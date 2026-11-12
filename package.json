@@ -10,6 +10,7 @@
     "build:lib": "vite build --config vite.lib.config.ts",
     "test": "npm run test:deployment && npm run test:unit",
     "test:unit": "vitest run",
+    "test:types": "tsc -p types/tsconfig.json",
     "preview": "vite preview --host 127.0.0.1",
     "test:e2e": "playwright test",
     "test:lib": "node scripts/verify-lib.mjs",
@@ -57,9 +58,15 @@
     "vitest": "^5.1.0"
   },
   "exports": {
-    ".": "./lib/ledgerglass.js",
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./lib/ledgerglass.js"
+    },
     "./style.css": "./lib/ledgerglass.css",
-    "./mcp": "./src/mcp/server.js"
+    "./mcp": {
+      "types": "./types/mcp.d.ts",
+      "import": "./src/mcp/server.js"
+    }
   },
   "files": [
     "README.md",
@@ -67,6 +74,7 @@
     "THIRD-PARTY-NOTICES.txt",
     "docs",
     "lib",
+    "types",
     "scripts/mcp-stdio.mjs",
     "src/mcp",
     "src/app"

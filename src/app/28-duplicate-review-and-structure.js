@@ -31,34 +31,36 @@ function DuplicateReviewDialog(e) {
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
   a.current = e.onClose;
-  const [s, d] = ne.useState(e.range),
-    [u, l] = ne.useState(qk(e.range)),
+  const [range, d] = ne.useState(e.range),
+    [keyColumns, l] = ne.useState(qk(e.range)),
     [c, h] = ne.useState(true),
-    [f, p] = ne.useState("raw"),
+    [comparison, p] = ne.useState("raw"),
     [m, v] = ne.useState(true),
     [g, b] = ne.useState(false),
-    [y, w] = ne.useState("keep"),
-    [E, A] = ne.useState("Unique review"),
-    [k, F] = ne.useState(false),
+    [blankPolicy, w] = ne.useState("keep"),
+    [outputSheetName, A] = ne.useState("Unique review"),
+    [checked, F] = ne.useState(false),
     [I, O] = ne.useState(null),
     [j, z] = ne.useState(""),
     [V, D] = ne.useState(""),
     [B, _] = ne.useState(""),
     [C, T] = ne.useState("all"),
     [N, R] = ne.useState(0),
-    L = qk(s),
-    $ = e.workbook.sheets.find((le) => le.id === e.sheetId),
+    L = qk(range),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     U = [
-      ...new Set(e.allowedSheetIds ?? e.workbook.sheets.map((le) => le.id)),
+      ...new Set(
+        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+      ),
     ].sort(),
     G = {
-      includeHidden: !!e.allowHidden && k,
+      includeHidden: !!e.allowHidden && checked,
       allowedSheetIds: e.allowedSheetIds,
     },
     H =
-      !!$ &&
-      U.includes($.id) &&
-      (G.includeHidden || (!$.hidden && !$.veryHidden)),
+      !!sheet &&
+      U.includes(sheet.id) &&
+      (G.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     Q = JSON.stringify([e.sheetId, e.range]),
     X$1 = JSON.stringify([e.workbook, e.readOnly, U, G.includeHidden, Q]),
     J =
@@ -80,34 +82,34 @@ function DuplicateReviewDialog(e) {
         ));
     };
   ne.useEffect(() => {
-    const le = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       o.current?.querySelector('[data-ui-label="Source range"]')?.focus(),
       () => {
-        le?.isConnected && le.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
-  const K = () => {
+  const onClick = () => {
       try {
-        const le = createDuplicateReviewSheet(
+        const duplicateReviewSheet = createDuplicateReviewSheet(
           e.workbook,
           {
             sheetId: e.sheetId,
-            range: s,
-            keyColumns: u,
+            range: range,
+            keyColumns: keyColumns,
             headers: c,
-            comparison: f,
+            comparison: comparison,
             caseSensitive: m,
             trimText: g,
-            blankPolicy: y,
-            outputSheetName: E,
+            blankPolicy: blankPolicy,
+            outputSheetName: outputSheetName,
           },
           { ...G, readOnly: e.readOnly },
         );
-        (O(le), z(Q), D(""), R(0), T("all"));
-      } catch (le) {
-        (O(null), W(le));
+        (O(duplicateReviewSheet), z(Q), D(""), R(0), T("all"));
+      } catch (error) {
+        (O(null), W(error));
       }
     },
     te = () => {
@@ -127,19 +129,20 @@ function DuplicateReviewDialog(e) {
           ),
             O(null),
             D(""));
-        } catch (le) {
-          W(le);
+        } catch (error) {
+          W(error);
         }
     },
     ae =
       I?.rows.filter(
-        (le) =>
-          C === "all" || (C === "groups" ? !!le.groupId : le.disposition === C),
+        (row) =>
+          C === "all" ||
+          (C === "groups" ? !!row.groupId : row.disposition === C),
       ) ?? [],
     oe = Math.max(1, Math.ceil(ae.length / structuralEditLimits.pageSize)),
     de = Math.min(N, oe - 1),
     he = ae.slice(de * 20, de * 20 + 20),
-    Se = (le, ce) =>
+    Se = (cell, ce) =>
       i.jsxs("details", {
         children: [
           i.jsx("summary", { children: describeCellValueType(ce) }),
@@ -148,21 +151,21 @@ function DuplicateReviewDialog(e) {
               i.jsx("dt", {
                 children: i.jsx(LocalizedText, { children: "Stored value" }),
               }),
-              i.jsx("dd", { children: describeCellValueType(le.raw) }),
+              i.jsx("dd", { children: describeCellValueType(cell.raw) }),
               i.jsx("dt", {
                 children: i.jsx(LocalizedText, {
                   children: "Stored as literal",
                 }),
               }),
-              i.jsx("dd", { children: le.literal ? "Yes" : "No" }),
+              i.jsx("dd", { children: cell.literal ? "Yes" : "No" }),
               i.jsx("dt", {
                 children: i.jsx(LocalizedText, { children: "Note" }),
               }),
-              i.jsx("dd", { children: le.note ?? "None" }),
+              i.jsx("dd", { children: cell.note ?? "None" }),
               i.jsx("dt", {
                 children: i.jsx(LocalizedText, { children: "Tickmark" }),
               }),
-              i.jsx("dd", { children: le.tickmark ?? "None" }),
+              i.jsx("dd", { children: cell.tickmark ?? "None" }),
               i.jsx("dt", {
                 children: i.jsx(LocalizedText, {
                   children: "Cell formatting / link",
@@ -172,7 +175,7 @@ function DuplicateReviewDialog(e) {
                 children: i.jsx("code", {
                   children: JSON.stringify(
                     Object.fromEntries(
-                      Object.entries(le).filter(
+                      Object.entries(cell).filter(
                         ([ge]) =>
                           !["raw", "literal", "note", "tickmark"].includes(ge),
                       ),
@@ -186,8 +189,8 @@ function DuplicateReviewDialog(e) {
       });
   return i.jsx("div", {
     className: "dup-backdrop",
-    onMouseDown: (le) => {
-      le.target === le.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
     children: i.jsxs("section", {
       className: "dup-dialog",
@@ -195,12 +198,12 @@ function DuplicateReviewDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
-      onKeyDown: (le) => {
+      onKeyDown: (event) => {
         var ge, se;
         if (
-          (le.stopPropagation(),
-          le.key === "Escape" && (le.preventDefault(), a.current()),
-          le.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), a.current()),
+          event.key === "Tab")
         ) {
           const we = [
             ...(o.current?.querySelectorAll(
@@ -210,11 +213,11 @@ function DuplicateReviewDialog(e) {
             (Ee) =>
               !Ee.closest("details:not([open])") || Ee.tagName === "SUMMARY",
           );
-          le.shiftKey && document.activeElement === we[0]
-            ? (le.preventDefault(), (ge = we.at(-1)) == null || ge.focus())
-            : !le.shiftKey &&
+          event.shiftKey && document.activeElement === we[0]
+            ? (event.preventDefault(), (ge = we.at(-1)) == null || ge.focus())
+            : !event.shiftKey &&
               document.activeElement === we.at(-1) &&
-              (le.preventDefault(), (se = we[0]) == null || se.focus());
+              (event.preventDefault(), (se = we[0]) == null || se.focus());
         }
       },
       children: [
@@ -258,7 +261,7 @@ function DuplicateReviewDialog(e) {
               children: [
                 i.jsx(LocalizedText, { children: "Source worksheet" }),
                 i.jsx("strong", {
-                  children: H ? $.name : "Outside current context",
+                  children: H ? sheet.name : "Outside current context",
                 }),
               ],
             }),
@@ -267,11 +270,11 @@ function DuplicateReviewDialog(e) {
                 i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Source range"),
-                  value: H ? s : "",
+                  value: H ? range : "",
                   readOnly: e.readOnly,
-                  onChange: (le) => {
-                    const ce = le.target.value;
-                    (d(ce), l(qk(ce)), q());
+                  onChange: (event) => {
+                    const value = event.target.value;
+                    (d(value), l(qk(value)), q());
                   },
                   lang: language("Source range"),
                   "data-ui-label": "Source range",
@@ -283,10 +286,10 @@ function DuplicateReviewDialog(e) {
                 i.jsx(LocalizedText, { children: "New worksheet name" }),
                 i.jsx("input", {
                   "aria-label": text("New worksheet name"),
-                  value: E,
+                  value: outputSheetName,
                   readOnly: e.readOnly,
-                  onChange: (le) => {
-                    (A(le.target.value), q());
+                  onChange: (event) => {
+                    (A(event.target.value), q());
                   },
                   lang: language("New worksheet name"),
                   "data-ui-label": "New worksheet name",
@@ -298,10 +301,10 @@ function DuplicateReviewDialog(e) {
                 i.jsx(LocalizedText, { children: "Compare" }),
                 i.jsxs("select", {
                   "aria-label": text("Comparison basis"),
-                  value: f,
+                  value: comparison,
                   disabled: e.readOnly,
-                  onChange: (le) => {
-                    (p(le.target.value), q());
+                  onChange: (event) => {
+                    (p(event.target.value), q());
                   },
                   lang: language("Comparison basis"),
                   "data-ui-label": "Comparison basis",
@@ -323,10 +326,10 @@ function DuplicateReviewDialog(e) {
                 i.jsx(LocalizedText, { children: "Blank key policy" }),
                 i.jsxs("select", {
                   "aria-label": text("Blank key policy"),
-                  value: y,
+                  value: blankPolicy,
                   disabled: e.readOnly,
-                  onChange: (le) => {
-                    (w(le.target.value), q());
+                  onChange: (event) => {
+                    (w(event.target.value), q());
                   },
                   lang: language("Blank key policy"),
                   "data-ui-label": "Blank key policy",
@@ -350,8 +353,8 @@ function DuplicateReviewDialog(e) {
                   type: "checkbox",
                   checked: c,
                   disabled: e.readOnly,
-                  onChange: (le) => {
-                    (h(le.target.checked), q());
+                  onChange: (event) => {
+                    (h(event.target.checked), q());
                   },
                 }),
                 i.jsx(LocalizedText, {
@@ -366,8 +369,8 @@ function DuplicateReviewDialog(e) {
                   type: "checkbox",
                   checked: m,
                   disabled: e.readOnly,
-                  onChange: (le) => {
-                    (v(le.target.checked), q());
+                  onChange: (event) => {
+                    (v(event.target.checked), q());
                   },
                 }),
                 i.jsx(LocalizedText, { children: "Case-sensitive text" }),
@@ -380,8 +383,8 @@ function DuplicateReviewDialog(e) {
                   type: "checkbox",
                   checked: g,
                   disabled: e.readOnly,
-                  onChange: (le) => {
-                    (b(le.target.checked), q());
+                  onChange: (event) => {
+                    (b(event.target.checked), q());
                   },
                 }),
                 i.jsx(LocalizedText, {
@@ -395,9 +398,9 @@ function DuplicateReviewDialog(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: k,
-                    onChange: (le) => {
-                      (F(le.target.checked), q());
+                    checked: checked,
+                    onChange: (event) => {
+                      (F(event.target.checked), q());
                     },
                   }),
                   i.jsx(LocalizedText, { children: "Include hidden sources" }),
@@ -425,12 +428,14 @@ function DuplicateReviewDialog(e) {
                         i.jsx("input", {
                           type: "checkbox",
                           "aria-label": `Key column ${columnIndexToLetters(le)}`,
-                          checked: u.includes(le),
-                          onChange: (ce) => {
+                          checked: keyColumns.includes(le),
+                          onChange: (event) => {
                             (l(
-                              ce.target.checked
-                                ? [...u, le]
-                                : u.filter((ge) => ge !== le),
+                              event.target.checked
+                                ? [...keyColumns, le]
+                                : keyColumns.filter(
+                                    (keyColumn) => keyColumn !== le,
+                                  ),
                             ),
                               q());
                           },
@@ -455,8 +460,8 @@ function DuplicateReviewDialog(e) {
           i.jsx("p", { className: "dup-error", role: "alert", children: V }),
         i.jsx("button", {
           className: "dup-primary",
-          disabled: e.readOnly || !H || !u.length,
-          onClick: K,
+          disabled: e.readOnly || !H || !keyColumns.length,
+          onClick: onClick,
           children: i.jsx(LocalizedText, {
             children: "Preview duplicate review",
           }),
@@ -521,7 +526,7 @@ function DuplicateReviewDialog(e) {
                             }),
                             i.jsx("div", {
                               className: "dup-headers",
-                              children: I.headerCells.map((le, ce) =>
+                              children: I.headerCells.map((headerCell, ce) =>
                                 i.jsxs(
                                   "div",
                                   {
@@ -534,7 +539,7 @@ function DuplicateReviewDialog(e) {
                                             : ce,
                                         ),
                                       }),
-                                      Se(le, le.raw),
+                                      Se(headerCell, headerCell.raw),
                                     ],
                                   },
                                   ce,
@@ -549,8 +554,8 @@ function DuplicateReviewDialog(e) {
                           i.jsxs("select", {
                             "aria-label": text("Preview view"),
                             value: C,
-                            onChange: (le) => {
-                              (T(le.target.value), R(0));
+                            onChange: (event) => {
+                              (T(event.target.value), R(0));
                             },
                             lang: language("Preview view"),
                             "data-ui-label": "Preview view",
@@ -681,10 +686,12 @@ function DuplicateReviewDialog(e) {
                                               }),
                                           ],
                                         }),
-                                        le.cells.map((ce, ge) =>
+                                        le.cells.map((cell, ge) =>
                                           i.jsx(
                                             "td",
-                                            { children: Se(ce, le.values[ge]) },
+                                            {
+                                              children: Se(cell, le.values[ge]),
+                                            },
                                             ge,
                                           ),
                                         ),
@@ -806,13 +813,13 @@ const structurePreviewRegistry = new WeakMap(),
   containsRefError = (e) => /#REF!/i.test(e.replace(/"(?:[^"]|"")*"/g, '""')),
   formatAxisAddress = (e, r) =>
     e.axis === "row" ? String(r + 1) : columnIndexToLetters(r);
-function buildStructurePreview(e, r, t, n = {}) {
+function buildStructurePreview(workbook, sheetId, t, n = {}) {
   if (n.readOnly) throw Error("This workbook is read-only.");
-  const o = calculateWorkbookWithSettings(e),
-    a = applyStructuralEdit(e, r, t),
+  const workbookWithSettings = calculateWorkbookWithSettings(workbook),
+    a = applyStructuralEdit(workbook, sheetId, t),
     s = calculateWorkbookWithSettings(a);
   if (
-    e.sheets.reduce(
+    workbook.sheets.reduce(
       (v, g) => v + Object.values(g.cells).filter(isFormulaCellValue).length,
       0,
     ) > 5e3
@@ -820,16 +827,16 @@ function buildStructurePreview(e, r, t, n = {}) {
     throw Error(
       "Structural preview can verify up to 5,000 formula cells. Reduce or separate the formula population before changing worksheet structure.",
     );
-  const u = e.sheets.find((v) => v.id === r),
-    l =
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
+    action =
       t.moveBefore !== undefined
-        ? `Move ${t.count} ${t.axis}${t.count === 1 ? "" : "s"} before ${t.moveBefore === (t.axis === "row" ? u.rowCount : u.colCount) ? "worksheet end" : formatAxisAddress(t, t.moveBefore)}`
+        ? `Move ${t.count} ${t.axis}${t.count === 1 ? "" : "s"} before ${t.moveBefore === (t.axis === "row" ? sheet.rowCount : sheet.colCount) ? "worksheet end" : formatAxisAddress(t, t.moveBefore)}`
         : `${t.remove ? "Delete" : "Insert"} ${t.count} ${t.axis}${t.count === 1 ? "" : "s"}`,
     c = {
-      sheetId: r,
+      sheetId: sheetId,
       edit: { ...t },
-      snapshot: JSON.stringify(e),
-      action: l,
+      snapshot: JSON.stringify(workbook),
+      action: action,
       deletedCells: 0,
       movedCells: 0,
       formulaChanges: [],
@@ -837,38 +844,43 @@ function buildStructurePreview(e, r, t, n = {}) {
       originChanges: [],
       metadataChanges: [],
     };
-  for (const v of e.sheets) {
-    const g = a.sheets.find((b) => b.id === v.id);
-    for (const [b, y] of Object.entries(v.cells)) {
-      const w = v.id === r ? assertInsertionWithinSheet(b, t) : b;
-      if (!w) {
+  for (const sheet of workbook.sheets) {
+    const g = a.sheets.find((b) => b.id === sheet.id);
+    for (const [beforeAddress, cell] of Object.entries(sheet.cells)) {
+      const address =
+        sheet.id === sheetId
+          ? assertInsertionWithinSheet(beforeAddress, t)
+          : beforeAddress;
+      if (!address) {
         c.deletedCells++;
         continue;
       }
-      w !== b && c.movedCells++;
-      const E = g.cells[w];
-      isFormulaCellValue(y) &&
-        (E?.raw !== y.raw &&
+      address !== beforeAddress && c.movedCells++;
+      const E = g.cells[address];
+      isFormulaCellValue(cell) &&
+        (E?.raw !== cell.raw &&
           c.formulaChanges.push({
-            sheetId: v.id,
-            sheetName: v.name,
-            beforeAddress: b,
-            address: w,
-            before: String(y.raw),
+            sheetId: sheet.id,
+            sheetName: sheet.name,
+            beforeAddress: beforeAddress,
+            address: address,
+            before: String(cell.raw),
             after: String(E?.raw ?? ""),
           }),
-        s(v.id, w) === "#REF!" &&
-          o(v.id, b) !== "#REF!" &&
+        s(sheet.id, address) === "#REF!" &&
+          workbookWithSettings(sheet.id, beforeAddress) !== "#REF!" &&
           c.referenceIssues.push({
             kind: "cell",
-            sheetName: v.name,
-            address: w,
-            before: String(y.raw),
+            sheetName: sheet.name,
+            address: address,
+            before: String(cell.raw),
             after: String(E?.raw ?? ""),
           }));
     }
     for (const b of g.conditionalFormats ?? []) {
-      const y = v.conditionalFormats?.find((w) => w.id === b.id);
+      const y = sheet.conditionalFormats?.find(
+        (conditionalFormat) => conditionalFormat.id === b.id,
+      );
       b.formula &&
         containsRefError(b.formula) &&
         !containsRefError(y?.formula ?? "") &&
@@ -880,7 +892,7 @@ function buildStructurePreview(e, r, t, n = {}) {
           after: b.formula,
         });
     }
-    for (const b of [
+    for (const field of [
       "rowHeights",
       "columnWidths",
       "hiddenRows",
@@ -897,30 +909,33 @@ function buildStructurePreview(e, r, t, n = {}) {
       "pageLayout",
       "outlineGroups",
     ])
-      JSON.stringify(v[b]) !== JSON.stringify(g[b]) &&
-        c.metadataChanges.push({ sheetName: v.name, field: b });
+      JSON.stringify(sheet[field]) !== JSON.stringify(g[field]) &&
+        c.metadataChanges.push({ sheetName: sheet.name, field: field });
   }
   for (const v of a.definedNames ?? []) {
-    const g = e.definedNames?.find(
-      (b) => b.name === v.name && b.scopeSheetId === v.scopeSheetId,
+    const g = workbook.definedNames?.find(
+      (definedName) =>
+        definedName.name === v.name &&
+        definedName.scopeSheetId === v.scopeSheetId,
     );
     containsRefError(v.refersTo) &&
       !containsRefError(g?.refersTo ?? "") &&
       c.referenceIssues.push({
         kind: "name",
         sheetName:
-          e.sheets.find((b) => b.id === v.scopeSheetId)?.name ?? "Workbook",
+          workbook.sheets.find((sheet) => sheet.id === v.scopeSheetId)?.name ??
+          "Workbook",
         address: v.name,
         before: g?.refersTo ?? "",
         after: v.refersTo,
       });
   }
-  const h = new Map((e.rowOrigins ?? []).map((v) => [v.id, v]));
+  const h = new Map((workbook.rowOrigins ?? []).map((v) => [v.id, v]));
   if (t.axis === "row")
-    for (const [v, g] of Object.entries(u.rowOriginIds ?? {})) {
+    for (const [v, g] of Object.entries(sheet.rowOriginIds ?? {})) {
       const b = assertInsertionWithinSheet(`A${Number(v) + 1}`, t),
-        y = b ? _t(b).row + 1 : null;
-      if (y === Number(v) + 1) continue;
+        afterRow = b ? _t(b).row + 1 : null;
+      if (afterRow === Number(v) + 1) continue;
       const w = h.get(g);
       w &&
         c.originChanges.push({
@@ -929,22 +944,22 @@ function buildStructurePreview(e, r, t, n = {}) {
           sourceSheet: w.sourceSheet,
           originalRow: w.originalRow,
           beforeRow: Number(v) + 1,
-          afterRow: y,
+          afterRow: afterRow,
         });
     }
   return (structurePreviewRegistry.set(c, JSON.stringify(c)), c);
 }
-function assertStructurePreviewCurrent(e, r, t = {}) {
+function assertStructurePreviewCurrent(workbook, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
   if (structurePreviewRegistry.get(r) !== JSON.stringify(r))
     throw Error(
       "This structural preview was changed or restored from another session. Create a fresh preview before applying.",
     );
-  if (JSON.stringify(e) !== r.snapshot)
+  if (JSON.stringify(workbook) !== r.snapshot)
     throw Error(
       "The workbook changed after this preview. Refresh the preview before applying.",
     );
-  return applyStructuralEdit(e, r.sheetId, r.edit);
+  return applyStructuralEdit(workbook, r.sheetId, r.edit);
 }
 function StructureToolDialog({
   workbook,
@@ -956,32 +971,37 @@ function StructureToolDialog({
   onWorkbookChange,
 }) {
   const { text, language } = useWorkbookMessages(),
-    l = mode === "insertRow" ? "row" : "column",
-    c = parseRangeAddress(range),
-    h = l === "row" ? workbookLimits.maxRows : workbookLimits.maxCols,
+    axis = mode === "insertRow" ? "row" : "column",
+    rangeAddress = parseRangeAddress(range),
+    h = axis === "row" ? workbookLimits.maxRows : workbookLimits.maxCols,
     [f, p] = ne.useState(
-      l === "row" ? String(c.firstRow + 1) : columnIndexToLetters(c.firstCol),
+      axis === "row"
+        ? String(rangeAddress.firstRow + 1)
+        : columnIndexToLetters(rangeAddress.firstCol),
     ),
-    [m, v] = ne.useState(1),
+    [count, v] = ne.useState(1),
     [g, b] = ne.useState("insert"),
     [y, w] = ne.useState(""),
     [E, A] = ne.useState(null),
     [k, F] = ne.useState(""),
     [I, O] = ne.useState(0),
     [j, z] = ne.useState("formulas"),
-    [V, D] = ne.useState(false),
+    [checked, D] = ne.useState(false),
     B = ne.useRef(null),
-    _ = workbook.sheets.find((G) => G.id === sheetId);
+    sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   ne.useEffect(() => {
-    const G = document.activeElement;
-    return (B.current?.querySelector("select")?.focus(), () => G?.focus());
+    const activeElement = document.activeElement;
+    return (
+      B.current?.querySelector("select")?.focus(),
+      () => activeElement?.focus()
+    );
   }, []);
   const C = () => {
       (A(null), D(false), F(""), O(0));
     },
     T = (G, H = false) => {
       if (H && G.trim().toLowerCase() === "end") return h;
-      if (l === "row") {
+      if (axis === "row") {
         const Q = Number(G);
         if (!/^[1-9]\d*$/.test(G.trim()) || !Number.isInteger(Q) || Q > h)
           throw Error(
@@ -995,30 +1015,30 @@ function StructureToolDialog({
         );
       return parseRangeAddress(G.trim().toUpperCase() + "1").firstCol;
     };
-  function N() {
+  function onClick() {
     try {
       F("");
-      const G = buildStructurePreview(
+      const structurePreview = buildStructurePreview(
         workbook,
         sheetId,
         {
-          axis: l,
+          axis: axis,
           index: T(f),
-          count: m,
+          count: count,
           remove: g === "delete",
           ...(g === "move" ? { moveBefore: T(y, true) } : {}),
         },
         { readOnly },
       );
-      (A(G), D(false), O(0));
-    } catch (G) {
-      (F(G.message), A(null));
+      (A(structurePreview), D(false), O(0));
+    } catch (error) {
+      (F(error.message), A(null));
     }
   }
   function R() {
     try {
       if (!E) throw Error("Create a preview first.");
-      if (L && !V)
+      if (L && !checked)
         throw Error(
           "Confirm the deletion and reference changes before applying.",
         );
@@ -1028,53 +1048,57 @@ function StructureToolDialog({
         `${E.action}${E.referenceIssues.length ? `; ${E.referenceIssues.length} new reference error(s) — reviewed` : ""}`,
       ),
         onClose());
-    } catch (G) {
-      F(G.message);
+    } catch (error) {
+      F(error.message);
     }
   }
   const L =
       !!E &&
       (E.deletedCells > 0 ||
         E.referenceIssues.length > 0 ||
-        E.originChanges.some((G) => G.afterRow === null)),
+        E.originChanges.some((originChange) => originChange.afterRow === null)),
     $ = E
       ? j === "errors"
-        ? E.referenceIssues.map((G) => ({
-            key: `${G.kind}-${G.sheetName}-${G.address}`,
-            title: `${G.kind}: ${G.sheetName}!${G.address}`,
-            detail: `${G.before} → ${G.after}`,
+        ? E.referenceIssues.map((referenceIssue) => ({
+            key: `${referenceIssue.kind}-${referenceIssue.sheetName}-${referenceIssue.address}`,
+            title: `${referenceIssue.kind}: ${referenceIssue.sheetName}!${referenceIssue.address}`,
+            detail: `${referenceIssue.before} → ${referenceIssue.after}`,
           }))
         : j === "origins"
-          ? E.originChanges.map((G) => ({
-              key: G.id + "-" + G.beforeRow,
-              title: `Row ${G.beforeRow} → ${G.afterRow ?? "deleted"}`,
-              detail: `${G.sourceName} · ${G.sourceSheet}, original row ${G.originalRow} · ID ${G.id}`,
+          ? E.originChanges.map((originChange) => ({
+              key: originChange.id + "-" + originChange.beforeRow,
+              title: `Row ${originChange.beforeRow} → ${originChange.afterRow ?? "deleted"}`,
+              detail: `${originChange.sourceName} · ${originChange.sourceSheet}, original row ${originChange.originalRow} · ID ${originChange.id}`,
             }))
-          : E.formulaChanges.map((G) => ({
-              key: G.sheetId + G.beforeAddress,
-              title: `${G.sheetName}!${G.beforeAddress} → ${G.address}`,
-              detail: `${G.before} → ${G.after}`,
+          : E.formulaChanges.map((formulaChange) => ({
+              key: formulaChange.sheetId + formulaChange.beforeAddress,
+              title: `${formulaChange.sheetName}!${formulaChange.beforeAddress} → ${formulaChange.address}`,
+              detail: `${formulaChange.before} → ${formulaChange.after}`,
             }))
       : [];
   let U = null;
   try {
-    U = findRowOrigin(workbook, sheetId, l === "row" ? T(f) : c.firstRow);
+    U = findRowOrigin(
+      workbook,
+      sheetId,
+      axis === "row" ? T(f) : rangeAddress.firstRow,
+    );
   } catch {}
   return i.jsx("div", {
     className: "st-backdrop",
-    onPointerDown: (G) => {
-      G.target === G.currentTarget && onClose();
+    onPointerDown: (event) => {
+      event.target === event.currentTarget && onClose();
     },
     children: i.jsxs("section", {
       className: "st-dialog",
       ref: B,
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": `Insert / Delete / Move ${l === "row" ? "Rows" : "Columns"}`,
-      onKeyDown: (G) => {
+      "aria-label": `Insert / Delete / Move ${axis === "row" ? "Rows" : "Columns"}`,
+      onKeyDown: (event) => {
         if (
-          (G.key === "Escape" && (G.stopPropagation(), onClose()),
-          G.key === "Tab")
+          (event.key === "Escape" && (event.stopPropagation(), onClose()),
+          event.key === "Tab")
         ) {
           const Q = Array.from(
               B.current?.querySelectorAll(
@@ -1083,11 +1107,11 @@ function StructureToolDialog({
             ),
             X = Q[0],
             J = Q.at(-1);
-          G.shiftKey && document.activeElement === X
-            ? (G.preventDefault(), J == null || J.focus())
-            : !G.shiftKey &&
+          event.shiftKey && document.activeElement === X
+            ? (event.preventDefault(), J == null || J.focus())
+            : !event.shiftKey &&
               document.activeElement === J &&
-              (G.preventDefault(), X == null || X.focus());
+              (event.preventDefault(), X == null || X.focus());
         }
       },
       children: [
@@ -1095,7 +1119,11 @@ function StructureToolDialog({
           className: "st-header",
           children: [
             i.jsxs("h2", {
-              children: [l === "row" ? "Rows" : "Columns", " · ", _.name],
+              children: [
+                axis === "row" ? "Rows" : "Columns",
+                " · ",
+                sheet.name,
+              ],
             }),
             i.jsx("button", {
               "aria-label": text("Close structure tool"),
@@ -1118,8 +1146,8 @@ function StructureToolDialog({
                     i.jsxs("select", {
                       "aria-label": text("Structure operation"),
                       value: g,
-                      onChange: (G) => {
-                        (C(), b(G.target.value));
+                      onChange: (event) => {
+                        (C(), b(event.target.value));
                       },
                       lang: language("Structure operation"),
                       "data-ui-label": "Structure operation",
@@ -1142,12 +1170,12 @@ function StructureToolDialog({
                 }),
                 i.jsxs("label", {
                   children: [
-                    l === "row" ? "First row" : "First column",
+                    axis === "row" ? "First row" : "First column",
                     i.jsx("input", {
                       "aria-label": text("Structure start"),
                       value: f,
-                      onChange: (G) => {
-                        (C(), p(G.target.value));
+                      onChange: (event) => {
+                        (C(), p(event.target.value));
                       },
                       lang: language("Structure start"),
                       "data-ui-label": "Structure start",
@@ -1161,7 +1189,7 @@ function StructureToolDialog({
                       "aria-label": text("Structure count"),
                       min: 1,
                       max: 1e4,
-                      value: m,
+                      value: count,
                       onValueChange: (G) => {
                         (C(), v(Number(G)));
                       },
@@ -1177,15 +1205,15 @@ function StructureToolDialog({
                 className: "st-destination",
                 children: [
                   i.jsx(LocalizedText, { children: "Before " }),
-                  l,
+                  axis,
                   " ",
                   i.jsx(LocalizedText, { children: "(original position)" }),
                   i.jsx("input", {
                     "aria-label": text("Structure destination"),
                     value: y,
-                    placeholder: l === "row" ? "10, or end" : "F, or end",
-                    onChange: (G) => {
-                      (C(), w(G.target.value));
+                    placeholder: axis === "row" ? "10, or end" : "F, or end",
+                    onChange: (event) => {
+                      (C(), w(event.target.value));
                     },
                     lang: language("Structure destination"),
                     "data-ui-label": "Structure destination",
@@ -1195,7 +1223,7 @@ function StructureToolDialog({
             i.jsxs("p", {
               children: [
                 i.jsx(LocalizedText, { children: "Entire " }),
-                l === "row" ? "rows" : "columns",
+                axis === "row" ? "rows" : "columns",
                 i.jsx(LocalizedText, {
                   children:
                     ", including hidden cells, move together. A move inserts the selection before the destination and shifts the intervening data.",
@@ -1278,8 +1306,8 @@ function StructureToolDialog({
                       i.jsxs("select", {
                         "aria-label": text("Structure review category"),
                         value: j,
-                        onChange: (G) => {
-                          (z(G.target.value), O(0));
+                        onChange: (event) => {
+                          (z(event.target.value), O(0));
                         },
                         lang: language("Structure review category"),
                         "data-ui-label": "Structure review category",
@@ -1374,12 +1402,12 @@ function StructureToolDialog({
                           }),
                         }),
                         i.jsx("ul", {
-                          children: E.metadataChanges.map((G) =>
+                          children: E.metadataChanges.map((metadataChange) =>
                             i.jsxs(
                               "li",
                               {
                                 children: [
-                                  G.sheetName,
+                                  metadataChange.sheetName,
                                   ":",
                                   " ",
                                   {
@@ -1398,10 +1426,10 @@ function StructureToolDialog({
                                     objects: "Pictures, charts and shapes",
                                     pageLayout: "Print settings",
                                     outlineGroups: "Outline groups",
-                                  }[G.field],
+                                  }[metadataChange.field],
                                 ],
                               },
-                              G.sheetName + G.field,
+                              metadataChange.sheetName + metadataChange.field,
                             ),
                           ),
                         }),
@@ -1428,8 +1456,8 @@ function StructureToolDialog({
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: V,
-                    onChange: (G) => D(G.target.checked),
+                    checked: checked,
+                    onChange: (event) => D(event.target.checked),
                   }),
                   i.jsx(LocalizedText, {
                     children:
@@ -1445,12 +1473,12 @@ function StructureToolDialog({
                 }),
                 i.jsx("button", {
                   disabled: readOnly,
-                  onClick: N,
+                  onClick: onClick,
                   children: E ? "Refresh preview" : "Preview changes",
                 }),
                 i.jsx("button", {
                   className: "st-primary",
-                  disabled: !E || readOnly || (L && !V),
+                  disabled: !E || readOnly || (L && !checked),
                   onClick: R,
                   children: i.jsx(LocalizedText, { children: "Apply changes" }),
                 }),

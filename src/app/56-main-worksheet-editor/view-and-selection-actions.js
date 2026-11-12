@@ -43,9 +43,9 @@ function createViewAndSelectionActions({
       selectionState.setCompletedSelectionAreas([]));
   }
   function applySelectionAreas(fe) {
-    const Oe = parseSelectionAreas(fe);
-    (selectionState.setCompletedSelectionAreas(Oe.slice(0, -1)),
-      selectionState.setActiveSelectionRange(Oe.at(-1)));
+    const selectionAreas = parseSelectionAreas(fe);
+    (selectionState.setCompletedSelectionAreas(selectionAreas.slice(0, -1)),
+      selectionState.setActiveSelectionRange(selectionAreas.at(-1)));
   }
   function requireSingleSelectionRange() {
     if (selectionAreas.length > 1)
@@ -73,97 +73,102 @@ function createViewAndSelectionActions({
       (clipboardState.internalClipboardRef.current = null));
   }
   function computeGridViewport(fe) {
-    const Oe = Math.max(
+    const rowViewport = Math.max(
         1,
         fe.height -
           ((viewDisplayState.isHeadingsVisible ? 22 : 0) + frozenRowsHeight) *
             zoomScale,
       ),
-      Be = Math.max(
+      columnViewport = Math.max(
         1,
         fe.width - (rowHeaderWidth + frozenColumnsWidth) * zoomScale,
       ),
-      Ue = computeVirtualizedRange(
+      virtualizedRange = computeVirtualizedRange(
         scrollableRowLayout,
         fe.top,
-        Oe,
+        rowViewport,
         zoomScale,
         6,
       ),
       Xe = computeVirtualizedRange(
         scrollableColumnLayout,
         fe.left,
-        Be,
+        columnViewport,
         zoomScale,
         3,
       ),
-      gt = Array.from({ length: Ue.last - Ue.first }, (Mr, Br) =>
-        logicalRowAt(Ue.first + Br),
+      shownRows = Array.from(
+        { length: virtualizedRange.last - virtualizedRange.first },
+        (Mr, Br) => logicalRowAt(virtualizedRange.first + Br),
       ),
-      Nt = Array.from({ length: Xe.last - Xe.first }, (Mr, Br) =>
+      shownColumns = Array.from({ length: Xe.last - Xe.first }, (Mr, Br) =>
         columnVisibilityIndex.logicalIndex(Xe.first + Br + yn),
       ),
-      wt = Xe.leading,
-      jt = Xe.trailing,
-      rr =
-        Nt.length +
+      leading = Xe.leading,
+      trailing = Xe.trailing,
+      visibleColumnCount =
+        shownColumns.length +
         frozenColumnIndexes.length +
         Number(viewDisplayState.isHeadingsVisible) +
-        +(wt > 0) +
-        +(jt > 0);
+        +(leading > 0) +
+        +(trailing > 0);
     return {
-      rowViewport: Oe,
-      columnViewport: Be,
-      rowWindow: Ue,
+      rowViewport: rowViewport,
+      columnViewport: columnViewport,
+      rowWindow: virtualizedRange,
       columnWindow: Xe,
-      shownRows: gt,
-      shownColumns: Nt,
-      leftGap: wt,
-      rightGap: jt,
-      visibleColumnCount: rr,
+      shownRows: shownRows,
+      shownColumns: shownColumns,
+      leftGap: leading,
+      rightGap: trailing,
+      visibleColumnCount: visibleColumnCount,
     };
   }
   function applyPaneScrollOffsets(fe, Oe, Be) {
-    const Ue = computeGridViewport(splitPaneSizes.current.current[fe]),
-      Xe = computeVirtualizedRange(
+    const gridViewport = computeGridViewport(
+        splitPaneSizes.current.current[fe],
+      ),
+      logicalOffset = computeVirtualizedRange(
         scrollableRowLayout,
         Oe,
-        Ue.rowViewport,
+        gridViewport.rowViewport,
         zoomScale,
         0,
       ).logicalOffset,
       gt = computeVirtualizedRange(
         scrollableColumnLayout,
         Be,
-        Ue.columnViewport,
+        gridViewport.columnViewport,
         zoomScale,
         0,
       ).logicalOffset,
       Nt = {};
     for (const wt of Pv(sheetSplitPanes)) {
-      const jt = computeGridViewport(splitPaneSizes.current.current[wt]),
+      const gridViewport = computeGridViewport(
+          splitPaneSizes.current.current[wt],
+        ),
         rr = splitPaneSizes.current.current[wt],
         Mr = anchorsMatchOnAxis(fe, wt, "row")
           ? logicalToPhysicalPixels(
-              Xe,
+              logicalOffset,
               scrollableRowLayout.total,
-              jt.rowViewport,
+              gridViewport.rowViewport,
               zoomScale,
             )
           : rr.top,
-        Br = anchorsMatchOnAxis(fe, wt, "column")
+        left = anchorsMatchOnAxis(fe, wt, "column")
           ? logicalToPhysicalPixels(
               gt,
               scrollableColumnLayout.total,
-              jt.columnViewport,
+              gridViewport.columnViewport,
               zoomScale,
             )
           : rr.left;
-      Nt[wt] = { top: Mr, left: Br };
+      Nt[wt] = { top: Mr, left: left };
       const xr = splitPaneSizes.refs.current[wt];
       xr &&
         (Math.abs(xr.scrollTop - Mr) > 0.5 && (xr.scrollTop = Mr),
-        Math.abs(xr.scrollLeft - Br) > 0.5 && (xr.scrollLeft = Br));
+        Math.abs(xr.scrollLeft - left) > 0.5 && (xr.scrollLeft = left));
     }
     splitPaneSizes.patch(Nt);
   }
@@ -171,13 +176,13 @@ function createViewAndSelectionActions({
     return enumerateSelectionCells(selectionAreas);
   }
   function buildWorkbookViewState(
-    fe,
+    workbook,
     Oe = activeSheet.id,
     Be = selectionState.activeSelectionRange,
   ) {
     const Ue =
-      fe.sheets.find((Xe) => Xe.id === Oe && !Xe.hidden) ??
-      fe.sheets.find((Xe) => !Xe.hidden);
+      workbook.sheets.find((sheet) => sheet.id === Oe && !sheet.hidden) ??
+      workbook.sheets.find((sheet) => !sheet.hidden);
     return {
       activeSheetId: Ue.id,
       selection: { sheetId: Ue.id, range: Ue.id === Oe ? Be : "A1" },
@@ -211,10 +216,10 @@ function createViewAndSelectionActions({
   function runGuardedAction(fe) {
     try {
       fe();
-    } catch (Oe) {
+    } catch (error) {
       operationStatusState.setErrorNotice(
-        Oe instanceof Error
-          ? Oe.message
+        error instanceof Error
+          ? error.message
           : "The operation could not be completed.",
       );
     }
@@ -247,7 +252,7 @@ function createViewAndSelectionActions({
       Math.max(0, Math.min(columnVisibilityIndex.count - 1, Be + Oe)),
     );
   }
-  function jumpToDataEdge(fe, Oe, Be, Ue) {
+  function jumpToDataEdge(row, col, Be, Ue) {
     const Xe =
         Be && sortedRowIndexes
           ? [...frozenRowIndexes, ...sortedRowIndexes]
@@ -255,21 +260,26 @@ function createViewAndSelectionActions({
       gt = Be ? rowVisibilityIndex : columnVisibilityIndex,
       Nt = Xe ? new Map(Xe.map((xr, Sr) => [xr, Sr])) : null,
       wt = (xr) => (Nt ? (Nt.get(xr) ?? null) : gt.viewIndex(xr)),
-      jt = wt(Be ? fe : Oe);
-    if (jt === null) return { row: fe, col: Oe };
+      jt = wt(Be ? row : col);
+    if (jt === null) return { row: row, col: col };
     const rr = getAllCellEntries().flatMap((xr) => {
         if (
           xr.cell.raw === null ||
           xr.cell.raw === "" ||
-          (Be ? xr.col !== Oe : xr.row !== fe)
+          (Be ? xr.col !== col : xr.row !== row)
         )
           return [];
         const Sr = wt(Be ? xr.row : xr.col);
         return Sr === null ? [] : [Sr];
       }),
-      Mr = resolveCellNavigation(jt, Xe?.length ?? gt.count, rr, Ue),
-      Br = Xe ? Xe[Mr] : gt.logicalIndex(Mr);
-    return Be ? { row: Br, col: Oe } : { row: fe, col: Br };
+      cellNavigation = resolveCellNavigation(
+        jt,
+        Xe?.length ?? gt.count,
+        rr,
+        Ue,
+      ),
+      Br = Xe ? Xe[cellNavigation] : gt.logicalIndex(cellNavigation);
+    return Be ? { row: Br, col: col } : { row: row, col: Br };
   }
   return {
     selectSingleRange,

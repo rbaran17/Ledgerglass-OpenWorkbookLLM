@@ -20,10 +20,10 @@ function TextCleanupDialog(e) {
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(false),
-    [s, d] = ne.useState(e.range),
-    [u, l] = ne.useState("Cleaned text"),
-    [c, h] = ne.useState(false),
-    [f, p] = ne.useState([
+    [sourceRange, d] = ne.useState(e.range),
+    [outputName, l] = ne.useState("Cleaned text"),
+    [checked, h] = ne.useState(false),
+    [steps, p] = ne.useState([
       getTextFunctionSpec("CLEAN"),
       getTextFunctionSpec("TRIM"),
     ]),
@@ -33,19 +33,21 @@ function TextCleanupDialog(e) {
     [E, A] = ne.useState(0),
     [k, F] = ne.useState(e.workbook.textCleanups?.at(-1)?.id ?? ""),
     [I, O] = ne.useState(0),
-    j = [
-      ...new Set(e.allowedSheetIds ?? e.workbook.sheets.map((H) => H.id)),
+    allowedSheetIds = [
+      ...new Set(
+        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+      ),
     ].sort(),
     z = {
       readOnly: e.readOnly,
-      includeHidden: !!e.allowHidden && c,
-      allowedSheetIds: j,
+      includeHidden: !!e.allowHidden && checked,
+      allowedSheetIds: allowedSheetIds,
       allowNewSheet: e.allowNewSheet ?? true,
     },
     V = JSON.stringify({
-      sourceRange: s,
-      outputName: u,
-      steps: f,
+      sourceRange: sourceRange,
+      outputName: outputName,
+      steps: steps,
       options: z,
       selection: [e.sheetId, e.range],
     }),
@@ -60,11 +62,11 @@ function TextCleanupDialog(e) {
     (d(e.range), b(null), w(""), (a.current = false));
   }, [e.sheetId, e.range]),
     ne.useEffect(() => {
-      const H = document.activeElement;
+      const activeElement = document.activeElement;
       return (
         o.current?.querySelector("input:not(:disabled),button")?.focus(),
         () => {
-          H?.isConnected && H.focus();
+          activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []));
@@ -74,13 +76,13 @@ function TextCleanupDialog(e) {
           ? H.message
           : "Cleanup failed. Review the source and steps.",
       ),
-    N = () => {
+    onClick = () => {
       C();
       try {
-        const H = f.map((Q) => ({
-          function: Q.name,
-          args: Q.fields
-            .filter((X) => !(X.optional && X.value === ""))
+        const H = steps.map((step) => ({
+          function: step.name,
+          args: step.fields
+            .filter((field) => !(field.optional && field.value === ""))
             .map((X) =>
               X.kind === "number"
                 ? X.value.trim()
@@ -97,15 +99,15 @@ function TextCleanupDialog(e) {
             e.workbook,
             {
               sourceSheetId: e.sheetId,
-              sourceRange: s,
-              outputName: u,
+              sourceRange: sourceRange,
+              outputName: outputName,
               steps: H,
             },
             z,
           ),
         });
-      } catch (H) {
-        T(H);
+      } catch (error) {
+        T(error);
       }
     },
     R = () => {
@@ -113,40 +115,43 @@ function TextCleanupDialog(e) {
         try {
           if (_.current.key !== g?.key)
             throw Error("The cleanup settings changed. Preview again.");
-          const H = createTextCleanupOutput(
+          const textCleanupOutput = createTextCleanupOutput(
             _.current.p.workbook,
             B,
             _.current.options,
           );
           ((a.current = true),
             _.current.p.onWorkbookChange(
-              H,
+              textCleanupOutput,
               `Text cleanup: ${B.sourceSheetName}!${B.request.sourceRange} → ${B.request.outputName}`,
             ),
             b(null),
-            F(H.textCleanups.at(-1).id),
+            F(textCleanupOutput.textCleanups.at(-1).id),
             O(0));
-        } catch (H) {
-          T(H);
+        } catch (error) {
+          T(error);
         }
     },
     L = (e.workbook.textCleanups ?? []).filter((H) => {
-      const Q = e.workbook.sheets.find((X) => X.id === H.sourceSheetId);
+      const sheet = e.workbook.sheets.find(
+        (sheet) => sheet.id === H.sourceSheetId,
+      );
       return (
-        (e.allowedSheetIds === undefined || j.includes(H.sourceSheetId)) &&
+        (e.allowedSheetIds === undefined ||
+          allowedSheetIds.includes(H.sourceSheetId)) &&
         (z.includeHidden ||
-          !Q ||
-          (!Q.hidden &&
-            !Q.veryHidden &&
-            !cn(Q, "row").length &&
-            !cn(Q, "column").length))
+          !sheet ||
+          (!sheet.hidden &&
+            !sheet.veryHidden &&
+            !cn(sheet, "row").length &&
+            !cn(sheet, "column").length))
       );
     }),
     $ = L.find((H) => H.id === k) ?? L.at(-1);
   return i.jsx("div", {
     className: "ttc-backdrop",
-    onMouseDown: (H) => {
-      H.target === H.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
     children: i.jsxs("section", {
       role: "dialog",
@@ -154,12 +159,12 @@ function TextCleanupDialog(e) {
       "aria-labelledby": `${n}-title`,
       className: "ttc-dialog cleanup-dialog",
       ref: o,
-      onKeyDown: (H) => {
+      onKeyDown: (event) => {
         var X, J;
         if (
-          (H.stopPropagation(),
-          H.key === "Escape" && (H.preventDefault(), e.onClose()),
-          H.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Tab")
         ) {
           const q = [
             ...(o.current?.querySelectorAll("button,input,select,summary") ??
@@ -169,11 +174,11 @@ function TextCleanupDialog(e) {
               !W.matches(":disabled") &&
               !W.closest("details:not([open]) > :not(summary)"),
           );
-          H.shiftKey && document.activeElement === q[0]
-            ? (H.preventDefault(), (X = q.at(-1)) == null || X.focus())
-            : !H.shiftKey &&
+          event.shiftKey && document.activeElement === q[0]
+            ? (event.preventDefault(), (X = q.at(-1)) == null || X.focus())
+            : !event.shiftKey &&
               document.activeElement === q.at(-1) &&
-              (H.preventDefault(), (J = q[0]) == null || J.focus());
+              (event.preventDefault(), (J = q[0]) == null || J.focus());
         }
       },
       children: [
@@ -210,9 +215,9 @@ function TextCleanupDialog(e) {
                 i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Cleanup source range"),
-                  value: s,
-                  onChange: (H) => {
-                    (d(H.target.value), C());
+                  value: sourceRange,
+                  onChange: (event) => {
+                    (d(event.target.value), C());
                   },
                   lang: language("Cleanup source range"),
                   "data-ui-label": "Cleanup source range",
@@ -223,9 +228,9 @@ function TextCleanupDialog(e) {
               children: [
                 i.jsx(LocalizedText, { children: "New worksheet name" }),
                 i.jsx("input", {
-                  value: u,
-                  onChange: (H) => {
-                    (l(H.target.value), C());
+                  value: outputName,
+                  onChange: (event) => {
+                    (l(event.target.value), C());
                   },
                 }),
               ],
@@ -236,9 +241,9 @@ function TextCleanupDialog(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: c,
-                    onChange: (H) => {
-                      (h(H.target.checked), C());
+                    checked: checked,
+                    onChange: (event) => {
+                      (h(event.target.checked), C());
                     },
                   }),
                   i.jsx(LocalizedText, {
@@ -263,39 +268,41 @@ function TextCleanupDialog(e) {
             i.jsx("legend", {
               children: i.jsx(LocalizedText, { children: "Steps in order" }),
             }),
-            f.map((H, Q) =>
+            steps.map((step, Q) =>
               i.jsxs(
                 "div",
                 {
                   className: "cleanup-step",
                   children: [
-                    i.jsxs("strong", { children: [Q + 1, ". ", H.name] }),
-                    H.fields.map((X, J) =>
+                    i.jsxs("strong", { children: [Q + 1, ". ", step.name] }),
+                    step.fields.map((field, J) =>
                       i.jsxs(
                         "label",
                         {
                           children: [
-                            X.label,
-                            X.kind === "boolean"
+                            field.label,
+                            field.kind === "boolean"
                               ? i.jsxs("select", {
-                                  "aria-label": `Step ${Q + 1} ${X.label}`,
-                                  value: X.value,
-                                  onChange: (q) => {
+                                  "aria-label": `Step ${Q + 1} ${field.label}`,
+                                  value: field.value,
+                                  onChange: (event) => {
                                     (p(
-                                      f.map((W, K) =>
+                                      steps.map((step, K) =>
                                         K === Q
                                           ? {
-                                              ...W,
-                                              fields: W.fields.map((te, ae) =>
-                                                ae === J
-                                                  ? {
-                                                      ...te,
-                                                      value: q.target.value,
-                                                    }
-                                                  : te,
+                                              ...step,
+                                              fields: step.fields.map(
+                                                (field, ae) =>
+                                                  ae === J
+                                                    ? {
+                                                        ...field,
+                                                        value:
+                                                          event.target.value,
+                                                      }
+                                                    : field,
                                               ),
                                             }
-                                          : W,
+                                          : step,
                                       ),
                                     ),
                                       C());
@@ -306,24 +313,26 @@ function TextCleanupDialog(e) {
                                   ],
                                 })
                               : i.jsx("input", {
-                                  "aria-label": `Step ${Q + 1} ${X.label}`,
-                                  value: X.value,
-                                  onChange: (q) => {
+                                  "aria-label": `Step ${Q + 1} ${field.label}`,
+                                  value: field.value,
+                                  onChange: (event) => {
                                     (p(
-                                      f.map((W, K) =>
+                                      steps.map((step, K) =>
                                         K === Q
                                           ? {
-                                              ...W,
-                                              fields: W.fields.map((te, ae) =>
-                                                ae === J
-                                                  ? {
-                                                      ...te,
-                                                      value: q.target.value,
-                                                    }
-                                                  : te,
+                                              ...step,
+                                              fields: step.fields.map(
+                                                (field, ae) =>
+                                                  ae === J
+                                                    ? {
+                                                        ...field,
+                                                        value:
+                                                          event.target.value,
+                                                      }
+                                                    : field,
                                               ),
                                             }
-                                          : W,
+                                          : step,
                                       ),
                                     ),
                                       C());
@@ -338,7 +347,7 @@ function TextCleanupDialog(e) {
                       "aria-label": `Move step ${Q + 1} up`,
                       disabled: Q === 0,
                       onClick: () => {
-                        const X = [...f];
+                        const X = [...steps];
                         (([X[Q - 1], X[Q]] = [X[Q], X[Q - 1]]), p(X), C());
                       },
                       children: "↑",
@@ -346,7 +355,7 @@ function TextCleanupDialog(e) {
                     i.jsx("button", {
                       "aria-label": `Remove step ${Q + 1}`,
                       onClick: () => {
-                        (p(f.filter((X, J) => Q !== J)), C());
+                        (p(steps.filter((step, J) => Q !== J)), C());
                       },
                       children: i.jsx(LocalizedText, { children: "Remove" }),
                     }),
@@ -363,24 +372,29 @@ function TextCleanupDialog(e) {
                     i.jsx(LocalizedText, { children: "Add function" }),
                     i.jsx("select", {
                       value: m,
-                      onChange: (H) => v(H.target.value),
-                      children: textCleanupFunctionNames.map((H) =>
-                        i.jsx("option", { children: H }, H),
+                      onChange: (event) => v(event.target.value),
+                      children: textCleanupFunctionNames.map(
+                        (textCleanupFunctionName) =>
+                          i.jsx(
+                            "option",
+                            { children: textCleanupFunctionName },
+                            textCleanupFunctionName,
+                          ),
                       ),
                     }),
                   ],
                 }),
                 i.jsx("button", {
-                  disabled: f.length >= 12,
+                  disabled: steps.length >= 12,
                   onClick: () => {
-                    (p([...f, getTextFunctionSpec(m)]), C());
+                    (p([...steps, getTextFunctionSpec(m)]), C());
                   },
                   children: i.jsx(LocalizedText, { children: "Add step" }),
                 }),
                 i.jsx("button", {
                   onClick: () => {
                     (p([
-                      ...f,
+                      ...steps,
                       {
                         name: "SUBSTITUTE",
                         fields: [
@@ -397,7 +411,7 @@ function TextCleanupDialog(e) {
                     ]),
                       C());
                   },
-                  disabled: f.length >= 12,
+                  disabled: steps.length >= 12,
                   children: i.jsx(LocalizedText, {
                     children: "Replace nonbreaking spaces",
                   }),
@@ -414,7 +428,7 @@ function TextCleanupDialog(e) {
           }),
         }),
         i.jsx("button", {
-          onClick: N,
+          onClick: onClick,
           disabled: e.readOnly || e.allowNewSheet === false,
           children: i.jsx(LocalizedText, { children: "Preview cleanup" }),
         }),
@@ -508,7 +522,8 @@ function TextCleanupDialog(e) {
                               i.jsx("td", {
                                 children:
                                   B.errors.find(
-                                    (J) => J.sourceAddress === H.sourceAddress,
+                                    (error) =>
+                                      error.sourceAddress === H.sourceAddress,
                                   )?.error ?? typeof H.result,
                               }),
                             ],
@@ -575,8 +590,8 @@ function TextCleanupDialog(e) {
                   i.jsx(LocalizedText, { children: "Cleanup record" }),
                   i.jsx("select", {
                     value: $?.id ?? "",
-                    onChange: (H) => {
-                      (F(H.target.value), O(0));
+                    onChange: (event) => {
+                      (F(event.target.value), O(0));
                     },
                     children: L.map((H) =>
                       i.jsxs(
@@ -754,13 +769,13 @@ const textCleanupStepLabels = [
       throw Error("Choose distinct field positions from 1 to 50.");
     return t;
   };
-function describeSplitFieldStep(e) {
-  if (e.kind === "pattern")
-    return `Infer “${e.name}”: ${describeInferredTextRule(e.pattern)} (${e.examples.length} examples)`;
-  if (e.kind === "split")
-    return `Split field ${e.column + 1}: ${e.mode === "fixed" ? "breaks " + e.breaks.join(", ") : "delimiters " + JSON.stringify(e.delimiters) + (e.collapse ? ", collapse consecutive" : "")}`;
-  const r = e.columns.map((n) => n + 1).join(", ");
-  return `${textCleanupStepLabels.find((n) => n[0] === e.kind)?.[1]} · fields ${r}${e.kind === "convert" ? ` → ${e.to} (decimal ${e.decimal}, groups ${e.group || "none"}, dates ${e.dateOrder})` : e.kind === "fill" ? ` → ${e.direction}${e.groupColumns.length ? " within fields " + e.groupColumns.map((n) => n + 1).join(", ") : ""}` : e.kind === "concat" ? ` → ${e.name}; separator ${JSON.stringify(e.separator)}` : e.kind === "case" || e.kind === "trim" ? ` → ${e.mode}` : e.kind === "replace" ? ` ${JSON.stringify(e.find)} → ${JSON.stringify(e.replacement)}` : ""}`;
+function describeSplitFieldStep(step) {
+  if (step.kind === "pattern")
+    return `Infer “${step.name}”: ${describeInferredTextRule(step.pattern)} (${step.examples.length} examples)`;
+  if (step.kind === "split")
+    return `Split field ${step.column + 1}: ${step.mode === "fixed" ? "breaks " + step.breaks.join(", ") : "delimiters " + JSON.stringify(step.delimiters) + (step.collapse ? ", collapse consecutive" : "")}`;
+  const r = step.columns.map((column) => column + 1).join(", ");
+  return `${textCleanupStepLabels.find((textCleanupStepLabel) => textCleanupStepLabel[0] === step.kind)?.[1]} · fields ${r}${step.kind === "convert" ? ` → ${step.to} (decimal ${step.decimal}, groups ${step.group || "none"}, dates ${step.dateOrder})` : step.kind === "fill" ? ` → ${step.direction}${step.groupColumns.length ? " within fields " + step.groupColumns.map((groupColumn) => groupColumn + 1).join(", ") : ""}` : step.kind === "concat" ? ` → ${step.name}; separator ${JSON.stringify(step.separator)}` : step.kind === "case" || step.kind === "trim" ? ` → ${step.mode}` : step.kind === "replace" ? ` ${JSON.stringify(step.find)} → ${JSON.stringify(step.replacement)}` : ""}`;
 }
 
 export {

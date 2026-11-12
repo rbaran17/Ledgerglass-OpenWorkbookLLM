@@ -31,7 +31,7 @@ import {
   buildFunctionBrowserGroups,
 } from "./34-function-browser-and-names.js";
 
-function buildFormulaCompatibilityReport(e, r = {}) {
+function buildFormulaCompatibilityReport(workbook, r = {}) {
   for (const v of ["includeHidden", "resolveNames", "includeMetadata"])
     if (r[v] !== undefined && typeof r[v] != "boolean")
       throw Error(`${v} must be boolean.`);
@@ -39,7 +39,9 @@ function buildFormulaCompatibilityReport(e, r = {}) {
     r.allowedSheetIds !== undefined &&
     (!Array.isArray(r.allowedSheetIds) ||
       r.allowedSheetIds.some(
-        (v) => typeof v != "string" || !e.sheets.some((g) => g.id === v),
+        (allowedSheetId) =>
+          typeof allowedSheetId != "string" ||
+          !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
       ))
   )
     throw Error("Invalid authorized worksheet scope.");
@@ -47,20 +49,22 @@ function buildFormulaCompatibilityReport(e, r = {}) {
   for (const v of ["maxLocations", "maxCharacters", "maxFindings"])
     if (!Number.isInteger(t[v]) || t[v] < 1 || t[v] > nameScanLimits[v])
       throw Error(`Invalid ${v}; limits can only be narrowed.`);
-  const n = r.includeHidden ?? true,
-    o = r.resolveNames ?? true,
-    a = r.includeMetadata ?? true,
-    s = new Set(r.allowedSheetIds ?? e.sheets.map((v) => v.id)),
-    d = e.sheets.filter((v) => s.has(v.id) && (n || !v.hidden)),
+  const includeHidden = r.includeHidden ?? true,
+    resolvesNames = r.resolveNames ?? true,
+    includesMetadata = r.includeMetadata ?? true,
+    s = new Set(r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id)),
+    d = workbook.sheets.filter(
+      (sheet) => s.has(sheet.id) && (includeHidden || !sheet.hidden),
+    ),
     u = new Set(d.map((v) => v.id)),
     l = {
-      workbookId: e.id,
-      revision: e.revision,
+      workbookId: workbook.id,
+      revision: workbook.revision,
       scope: {
         sheetIds: [...u],
-        includeHidden: n,
-        resolvesNames: o,
-        includesMetadata: a,
+        includeHidden: includeHidden,
+        resolvesNames: resolvesNames,
+        includesMetadata: includesMetadata,
       },
       coverage: {
         locationsScanned: 0,
@@ -82,11 +86,11 @@ function buildFormulaCompatibilityReport(e, r = {}) {
       excelVerification: { status: "not-run", version: null },
     };
   if (
-    (o ||
+    (resolvesNames ||
       l.coverage.notes.push(
         "Named definitions are outside this report scope; unresolved names require host review.",
       ),
-    n ||
+    includeHidden ||
       l.coverage.notes.push(
         "Hidden worksheets, rows and columns are excluded by the chosen visibility scope.",
       ),
@@ -103,7 +107,7 @@ function buildFormulaCompatibilityReport(e, r = {}) {
       l.coverage.notes.includes(v) || l.coverage.notes.push(v));
   };
   let h = false;
-  const f = o ? (e.definedNames ?? []) : [],
+  const f = resolvesNames ? (workbook.definedNames ?? []) : [],
     p = (v, g, b = []) => {
       if (
         v.length > 4096 ||
@@ -115,7 +119,7 @@ function buildFormulaCompatibilityReport(e, r = {}) {
         );
       l.coverage.charactersScanned += v.length;
       const y = [];
-      rewriteFormulaReferences(v, e, g ?? d[0]?.id ?? "", "A1") &&
+      rewriteFormulaReferences(v, workbook, g ?? d[0]?.id ?? "", "A1") &&
         y.push({
           kind: "external-reference",
           message:
@@ -125,13 +129,15 @@ function buildFormulaCompatibilityReport(e, r = {}) {
         walkFormulaNodes(tokenizeFormulaText(v), (A, k, F, I) => {
           if (I || (!A.qualifier && k.has(normalizeBindingName(A.name))))
             return;
-          const O = normalizeFunctionName(A.name);
-          if (!F && ["TRUE", "FALSE"].includes(O)) return;
-          const j = buildFunctionCatalogEntry(O);
-          if (F && !A.qualifier && j.status === "local") return;
+          const functionName = normalizeFunctionName(A.name);
+          if (!F && ["TRUE", "FALSE"].includes(functionName)) return;
+          const functionCatalogEntry = buildFunctionCatalogEntry(functionName);
+          if (F && !A.qualifier && functionCatalogEntry.status === "local")
+            return;
           const z = A.qualifier
-            ? e.sheets.find(
-                (B) => B.name.toLowerCase() === A.qualifier.toLowerCase(),
+            ? workbook.sheets.find(
+                (sheet) =>
+                  sheet.name.toLowerCase() === A.qualifier.toLowerCase(),
               )
             : undefined;
           if (A.qualifier && (!z || !u.has(z.id))) {
@@ -196,13 +202,13 @@ function buildFormulaCompatibilityReport(e, r = {}) {
           }
           y.push({
             kind:
-              j.status === "connector-required"
+              functionCatalogEntry.status === "connector-required"
                 ? "connector-required"
                 : "unsupported-function",
-            functionName: O,
-            family: j.family,
+            functionName: functionName,
+            family: functionCatalogEntry.family,
             message:
-              j.status === "connector-required"
+              functionCatalogEntry.status === "connector-required"
                 ? "Disabled: an approved, implemented host connector is required. No data was requested."
                 : "This function has no local implementation. Review its source or add-in contract.",
           });
@@ -217,7 +223,7 @@ function buildFormulaCompatibilityReport(e, r = {}) {
       }
       return [...new Map(y.map((A) => [JSON.stringify(A), A])).values()];
     },
-    m = (v, g, b, y) => {
+    m = (v, source, b, y) => {
       if (h) return;
       if (++l.coverage.locationsScanned > t.maxLocations) {
         (l.coverage.locationsScanned--,
@@ -238,11 +244,11 @@ function buildFormulaCompatibilityReport(e, r = {}) {
         }
         l.findings.push({
           ...E,
-          source: g,
+          source: source,
           location: b,
           ...(y ? { sheetId: y.id, sheetName: y.name } : {}),
           message:
-            (g === "literal"
+            (source === "literal"
               ? "Stored as literal text; will not execute. "
               : "") + E.message,
         });
@@ -252,10 +258,10 @@ function buildFormulaCompatibilityReport(e, r = {}) {
   for (const v of d) {
     const g = cn(v, "row"),
       b = cn(v, "column");
-    for (const [y, w] of Object.entries(v.cells)) {
+    for (const [y, cell] of Object.entries(v.cells)) {
       if (h) break;
-      if (!(typeof w.raw != "string" || !w.raw.startsWith("="))) {
-        if (!n) {
+      if (!(typeof cell.raw != "string" || !cell.raw.startsWith("="))) {
+        if (!includeHidden) {
           const E = _t(y);
           if (
             g.some(({ start, end }) => E.row >= start && E.row <= end) ||
@@ -263,19 +269,24 @@ function buildFormulaCompatibilityReport(e, r = {}) {
           )
             continue;
         }
-        m(w.raw, w.literal ? "literal" : "cell", y, v);
+        m(cell.raw, cell.literal ? "literal" : "cell", y, v);
       }
     }
-    if (a && n) {
+    if (includesMetadata && includeHidden) {
       for (const y of v.conditionalFormats ?? [])
         y.formula && m(y.formula, "conditional-format", y.range, v);
       for (const y of v.tables ?? [])
-        for (const w of y.columns)
-          w.calculatedFormula &&
-            m(w.calculatedFormula, "table-template", `${y.name}[${w.name}]`, v);
+        for (const column of y.columns)
+          column.calculatedFormula &&
+            m(
+              column.calculatedFormula,
+              "table-template",
+              `${y.name}[${column.name}]`,
+              v,
+            );
     }
   }
-  if (a && o)
+  if (includesMetadata && resolvesNames)
     for (const v of f)
       (v.scopeSheetId && !u.has(v.scopeSheetId)) ||
         m(
@@ -285,8 +296,8 @@ function buildFormulaCompatibilityReport(e, r = {}) {
           d.find((g) => g.id === v.scopeSheetId),
         );
   return (
-    a &&
-      !n &&
+    includesMetadata &&
+      !includeHidden &&
       l.coverage.notes.push(
         "Conditional and table templates are excluded when hidden content is excluded; named definitions remain in scope.",
       ),
@@ -309,10 +320,12 @@ function FormulaCompatibilityDialog(e) {
             includeHidden: a,
           }),
         };
-      } catch (w) {
+      } catch (error) {
         return {
           error:
-            w instanceof Error ? w.message : "Could not inspect this workbook.",
+            error instanceof Error
+              ? error.message
+              : "Could not inspect this workbook.",
         };
       }
     }, [e.workbook, e.allowedSheetIds, a]),
@@ -324,11 +337,11 @@ function FormulaCompatibilityDialog(e) {
           `${w.name} ${w.outputs}`.toLowerCase().includes(d.toLowerCase()),
       ),
     g = v.find((w) => w.name === h) ?? v[0],
-    b = p.report,
-    y = () => {
-      if (!b) return;
-      if (e.onExport) return e.onExport(b);
-      const w = new Blob([JSON.stringify(b, null, 2)], {
+    report = p.report,
+    onClick = () => {
+      if (!report) return;
+      if (e.onExport) return e.onExport(report);
+      const w = new Blob([JSON.stringify(report, null, 2)], {
           type: "application/json",
         }),
         E = URL.createObjectURL(w),
@@ -340,11 +353,11 @@ function FormulaCompatibilityDialog(e) {
     };
   return i.jsx("div", {
     className: "formula-tool-backdrop",
-    onMouseDown: (w) => {
-      w.target === w.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
-    onKeyDown: (w) => {
-      w.key === "Escape" && e.onClose();
+    onKeyDown: (event) => {
+      event.key === "Escape" && e.onClose();
     },
     children: i.jsxs("section", {
       className: "formula-tools function-compatibility",
@@ -412,7 +425,7 @@ function FormulaCompatibilityDialog(e) {
                     i.jsx("input", {
                       type: "checkbox",
                       checked: a,
-                      onChange: (w) => s(w.target.checked),
+                      onChange: (event) => s(event.target.checked),
                     }),
                     i.jsx(LocalizedText, {
                       children: "Include hidden worksheets, rows and columns",
@@ -420,26 +433,26 @@ function FormulaCompatibilityDialog(e) {
                   ],
                 }),
                 p.error && i.jsx("p", { role: "alert", children: p.error }),
-                b &&
+                report &&
                   i.jsxs(i.Fragment, {
                     children: [
                       i.jsxs("p", {
                         role: "status",
                         children: [
                           i.jsx(LocalizedText, { children: "Revision " }),
-                          b.revision,
+                          report.revision,
                           " · ",
-                          b.coverage.locationsScanned,
+                          report.coverage.locationsScanned,
                           " ",
                           i.jsx(LocalizedText, {
                             children: "locations inspected ·",
                           }),
                           " ",
-                          b.findings.length,
+                          report.findings.length,
                           " ",
                           i.jsx(LocalizedText, { children: "findings ·" }),
                           " ",
-                          b.coverage.complete
+                          report.coverage.complete
                             ? "Scan complete within chosen scope"
                             : "Incomplete scan — review limits below",
                         ],
@@ -476,7 +489,7 @@ function FormulaCompatibilityDialog(e) {
                             }),
                             i.jsxs("tbody", {
                               children: [
-                                b.findings.slice(0, 200).map((w, E) =>
+                                report.findings.slice(0, 200).map((w, E) =>
                                   i.jsxs(
                                     "tr",
                                     {
@@ -531,7 +544,7 @@ function FormulaCompatibilityDialog(e) {
                                     E,
                                   ),
                                 ),
-                                !b.findings.length &&
+                                !report.findings.length &&
                                   i.jsx("tr", {
                                     children: i.jsx("td", {
                                       colSpan: 4,
@@ -546,7 +559,7 @@ function FormulaCompatibilityDialog(e) {
                           ],
                         }),
                       }),
-                      b.findings.length > 200 &&
+                      report.findings.length > 200 &&
                         i.jsxs("p", {
                           children: [
                             i.jsx(LocalizedText, {
@@ -554,7 +567,7 @@ function FormulaCompatibilityDialog(e) {
                                 "Showing 200 findings. Export the report for all",
                             }),
                             " ",
-                            b.findings.length,
+                            report.findings.length,
                             ".",
                           ],
                         }),
@@ -565,37 +578,37 @@ function FormulaCompatibilityDialog(e) {
                               children: "Family inventory and engagement uses",
                             }),
                           }),
-                          b.families.map((w) =>
+                          report.families.map((family) =>
                             i.jsxs(
                               "p",
                               {
                                 children: [
-                                  i.jsx("strong", { children: w.title }),
+                                  i.jsx("strong", { children: family.title }),
                                   " · ",
-                                  w.adopted.length,
+                                  family.adopted.length,
                                   " ",
                                   i.jsx(LocalizedText, {
                                     children: "adopted ·",
                                   }),
                                   " ",
-                                  w.unavailable.length,
+                                  family.unavailable.length,
                                   " ",
                                   i.jsx(LocalizedText, {
                                     children: "inventoried as unavailable",
                                   }),
                                   i.jsx("br", {}),
-                                  w.demand,
+                                  family.demand,
                                 ],
                               },
-                              w.id,
+                              family.id,
                             ),
                           ),
                         ],
                       }),
-                      i.jsx("p", { children: b.connectorPolicy.required }),
+                      i.jsx("p", { children: report.connectorPolicy.required }),
                       i.jsx("ul", {
-                        children: b.coverage.notes.map((w) =>
-                          i.jsx("li", { children: w }, w),
+                        children: report.coverage.notes.map((note) =>
+                          i.jsx("li", { children: note }, note),
                         ),
                       }),
                     ],
@@ -607,8 +620,8 @@ function FormulaCompatibilityDialog(e) {
                       children: i.jsx(LocalizedText, { children: "Close" }),
                     }),
                     i.jsx("button", {
-                      disabled: !b,
-                      onClick: y,
+                      disabled: !report,
+                      onClick: onClick,
                       children: i.jsx(LocalizedText, {
                         children: "Export compatibility report",
                       }),
@@ -633,7 +646,7 @@ function FormulaCompatibilityDialog(e) {
                         }),
                         i.jsx("input", {
                           value: d,
-                          onChange: (w) => u(w.target.value),
+                          onChange: (event) => u(event.target.value),
                         }),
                       ],
                     }),
@@ -642,18 +655,22 @@ function FormulaCompatibilityDialog(e) {
                         i.jsx(LocalizedText, { children: "Function family" }),
                         i.jsxs("select", {
                           value: l,
-                          onChange: (w) => c(w.target.value),
+                          onChange: (event) => c(event.target.value),
                           children: [
                             i.jsx("option", {
                               value: "",
                               children: "All families",
                             }),
-                            functionBrowserCategories.map((w) =>
-                              i.jsx(
-                                "option",
-                                { value: w.id, children: w.title },
-                                w.id,
-                              ),
+                            functionBrowserCategories.map(
+                              (functionBrowserCategory) =>
+                                i.jsx(
+                                  "option",
+                                  {
+                                    value: functionBrowserCategory.id,
+                                    children: functionBrowserCategory.title,
+                                  },
+                                  functionBrowserCategory.id,
+                                ),
                             ),
                           ],
                         }),
@@ -669,7 +686,7 @@ function FormulaCompatibilityDialog(e) {
                           "aria-label": text("Function contracts"),
                           size: 12,
                           value: g.name,
-                          onChange: (w) => f(w.target.value),
+                          onChange: (event) => f(event.target.value),
                           lang: language("Function contracts"),
                           "data-ui-label": "Function contracts",
                           children: v.map((w) =>
@@ -754,7 +771,10 @@ function FormulaCompatibilityDialog(e) {
                                   }),
                                   i.jsx("p", {
                                     children: frozenConversionUnits
-                                      .map((w) => w.symbol)
+                                      .map(
+                                        (frozenConversionUnit) =>
+                                          frozenConversionUnit.symbol,
+                                      )
                                       .join(", "),
                                   }),
                                   i.jsx("p", {
@@ -786,20 +806,20 @@ function describeEvaluatedValue(e) {
     return { kind: "error", text: String(e.error) };
   if (Array.isArray(e)) {
     const a = e.every(Array.isArray) ? e : [e],
-      s = [];
+      preview = [];
     for (const d of a) {
       for (const u of d) {
-        if (s.length === 8) break;
-        s.push(describeEvaluatedValue(u));
+        if (preview.length === 8) break;
+        preview.push(describeEvaluatedValue(u));
       }
-      if (s.length === 8) break;
+      if (preview.length === 8) break;
     }
     return {
       kind: "array",
       text: `${a.length} × ${a[0]?.length ?? 0} array`,
       rows: a.length,
       columns: a[0]?.length ?? 0,
-      preview: s,
+      preview: preview,
       truncated: a.length * (a[0]?.length ?? 0) > 8,
     };
   }
@@ -807,14 +827,14 @@ function describeEvaluatedValue(e) {
     if ("kind" in e && e.kind === "formula-closure")
       return { kind: "function", text: "LAMBDA function" };
     if ("ref" in e && e.ref && typeof e.ref == "object") {
-      const a = e.ref,
+      const ref = e.ref,
         s = (d) =>
           Number.isInteger(d.row) && Number.isInteger(d.col) && d.col > 0
             ? `${columnIndexToLetters(d.col - 1)}${d.row}`
             : "axis reference";
       return {
         kind: "reference",
-        text: `${a.sheet ? `${a.sheet}!` : ""}${a.from && a.to ? `${s(a.from)}:${s(a.to)}` : s(a)}`,
+        text: `${ref.sheet ? `${ref.sheet}!` : ""}${ref.from && ref.to ? `${s(ref.from)}:${s(ref.to)}` : s(ref)}`,
       };
     }
     return { kind: "unavailable", text: "Internal value" };
@@ -837,9 +857,9 @@ const validateInspectionLimit = (e, r) => {
     throw Error(`Inspection limits must be integers between 1 and ${r}.`);
   return e;
 };
-function inspectFormulaCalculation(e, r) {
-  const t = validateInspectionLimit(r.limits?.maxSteps, 500),
-    n = validateInspectionLimit(r.limits?.maxReads, 2e3);
+function inspectFormulaCalculation(workbook, r) {
+  const maxSteps = validateInspectionLimit(r.limits?.maxSteps, 500),
+    maxReads = validateInspectionLimit(r.limits?.maxReads, 2e3);
   if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("includeHidden must be boolean.");
   if (r.includeNames !== undefined && typeof r.includeNames != "boolean")
@@ -847,23 +867,28 @@ function inspectFormulaCalculation(e, r) {
   if (
     r.allowedSheetIds !== undefined &&
     (!Array.isArray(r.allowedSheetIds) ||
-      r.allowedSheetIds.some((C) => !e.sheets.some((T) => T.id === C)))
+      r.allowedSheetIds.some(
+        (allowedSheetId) =>
+          !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
+      ))
   )
     throw Error("Invalid authorized worksheet context.");
-  const o = new Set(r.allowedSheetIds ?? e.sheets.map((C) => C.id)),
+  const o = new Set(
+      r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id),
+    ),
     a = _t(r.address),
-    s = `${columnIndexToLetters(a.col)}${a.row + 1}`,
-    d = r.allowedRanges?.map((C) => {
-      if (!o.has(C.sheetId))
+    address = `${columnIndexToLetters(a.col)}${a.row + 1}`,
+    d = r.allowedRanges?.map((allowedRange) => {
+      if (!o.has(allowedRange.sheetId))
         throw Error(
           "Inspection ranges must remain within authorized worksheets.",
         );
-      return { ...C, bounds: parseRangeAddress(C.range) };
+      return { ...allowedRange, bounds: parseRangeAddress(allowedRange.range) };
     }),
     u = new Map(
-      e.sheets.map((C) => [
-        C.id,
-        { sheet: C, rows: cn(C, "row"), cols: cn(C, "column") },
+      workbook.sheets.map((sheet) => [
+        sheet.id,
+        { sheet: sheet, rows: cn(sheet, "row"), cols: cn(sheet, "column") },
       ]),
     ),
     l = (C, T) => {
@@ -887,23 +912,23 @@ function inspectFormulaCalculation(e, r) {
               !N.rows.some(($) => row >= $.start && row <= $.end) &&
               !N.cols.some(($) => col >= $.start && col <= $.end));
     };
-  if (!l(r.sheetId, s))
+  if (!l(r.sheetId, address))
     throw Error(
       "The selected cell is outside the visible, authorized inspection context.",
     );
-  const c = [],
-    h = [];
-  let f = 0,
-    p = 0,
+  const steps = [],
+    issues = [];
+  let reads = 0,
+    stepsObserved = 0,
     m = false,
     v = false;
   const g = (C, T) => {
-      !h.some((N) => N.kind === C && N.message === T) &&
-        h.length < 50 &&
-        h.push({ kind: C, message: T });
+      !issues.some((issue) => issue.kind === C && issue.message === T) &&
+        issues.length < 50 &&
+        issues.push({ kind: C, message: T });
     },
-    b = r.includeNames === false ? { ...e, definedNames: [] } : e,
-    y = calculateWorkbookWithSettings(
+    b = r.includeNames === false ? { ...workbook, definedNames: [] } : workbook,
+    workbookWithSettings = calculateWorkbookWithSettings(
       b,
       {},
       {
@@ -918,7 +943,7 @@ function inspectFormulaCalculation(e, r) {
             : true;
         },
         allowRead(C, T) {
-          if (++f > n)
+          if (++reads > maxReads)
             return (
               (v = true),
               g(
@@ -941,10 +966,10 @@ function inspectFormulaCalculation(e, r) {
         },
         step(C) {
           l(C.sheetId, C.address) &&
-            (p++,
-            !(c.length >= t) &&
-              c.push({
-                index: c.length + 1,
+            (stepsObserved++,
+            !(steps.length >= maxSteps) &&
+              steps.push({
+                index: steps.length + 1,
                 kind: C.kind,
                 sheetId: C.sheetId,
                 address: C.address,
@@ -957,52 +982,56 @@ function inspectFormulaCalculation(e, r) {
         },
       },
     ),
-    w = e.sheets.find((C) => C.id === r.sheetId).cells[s],
-    E = w?.raw ?? null,
-    A = typeof E == "string" && E.startsWith("=") && !w?.literal,
-    k = y(r.sheetId, s),
-    { range, diagnostic } = y.peekSpill(r.sheetId, s);
-  for (const C of y.getReferenceDiagnostics()) g("reference", C.message);
-  for (const C of y.getNamedFormulaDiagnostics()) g("name", C.message);
-  for (const C of y.getFinancialDiagnostics())
+    cell = workbook.sheets.find((sheet) => sheet.id === r.sheetId).cells[
+      address
+    ],
+    raw = cell?.raw ?? null,
+    A = typeof raw == "string" && raw.startsWith("=") && !cell?.literal,
+    k = workbookWithSettings(r.sheetId, address),
+    { range, diagnostic } = workbookWithSettings.peekSpill(r.sheetId, address);
+  for (const C of workbookWithSettings.getReferenceDiagnostics())
+    g("reference", C.message);
+  for (const C of workbookWithSettings.getNamedFormulaDiagnostics())
+    g("name", C.message);
+  for (const C of workbookWithSettings.getFinancialDiagnostics())
     (C.status === "error" ||
       (C.solver &&
         (C.solver.candidates.length > 1 || (C.signChanges ?? 0) > 1))) &&
       g("calculation", `${C.functionName}: ${C.message}`);
-  const O = y.getOperationalErrors();
+  const O = workbookWithSettings.getOperationalErrors();
   O.length &&
     g("calculation", `Local calculation diagnostics: ${O.join(", ")}.`);
-  const j = p > t;
-  j &&
+  const truncated = stepsObserved > maxSteps;
+  truncated &&
     g(
       "limit",
-      `Only the first ${t} steps were retained; calculation continued within its own limits.`,
+      `Only the first ${maxSteps} steps were retained; calculation continued within its own limits.`,
     );
   const z = m || v;
   return {
-    workbookId: e.id,
-    dateContext: y.getDateContext(),
-    ...(!z && y.getFinancialDiagnostics().length
-      ? { financial: y.getFinancialDiagnostics() }
+    workbookId: workbook.id,
+    dateContext: workbookWithSettings.getDateContext(),
+    ...(!z && workbookWithSettings.getFinancialDiagnostics().length
+      ? { financial: workbookWithSettings.getFinancialDiagnostics() }
       : {}),
-    revision: e.revision,
+    revision: workbook.revision,
     sheetId: r.sheetId,
-    address: s,
-    raw: E,
+    address: address,
+    raw: raw,
     result: z ? null : k,
     resultStatus: z ? "withheld" : A ? "calculated" : "literal",
-    steps: c,
-    firstErrorStep: c.find((C) => C.result.kind === "error")?.index,
+    steps: steps,
+    firstErrorStep: steps.find((step) => step.result.kind === "error")?.index,
     ...(!z && range ? { spillRange: range } : {}),
     ...(!z && diagnostic ? { spillDiagnostic: diagnostic } : {}),
-    issues: h,
+    issues: issues,
     coverage: {
-      complete: !j && !z && !O.length,
-      truncated: j,
-      reads: f,
-      stepsObserved: p,
-      maxSteps: t,
-      maxReads: n,
+      complete: !truncated && !z && !O.length,
+      truncated: truncated,
+      reads: reads,
+      stepsObserved: stepsObserved,
+      maxSteps: maxSteps,
+      maxReads: maxReads,
     },
     notes: [
       "Steps record one actual local calculation, in execution order. Function internals are a single step; references are shown as references without a second read.",
@@ -1034,7 +1063,7 @@ function EvaluateFormulaDialog(e) {
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
-    [a, s] = ne.useState(false),
+    [checked, s] = ne.useState(false),
     [d, u] = ne.useState(0),
     [l, c] = ne.useState(""),
     h = ne.useMemo(() => {
@@ -1044,60 +1073,67 @@ function EvaluateFormulaDialog(e) {
             sheetId: e.sheetId,
             address: e.address,
             allowedSheetIds: e.allowedSheetIds,
-            includeHidden: !!e.allowHidden && a,
+            includeHidden: !!e.allowHidden && checked,
           }),
         };
-      } catch (b) {
+      } catch (error) {
         return {
           error:
-            b instanceof Error
-              ? b.message
+            error instanceof Error
+              ? error.message
               : "Calculation could not be inspected.",
         };
       }
-    }, [e.workbook, e.sheetId, e.address, e.allowedSheetIds, e.allowHidden, a]);
+    }, [
+      e.workbook,
+      e.sheetId,
+      e.address,
+      e.allowedSheetIds,
+      e.allowHidden,
+      checked,
+    ]);
   (ne.useEffect(() => {
     (u(0), c(""));
   }, [h]),
     ne.useEffect(() => {
-      const b = document.activeElement;
+      const activeElement = document.activeElement;
       return (
         o.current?.querySelector("button")?.focus(),
         () => {
-          b?.isConnected && b.focus();
+          activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []));
-  const f = h.report,
-    p = f ? Math.min(d, f.steps.length - 1) : -1,
-    m = f?.steps[p],
+  const report = h.report,
+    p = report ? Math.min(d, report.steps.length - 1) : -1,
+    m = report?.steps[p],
     v = (b, y) =>
-      `${e.workbook.sheets.find((E) => E.id === b)?.name ?? "Unavailable sheet"}!${y}`,
-    g = () => {
-      if (f)
+      `${e.workbook.sheets.find((sheet) => sheet.id === b)?.name ?? "Unavailable sheet"}!${y}`,
+    onClick = () => {
+      if (report)
         try {
-          if (e.onExport) e.onExport(structuredClone(f));
+          if (e.onExport) e.onExport(structuredClone(report));
           else {
             const b = URL.createObjectURL(
-                new Blob([JSON.stringify(f, null, 2)], {
+                new Blob([JSON.stringify(report, null, 2)], {
                   type: "application/json",
                 }),
               ),
               y = document.createElement("a");
             ((y.href = b),
-              (y.download = `Calculation-${f.address}-revision-${f.revision}.json`),
+              (y.download = `Calculation-${report.address}-revision-${report.revision}.json`),
               y.click(),
               setTimeout(() => URL.revokeObjectURL(b), 1e3));
           }
           c("");
-        } catch (b) {
-          c(b instanceof Error ? b.message : "Export failed.");
+        } catch (error) {
+          c(error instanceof Error ? error.message : "Export failed.");
         }
     };
   return i.jsx("div", {
     className: "fi-backdrop",
-    onMouseDown: (b) => {
-      b.target === b.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
     children: i.jsxs("section", {
       className: "fi-dialog fe-dialog",
@@ -1105,11 +1141,11 @@ function EvaluateFormulaDialog(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       ref: o,
-      onKeyDown: (b) => {
+      onKeyDown: (event) => {
         if (
-          (b.stopPropagation(),
-          b.key === "Escape" && (b.preventDefault(), e.onClose()),
-          b.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Tab")
         ) {
           const y = [
               ...o.current.querySelectorAll(
@@ -1118,11 +1154,11 @@ function EvaluateFormulaDialog(e) {
             ],
             w = y[0],
             E = y.at(-1);
-          b.shiftKey && document.activeElement === w
-            ? (b.preventDefault(), E == null || E.focus())
-            : !b.shiftKey &&
+          event.shiftKey && document.activeElement === w
+            ? (event.preventDefault(), E == null || E.focus())
+            : !event.shiftKey &&
               document.activeElement === E &&
-              (b.preventDefault(), w == null || w.focus());
+              (event.preventDefault(), w == null || w.focus());
         }
       },
       children: [
@@ -1163,15 +1199,15 @@ function EvaluateFormulaDialog(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: a,
-                    onChange: (b) => s(b.target.checked),
+                    checked: checked,
+                    onChange: (event) => s(event.target.checked),
                   }),
                   i.jsx(LocalizedText, { children: "Include hidden cells" }),
                 ],
               }),
             i.jsx("button", {
-              disabled: !f,
-              onClick: g,
+              disabled: !report,
+              onClick: onClick,
               children: i.jsx(LocalizedText, {
                 children: "Export calculation steps",
               }),
@@ -1183,7 +1219,7 @@ function EvaluateFormulaDialog(e) {
           children: [
             h.error && i.jsx("p", { role: "alert", children: h.error }),
             l && i.jsx("p", { role: "alert", children: l }),
-            f &&
+            report &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("section", {
@@ -1192,8 +1228,12 @@ function EvaluateFormulaDialog(e) {
                     lang: language("Evaluation target"),
                     "data-ui-label": "Evaluation target",
                     children: [
-                      i.jsx("h3", { children: v(f.sheetId, f.address) }),
-                      i.jsx("code", { children: String(f.raw ?? "(blank)") }),
+                      i.jsx("h3", {
+                        children: v(report.sheetId, report.address),
+                      }),
+                      i.jsx("code", {
+                        children: String(report.raw ?? "(blank)"),
+                      }),
                       i.jsxs("p", {
                         children: [
                           i.jsx("strong", {
@@ -1201,64 +1241,66 @@ function EvaluateFormulaDialog(e) {
                               children: "Final result: ",
                             }),
                           }),
-                          f.resultStatus === "withheld"
+                          report.resultStatus === "withheld"
                             ? "Withheld"
-                            : String(f.result ?? "(blank)"),
-                          f.resultStatus === "literal"
+                            : String(report.result ?? "(blank)"),
+                          report.resultStatus === "literal"
                             ? " · literal input"
                             : "",
                         ],
                       }),
-                      f.spillRange &&
+                      report.spillRange &&
                         i.jsxs("p", {
                           children: [
                             i.jsx(LocalizedText, {
                               children: "Spill output: ",
                             }),
-                            f.spillRange,
+                            report.spillRange,
                           ],
                         }),
                     ],
                   }),
                   i.jsxs("div", {
-                    className: `fi-coverage ${f.coverage.complete ? "" : "fi-warning"}`,
+                    className: `fi-coverage ${report.coverage.complete ? "" : "fi-warning"}`,
                     role: "status",
                     children: [
-                      f.coverage.complete
+                      report.coverage.complete
                         ? "Calculation captured"
                         : "Partial calculation capture",
                       " ",
                       "· ",
-                      f.coverage.reads,
+                      report.coverage.reads,
                       " ",
                       i.jsx(LocalizedText, { children: "reads · " }),
-                      f.steps.length,
+                      report.steps.length,
                       " ",
                       i.jsx(LocalizedText, { children: "retained steps" }),
                     ],
                   }),
-                  f.issues.length > 0 &&
+                  report.issues.length > 0 &&
                     i.jsx("ul", {
                       "aria-label": text("Evaluation diagnostics"),
                       lang: language("Evaluation diagnostics"),
                       "data-ui-label": "Evaluation diagnostics",
-                      children: f.issues.map((b, y) =>
+                      children: report.issues.map((issue, y) =>
                         i.jsxs(
                           "li",
                           {
                             children: [
-                              i.jsxs("strong", { children: [b.kind, ": "] }),
-                              b.message,
+                              i.jsxs("strong", {
+                                children: [issue.kind, ": "],
+                              }),
+                              issue.message,
                             ],
                           },
                           y,
                         ),
                       ),
                     }),
-                  f.spillDiagnostic &&
+                  report.spillDiagnostic &&
                     i.jsx("p", {
                       className: "fi-warning",
-                      children: f.spillDiagnostic.message,
+                      children: report.spillDiagnostic.message,
                     }),
                   i.jsxs("div", {
                     className: "fi-controls fe-playback",
@@ -1277,21 +1319,23 @@ function EvaluateFormulaDialog(e) {
                       }),
                       i.jsx("button", {
                         onClick: () => u((b) => b + 1),
-                        disabled: !f.steps.length || p >= f.steps.length - 1,
+                        disabled:
+                          !report.steps.length || p >= report.steps.length - 1,
                         children: i.jsx(LocalizedText, {
                           children: "Next step",
                         }),
                       }),
                       i.jsx("button", {
-                        onClick: () => u(f.steps.length - 1),
-                        disabled: !f.steps.length || p >= f.steps.length - 1,
+                        onClick: () => u(report.steps.length - 1),
+                        disabled:
+                          !report.steps.length || p >= report.steps.length - 1,
                         children: i.jsx(LocalizedText, {
                           children: "Last step",
                         }),
                       }),
                       i.jsx("button", {
-                        onClick: () => u(f.firstErrorStep - 1),
-                        disabled: !f.firstErrorStep,
+                        onClick: () => u(report.firstErrorStep - 1),
+                        disabled: !report.firstErrorStep,
                         children: i.jsx(LocalizedText, {
                           children: "First error",
                         }),
@@ -1312,7 +1356,7 @@ function EvaluateFormulaDialog(e) {
                             m.index,
                             " ",
                             i.jsx(LocalizedText, { children: "of " }),
-                            f.steps.length,
+                            report.steps.length,
                             " · ",
                             m.kind,
                           ],
@@ -1322,10 +1366,10 @@ function EvaluateFormulaDialog(e) {
                             onClick: () => {
                               try {
                                 (e.onNavigate(m.sheetId, m.address), c(""));
-                              } catch (b) {
+                              } catch (error) {
                                 c(
-                                  b instanceof Error
-                                    ? b.message
+                                  error instanceof Error
+                                    ? error.message
                                     : "Navigation failed.",
                                 );
                               }
@@ -1338,7 +1382,7 @@ function EvaluateFormulaDialog(e) {
                           i.jsxs("p", {
                             children: [
                               i.jsx(LocalizedText, { children: "Inputs: " }),
-                              m.inputs.map((b) => b.text).join("; "),
+                              m.inputs.map((input) => input.text).join("; "),
                             ],
                           }),
                         i.jsxs("p", {
@@ -1378,33 +1422,33 @@ function EvaluateFormulaDialog(e) {
                           i.jsx(LocalizedText, {
                             children: "Captured steps (",
                           }),
-                          f.steps.length,
+                          report.steps.length,
                           ")",
                         ],
                       }),
                       i.jsx("ol", {
                         className: "fe-log",
-                        children: f.steps.map((b) =>
+                        children: report.steps.map((step) =>
                           i.jsx(
                             "li",
                             {
                               children: i.jsxs("button", {
                                 "aria-current":
-                                  b.index === m?.index ? "step" : undefined,
-                                onClick: () => u(b.index - 1),
+                                  step.index === m?.index ? "step" : undefined,
+                                onClick: () => u(step.index - 1),
                                 children: [
-                                  b.index,
+                                  step.index,
                                   ". ",
-                                  v(b.sheetId, b.address),
+                                  v(step.sheetId, step.address),
                                   " · ",
-                                  b.operation,
+                                  step.operation,
                                   " ",
                                   "→ ",
-                                  b.result.text,
+                                  step.result.text,
                                 ],
                               }),
                             },
-                            b.index,
+                            step.index,
                           ),
                         ),
                       }),
@@ -1418,8 +1462,8 @@ function EvaluateFormulaDialog(e) {
                         }),
                       }),
                       i.jsx("ul", {
-                        children: f.notes.map((b) =>
-                          i.jsx("li", { children: b }, b),
+                        children: report.notes.map((note) =>
+                          i.jsx("li", { children: note }, note),
                         ),
                       }),
                     ],
@@ -1445,9 +1489,9 @@ function CalculationInspectorDialog(e) {
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
   a.current = e.onClose;
-  const [s, d] = ne.useState(e.initialDirection ?? "precedents"),
-    [u, l] = ne.useState(1),
-    [c, h] = ne.useState(false),
+  const [direction, d] = ne.useState(e.initialDirection ?? "precedents"),
+    [depth, l] = ne.useState(1),
+    [checked, h] = ne.useState(false),
     [f, p] = ne.useState(0),
     [m, v] = ne.useState(""),
     g = ne.useMemo(() => {
@@ -1456,17 +1500,17 @@ function CalculationInspectorDialog(e) {
           result: inspectFormulaDependencies(e.workbook, {
             sheetId: e.sheetId,
             address: e.address,
-            direction: s,
-            depth: u,
-            includeHidden: !!e.allowHidden && c,
+            direction: direction,
+            depth: depth,
+            includeHidden: !!e.allowHidden && checked,
             allowedSheetIds: e.allowedSheetIds,
           }),
         };
-      } catch (k) {
+      } catch (error) {
         return {
           error:
-            k instanceof Error
-              ? k.message
+            error instanceof Error
+              ? error.message
               : "The selected cell could not be inspected.",
         };
       }
@@ -1476,28 +1520,28 @@ function CalculationInspectorDialog(e) {
       e.address,
       e.allowedSheetIds,
       e.allowHidden,
-      s,
-      u,
-      c,
+      direction,
+      depth,
+      checked,
     ]);
   (ne.useEffect(() => {
     (p(0), v(""));
   }, [g]),
     ne.useEffect(() => {
-      const k = document.activeElement;
+      const activeElement = document.activeElement;
       return (
         o.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus(),
         () => {
-          k?.isConnected && k.focus();
+          activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []));
-  const b = g.result,
+  const result = g.result,
     y = (k) => {
       const [F, I] = JSON.parse(k);
-      return `${e.workbook.sheets.find((j) => j.id === F)?.name ?? "Unavailable sheet"}!${I}`;
+      return `${e.workbook.sheets.find((sheet) => sheet.id === F)?.name ?? "Unavailable sheet"}!${I}`;
     },
-    w = Math.max(1, Math.ceil((b?.nodes.length ?? 0) / 50)),
+    w = Math.max(1, Math.ceil((result?.nodes.length ?? 0) / 50)),
     E = Math.min(f, w - 1),
     A = (k) => {
       try {
@@ -1506,23 +1550,23 @@ function CalculationInspectorDialog(e) {
           address: k.address,
           direction: "precedents",
           allowedSheetIds: e.allowedSheetIds,
-          includeHidden: !!e.allowHidden && c,
+          includeHidden: !!e.allowHidden && checked,
           limits: { maxFormulaCells: 1, maxNodes: 1, maxReferences: 1 },
         }),
           e.onNavigate(k.sheetId, k.address),
           v(""));
-      } catch (F) {
+      } catch (error) {
         v(
-          F instanceof Error
-            ? F.message
+          error instanceof Error
+            ? error.message
             : "The host could not navigate to this cell.",
         );
       }
     };
   return i.jsx("div", {
     className: "fi-backdrop",
-    onMouseDown: (k) => {
-      k.target === k.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
     children: i.jsxs("section", {
       ref: o,
@@ -1530,11 +1574,11 @@ function CalculationInspectorDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
-      onKeyDown: (k) => {
+      onKeyDown: (event) => {
         if (
-          (k.stopPropagation(),
-          k.key === "Escape" && (k.preventDefault(), a.current()),
-          k.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), a.current()),
+          event.key === "Tab")
         ) {
           const I = [
               ...(o.current?.querySelectorAll(
@@ -1543,11 +1587,11 @@ function CalculationInspectorDialog(e) {
             ].filter((z) => !z.hidden),
             O = I[0],
             j = I.at(-1);
-          k.shiftKey && document.activeElement === O
-            ? (k.preventDefault(), j == null || j.focus())
-            : !k.shiftKey &&
+          event.shiftKey && document.activeElement === O
+            ? (event.preventDefault(), j == null || j.focus())
+            : !event.shiftKey &&
               document.activeElement === j &&
-              (k.preventDefault(), O == null || O.focus());
+              (event.preventDefault(), O == null || O.focus());
         }
       },
       children: [
@@ -1595,20 +1639,20 @@ function CalculationInspectorDialog(e) {
                     role: "tab",
                     id: `${n}-${k}`,
                     "aria-controls": `${n}-panel`,
-                    "aria-selected": s === k,
-                    tabIndex: s === k ? 0 : -1,
+                    "aria-selected": direction === k,
+                    tabIndex: direction === k ? 0 : -1,
                     onClick: () => d(k),
-                    onKeyDown: (F) => {
+                    onKeyDown: (event) => {
                       if (
                         ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
-                          F.key,
+                          event.key,
                         )
                       ) {
-                        F.preventDefault();
+                        event.preventDefault();
                         const O =
-                          F.key === "Home"
+                          event.key === "Home"
                             ? "precedents"
-                            : F.key === "End" || k === "precedents"
+                            : event.key === "End" || k === "precedents"
                               ? "dependents"
                               : "precedents";
                         (d(O), document.getElementById(`${n}-${O}`)?.focus());
@@ -1625,8 +1669,8 @@ function CalculationInspectorDialog(e) {
                 i.jsx(LocalizedText, { children: "Traversal depth" }),
                 i.jsx("select", {
                   "aria-label": text("Traversal depth"),
-                  value: u,
-                  onChange: (k) => l(Number(k.target.value)),
+                  value: depth,
+                  onChange: (event) => l(Number(event.target.value)),
                   lang: language("Traversal depth"),
                   "data-ui-label": "Traversal depth",
                   children: Array.from({ length: 8 }, (k, F) =>
@@ -1649,8 +1693,8 @@ function CalculationInspectorDialog(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: c,
-                    onChange: (k) => h(k.target.checked),
+                    checked: checked,
+                    onChange: (event) => h(event.target.checked),
                   }),
                   i.jsx(LocalizedText, {
                     children: "Include hidden cells in the allowed context",
@@ -1667,11 +1711,11 @@ function CalculationInspectorDialog(e) {
           }),
         m &&
           i.jsx("p", { role: "alert", className: "fi-warning", children: m }),
-        b &&
+        result &&
           i.jsxs("div", {
             role: "tabpanel",
             id: `${n}-panel`,
-            "aria-labelledby": `${n}-${s}`,
+            "aria-labelledby": `${n}-${direction}`,
             children: [
               i.jsxs("section", {
                 className: "fi-target",
@@ -1680,7 +1724,11 @@ function CalculationInspectorDialog(e) {
                 "data-ui-label": "Selected cell",
                 children: [
                   i.jsxs("h3", {
-                    children: [b.target.sheetName, "!", b.target.address],
+                    children: [
+                      result.target.sheetName,
+                      "!",
+                      result.target.address,
+                    ],
                   }),
                   i.jsxs("dl", {
                     children: [
@@ -1691,7 +1739,9 @@ function CalculationInspectorDialog(e) {
                       }),
                       i.jsx("dd", {
                         children: i.jsx("code", {
-                          children: formatCellValueForDisplay(b.target.raw),
+                          children: formatCellValueForDisplay(
+                            result.target.raw,
+                          ),
                         }),
                       }),
                       i.jsx("dt", {
@@ -1701,11 +1751,13 @@ function CalculationInspectorDialog(e) {
                       }),
                       i.jsxs("dd", {
                         children: [
-                          b.target.resultStatus === "unavailable"
+                          result.target.resultStatus === "unavailable"
                             ? "Unavailable"
-                            : formatCellValueForDisplay(b.target.result),
-                          b.target.resultNote &&
-                            i.jsx("small", { children: b.target.resultNote }),
+                            : formatCellValueForDisplay(result.target.result),
+                          result.target.resultNote &&
+                            i.jsx("small", {
+                              children: result.target.resultNote,
+                            }),
                         ],
                       }),
                     ],
@@ -1714,40 +1766,40 @@ function CalculationInspectorDialog(e) {
               }),
               i.jsxs("div", {
                 role: "status",
-                className: b.coverage.complete
+                className: result.coverage.complete
                   ? "fi-coverage"
                   : "fi-coverage fi-warning",
                 children: [
                   i.jsxs("strong", {
                     children: [
-                      b.nodes.length,
+                      result.nodes.length,
                       " ",
-                      s,
+                      direction,
                       " ",
                       i.jsx(LocalizedText, { children: "listed ·" }),
                       " ",
-                      b.coverage.complete
+                      result.coverage.complete
                         ? "Complete within the selected static scope"
                         : "Partial static inspection",
                     ],
                   }),
                   i.jsxs("p", {
                     children: [
-                      b.coverage.formulaCellsScanned,
+                      result.coverage.formulaCellsScanned,
                       " ",
                       i.jsx(LocalizedText, { children: "of" }),
                       " ",
-                      b.coverage.formulaCellsAvailable,
+                      result.coverage.formulaCellsAvailable,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "eligible formula cells scanned; ",
                       }),
-                      b.coverage.referencesScanned,
+                      result.coverage.referencesScanned,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "references inspected. ",
                       }),
-                      b.coverage.excludedCells,
+                      result.coverage.excludedCells,
                       " ",
                       i.jsx(LocalizedText, {
                         children:
@@ -1755,13 +1807,15 @@ function CalculationInspectorDialog(e) {
                       }),
                     ],
                   }),
-                  b.coverage.notes.map((k) => i.jsx("p", { children: k }, k)),
+                  result.coverage.notes.map((note) =>
+                    i.jsx("p", { children: note }, note),
+                  ),
                 ],
               }),
               i.jsxs("p", {
                 className: "fi-explanation",
                 children: [
-                  s === "precedents"
+                  direction === "precedents"
                     ? "These cells are referenced by the selected cell, directly or through other formulas."
                     : "These formula cells contain a potential reference path to the selected cell.",
                   " ",
@@ -1771,11 +1825,11 @@ function CalculationInspectorDialog(e) {
                   }),
                 ],
               }),
-              b.nodes.length
+              result.nodes.length
                 ? i.jsx("div", {
                     className: "fi-table-wrap",
                     children: i.jsxs("table", {
-                      "aria-label": `${s} cells`,
+                      "aria-label": `${direction} cells`,
                       children: [
                         i.jsx("thead", {
                           children: i.jsxs("tr", {
@@ -1804,42 +1858,48 @@ function CalculationInspectorDialog(e) {
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: b.nodes
+                          children: result.nodes
                             .slice(E * 50, (E + 1) * 50)
-                            .map((k) =>
+                            .map((cell) =>
                               i.jsxs(
                                 "tr",
                                 {
                                   children: [
                                     i.jsx("td", {
                                       children: i.jsxs("button", {
-                                        onClick: () => A(k),
-                                        "aria-label": `Go to ${k.sheetName}!${k.address}`,
-                                        children: [k.sheetName, "!", k.address],
+                                        onClick: () => A(cell),
+                                        "aria-label": `Go to ${cell.sheetName}!${cell.address}`,
+                                        children: [
+                                          cell.sheetName,
+                                          "!",
+                                          cell.address,
+                                        ],
                                       }),
                                     }),
-                                    i.jsx("td", { children: k.depth }),
+                                    i.jsx("td", { children: cell.depth }),
                                     i.jsx("td", {
                                       children: i.jsx("code", {
                                         children: formatCellValueForDisplay(
-                                          k.raw,
+                                          cell.raw,
                                         ),
                                       }),
                                     }),
                                     i.jsx("td", {
                                       children:
-                                        k.resultStatus === "unavailable"
+                                        cell.resultStatus === "unavailable"
                                           ? i.jsx("span", {
-                                              title: k.resultNote,
+                                              title: cell.resultNote,
                                               children: i.jsx(LocalizedText, {
                                                 children: "Unavailable",
                                               }),
                                             })
-                                          : formatCellValueForDisplay(k.result),
+                                          : formatCellValueForDisplay(
+                                              cell.result,
+                                            ),
                                     }),
                                   ],
                                 },
-                                k.key,
+                                cell.key,
                               ),
                             ),
                         }),
@@ -1849,7 +1909,7 @@ function CalculationInspectorDialog(e) {
                 : i.jsxs("p", {
                     children: [
                       i.jsx(LocalizedText, { children: "No " }),
-                      s,
+                      direction,
                       " ",
                       i.jsx(LocalizedText, {
                         children:
@@ -1889,7 +1949,7 @@ function CalculationInspectorDialog(e) {
                     }),
                   ],
                 }),
-              b.cycles.length > 0 &&
+              result.cycles.length > 0 &&
                 i.jsxs("section", {
                   className: "fi-warning",
                   "aria-label": text("Detected cycles"),
@@ -1902,8 +1962,8 @@ function CalculationInspectorDialog(e) {
                       }),
                     }),
                     i.jsx("ul", {
-                      children: b.cycles.map((k, F) =>
-                        i.jsx("li", { children: k.map(y).join(" → ") }, F),
+                      children: result.cycles.map((cycle, F) =>
+                        i.jsx("li", { children: cycle.map(y).join(" → ") }, F),
                       ),
                     }),
                   ],
@@ -1913,32 +1973,33 @@ function CalculationInspectorDialog(e) {
                   i.jsxs("summary", {
                     children: [
                       i.jsx(LocalizedText, { children: "Reference ranges (" }),
-                      b.references.length,
+                      result.references.length,
                       ")",
                     ],
                   }),
                   i.jsx("ul", {
-                    children: b.references.map((k, F) =>
+                    children: result.references.map((reference, F) =>
                       i.jsxs(
                         "li",
                         {
                           children: [
-                            i.jsx("code", { children: y(k.from) }),
+                            i.jsx("code", { children: y(reference.from) }),
                             " →",
                             " ",
-                            e.workbook.sheets.find((O) => O.id === k.sheetId)
-                              ?.name,
+                            e.workbook.sheets.find(
+                              (sheet) => sheet.id === reference.sheetId,
+                            )?.name,
                             "!",
-                            k.range,
+                            reference.range,
                             " · ",
-                            k.cellCount.toLocaleString(),
+                            reference.cellCount.toLocaleString(),
                             " ",
                             i.jsx(LocalizedText, { children: "cells ·" }),
                             " ",
-                            k.kind,
+                            reference.kind,
                             " ·",
                             " ",
-                            i.jsx("code", { children: k.token }),
+                            i.jsx("code", { children: reference.token }),
                           ],
                         },
                         F,
@@ -1948,38 +2009,38 @@ function CalculationInspectorDialog(e) {
                 ],
               }),
               i.jsxs("details", {
-                open: b.issues.length > 0,
+                open: result.issues.length > 0,
                 children: [
                   i.jsxs("summary", {
                     children: [
                       i.jsx(LocalizedText, {
                         children: "Unresolved or excluded dependencies (",
                       }),
-                      b.issues.length,
+                      result.issues.length,
                       ")",
                     ],
                   }),
-                  b.issues.length
+                  result.issues.length
                     ? i.jsx("ul", {
-                        children: b.issues.map((k, F) =>
+                        children: result.issues.map((issue, F) =>
                           i.jsxs(
                             "li",
                             {
                               children: [
-                                i.jsx("strong", { children: k.kind }),
+                                i.jsx("strong", { children: issue.kind }),
                                 " · ",
-                                y(k.from),
-                                k.token &&
+                                y(issue.from),
+                                issue.token &&
                                   i.jsxs(i.Fragment, {
                                     children: [
                                       " ",
                                       "· ",
-                                      i.jsx("code", { children: k.token }),
+                                      i.jsx("code", { children: issue.token }),
                                     ],
                                   }),
                                 " ",
                                 "— ",
-                                k.message,
+                                issue.message,
                               ],
                             },
                             F,
@@ -2014,14 +2075,16 @@ function CalculationInspectorDialog(e) {
     }),
   });
 }
-function normalizeFormulaWatchContext(e, r) {
+function normalizeFormulaWatchContext(workbook, r) {
   if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
   if (
     r.allowedSheetIds !== undefined &&
     (!Array.isArray(r.allowedSheetIds) ||
       r.allowedSheetIds.some(
-        (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
+        (allowedSheetId) =>
+          typeof allowedSheetId != "string" ||
+          !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
       ))
   )
     throw Error(
@@ -2030,21 +2093,22 @@ function normalizeFormulaWatchContext(e, r) {
   return {
     includeHidden: !!r.includeHidden,
     allowedSheetIds: [
-      ...new Set(r.allowedSheetIds ?? e.sheets.map((t) => t.id)),
+      ...new Set(r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id)),
     ].sort(),
   };
 }
-function classifyWatchedCell(e, r, t) {
-  const n = e.sheets.find((o) => o.id === r.anchor.sheetId);
-  if (!n) return "orphaned";
-  if (!t.allowedSheetIds.includes(n.id)) return "excluded";
-  if (!t.includeHidden) {
+function classifyWatchedCell(workbook, r, formulaWatchContext) {
+  const sheet = workbook.sheets.find((sheet) => sheet.id === r.anchor.sheetId);
+  if (!sheet) return "orphaned";
+  if (!formulaWatchContext.allowedSheetIds.includes(sheet.id))
+    return "excluded";
+  if (!formulaWatchContext.includeHidden) {
     const o = _t(r.anchor.address);
     if (
-      n.hidden ||
-      n.veryHidden ||
-      cn(n, "row").some((a) => a.start <= o.row && a.end >= o.row) ||
-      cn(n, "column").some((a) => a.start <= o.col && a.end >= o.col)
+      sheet.hidden ||
+      sheet.veryHidden ||
+      cn(sheet, "row").some((a) => a.start <= o.row && a.end >= o.row) ||
+      cn(sheet, "column").some((a) => a.start <= o.col && a.end >= o.col)
     )
       return "hidden";
   }

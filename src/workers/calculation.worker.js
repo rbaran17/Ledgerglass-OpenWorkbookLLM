@@ -17,82 +17,107 @@ import {
   refreshCalculationReport,
 } from "../app/03-workbook-model/09-calculation-engine.js";
 
-function GR(e, t) {
-  let r = t.calculator,
-    o = [];
-  for (let n of e.sheets)
+function GR(workbook, calculation) {
+  let calculator = calculation.calculator,
+    spills = [];
+  for (let sheet of workbook.sheets)
     try {
-      for (let i of r.getSpillEntries(n.id))
-        o.push({
-          ...i,
-          sheetId: n.id,
-          result: r.getTypedValue(n.id, i.address),
+      for (let spillEntry of calculator.getSpillEntries(sheet.id))
+        spills.push({
+          ...spillEntry,
+          sheetId: sheet.id,
+          result: calculator.getTypedValue(sheet.id, spillEntry.address),
         });
     } catch {
-      if (!r.getOperationalErrors().includes("#LIMIT!"))
+      if (!calculator.getOperationalErrors().includes("#LIMIT!"))
         throw Error("Could not capture spill results.");
     }
   return {
-    inputSignature: getCalculationInputSignature(e),
-    report: t.report,
-    spills: o,
-    spillMetadata: t.report.cells.map((n) => ({
-      sheetId: n.sheetId,
-      address: n.address,
-      ...r.peekSpill(n.sheetId, n.address),
+    inputSignature: getCalculationInputSignature(workbook),
+    report: calculation.report,
+    spills: spills,
+    spillMetadata: calculation.report.cells.map((cell) => ({
+      sheetId: cell.sheetId,
+      address: cell.address,
+      ...calculator.peekSpill(cell.sheetId, cell.address),
     })),
-    references: r.getReferenceDiagnostics(),
-    names: r.getNamedFormulaDiagnostics(),
-    financial: r.getFinancialDiagnostics(),
-    operationalErrors: r.getOperationalErrors(),
+    references: calculator.getReferenceDiagnostics(),
+    names: calculator.getNamedFormulaDiagnostics(),
+    financial: calculator.getFinancialDiagnostics(),
+    operationalErrors: calculator.getOperationalErrors(),
   };
 }
 
 function HR() {
-  let e;
-  return (t) => {
-    let r = t.workbook;
+  let previousWorkbook;
+  return (request) => {
+    let workbook = request.workbook;
     try {
-      if (t.baseRevision !== undefined) {
-        if (!e || e.id !== r.id || e.revision !== t.baseRevision)
+      if (request.baseRevision !== undefined) {
+        if (
+          !previousWorkbook ||
+          previousWorkbook.id !== workbook.id ||
+          previousWorkbook.revision !== request.baseRevision
+        )
           throw Error("Stale calculation delta");
-        r = {
-          ...r,
-          sheets: r.sheets.map((a) => {
-            let l = e.sheets.find((u) => u.id === a.id),
-              s = t.removedCells?.[a.id] ?? [];
-            if (!l) return a;
-            if (!Object.keys(a.cells).length && !s.length)
-              return { ...a, cells: l.cells };
-            let c = { ...l.cells, ...a.cells };
-            for (let u of s) delete c[u];
-            return { ...a, cells: c };
+        workbook = {
+          ...workbook,
+          sheets: workbook.sheets.map((sheet) => {
+            let matchingSheet = previousWorkbook.sheets.find(
+                (previousSheet) => previousSheet.id === sheet.id,
+              ),
+              removedCellAddresses = request.removedCells?.[sheet.id] ?? [];
+            if (!matchingSheet) return sheet;
+            if (
+              !Object.keys(sheet.cells).length &&
+              !removedCellAddresses.length
+            )
+              return { ...sheet, cells: matchingSheet.cells };
+            let cells = { ...matchingSheet.cells, ...sheet.cells };
+            for (let cellAddress of removedCellAddresses)
+              delete cells[cellAddress];
+            return { ...sheet, cells: cells };
           }),
         };
       }
-      let { memoryBudgetBytes } = resolveCalculationBudget(r.calculation);
-      if (estimateWorkbookMemoryBytes(r, memoryBudgetBytes) > memoryBudgetBytes)
+      let { memoryBudgetBytes } = resolveCalculationBudget(
+        workbook.calculation,
+      );
+      if (
+        estimateWorkbookMemoryBytes(workbook, memoryBudgetBytes) >
+        memoryBudgetBytes
+      )
         throw Error(
           "#LIMIT! Calculation inputs exceed the working-data budget.",
         );
-      (deepFreezeValue(r),
-        setExtensionCacheEntries(r, t.extensionAvailability ?? []),
-        e && (zie(e, r), carryCalculatorRecordForward(e, r)));
-      let n = t.force ? refreshCalculationReport(r) : getWorkbookCalculation(r),
-        i = GR(r, n);
-      if (estimateValueFootprintBytes(i, memoryBudgetBytes) > memoryBudgetBytes)
+      (deepFreezeValue(workbook),
+        setExtensionCacheEntries(workbook, request.extensionAvailability ?? []),
+        previousWorkbook &&
+          (zie(previousWorkbook, workbook),
+          carryCalculatorRecordForward(previousWorkbook, workbook)));
+      let calculation = request.force
+          ? refreshCalculationReport(workbook)
+          : getWorkbookCalculation(workbook),
+        result = GR(workbook, calculation);
+      if (
+        estimateValueFootprintBytes(result, memoryBudgetBytes) >
+        memoryBudgetBytes
+      )
         throw Error(
           "#LIMIT! Calculation result payload exceeds the working-data budget.",
         );
-      return ((e = r), { id: t.id, result: i });
-    } catch (o) {
       return (
-        (e = undefined),
+        (previousWorkbook = workbook),
+        { id: request.id, result: result }
+      );
+    } catch (error) {
+      return (
+        (previousWorkbook = undefined),
         {
-          id: t.id,
+          id: request.id,
           error:
-            o instanceof Error && o.message.startsWith("#LIMIT!")
-              ? o.message
+            error instanceof Error && error.message.startsWith("#LIMIT!")
+              ? error.message
               : "Calculation worker failed; no result was published.",
         }
       );

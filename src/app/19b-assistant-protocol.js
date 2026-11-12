@@ -43,56 +43,61 @@ const attachmentMediaTypes = {
   webp: "image/webp",
 };
 const textAttachmentExtensions = new Set(["txt", "md", "csv", "tsv", "json"]);
-const getFileExtension = (e) => e.split(".").pop()?.toLowerCase() ?? "";
-function assertCondition(e, r) {
-  if (!e) throw new Error(r);
+const getFileExtension = (fileName) =>
+  fileName.split(".").pop()?.toLowerCase() ?? "";
+function assertCondition(condition, message) {
+  if (!condition) throw new Error(message);
 }
-function isSafeAttachmentFilename(e) {
+function isSafeAttachmentFilename(fileName) {
   return (
-    typeof e == "string" &&
-    e.length > 0 &&
-    e.length <= 180 &&
-    !/[\x00-\x1f\x7f/\\]/.test(e)
+    typeof fileName == "string" &&
+    fileName.length > 0 &&
+    fileName.length <= 180 &&
+    !/[\x00-\x1f\x7f/\\]/.test(fileName)
   );
 }
-function matchesFileSignature(e, r) {
-  const t = (...n) => n.every((o, a) => e[a] === o);
-  return r === "pdf"
-    ? t(37, 80, 68, 70, 45)
-    : r === "png"
-      ? t(137, 80, 78, 71, 13, 10, 26, 10)
-      : r === "jpg" || r === "jpeg"
-        ? t(255, 216, 255)
-        : r === "webp"
-          ? t(82, 73, 70, 70) &&
-            String.fromCharCode(...e.slice(8, 12)) === "WEBP"
-          : r === "xlsx" || r === "docx"
-            ? t(80, 75, 3, 4)
-            : textAttachmentExtensions.has(r);
+function matchesFileSignature(attachmentBytes, fileExtension) {
+  const startsWithBytes = (...expectedBytes) =>
+    expectedBytes.every(
+      (expectedByte, byteIndex) => attachmentBytes[byteIndex] === expectedByte,
+    );
+  return fileExtension === "pdf"
+    ? startsWithBytes(37, 80, 68, 70, 45)
+    : fileExtension === "png"
+      ? startsWithBytes(137, 80, 78, 71, 13, 10, 26, 10)
+      : fileExtension === "jpg" || fileExtension === "jpeg"
+        ? startsWithBytes(255, 216, 255)
+        : fileExtension === "webp"
+          ? startsWithBytes(82, 73, 70, 70) &&
+            String.fromCharCode(...attachmentBytes.slice(8, 12)) === "WEBP"
+          : fileExtension === "xlsx" || fileExtension === "docx"
+            ? startsWithBytes(80, 75, 3, 4)
+            : textAttachmentExtensions.has(fileExtension);
 }
-function parseAssistantChatRequest(e) {
+function parseAssistantChatRequest(request) {
   (assertCondition(
-    hasOnlyAllowedKeys(e, ["version", "messages", "attachments"]) &&
-      e.version === 1 &&
-      Array.isArray(e.messages) &&
-      Array.isArray(e.attachments),
+    hasOnlyAllowedKeys(request, ["version", "messages", "attachments"]) &&
+      request.version === 1 &&
+      Array.isArray(request.messages) &&
+      Array.isArray(request.attachments),
     "Invalid chat request.",
   ),
     assertCondition(
-      e.messages.length <= assistantRequestLimits.historyMessages,
+      request.messages.length <= assistantRequestLimits.historyMessages,
       "This conversation has reached 20 prior messages. Start a new chat to continue.",
     ));
-  let r = 0,
-    t = 0;
-  const n = (a) => {
+  let totalAttachmentBytes = 0,
+    historyCharacterCount = 0;
+  const parseAttachments = (attachments) => {
     assertCondition(
-      Array.isArray(a) && a.length <= assistantRequestLimits.filesPerMessage,
+      Array.isArray(attachments) &&
+        attachments.length <= assistantRequestLimits.filesPerMessage,
       "Attach up to 4 files per message.",
     );
-    const s = new Set();
-    return a.map((d) => {
+    const seenIds = new Set();
+    return attachments.map((attachment) => {
       (assertCondition(
-        hasOnlyAllowedKeys(d, [
+        hasOnlyAllowedKeys(attachment, [
           "id",
           "name",
           "mediaType",
@@ -100,95 +105,110 @@ function parseAssistantChatRequest(e) {
           "encoding",
           "data",
         ]) &&
-          typeof d.id == "string" &&
-          d.id.length > 0 &&
-          d.id.length <= 100 &&
-          !s.has(d.id),
+          typeof attachment.id == "string" &&
+          attachment.id.length > 0 &&
+          attachment.id.length <= 100 &&
+          !seenIds.has(attachment.id),
         "Invalid or duplicate attachment.",
       ),
-        s.add(d.id),
+        seenIds.add(attachment.id),
         assertCondition(
-          isSafeAttachmentFilename(d.name) &&
-            Object.hasOwn(attachmentMediaTypes, getFileExtension(d.name)) &&
-            d.mediaType === attachmentMediaTypes[getFileExtension(d.name)],
+          isSafeAttachmentFilename(attachment.name) &&
+            Object.hasOwn(
+              attachmentMediaTypes,
+              getFileExtension(attachment.name),
+            ) &&
+            attachment.mediaType ===
+              attachmentMediaTypes[getFileExtension(attachment.name)],
           "Unsupported attachment type.",
         ),
         assertCondition(
-          Number.isSafeInteger(d.size) &&
-            Number(d.size) > 0 &&
-            Number(d.size) <= assistantRequestLimits.fileBytes &&
-            typeof d.data == "string" &&
-            d.data.length <=
+          Number.isSafeInteger(attachment.size) &&
+            Number(attachment.size) > 0 &&
+            Number(attachment.size) <= assistantRequestLimits.fileBytes &&
+            typeof attachment.data == "string" &&
+            attachment.data.length <=
               Math.ceil(assistantRequestLimits.fileBytes / 3) * 4,
           "Attachment exceeds the 5 MB limit.",
         ));
-      const u = textAttachmentExtensions.has(getFileExtension(d.name));
+      const isTextAttachment = textAttachmentExtensions.has(
+        getFileExtension(attachment.name),
+      );
       assertCondition(
-        d.encoding === (u ? "utf8" : "base64"),
+        attachment.encoding === (isTextAttachment ? "utf8" : "base64"),
         "Invalid attachment encoding.",
       );
-      let l;
+      let attachmentBytes;
       return (
-        u
+        isTextAttachment
           ? (assertCondition(
-              !d.data.includes("\0"),
+              !attachment.data.includes("\0"),
               "Invalid text attachment.",
             ),
-            (l = new TextEncoder().encode(d.data)))
+            (attachmentBytes = new TextEncoder().encode(attachment.data)))
           : (assertCondition(
-              d.data.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(d.data),
+              attachment.data.length % 4 === 0 &&
+                /^[A-Za-z0-9+/]*={0,2}$/.test(attachment.data),
               "Invalid attachment encoding.",
             ),
-            (l = Uint8Array.from(atob(d.data), (c) => c.charCodeAt(0)))),
+            (attachmentBytes = Uint8Array.from(
+              atob(attachment.data),
+              (character) => character.charCodeAt(0),
+            ))),
         assertCondition(
-          l.length === d.size &&
-            matchesFileSignature(l, getFileExtension(d.name)),
+          attachmentBytes.length === attachment.size &&
+            matchesFileSignature(
+              attachmentBytes,
+              getFileExtension(attachment.name),
+            ),
           "Attachment content or size is invalid.",
         ),
-        (r += Number(d.size)),
+        (totalAttachmentBytes += Number(attachment.size)),
         assertCondition(
-          r <= assistantRequestLimits.totalFileBytes,
+          totalAttachmentBytes <= assistantRequestLimits.totalFileBytes,
           "The conversation contains more than 10 MB of attachments. Remove files or start a new chat.",
         ),
         {
-          id: d.id,
-          name: d.name,
-          mediaType: d.mediaType,
-          size: Number(d.size),
-          encoding: d.encoding,
-          data: d.data,
+          id: attachment.id,
+          name: attachment.name,
+          mediaType: attachment.mediaType,
+          size: Number(attachment.size),
+          encoding: attachment.encoding,
+          data: attachment.data,
         }
       );
     });
   };
   return {
     version: 1,
-    messages: e.messages.map(
-      (a) => (
+    messages: request.messages.map(
+      (message) => (
         assertCondition(
-          hasOnlyAllowedKeys(a, ["role", "text", "attachments"]) &&
-            (a.role === "user" || a.role === "assistant") &&
-            typeof a.text == "string" &&
-            a.text.length <= 1e4,
+          hasOnlyAllowedKeys(message, ["role", "text", "attachments"]) &&
+            (message.role === "user" || message.role === "assistant") &&
+            typeof message.text == "string" &&
+            message.text.length <= 1e4,
           "Invalid chat history message.",
         ),
         assertCondition(
-          a.role === "user" || a.attachments === undefined,
+          message.role === "user" || message.attachments === undefined,
           "Assistant messages cannot attach files.",
         ),
-        (t += a.text.length),
+        (historyCharacterCount += message.text.length),
         assertCondition(
-          t <= assistantRequestLimits.historyCharacters,
+          historyCharacterCount <= assistantRequestLimits.historyCharacters,
           "This conversation has reached its context limit. Start a new chat to continue.",
         ),
         {
-          role: a.role,
-          text: a.text,
-          ...(a.attachments ? { attachments: n(a.attachments) } : {}),
+          role: message.role,
+          text: message.text,
+          ...(message.attachments
+            ? { attachments: parseAttachments(message.attachments) }
+            : {}),
         }
       ),
     ),
-    attachments: n(e.attachments),
+    attachments: parseAttachments(request.attachments),
   };
 }
 const assistantErrorMessages = {
@@ -205,14 +225,15 @@ const assistantErrorMessages = {
     "The assistant request is invalid. Use a prompt of 1 to 10000 characters and select at most 500 cells. The host must supply a complete bounded context from buildContext; then retry.",
 };
 class LLMRequestError extends Error {
-  constructor(t) {
-    const n =
-      typeof t == "string" && Object.hasOwn(assistantErrorMessages, t)
-        ? t
+  constructor(requestedCode) {
+    const resolvedCode =
+      typeof requestedCode == "string" &&
+      Object.hasOwn(assistantErrorMessages, requestedCode)
+        ? requestedCode
         : "unavailable";
-    super(assistantErrorMessages[n]);
+    super(assistantErrorMessages[resolvedCode]);
     defineDataPropertyByKey(this, "code");
-    ((this.name = "LLMRequestError"), (this.code = n));
+    ((this.name = "LLMRequestError"), (this.code = resolvedCode));
   }
 }
 const answerGroundingLimits = Object.freeze({
@@ -263,96 +284,130 @@ const answerGroundingSchema = object({
     }).strict(),
   ).max(answerGroundingLimits.sources),
 }).strict();
-function validateCitationRange(e) {
-  if (!/^[A-Z]{1,3}[1-9]\d*(?::[A-Z]{1,3}[1-9]\d*)?$/.test(e))
+function validateCitationRange(range) {
+  if (!/^[A-Z]{1,3}[1-9]\d*(?::[A-Z]{1,3}[1-9]\d*)?$/.test(range))
     throw Error("Citation requires an explicit A1 cell or rectangle.");
-  const r = parseRangeAddress(e),
-    t = e.split(":");
-  if (t[1] && `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}` !== t[0])
-    throw Error("Citation range must run top left to bottom right.");
-  if ((r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1) > 500)
-    throw Error("Citations support at most 500 cells per range.");
-  const n = [];
-  for (let o = r.firstRow; o <= r.lastRow; o++)
-    for (let a = r.firstCol; a <= r.lastCol; a++)
-      n.push(`${columnIndexToLetters(a)}${o + 1}`);
-  return n;
-}
-function validateExternalSourceUrl(e) {
+  const rangeAddress = parseRangeAddress(range),
+    rangeParts = range.split(":");
   if (
-    typeof e != "string" ||
-    e.length > 2048 ||
-    e !== e.trim() ||
-    /[\u0000-\u0020\u007f]/.test(e)
+    rangeParts[1] &&
+    `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}` !==
+      rangeParts[0]
+  )
+    throw Error("Citation range must run top left to bottom right.");
+  if (
+    (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+      (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
+    500
+  )
+    throw Error("Citations support at most 500 cells per range.");
+  const cellAddresses = [];
+  for (
+    let firstRow = rangeAddress.firstRow;
+    firstRow <= rangeAddress.lastRow;
+    firstRow++
+  )
+    for (
+      let firstCol = rangeAddress.firstCol;
+      firstCol <= rangeAddress.lastCol;
+      firstCol++
+    )
+      cellAddresses.push(`${columnIndexToLetters(firstCol)}${firstRow + 1}`);
+  return cellAddresses;
+}
+function validateExternalSourceUrl(url) {
+  if (
+    typeof url != "string" ||
+    url.length > 2048 ||
+    url !== url.trim() ||
+    /[\u0000-\u0020\u007f]/.test(url)
   )
     throw Error(
       "External sources require a valid HTTPS URL without credentials.",
     );
-  let r;
+  let parsedUrl;
   try {
-    r = new URL(e);
+    parsedUrl = new URL(url);
   } catch {
     throw Error(
       "External sources require a valid HTTPS URL without credentials.",
     );
   }
-  if (r.protocol !== "https:" || r.username || r.password || !r.hostname)
+  if (
+    parsedUrl.protocol !== "https:" ||
+    parsedUrl.username ||
+    parsedUrl.password ||
+    !parsedUrl.hostname
+  )
     throw Error(
       "External sources require a valid HTTPS URL without credentials.",
     );
-  return r.href;
+  return parsedUrl.href;
 }
-function validateAnswerGrounding(e, r) {
-  const t = answerGroundingSchema.safeParse(e);
-  if (!t.success)
+function validateAnswerGrounding(grounding, selectionContext) {
+  const parseResult = answerGroundingSchema.safeParse(grounding);
+  if (!parseResult.success)
     throw Error(
       "Invalid answer grounding: provide typed claims and separate external sources.",
     );
-  const n = t.data,
-    o = new Set(r.cells.map((l) => l.address)),
-    a = new Set(),
-    s = new Set(),
-    d = new Set();
-  let u = 0;
-  for (const l of n.externalSources) {
-    if (s.has(l.id)) throw Error("External source IDs must be unique.");
-    (s.add(l.id), (l.url = validateExternalSourceUrl(l.url)));
+  const data = parseResult.data,
+    selectionAddresses = new Set(
+      selectionContext.cells.map((cell) => cell.address),
+    ),
+    claimIds = new Set(),
+    externalSourceIds = new Set(),
+    referencedSourceIds = new Set();
+  let referencedCellCount = 0;
+  for (const externalSource of data.externalSources) {
+    if (externalSourceIds.has(externalSource.id))
+      throw Error("External source IDs must be unique.");
+    (externalSourceIds.add(externalSource.id),
+      (externalSource.url = validateExternalSourceUrl(externalSource.url)));
   }
-  if (n.claims.reduce((l, c) => l + c.text.length, 0) > 2e4)
+  if (data.claims.reduce((total, claim) => total + claim.text.length, 0) > 2e4)
     throw Error("Answer claims exceed the 20,000 character evidence limit.");
-  for (const l of n.claims) {
-    if (a.has(l.id)) throw Error("Answer claim IDs must be unique.");
-    if ((a.add(l.id), l.kind === "workbook")) {
-      if (new Set(l.ranges).size !== l.ranges.length)
+  for (const claim of data.claims) {
+    if (claimIds.has(claim.id)) throw Error("Answer claim IDs must be unique.");
+    if ((claimIds.add(claim.id), claim.kind === "workbook")) {
+      if (new Set(claim.ranges).size !== claim.ranges.length)
         throw Error("Duplicate citation ranges in a claim.");
-      for (const c of l.ranges) {
-        const h = validateCitationRange(c);
-        if (((u += h.length), u > answerGroundingLimits.referencedCells))
+      for (const range of claim.ranges) {
+        const rangeCellAddresses = validateCitationRange(range);
+        if (
+          ((referencedCellCount += rangeCellAddresses.length),
+          referencedCellCount > answerGroundingLimits.referencedCells)
+        )
           throw Error(
             "Answer citations exceed the 1,000 cell-reference budget.",
           );
-        if (h.some((f) => !o.has(f)))
+        if (
+          rangeCellAddresses.some((address) => !selectionAddresses.has(address))
+        )
           throw Error(
             "Answer citations must stay inside the approved selection.",
           );
       }
-    } else if (l.kind === "external") {
+    } else if (claim.kind === "external") {
       if (
-        new Set(l.sourceIds).size !== l.sourceIds.length ||
-        l.sourceIds.some((c) => !s.has(c))
+        new Set(claim.sourceIds).size !== claim.sourceIds.length ||
+        claim.sourceIds.some((sourceId) => !externalSourceIds.has(sourceId))
       )
         throw Error(
           "External claims require distinct references to declared external sources.",
         );
-      l.sourceIds.forEach((c) => d.add(c));
+      claim.sourceIds.forEach((sourceId) => referencedSourceIds.add(sourceId));
     }
   }
-  if (n.externalSources.some((l) => !d.has(l.id)))
+  if (
+    data.externalSources.some(
+      (externalSource) => !referencedSourceIds.has(externalSource.id),
+    )
+  )
     throw Error("Unused external sources are not accepted as grounding.");
-  return n;
+  return data;
 }
 const nonVolatileFunctionNames = builtinFunctionNames.filter(
-  (e) =>
+  (builtinFunctionName) =>
     ![
       "RAND",
       "RANDBETWEEN",
@@ -364,151 +419,184 @@ const nonVolatileFunctionNames = builtinFunctionNames.filter(
       "RTD",
       "HYPERLINK",
       "CALL",
-    ].includes(e),
+    ].includes(builtinFunctionName),
 );
 const nonVolatileFunctionNameSet = new Set(nonVolatileFunctionNames);
-const assertNoUnexpectedFields = (e, r) =>
+const assertNoUnexpectedFields = (record, allowedFields) =>
   assertCondition(
-    Object.keys(e).every((t) => r.includes(t)),
+    Object.keys(record).every((fieldName) => allowedFields.includes(fieldName)),
     "Unexpected field in LLM proposal.",
   );
-function parseCellAddress(e) {
-  const r = /^([A-Z]{1,3})([1-9]\d*)$/.exec(e);
-  assertCondition(r, `Invalid cell address: ${e}`);
-  const t = [...r[1]].reduce((o, a) => o * 26 + a.charCodeAt(0) - 64, 0),
-    n = Number(r[2]);
+function parseCellAddress(address) {
+  const match = /^([A-Z]{1,3})([1-9]\d*)$/.exec(address);
+  assertCondition(match, `Invalid cell address: ${address}`);
+  const col = [...match[1]].reduce(
+      (total, character) => total * 26 + character.charCodeAt(0) - 64,
+      0,
+    ),
+    row = Number(match[2]);
   return (
     assertCondition(
-      n <= workbookLimits.maxRows && t <= workbookLimits.maxCols,
+      row <= workbookLimits.maxRows && col <= workbookLimits.maxCols,
       "Cell address exceeds supported dimensions.",
     ),
-    { row: n, col: t }
+    { row: row, col: col }
   );
 }
-function columnNumberToLetters(e) {
-  let r = "";
-  for (; e > 0; e = Math.floor((e - 1) / 26))
-    r = String.fromCharCode(65 + ((e - 1) % 26)) + r;
-  return r;
+function columnNumberToLetters(col) {
+  let letters = "";
+  for (; col > 0; col = Math.floor((col - 1) / 26))
+    letters = String.fromCharCode(65 + ((col - 1) % 26)) + letters;
+  return letters;
 }
-function resolveAssistantSelection(e, r) {
+function resolveAssistantSelection(workbook, selection) {
   assertCondition(
-    !r.ranges || (r.ranges.length === 1 && r.ranges[0] === r.range),
+    !selection.ranges ||
+      (selection.ranges.length === 1 &&
+        selection.ranges[0] === selection.range),
     "Select one rectangular range before using an assistant.",
   );
-  const t = e.sheets.find((d) => d.id === r.sheetId);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === selection.sheetId);
   assertCondition(
-    t && !t.hidden,
+    sheet && !sheet.hidden,
     "Select a visible worksheet before using an assistant.",
   );
-  const n = r.range.toUpperCase().split(":");
-  assertCondition(n.length <= 2, "Select one rectangular range.");
-  const o = parseCellAddress(n[0]),
-    a = parseCellAddress(n[1] || n[0]);
+  const rangeParts = selection.range.toUpperCase().split(":");
+  assertCondition(rangeParts.length <= 2, "Select one rectangular range.");
+  const cellAddress = parseCellAddress(rangeParts[0]),
+    endAddress = parseCellAddress(rangeParts[1] || rangeParts[0]);
   (assertCondition(
-    o.row <= a.row && o.col <= a.col,
+    cellAddress.row <= endAddress.row && cellAddress.col <= endAddress.col,
     "Selection range must run from top left to bottom right.",
   ),
     assertCondition(
-      a.row <= t.rowCount && a.col <= t.colCount,
+      endAddress.row <= sheet.rowCount && endAddress.col <= sheet.colCount,
       "Selection exceeds worksheet dimensions.",
     ),
     assertCondition(
-      (a.row - o.row + 1) * (a.col - o.col + 1) <= workbookLimits.maxLLMCells,
+      (endAddress.row - cellAddress.row + 1) *
+        (endAddress.col - cellAddress.col + 1) <=
+        workbookLimits.maxLLMCells,
       `Select at most ${workbookLimits.maxLLMCells} cells for the assistant.`,
     ));
-  const s = [];
-  for (let d = o.row; d <= a.row; d++)
-    for (let u = o.col; u <= a.col; u++)
-      s.push(`${columnNumberToLetters(u)}${d}`);
-  return s;
+  const addresses = [];
+  for (let row = cellAddress.row; row <= endAddress.row; row++)
+    for (let col = cellAddress.col; col <= endAddress.col; col++)
+      addresses.push(`${columnNumberToLetters(col)}${row}`);
+  return addresses;
 }
-function buildAssistantSelectionContext(e, r) {
-  const t = resolveAssistantSelection(e, r),
-    n = e.sheets.find((a) => a.id === r.sheetId),
-    o = calculateWorkbookWithSettings(e);
-  for (const a of t) {
-    const s = o.getTypedValue(n.id, a);
+function buildAssistantSelectionContext(workbook, selection) {
+  const assistantSelection = resolveAssistantSelection(workbook, selection),
+    sheet = workbook.sheets.find((sheet) => sheet.id === selection.sheetId),
+    workbookWithSettings = calculateWorkbookWithSettings(workbook);
+  for (const address of assistantSelection) {
+    const typedValue = workbookWithSettings.getTypedValue(sheet.id, address);
     (assertCondition(
-      !(s.type === "error" && s.value === "#PENDING!"),
+      !(typedValue.type === "error" && typedValue.value === "#PENDING!"),
       "Calculation is pending in the approved selection. Choose Calculate Now before sharing current values with an assistant.",
     ),
       assertCondition(
         !(
-          s.type === "error" &&
-          ["#TIMEOUT!", "#LIMIT!", "#BLOCKED!"].includes(String(s.value))
+          typedValue.type === "error" &&
+          ["#TIMEOUT!", "#LIMIT!", "#BLOCKED!"].includes(
+            String(typedValue.value),
+          )
         ),
         "Calculation failed at a resource or execution boundary in the approved selection. Resolve the limit and choose Calculate Now before sharing current values with an assistant.",
       ));
   }
   return {
-    workbookId: e.id,
-    ...(e.datePolicy ? { datePolicy: normalizeDatePolicy(e.datePolicy) } : {}),
-    ...(workbookUsesNowOrToday(e)
-      ? { calculationClock: o.getDateContext() }
+    workbookId: workbook.id,
+    ...(workbook.datePolicy
+      ? { datePolicy: normalizeDatePolicy(workbook.datePolicy) }
       : {}),
-    revision: e.revision,
-    sheetId: n.id,
-    sheetName: n.name,
-    range: r.range.toUpperCase(),
-    cells: t.map((a) => ({
-      address: a,
-      raw: n.cells[a]?.raw ?? null,
-      value: o(n.id, a),
+    ...(workbookUsesNowOrToday(workbook)
+      ? { calculationClock: workbookWithSettings.getDateContext() }
+      : {}),
+    revision: workbook.revision,
+    sheetId: sheet.id,
+    sheetName: sheet.name,
+    range: selection.range.toUpperCase(),
+    cells: assistantSelection.map((address) => ({
+      address: address,
+      raw: sheet.cells[address]?.raw ?? null,
+      value: workbookWithSettings(sheet.id, address),
     })),
   };
 }
-function validateAssistantFormula(e, r) {
-  let t = e.replace(/"(?:[^"]|"")*"/g, '""');
+function validateAssistantFormula(formulaText, selectedAddresses) {
+  let formulaWithoutStrings = formulaText.replace(/"(?:[^"]|"")*"/g, '""');
   if (
     (assertCondition(
-      !/[!\[\]|\\#]/.test(t),
+      !/[!\[\]|\\#]/.test(formulaWithoutStrings),
       "Assistant formulas cannot reference other worksheets, external workbooks, table names, existing spills or executable content.",
     ),
     assertCondition(
-      !/(?:https?:|javascript:|data:|file:)/i.test(e),
+      !/(?:https?:|javascript:|data:|file:)/i.test(formulaText),
       "Assistant formulas cannot contain network or executable URLs.",
     ),
-    /\b(?:LET|LAMBDA)\s*\(/i.test(t))
+    /\b(?:LET|LAMBDA)\s*\(/i.test(formulaWithoutStrings))
   ) {
-    const a = [];
-    walkFormulaNodes(tokenizeFormulaText(t), (s, d, u, l) => {
-      (l || (!s.qualifier && d.has(normalizeBindingName(s.name)))) &&
-        a.push({ start: s.start, end: s.end, value: u ? "SUM" : "0" });
-    });
-    for (const s of a.sort((d, u) => u.start - d.start))
-      t = t.slice(0, s.start) + s.value + t.slice(s.end);
-  }
-  const n = [...t.matchAll(/([A-Z_][A-Z0-9_.]*)\s*\(/gi)];
-  for (const a of n)
-    assertCondition(
-      nonVolatileFunctionNameSet.has(a[1].toUpperCase()),
-      `Assistant formula function ${a[1]} is not allowed.`,
+    const replacements = [];
+    walkFormulaNodes(
+      tokenizeFormulaText(formulaWithoutStrings),
+      (node, boundNames, isCallee, isBindingDeclaration) => {
+        (isBindingDeclaration ||
+          (!node.qualifier &&
+            boundNames.has(normalizeBindingName(node.name)))) &&
+          replacements.push({
+            start: node.start,
+            end: node.end,
+            value: isCallee ? "SUM" : "0",
+          });
+      },
     );
-  for (const a of t.matchAll(
+    for (const replacement of replacements.sort(
+      (leftReplacement, rightReplacement) =>
+        rightReplacement.start - leftReplacement.start,
+    ))
+      formulaWithoutStrings =
+        formulaWithoutStrings.slice(0, replacement.start) +
+        replacement.value +
+        formulaWithoutStrings.slice(replacement.end);
+  }
+  const functionCallMatches = [
+    ...formulaWithoutStrings.matchAll(/([A-Z_][A-Z0-9_.]*)\s*\(/gi),
+  ];
+  for (const functionCallMatch of functionCallMatches)
+    assertCondition(
+      nonVolatileFunctionNameSet.has(functionCallMatch[1].toUpperCase()),
+      `Assistant formula function ${functionCallMatch[1]} is not allowed.`,
+    );
+  for (const cellReferenceMatch of formulaWithoutStrings.matchAll(
     new RegExp(
       "(?<![A-Z0-9_.])\\$?([A-Z]{1,3})\\$?([1-9]\\d*)(?![A-Z0-9_]|\\s*\\()",
       "gi",
     ),
   ))
     assertCondition(
-      r.has(`${a[1].toUpperCase()}${a[2]}`),
+      selectedAddresses.has(
+        `${cellReferenceMatch[1].toUpperCase()}${cellReferenceMatch[2]}`,
+      ),
       "Assistant formulas may only reference cells in the approved selection.",
     );
-  const o = t
+  const residualFormula = formulaWithoutStrings
     .replace(/([A-Z_][A-Z0-9_.]*)\s*\(/gi, "(")
     .replace(/\$?[A-Z]{1,3}\$?[1-9]\d*(?![A-Z0-9_])/gi, "0")
     .replace(/""/g, "0")
     .replace(/\b(?:TRUE|FALSE)\b/gi, "0")
     .replace(/\d+(?:\.\d+)?(?:E[+-]?\d+)?/gi, "0");
   assertCondition(
-    !/[A-Z_]/i.test(o),
+    !/[A-Z_]/i.test(residualFormula),
     "Named ranges and unsupported formula tokens are not allowed in assistant changes.",
   );
 }
-function validateProposedCell(e, r) {
-  (assertCondition(isPlainRecord(e), "Each proposed cell must be an object."),
-    assertNoUnexpectedFields(e, [
+function validateProposedCell(cell, selectedAddresses) {
+  (assertCondition(
+    isPlainRecord(cell),
+    "Each proposed cell must be an object.",
+  ),
+    assertNoUnexpectedFields(cell, [
       "raw",
       "literal",
       "numFmt",
@@ -518,45 +606,48 @@ function validateProposedCell(e, r) {
       "tickmark",
     ]),
     assertCondition(
-      Object.hasOwn(e, "raw") &&
-        (e.raw === null ||
-          typeof e.raw == "string" ||
-          typeof e.raw == "boolean" ||
-          (typeof e.raw == "number" && Number.isFinite(e.raw))),
+      Object.hasOwn(cell, "raw") &&
+        (cell.raw === null ||
+          typeof cell.raw == "string" ||
+          typeof cell.raw == "boolean" ||
+          (typeof cell.raw == "number" && Number.isFinite(cell.raw))),
       "Unsupported proposed cell value.",
     ),
-    typeof e.raw == "string" &&
+    typeof cell.raw == "string" &&
       assertCondition(
-        e.raw.length <= (e.raw.startsWith("=") ? 4096 : 32767),
+        cell.raw.length <= (cell.raw.startsWith("=") ? 4096 : 32767),
         "Proposed cell text is too long.",
       ),
-    e.literal !== undefined &&
+    cell.literal !== undefined &&
       assertCondition(
-        typeof e.literal == "boolean",
+        typeof cell.literal == "boolean",
         "Cell literal must be boolean.",
       ),
-    e.numFmt !== undefined &&
+    cell.numFmt !== undefined &&
       assertCondition(
-        typeof e.numFmt == "string" && e.numFmt.length <= 200,
+        typeof cell.numFmt == "string" && cell.numFmt.length <= 200,
         "Invalid number format.",
       ),
-    e.format !== undefined &&
+    cell.format !== undefined &&
       assertCondition(
         ["general", "number", "currency", "percent", "date"].includes(
-          String(e.format),
+          String(cell.format),
         ),
         "Unsupported cell format.",
       ));
-  for (const t of ["note", "tickmark"])
-    e[t] !== undefined &&
+  for (const textField of ["note", "tickmark"])
+    cell[textField] !== undefined &&
       assertCondition(
-        typeof e[t] == "string" &&
-          String(e[t]).length <= (t === "note" ? 1e4 : 40),
-        `Invalid cell ${t}.`,
+        typeof cell[textField] == "string" &&
+          String(cell[textField]).length <= (textField === "note" ? 1e4 : 40),
+        `Invalid cell ${textField}.`,
       );
-  if (e.style !== undefined) {
-    (assertCondition(isPlainRecord(e.style), "Cell style must be an object."),
-      assertNoUnexpectedFields(e.style, [
+  if (cell.style !== undefined) {
+    (assertCondition(
+      isPlainRecord(cell.style),
+      "Cell style must be an object.",
+    ),
+      assertNoUnexpectedFields(cell.style, [
         "bold",
         "italic",
         "underline",
@@ -568,54 +659,59 @@ function validateProposedCell(e, r) {
         "color",
         "align",
       ]));
-    for (const t of ["bold", "italic", "underline", "wrap"])
-      e.style[t] !== undefined &&
-        assertCondition(typeof e.style[t] == "boolean", "Invalid font style.");
-    (e.style.fontFamily !== undefined &&
+    for (const styleFlag of ["bold", "italic", "underline", "wrap"])
+      cell.style[styleFlag] !== undefined &&
+        assertCondition(
+          typeof cell.style[styleFlag] == "boolean",
+          "Invalid font style.",
+        );
+    (cell.style.fontFamily !== undefined &&
       assertCondition(
-        supportedFontFamilies.includes(e.style.fontFamily),
+        supportedFontFamilies.includes(cell.style.fontFamily),
         "Unsupported font family.",
       ),
-      e.style.fontSize !== undefined &&
+      cell.style.fontSize !== undefined &&
         assertCondition(
-          typeof e.style.fontSize == "number" &&
-            Number.isInteger(e.style.fontSize) &&
-            e.style.fontSize >= 8 &&
-            e.style.fontSize <= 72,
+          typeof cell.style.fontSize == "number" &&
+            Number.isInteger(cell.style.fontSize) &&
+            cell.style.fontSize >= 8 &&
+            cell.style.fontSize <= 72,
           "Font size must be an integer between 8 and 72.",
         ),
-      e.style.border !== undefined &&
+      cell.style.border !== undefined &&
         assertCondition(
-          ["all", "bottom", "none"].includes(String(e.style.border)),
+          ["all", "bottom", "none"].includes(String(cell.style.border)),
           "Unsupported cell border.",
         ));
-    for (const t of ["fill", "color"])
-      e.style[t] !== undefined &&
+    for (const colorField of ["fill", "color"])
+      cell.style[colorField] !== undefined &&
         assertCondition(
-          typeof e.style[t] == "string" &&
-            /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(e.style[t])),
+          typeof cell.style[colorField] == "string" &&
+            /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(
+              String(cell.style[colorField]),
+            ),
           "Use hexadecimal colors.",
         );
-    e.style.align !== undefined &&
+    cell.style.align !== undefined &&
       assertCondition(
-        ["left", "center", "right"].includes(String(e.style.align)),
+        ["left", "center", "right"].includes(String(cell.style.align)),
         "Invalid alignment.",
       );
   }
   return (
-    typeof e.raw == "string" &&
-      e.raw.startsWith("=") &&
-      !e.literal &&
-      validateAssistantFormula(e.raw, r),
-    structuredClone(e)
+    typeof cell.raw == "string" &&
+      cell.raw.startsWith("=") &&
+      !cell.literal &&
+      validateAssistantFormula(cell.raw, selectedAddresses),
+    structuredClone(cell)
   );
 }
-function validateAssistantProposal(e, r) {
+function validateAssistantProposal(proposal, selectionContext) {
   (assertCondition(
-    isPlainRecord(e),
+    isPlainRecord(proposal),
     "The assistant response must be a proposal object.",
   ),
-    assertNoUnexpectedFields(e, [
+    assertNoUnexpectedFields(proposal, [
       "id",
       "workbookId",
       "revision",
@@ -625,143 +721,173 @@ function validateAssistantProposal(e, r) {
       "grounding",
     ]),
     assertCondition(
-      typeof e.id == "string" && e.id.length > 0 && e.id.length <= 100,
+      typeof proposal.id == "string" &&
+        proposal.id.length > 0 &&
+        proposal.id.length <= 100,
       "Invalid proposal identifier.",
     ),
     assertCondition(
-      e.workbookId === r.workbookId && e.revision === r.revision,
+      proposal.workbookId === selectionContext.workbookId &&
+        proposal.revision === selectionContext.revision,
       "This proposal is stale or belongs to another workbook. Generate a new proposal.",
     ),
     assertCondition(
-      typeof e.explanation == "string" &&
-        e.explanation.length > 0 &&
-        e.explanation.length <= 1e4,
+      typeof proposal.explanation == "string" &&
+        proposal.explanation.length > 0 &&
+        proposal.explanation.length <= 1e4,
       "Invalid proposal explanation.",
     ));
-  const t = new Set(r.cells.map((a) => a.address));
+  const selectedAddresses = new Set(
+    selectionContext.cells.map((cell) => cell.address),
+  );
   (assertCondition(
-    Array.isArray(e.citations) &&
-      e.citations.length <= workbookLimits.maxLLMCells,
+    Array.isArray(proposal.citations) &&
+      proposal.citations.length <= workbookLimits.maxLLMCells,
     "Invalid proposal citations.",
   ),
     assertCondition(
-      e.citations.every((a) => typeof a == "string" && t.has(a)),
+      proposal.citations.every(
+        (citation) =>
+          typeof citation == "string" && selectedAddresses.has(citation),
+      ),
       "Citations must reference the approved selection.",
     ),
     assertCondition(
-      Array.isArray(e.patches) && e.patches.length <= workbookLimits.maxPatches,
+      Array.isArray(proposal.patches) &&
+        proposal.patches.length <= workbookLimits.maxPatches,
       "Too many proposed edits.",
     ));
-  const n = new Set(),
-    o = e.patches.map(
-      (a) => (
-        assertCondition(isPlainRecord(a), "Each patch must be an object."),
-        assertNoUnexpectedFields(a, ["sheetId", "address", "cell"]),
+  const patchAddresses = new Set(),
+    patches = proposal.patches.map(
+      (patch) => (
+        assertCondition(isPlainRecord(patch), "Each patch must be an object."),
+        assertNoUnexpectedFields(patch, ["sheetId", "address", "cell"]),
         assertCondition(
-          a.sheetId === r.sheetId &&
-            typeof a.address == "string" &&
-            t.has(a.address),
+          patch.sheetId === selectionContext.sheetId &&
+            typeof patch.address == "string" &&
+            selectedAddresses.has(patch.address),
           "Assistant changes must stay inside the approved selection.",
         ),
         assertCondition(
-          !n.has(a.address),
+          !patchAddresses.has(patch.address),
           "The proposal contains duplicate cell edits.",
         ),
-        n.add(a.address),
+        patchAddresses.add(patch.address),
         {
-          sheetId: r.sheetId,
-          address: a.address,
-          cell: validateProposedCell(a.cell, t),
+          sheetId: selectionContext.sheetId,
+          address: patch.address,
+          cell: validateProposedCell(patch.cell, selectedAddresses),
         }
       ),
     );
   return {
-    id: e.id,
-    workbookId: r.workbookId,
-    revision: r.revision,
-    explanation: e.explanation,
-    citations: [...e.citations],
-    patches: o,
-    ...(e.grounding !== undefined
-      ? { grounding: validateAnswerGrounding(e.grounding, r) }
+    id: proposal.id,
+    workbookId: selectionContext.workbookId,
+    revision: selectionContext.revision,
+    explanation: proposal.explanation,
+    citations: [...proposal.citations],
+    patches: patches,
+    ...(proposal.grounding !== undefined
+      ? {
+          grounding: validateAnswerGrounding(
+            proposal.grounding,
+            selectionContext,
+          ),
+        }
       : {}),
   };
 }
-function validateProposedCalculation(e, r, t) {
-  const n = resolveAssistantSelection(e, r).map((c) => ({
-      address: c,
-      raw: null,
-      value: null,
-    })),
-    o = validateAssistantProposal(t, {
-      workbookId: e.id,
-      revision: e.revision,
-      sheetId: r.sheetId,
-      cells: n,
+function validateProposedCalculation(workbook, assistantSelection, proposal) {
+  const cells = resolveAssistantSelection(workbook, assistantSelection).map(
+      (address) => ({
+        address: address,
+        raw: null,
+        value: null,
+      }),
+    ),
+    validatedProposal = validateAssistantProposal(proposal, {
+      workbookId: workbook.id,
+      revision: workbook.revision,
+      sheetId: assistantSelection.sheetId,
+      cells: cells,
     }),
-    a = e.sheets.find((c) => c.id === r.sheetId),
-    s = {
-      ...o,
-      patches: o.patches.map((c) => {
-        const h = a.cells[c.address],
-          f = {
-            ...h,
-            ...c.cell,
-            ...(h?.style || c.cell.style
+    a = workbook.sheets.find(
+      (sheet) => sheet.id === assistantSelection.sheetId,
+    ),
+    mergedProposal = {
+      ...validatedProposal,
+      patches: validatedProposal.patches.map((patch) => {
+        const cell = a.cells[patch.address],
+          mergedCell = {
+            ...cell,
+            ...patch.cell,
+            ...(cell?.style || patch.cell.style
               ? {
-                  style: { ...h?.style, ...c.cell.style },
+                  style: { ...cell?.style, ...patch.cell.style },
                 }
               : {}),
           };
-        (h?.raw !== c.cell.raw &&
-          c.cell.literal === undefined &&
-          delete f.literal,
-          c.cell.format &&
-            c.cell.format !== h?.format &&
-            c.cell.numFmt === undefined &&
-            delete f.numFmt);
-        const p = parseCellAddress(c.address),
-          m = (a.tables ?? []).some((v) => {
-            const [g, b] = v.range.split(":"),
-              y = parseCellAddress(g),
-              w = parseCellAddress(b ?? g);
-            return p.row === y.row && p.col >= y.col && p.col <= w.col;
+        (cell?.raw !== patch.cell.raw &&
+          patch.cell.literal === undefined &&
+          delete mergedCell.literal,
+          patch.cell.format &&
+            patch.cell.format !== cell?.format &&
+            patch.cell.numFmt === undefined &&
+            delete mergedCell.numFmt);
+        const cellAddress = parseCellAddress(patch.address),
+          isTableHeaderCell = (a.tables ?? []).some((table) => {
+            const [tableStartRef, tableEndRef] = table.range.split(":"),
+              tableStart = parseCellAddress(tableStartRef),
+              tableEnd = parseCellAddress(tableEndRef ?? tableStartRef);
+            return (
+              cellAddress.row === tableStart.row &&
+              cellAddress.col >= tableStart.col &&
+              cellAddress.col <= tableEnd.col
+            );
           });
         return (
           assertCondition(
-            !m || (h?.raw === f.raw && !!h?.literal == !!f.literal),
+            !isTableHeaderCell ||
+              (cell?.raw === mergedCell.raw &&
+                !!cell?.literal == !!mergedCell.literal),
             "Assistant changes cannot rename table headers because dependent references may change outside the approved selection.",
           ),
-          { ...c, cell: f }
+          { ...patch, cell: mergedCell }
         );
       }),
     },
-    d = new Set(n.map((c) => c.address)),
-    u = {
-      ...e,
-      sheets: e.sheets.map((c) =>
-        c.id === a.id
+    selectedAddresses = new Set(cells.map((cell) => cell.address)),
+    workbookWithPatches = {
+      ...workbook,
+      sheets: workbook.sheets.map((sheet) =>
+        sheet.id === a.id
           ? {
-              ...c,
+              ...sheet,
               cells: {
-                ...c.cells,
+                ...sheet.cells,
                 ...Object.fromEntries(
-                  s.patches.map((h) => [h.address, h.cell]),
+                  mergedProposal.patches.map((patch) => [
+                    patch.address,
+                    patch.cell,
+                  ]),
                 ),
               },
             }
-          : c,
+          : sheet,
       ),
     },
-    l = evaluateWorkbookFormulas(
-      u,
+    calculator = evaluateWorkbookFormulas(
+      workbookWithPatches,
       {},
       {
         allowRead: () => true,
-        allowDatabaseCriterion: (c, h) => {
-          if (c !== a.id) return false;
+        allowDatabaseCriterion: (sheetId, criterionFormula) => {
+          if (sheetId !== a.id) return false;
           try {
-            return (validateAssistantFormula(h, d), true);
+            return (
+              validateAssistantFormula(criterionFormula, selectedAddresses),
+              true
+            );
           } catch {
             return false;
           }
@@ -769,51 +895,53 @@ function validateProposedCalculation(e, r, t) {
         step: () => {},
       },
     );
-  for (const c of s.patches) {
+  for (const patch of mergedProposal.patches) {
     if (
-      typeof c.cell.raw != "string" ||
-      !c.cell.raw.startsWith("=") ||
-      c.cell.literal
+      typeof patch.cell.raw != "string" ||
+      !patch.cell.raw.startsWith("=") ||
+      patch.cell.literal
     )
       continue;
-    const h = l(a.id, c.address);
+    const calculatedValue = calculator(a.id, patch.address);
     (assertCondition(
-      h !== "#LIMIT!",
+      calculatedValue !== "#LIMIT!",
       "The proposed formula exceeds calculation limits.",
     ),
       assertCondition(
-        l.getOperationalErrors().length === 0,
+        calculator.getOperationalErrors().length === 0,
         "The proposed formula has invalid syntax, a circular reference or an operational calculation failure. Correct the formula before review; error handlers cannot suppress this rejection.",
       ));
-    const f = l.getSpillRange(a.id, c.address);
+    const spillRange = calculator.getSpillRange(a.id, patch.address);
     if (
       (assertCondition(
-        !l.getSpillDiagnostic(a.id, c.address),
+        !calculator.getSpillDiagnostic(a.id, patch.address),
         "The proposed array is blocked. Review the spill obstruction before requesting approval.",
       ),
-      f)
+      spillRange)
     ) {
-      const [p, m] = f.split(":"),
-        v = parseCellAddress(p),
-        g = parseCellAddress(m ?? p);
+      const [spillStartRef, spillEndRef] = spillRange.split(":"),
+        cellAddress = parseCellAddress(spillStartRef),
+        spillEnd = parseCellAddress(spillEndRef ?? spillStartRef);
       assertCondition(
-        (g.row - v.row + 1) * (g.col - v.col + 1) <= workbookLimits.maxLLMCells,
+        (spillEnd.row - cellAddress.row + 1) *
+          (spillEnd.col - cellAddress.col + 1) <=
+          workbookLimits.maxLLMCells,
         "Assistant spill outputs must stay inside the approved selection.",
       );
-      for (let b = v.row; b <= g.row; b++)
-        for (let y = v.col; y <= g.col; y++)
+      for (let row = cellAddress.row; row <= spillEnd.row; row++)
+        for (let col = cellAddress.col; col <= spillEnd.col; col++)
           assertCondition(
-            d.has(`${columnNumberToLetters(y)}${b}`),
+            selectedAddresses.has(`${columnNumberToLetters(col)}${row}`),
             "Assistant spill outputs must stay inside the approved selection.",
           );
     }
   }
   return (
     assertCondition(
-      l.getOperationalErrors().length === 0,
+      calculator.getOperationalErrors().length === 0,
       "The proposed formula cannot be validated because calculation encountered an operational failure.",
     ),
-    s
+    mergedProposal
   );
 }
 function buildLocalDemoProposal() {
@@ -821,113 +949,122 @@ function buildLocalDemoProposal() {
     name: "Local demo · no model or network",
     localOnly: true,
     chat: { history: true, attachments: true },
-    async propose(e, r, t, n) {
-      if (t?.aborted)
+    async propose(prompt, selectionContext, abortSignal, chatRequest) {
+      if (abortSignal?.aborted)
         throw new DOMException("Request cancelled.", "AbortError");
-      const o = {
-          id: `local-${r.revision}-${Date.now()}`,
-          workbookId: r.workbookId,
-          revision: r.revision,
+      const proposal = {
+          id: `local-${selectionContext.revision}-${Date.now()}`,
+          workbookId: selectionContext.workbookId,
+          revision: selectionContext.revision,
           explanation: "",
           citations: [],
           patches: [],
         },
-        a = r.cells.filter(
-          (d) => typeof d.value == "number" && Number.isFinite(d.value),
+        numericCells = selectionContext.cells.filter(
+          (cell) =>
+            typeof cell.value == "number" && Number.isFinite(cell.value),
         ),
-        s = a.reduce((d, u) => d + Number(u.value), 0);
-      if (/highlight|high values|outlier/i.test(e)) {
-        const d =
+        numericSum = numericCells.reduce(
+          (total, cell) => total + Number(cell.value),
+          0,
+        );
+      if (/highlight|high values|outlier/i.test(prompt)) {
+        const thresholdMatch =
             /(?:above|over|greater than|exceed(?:ing|s)?)\s*[$€£]?\s*(-?\d[\d,]*(?:\.\d+)?)/i.exec(
-              e,
+              prompt,
             ),
-          u = d
-            ? Number(d[1].replaceAll(",", ""))
-            : a.length
-              ? Math.abs(s / a.length) * 1.5
+          threshold = thresholdMatch
+            ? Number(thresholdMatch[1].replaceAll(",", ""))
+            : numericCells.length
+              ? Math.abs(numericSum / numericCells.length) * 1.5
               : 0,
-          l = a.filter(
-            (c) => (d ? Number(c.value) : Math.abs(Number(c.value))) > u,
+          flaggedCells = numericCells.filter(
+            (cell) =>
+              (thresholdMatch
+                ? Number(cell.value)
+                : Math.abs(Number(cell.value))) > threshold,
           );
-        ((o.explanation = `Local deterministic demo: ${l.length} values exceed ${d ? `the requested threshold of ${u.toLocaleString()}` : `1.5 times the absolute arithmetic mean (${u.toLocaleString()})`}. This is a simple illustration, not a statistical audit conclusion. The listed cells receive an amber fill; existing annotations are retained.`),
-          (o.citations = l.map((c) => c.address)),
-          (o.patches = l.map((c) => ({
-            sheetId: r.sheetId,
-            address: c.address,
-            cell: { raw: c.raw, style: { fill: "#fff0b3" } },
+        ((proposal.explanation = `Local deterministic demo: ${flaggedCells.length} values exceed ${thresholdMatch ? `the requested threshold of ${threshold.toLocaleString()}` : `1.5 times the absolute arithmetic mean (${threshold.toLocaleString()})`}. This is a simple illustration, not a statistical audit conclusion. The listed cells receive an amber fill; existing annotations are retained.`),
+          (proposal.citations = flaggedCells.map((cell) => cell.address)),
+          (proposal.patches = flaggedCells.map((cell) => ({
+            sheetId: selectionContext.sheetId,
+            address: cell.address,
+            cell: { raw: cell.raw, style: { fill: "#fff0b3" } },
           }))));
-      } else if (/\b(?:total|sum)\b/i.test(e)) {
-        const d = [...r.cells]
+      } else if (/\b(?:total|sum)\b/i.test(prompt)) {
+        const emptyCell = [...selectionContext.cells]
           .reverse()
-          .find((u) => u.raw === null || u.raw === "");
-        if (d && a.length) {
-          const u = `=SUM(${a.map((l) => l.address).join(",")})`;
-          ((o.patches = [
+          .find((cell) => cell.raw === null || cell.raw === "");
+        if (emptyCell && numericCells.length) {
+          const raw = `=SUM(${numericCells.map((cell) => cell.address).join(",")})`;
+          ((proposal.patches = [
             {
-              sheetId: r.sheetId,
-              address: d.address,
-              cell: { raw: u, format: "number", style: { bold: true } },
+              sheetId: selectionContext.sheetId,
+              address: emptyCell.address,
+              cell: { raw: raw, format: "number", style: { bold: true } },
             },
           ]),
-            (o.citations = a.map((l) => l.address)),
-            (o.explanation = `Local deterministic demo: put a SUM formula for ${a.length} numeric selected cells in empty cell ${d.address}. Current result: ${s.toLocaleString()}. Review the included addresses for subtotals or duplicates before accepting.`));
+            (proposal.citations = numericCells.map((cell) => cell.address)),
+            (proposal.explanation = `Local deterministic demo: put a SUM formula for ${numericCells.length} numeric selected cells in empty cell ${emptyCell.address}. Current result: ${numericSum.toLocaleString()}. Review the included addresses for subtotals or duplicates before accepting.`));
         } else
-          o.explanation =
+          proposal.explanation =
             "Local deterministic demo: select numeric cells and at least one empty destination cell to propose a total.";
-      } else if (/explain/i.test(e)) {
-        const d = r.cells.filter(
-          (u) => typeof u.raw == "string" && u.raw.startsWith("="),
+      } else if (/explain/i.test(prompt)) {
+        const formulaCells = selectionContext.cells.filter(
+          (cell) => typeof cell.raw == "string" && cell.raw.startsWith("="),
         );
-        ((o.explanation = d.length
-          ? `Local deterministic demo: ${d.map((u) => `${u.address} contains ${u.raw} and currently returns ${String(u.value)}`).join("; ")}. This lists formulas and results; no language model interpretation is used.`
+        ((proposal.explanation = formulaCells.length
+          ? `Local deterministic demo: ${formulaCells.map((cell) => `${cell.address} contains ${cell.raw} and currently returns ${String(cell.value)}`).join("; ")}. This lists formulas and results; no language model interpretation is used.`
           : "Local deterministic demo: the selection contains no formula expressions. Values and formulas are worksheet data, never instructions."),
-          (o.citations = d.map((u) => u.address)));
+          (proposal.citations = formulaCells.map((cell) => cell.address)));
       } else
-        ((o.explanation = `Local deterministic demo: ${r.cells.length} selected cells; ${a.length} numeric values; sum ${s.toLocaleString()}; ${r.cells.filter((d) => d.raw === null || d.raw === "").length} empty cells. Workbook content is treated only as data.`),
-          (o.citations = a.slice(0, 20).map((d) => d.address)));
+        ((proposal.explanation = `Local deterministic demo: ${selectionContext.cells.length} selected cells; ${numericCells.length} numeric values; sum ${numericSum.toLocaleString()}; ${selectionContext.cells.filter((cell) => cell.raw === null || cell.raw === "").length} empty cells. Workbook content is treated only as data.`),
+          (proposal.citations = numericCells
+            .slice(0, 20)
+            .map((cell) => cell.address)));
       if (
-        ((o.grounding = {
+        ((proposal.grounding = {
           claims: [
             {
               id: "local-evidence",
               kind: "workbook",
-              text: o.explanation,
-              ranges: [r.range],
+              text: proposal.explanation,
+              ranges: [selectionContext.range],
             },
           ],
           externalSources: [],
         }),
-        n?.attachments.length)
+        chatRequest?.attachments.length)
       ) {
-        const d = parseAssistantChatRequest(n).attachments,
-          u = `Received ${d.length} attachment${d.length === 1 ? "" : "s"}: ${d.map((l) => `${l.name} (${l.size.toLocaleString()} bytes)`).join(", ")}. Files remain in this browser in local demo mode. Preview text and images in the attachment cards; document interpretation requires a connected model.`;
-        ((o.explanation += `
+        const attachments = parseAssistantChatRequest(chatRequest).attachments,
+          attachmentSummary = `Received ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}: ${attachments.map((attachment) => `${attachment.name} (${attachment.size.toLocaleString()} bytes)`).join(", ")}. Files remain in this browser in local demo mode. Preview text and images in the attachment cards; document interpretation requires a connected model.`;
+        ((proposal.explanation += `
 
-${u}`),
-          o.grounding.claims.push({
+${attachmentSummary}`),
+          proposal.grounding.claims.push({
             id: "local-attachments",
             kind: "commentary",
-            text: u,
+            text: attachmentSummary,
           }));
       }
-      return validateAssistantProposal(o, r);
+      return validateAssistantProposal(proposal, selectionContext);
     },
   };
 }
 
 /* From 11-local-workbook-store-and-versions.js */
-const isPlainRecord = (e) =>
-  !!e &&
-  typeof e == "object" &&
-  !Array.isArray(e) &&
-  Object.getPrototypeOf(e) === Object.prototype;
+const isPlainRecord = (value) =>
+  !!value &&
+  typeof value == "object" &&
+  !Array.isArray(value) &&
+  Object.getPrototypeOf(value) === Object.prototype;
 
 /* From 12-consolidation-and-dependency-inspection.js */
-const hasOnlyAllowedKeys = (e, r) =>
-  !!e &&
-  typeof e == "object" &&
-  !Array.isArray(e) &&
-  Object.keys(e).every((t) => r.includes(t));
+const hasOnlyAllowedKeys = (value, allowedKeys) =>
+  !!value &&
+  typeof value == "object" &&
+  !Array.isArray(value) &&
+  Object.keys(value).every((key) => allowedKeys.includes(key));
 
 export {
   LLMRequestError,

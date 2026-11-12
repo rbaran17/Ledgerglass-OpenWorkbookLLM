@@ -36,33 +36,35 @@ function WhatIfAnalysisDialog(e) {
     u = ne.useRef(null),
     [l, c] = ne.useState(e.initialKind ?? "scenarios"),
     [h, f] = ne.useState("Sensitivity analysis"),
-    [p, m] = ne.useState(e.sheetId),
+    [sheetId, m] = ne.useState(e.sheetId),
     [v, g] = ne.useState(""),
     [b, y] = ne.useState(e.address),
-    [w, E] = ne.useState("column"),
+    [orientation, E] = ne.useState("column"),
     [A, k] = ne.useState(""),
     [F, I] = ne.useState(""),
     [O, j] = ne.useState([
       { name: "Downside", values: "" },
       { name: "Upside", values: "" },
     ]),
-    [z, V] = ne.useState(false),
+    [checked, V] = ne.useState(false),
     [D, B] = ne.useState(""),
     [_, C] = ne.useState("0"),
     [T, N] = ne.useState(null),
     [R, L] = ne.useState(""),
     $ = {
       readOnly: e.readOnly,
-      includeHidden: !!e.allowHidden && z,
+      includeHidden: !!e.allowHidden && checked,
       allowedSheetIds: e.allowedSheetIds,
     },
     U = [
-      ...new Set(e.allowedSheetIds ?? e.workbook.sheets.map((ge) => ge.id)),
+      ...new Set(
+        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+      ),
     ].sort(),
     G = e.workbook.sheets.filter(
-      (ge) =>
-        U.includes(ge.id) &&
-        ($.includeHidden || (!ge.hidden && !ge.veryHidden)),
+      (sheet) =>
+        U.includes(sheet.id) &&
+        ($.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     ),
     H = JSON.stringify([U, $.includeHidden]),
     Q = ne.useRef(H),
@@ -75,11 +77,11 @@ function WhatIfAnalysisDialog(e) {
       isWhatIfAnalysisInScope(e.workbook, ge, $),
     );
   (ne.useEffect(() => {
-    const ge = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       u.current?.querySelector('[data-ui-label="Analysis name"]')?.focus(),
       () => {
-        ge?.isConnected && ge.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []),
@@ -101,10 +103,10 @@ function WhatIfAnalysisDialog(e) {
     W = (ge) => {
       try {
         (ge(), L(""));
-      } catch (se) {
+      } catch (error) {
         L(
-          se instanceof Error
-            ? se.message
+          error instanceof Error
+            ? error.message
             : "What-if analysis could not complete.",
         );
       }
@@ -114,10 +116,11 @@ function WhatIfAnalysisDialog(e) {
       if (!se.length || /[,\n]\s*[,\n]|[,\n]\s*$/.test(ge))
         throw Error("Enter cell addresses separated by commas or new lines.");
       return se.map((we) => {
-        const Ee = we.trim(),
-          Ae = Ee.lastIndexOf("!");
-        if (Ae < 0) return { sheetId: p, address: Ee };
-        const ye = Ee.slice(0, Ae)
+        const address = we.trim(),
+          Ae = address.lastIndexOf("!");
+        if (Ae < 0) return { sheetId: sheetId, address: address };
+        const ye = address
+            .slice(0, Ae)
             .replace(/^'(.*)'$/, "$1")
             .replaceAll("''", "'"),
           Te = G.find((Pe) => Pe.name.toLowerCase() === ye.toLowerCase());
@@ -125,14 +128,14 @@ function WhatIfAnalysisDialog(e) {
           throw Error(
             "A referenced worksheet is missing or outside the current context.",
           );
-        return { sheetId: Te.id, address: Ee.slice(Ae + 1) };
+        return { sheetId: Te.id, address: address.slice(Ae + 1) };
       });
     },
-    te = () =>
+    onClick = () =>
       W(() => {
         N(null);
         const ge = { name: h, inputs: K(v), outputs: K(b) },
-          se =
+          request =
             l === "scenarios"
               ? {
                   ...ge,
@@ -146,7 +149,7 @@ function WhatIfAnalysisDialog(e) {
                 ? {
                     ...ge,
                     kind: l,
-                    orientation: w,
+                    orientation: orientation,
                     values: parseAssumptionNumbers(A, o),
                   }
                 : {
@@ -155,7 +158,7 @@ function WhatIfAnalysisDialog(e) {
                     rowValues: parseAssumptionNumbers(A, o),
                     columnValues: parseAssumptionNumbers(F, o),
                   };
-        (N(computeWhatIfResult(e.workbook, se, $)), C("0"));
+        (N(computeWhatIfResult(e.workbook, request, $)), C("0"));
       }),
     ae = (ge, se = false) =>
       W(() => {
@@ -163,24 +166,27 @@ function WhatIfAnalysisDialog(e) {
         if ((N(null), B(ge), !we)) return;
         if (
           we.assumptions.some(
-            (ye) => !e.workbook.sheets.some((Te) => Te.id === ye.sheetId),
+            (assumption) =>
+              !e.workbook.sheets.some(
+                (sheet) => sheet.id === assumption.sheetId,
+              ),
           )
         )
           throw Error(
             "A saved source worksheet was deleted. This definition cannot reconnect by name. Remove the definition or create a new analysis with current source cells; its historical report is retained.",
           );
-        const Ee = we.request,
+        const request = we.request,
           Ae = (ye) =>
             ye
               .map(
                 (Te) =>
-                  `'${e.workbook.sheets.find((Pe) => Pe.id === Te.sheetId).name.replaceAll("'", "''")}'!${Te.address}`,
+                  `'${e.workbook.sheets.find((sheet) => sheet.id === Te.sheetId).name.replaceAll("'", "''")}'!${Te.address}`,
               )
               .join(", ");
-        (f(Ee.name),
-          g(Ae(Ee.inputs)),
-          y(Ae(Ee.outputs)),
-          c(se ? "scenarios" : Ee.kind),
+        (f(request.name),
+          g(Ae(request.inputs)),
+          y(Ae(request.outputs)),
+          c(se ? "scenarios" : request.kind),
           se
             ? j([
                 {
@@ -188,16 +194,16 @@ function WhatIfAnalysisDialog(e) {
                   values: s(we.baseline.inputs),
                 },
               ])
-            : Ee.kind === "scenarios"
+            : request.kind === "scenarios"
               ? j(
-                  Ee.scenarios.map((ye) => ({
-                    name: ye.name,
-                    values: s(ye.values),
+                  request.scenarios.map((scenario) => ({
+                    name: scenario.name,
+                    values: s(scenario.values),
                   })),
                 )
-              : Ee.kind === "one-variable"
-                ? (k(s(Ee.values)), E(Ee.orientation))
-                : (k(s(Ee.rowValues)), I(s(Ee.columnValues))));
+              : request.kind === "one-variable"
+                ? (k(s(request.values)), E(request.orientation))
+                : (k(s(request.rowValues)), I(s(request.columnValues))));
       }),
     oe = () =>
       W(() => {
@@ -240,8 +246,8 @@ function WhatIfAnalysisDialog(e) {
     le = Se.findIndex((ge) => ge[0] === "Source assumptions at preview");
   return i.jsx("div", {
     className: "gs-backdrop",
-    onMouseDown: (ge) => {
-      ge.target === ge.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
     children: i.jsxs("section", {
       ref: u,
@@ -249,12 +255,12 @@ function WhatIfAnalysisDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${d}-title`,
-      onKeyDown: (ge) => {
+      onKeyDown: (event) => {
         var we, Ee;
         if (
-          (ge.stopPropagation(),
-          ge.key === "Escape" && (ge.preventDefault(), e.onClose()),
-          ge.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Tab")
         ) {
           const Ae = [
             ...(u.current?.querySelectorAll(
@@ -265,11 +271,11 @@ function WhatIfAnalysisDialog(e) {
               !ye.hidden &&
               (!ye.closest("details:not([open])") || ye.tagName === "SUMMARY"),
           );
-          ge.shiftKey && document.activeElement === Ae[0]
-            ? (ge.preventDefault(), (we = Ae.at(-1)) == null || we.focus())
-            : !ge.shiftKey &&
+          event.shiftKey && document.activeElement === Ae[0]
+            ? (event.preventDefault(), (we = Ae.at(-1)) == null || we.focus())
+            : !event.shiftKey &&
               document.activeElement === Ae.at(-1) &&
-              (ge.preventDefault(), (Ee = Ae[0]) == null || Ee.focus());
+              (event.preventDefault(), (Ee = Ae[0]) == null || Ee.focus());
         }
       },
       children: [
@@ -325,7 +331,7 @@ function WhatIfAnalysisDialog(e) {
                   "aria-label": text("Analysis name"),
                   value: h,
                   maxLength: 100,
-                  onChange: (ge) => q(() => f(ge.target.value)),
+                  onChange: (event) => q(() => f(event.target.value)),
                   lang: language("Analysis name"),
                   "data-ui-label": "Analysis name",
                 }),
@@ -337,9 +343,9 @@ function WhatIfAnalysisDialog(e) {
                 i.jsxs("select", {
                   "aria-label": text("Analysis type"),
                   value: l,
-                  onChange: (ge) =>
+                  onChange: (event) =>
                     q(() => {
-                      (c(ge.target.value), B(""));
+                      (c(event.target.value), B(""));
                     }),
                   lang: language("Analysis type"),
                   "data-ui-label": "Analysis type",
@@ -365,8 +371,8 @@ function WhatIfAnalysisDialog(e) {
                 i.jsx(LocalizedText, { children: "Default worksheet" }),
                 i.jsxs("select", {
                   "aria-label": text("Default worksheet"),
-                  value: G.some((ge) => ge.id === p) ? p : "",
-                  onChange: (ge) => q(() => m(ge.target.value)),
+                  value: G.some((ge) => ge.id === sheetId) ? sheetId : "",
+                  onChange: (event) => q(() => m(event.target.value)),
                   lang: language("Default worksheet"),
                   "data-ui-label": "Default worksheet",
                   children: [
@@ -392,7 +398,7 @@ function WhatIfAnalysisDialog(e) {
                 i.jsxs("select", {
                   "aria-label": text("Saved analyses"),
                   value: J.some((ge) => ge.id === D) ? D : "",
-                  onChange: (ge) => ae(ge.target.value),
+                  onChange: (event) => ae(event.target.value),
                   lang: language("Saved analyses"),
                   "data-ui-label": "Saved analyses",
                   children: [
@@ -418,7 +424,7 @@ function WhatIfAnalysisDialog(e) {
                       ? "B2, B3 — across first, down second"
                       : "B2, B3",
                   value: v,
-                  onChange: (ge) => q(() => g(ge.target.value)),
+                  onChange: (event) => q(() => g(event.target.value)),
                   lang: language("Changing cells"),
                   "data-ui-label": "Changing cells",
                 }),
@@ -431,7 +437,7 @@ function WhatIfAnalysisDialog(e) {
                   "aria-label": text("Result cells"),
                   placeholder: text("B5, B6"),
                   value: b,
-                  onChange: (ge) => q(() => y(ge.target.value)),
+                  onChange: (event) => q(() => y(event.target.value)),
                   lang: language("Result cells"),
                   "data-ui-label": "Result cells",
                 }),
@@ -508,12 +514,12 @@ function WhatIfAnalysisDialog(e) {
                               "aria-label": `Scenario ${se + 1} name`,
                               value: ge.name,
                               maxLength: 100,
-                              onChange: (we) =>
+                              onChange: (event) =>
                                 q(() =>
                                   j(
                                     O.map((Ee, Ae) =>
                                       Ae === se
-                                        ? { ...Ee, name: we.target.value }
+                                        ? { ...Ee, name: event.target.value }
                                         : Ee,
                                     ),
                                   ),
@@ -531,12 +537,12 @@ function WhatIfAnalysisDialog(e) {
                               "aria-label": `Scenario ${se + 1} values`,
                               placeholder: a ? "90000; 45000" : "90000, 45000",
                               value: ge.values,
-                              onChange: (we) =>
+                              onChange: (event) =>
                                 q(() =>
                                   j(
                                     O.map((Ee, Ae) =>
                                       Ae === se
-                                        ? { ...Ee, values: we.target.value }
+                                        ? { ...Ee, values: event.target.value }
                                         : Ee,
                                     ),
                                   ),
@@ -588,7 +594,7 @@ function WhatIfAnalysisDialog(e) {
                         ? "80000; 100000; 120000"
                         : "80000, 100000, 120000",
                       value: A,
-                      onChange: (ge) => q(() => k(ge.target.value)),
+                      onChange: (event) => q(() => k(event.target.value)),
                     }),
                   ],
                 }),
@@ -605,7 +611,7 @@ function WhatIfAnalysisDialog(e) {
                             ? "40000; 50000; 60000"
                             : "40000, 50000, 60000",
                           value: F,
-                          onChange: (ge) => q(() => I(ge.target.value)),
+                          onChange: (event) => q(() => I(event.target.value)),
                           lang: language("Down-column input values"),
                           "data-ui-label": "Down-column input values",
                         }),
@@ -616,8 +622,8 @@ function WhatIfAnalysisDialog(e) {
                         i.jsx(LocalizedText, { children: "Values arranged" }),
                         i.jsxs("select", {
                           "aria-label": text("Values arranged"),
-                          value: w,
-                          onChange: (ge) => q(() => E(ge.target.value)),
+                          value: orientation,
+                          onChange: (event) => q(() => E(event.target.value)),
                           lang: language("Values arranged"),
                           "data-ui-label": "Values arranged",
                           children: [
@@ -641,8 +647,8 @@ function WhatIfAnalysisDialog(e) {
             children: [
               i.jsx("input", {
                 type: "checkbox",
-                checked: z,
-                onChange: (ge) => q(() => V(ge.target.checked)),
+                checked: checked,
+                onChange: (event) => q(() => V(event.target.checked)),
               }),
               i.jsx(LocalizedText, { children: "Include hidden sources" }),
             ],
@@ -650,7 +656,7 @@ function WhatIfAnalysisDialog(e) {
         R && i.jsx("p", { role: "alert", className: "gs-error", children: R }),
         i.jsx("button", {
           className: "gs-primary",
-          onClick: te,
+          onClick: onClick,
           children: i.jsx(LocalizedText, { children: "Preview analysis" }),
         }),
         T &&
@@ -675,7 +681,7 @@ function WhatIfAnalysisDialog(e) {
                             children: "Baseline inputs are unchanged.",
                           }),
                           " ",
-                          T.trials.filter((ge) => !ge.error).length,
+                          T.trials.filter((trial) => !trial.error).length,
                           " ",
                           i.jsx(LocalizedText, { children: "of" }),
                           " ",
@@ -775,29 +781,32 @@ function WhatIfAnalysisDialog(e) {
                                   }),
                                 }),
                                 i.jsx("tbody", {
-                                  children: T.assumptions.map((ge, se) =>
-                                    i.jsxs(
-                                      "tr",
-                                      {
-                                        children: [
-                                          i.jsxs("th", {
-                                            scope: "row",
-                                            children: [
-                                              ge.sheetName,
-                                              "!",
-                                              ge.address,
-                                            ],
-                                          }),
-                                          i.jsx("td", {
-                                            children: String(ge.raw),
-                                          }),
-                                          i.jsx("td", {
-                                            children: ge.literal ? "Yes" : "No",
-                                          }),
-                                        ],
-                                      },
-                                      se,
-                                    ),
+                                  children: T.assumptions.map(
+                                    (assumption, se) =>
+                                      i.jsxs(
+                                        "tr",
+                                        {
+                                          children: [
+                                            i.jsxs("th", {
+                                              scope: "row",
+                                              children: [
+                                                assumption.sheetName,
+                                                "!",
+                                                assumption.address,
+                                              ],
+                                            }),
+                                            i.jsx("td", {
+                                              children: String(assumption.raw),
+                                            }),
+                                            i.jsx("td", {
+                                              children: assumption.literal
+                                                ? "Yes"
+                                                : "No",
+                                            }),
+                                          ],
+                                        },
+                                        se,
+                                      ),
                                   ),
                                 }),
                               ],
@@ -835,18 +844,18 @@ function WhatIfAnalysisDialog(e) {
                                 i.jsx("select", {
                                   "aria-label": text("Scenario to apply"),
                                   value: _,
-                                  onChange: (ge) => C(ge.target.value),
+                                  onChange: (event) => C(event.target.value),
                                   lang: language("Scenario to apply"),
                                   "data-ui-label": "Scenario to apply",
-                                  children: T.trials.map((ge, se) =>
+                                  children: T.trials.map((trial, se) =>
                                     i.jsxs(
                                       "option",
                                       {
                                         value: se,
-                                        disabled: !!ge.error,
+                                        disabled: !!trial.error,
                                         children: [
-                                          ge.name,
-                                          ge.error ? " — failed" : "",
+                                          trial.name,
+                                          trial.error ? " — failed" : "",
                                         ],
                                       },
                                       se,
@@ -924,7 +933,7 @@ function DelimitedImportExportDialog({
     u = "bytes" in source,
     l = ne.useId(),
     c = ne.useRef(null),
-    h = useOperationScope(),
+    operationScope = useOperationScope(),
     f = ne.useRef(0),
     p = ne.useRef(null),
     [m, v] = ne.useState(() => ({
@@ -954,8 +963,9 @@ function DelimitedImportExportDialog({
               : {}),
             hasHeader: source.population
               ? true
-              : (source.snapshot.sheets.find((U) => U.id === source.sheetId)
-                  ?.delimitedSource?.hasHeader ?? true),
+              : (source.snapshot.sheets.find(
+                  (sheet) => sheet.id === source.sheetId,
+                )?.delimitedSource?.hasHeader ?? true),
           }),
     })),
     g = (R) => {
@@ -966,17 +976,17 @@ function DelimitedImportExportDialog({
             : exportWorksheetToCsv(source.snapshot, source.sheetId, R),
           error: "",
         };
-      } catch (L) {
+      } catch (error) {
         return {
           result: undefined,
-          error: L instanceof Error ? L.message : "Preview failed.",
+          error: error instanceof Error ? error.message : "Preview failed.",
         };
       }
     },
     [b, y] = ne.useState(() =>
       u && source.initial ? { result: source.initial, error: "" } : g(m),
     ),
-    [w, E] = ne.useState(u && !source.initial),
+    [disabled, E] = ne.useState(u && !source.initial),
     [A, k] = ne.useState(false),
     [F, I] = ne.useState(0),
     [O, j] = ne.useState(""),
@@ -990,7 +1000,7 @@ function DelimitedImportExportDialog({
       E(false),
       j(""));
   }
-  async function B() {
+  async function onClick() {
     const R = ++f.current;
     p.current?.abort();
     const L = new AbortController();
@@ -1001,15 +1011,19 @@ function DelimitedImportExportDialog({
           source.file ?? new File([source.bytes], source.fileName),
           m,
           {
-            ...h,
-            signal: h.signal ? AbortSignal.any([L.signal, h.signal]) : L.signal,
+            ...operationScope,
+            signal: operationScope.signal
+              ? AbortSignal.any([L.signal, operationScope.signal])
+              : L.signal,
           },
         );
         if (f.current !== R) return;
         y({ result: U, error: "" });
-      } catch (U) {
+      } catch (error) {
         if (f.current !== R) return;
-        y({ error: U instanceof Error ? U.message : "Preview failed." });
+        y({
+          error: error instanceof Error ? error.message : "Preview failed.",
+        });
       } finally {
         f.current === R && E(false);
       }
@@ -1018,7 +1032,7 @@ function DelimitedImportExportDialog({
   }
   (ne.useEffect(
     () => (
-      u && !source.initial && B(),
+      u && !source.initial && onClick(),
       () => {
         (f.current++, p.current?.abort());
       }
@@ -1026,11 +1040,11 @@ function DelimitedImportExportDialog({
     [source],
   ),
     ne.useEffect(() => {
-      const R = document.activeElement;
+      const activeElement = document.activeElement;
       return (
         c.current?.focus(),
         () => {
-          R?.isConnected && R.focus();
+          activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []));
@@ -1040,7 +1054,7 @@ function DelimitedImportExportDialog({
           i.jsx(LocalizedText, { children: R }),
           i.jsx("select", {
             value: String(m[L]),
-            onChange: (U) => D(L, U.target.value),
+            onChange: (event) => D(L, event.target.value),
             children: $.map(([U, G]) =>
               i.jsx("option", { value: U, children: text(G) }, U),
             ),
@@ -1054,7 +1068,7 @@ function DelimitedImportExportDialog({
           i.jsx("input", {
             type: "checkbox",
             checked: m[L],
-            onChange: ($) => D(L, $.target.checked),
+            onChange: (event) => D(L, event.target.checked),
           }),
           R,
         ],
@@ -1068,11 +1082,11 @@ function DelimitedImportExportDialog({
       tabIndex: -1,
       ref: c,
       className: "lg-delimited-review",
-      onKeyDown: (R) => {
+      onKeyDown: (event) => {
         if (
-          (R.stopPropagation(),
-          R.key === "Escape" && (R.preventDefault(), onClose()),
-          R.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), onClose()),
+          event.key === "Tab")
         ) {
           const $ = [
               ...(c.current?.querySelectorAll(
@@ -1081,12 +1095,12 @@ function DelimitedImportExportDialog({
             ],
             U = $[0],
             G = $.at(-1);
-          R.shiftKey &&
+          event.shiftKey &&
           (document.activeElement === U || document.activeElement === c.current)
-            ? (R.preventDefault(), G == null || G.focus())
-            : !R.shiftKey &&
+            ? (event.preventDefault(), G == null || G.focus())
+            : !event.shiftKey &&
               document.activeElement === G &&
-              (R.preventDefault(), U == null || U.focus());
+              (event.preventDefault(), U == null || U.focus());
         }
       },
       children: [
@@ -1125,10 +1139,10 @@ function DelimitedImportExportDialog({
                   i.jsxs("select", {
                     "aria-label": text("Export population"),
                     value: m.population?.scope ?? "full",
-                    onChange: (R) =>
+                    onChange: (event) =>
                       D("population", {
                         definition: source.population,
-                        scope: R.target.value,
+                        scope: event.target.value,
                       }),
                     lang: language("Export population"),
                     "data-ui-label": "Export population",
@@ -1230,7 +1244,8 @@ function DelimitedImportExportDialog({
                               }),
                               i.jsx("input", {
                                 value: m.range ?? "",
-                                onChange: (R) => D("range", R.target.value),
+                                onChange: (event) =>
+                                  D("range", event.target.value),
                               }),
                             ],
                           }),
@@ -1293,10 +1308,10 @@ function DelimitedImportExportDialog({
                             i.jsx("select", {
                               "aria-label": `Type for column ${columnIndexToLetters(R.index)}`,
                               value: m.columns[R.index] ?? "auto",
-                              onChange: (L) =>
+                              onChange: (event) =>
                                 D("columns", {
                                   ...m.columns,
-                                  [R.index]: L.target.value,
+                                  [R.index]: event.target.value,
                                 }),
                               children: [
                                 "auto",
@@ -1352,11 +1367,11 @@ function DelimitedImportExportDialog({
                 ],
               }),
             i.jsx("button", {
-              onClick: B,
-              disabled: w,
+              onClick: onClick,
+              disabled: disabled,
               children: i.jsx(LocalizedText, { children: "Refresh preview" }),
             }),
-            w &&
+            disabled &&
               i.jsx("p", {
                 role: "status",
                 children: i.jsx(LocalizedText, {
@@ -1435,30 +1450,30 @@ function DelimitedImportExportDialog({
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: z.preview.map((R) =>
+                          children: z.preview.map((cell) =>
                             i.jsxs(
                               "tr",
                               {
                                 children: [
-                                  i.jsx("th", { children: R.record }),
-                                  R.values.map((L, $) =>
+                                  i.jsx("th", { children: cell.record }),
+                                  cell.values.map((value, $) =>
                                     i.jsx(
                                       "td",
                                       {
-                                        title: R.raw[$],
+                                        title: cell.raw[$],
                                         children:
-                                          L === null
+                                          value === null
                                             ? "(blank)"
-                                            : L === ""
+                                            : value === ""
                                               ? "(empty text)"
-                                              : String(L),
+                                              : String(value),
                                       },
                                       $,
                                     ),
                                   ),
                                 ],
                               },
-                              R.record,
+                              cell.record,
                             ),
                           ),
                         }),
@@ -1475,18 +1490,20 @@ function DelimitedImportExportDialog({
                           }),
                         }),
                         i.jsx("ul", {
-                          children: z.issues.map((R, L) =>
+                          children: z.issues.map((issue, L) =>
                             i.jsxs(
                               "li",
                               {
                                 children: [
                                   i.jsx(LocalizedText, { children: "Record " }),
-                                  R.record,
-                                  R.column ? `, column ${R.column}` : "",
+                                  issue.record,
+                                  issue.column
+                                    ? `, column ${issue.column}`
+                                    : "",
                                   ": ",
-                                  R.message,
-                                  R.value !== undefined
-                                    ? ` Value: ${R.value}`
+                                  issue.message,
+                                  issue.value !== undefined
+                                    ? ` Value: ${issue.value}`
                                     : "",
                                 ],
                               },
@@ -1585,8 +1602,8 @@ function DelimitedImportExportDialog({
                     }),
                   }),
                   i.jsx("ul", {
-                    children: z.warnings.map((R, L) =>
-                      i.jsx("li", { children: R }, L),
+                    children: z.warnings.map((warning, L) =>
+                      i.jsx("li", { children: warning }, L),
                     ),
                   }),
                 ],
@@ -1601,17 +1618,17 @@ function DelimitedImportExportDialog({
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
-              disabled: !z || A || w,
+              disabled: !z || A || disabled,
               onClick: () => z && onReport(z),
               children: i.jsx(LocalizedText, {
                 children: "Save schema and changes",
               }),
             }),
             i.jsx("button", {
-              disabled: A || w || !!blocked || !z?.valid,
+              disabled: A || disabled || !!blocked || !z?.valid,
               onClick: () => {
                 var R, L;
-                if (!(A || w || blocked || !z?.valid))
+                if (!(A || disabled || blocked || !z?.valid))
                   try {
                     u
                       ? (R = b.result) != null &&
@@ -1620,8 +1637,12 @@ function DelimitedImportExportDialog({
                       : (L = b.result) != null &&
                         L.bytes &&
                         onExport(b.result.bytes, z);
-                  } catch ($) {
-                    j($ instanceof Error ? $.message : "Exchange failed.");
+                  } catch (error) {
+                    j(
+                      error instanceof Error
+                        ? error.message
+                        : "Exchange failed.",
+                    );
                   }
               },
               children: i.jsx(LocalizedText, {
@@ -1637,16 +1658,16 @@ function DelimitedImportExportDialog({
 function tokenizeVbaSource(e) {
   const r = [];
   let t = 0,
-    n = 1;
+    line = 1;
   const o = (a) => {
-    throw { line: n, message: a };
+    throw { line: line, message: a };
   };
   for (; t < e.length;) {
     const a = e[t];
     if (/\s/.test(a)) {
       (a ===
         `
-` && n++,
+` && line++,
         t++);
       continue;
     }
@@ -1665,11 +1686,11 @@ function tokenizeVbaSource(e) {
       for (t += 2; t < e.length && e.slice(t, t + 2) !== "*/";)
         e[t++] ===
           `
-` && n++;
+` && line++;
       (t === e.length && o("Unclosed block comment."), (t += 2));
       continue;
     }
-    const s = n;
+    const s = line;
     if (a === '"' || a === "'") {
       let d = "";
       const u = a;
@@ -1841,7 +1862,7 @@ class VbaAssignmentParser {
     for (; this.peek(".");) {
       this.take(".");
       const t = this.id(),
-        n = this.ts[this.pos - 1].line;
+        line = this.ts[this.pos - 1].line;
       if ((this.take("("), r.kind === "workbook" && t === "getActiveWorksheet"))
         (this.take(")"), (r = { kind: "sheet" }));
       else if (r.kind === "workbook" && t === "getWorksheet") {
@@ -1870,7 +1891,7 @@ class VbaAssignmentParser {
           (r = {
             kind: "command",
             command: {
-              line: n,
+              line: line,
               kind: t.includes("Formula") ? "set-formulas" : "set-values",
               sheet: r.sheet,
               range: r.range,
@@ -1890,7 +1911,7 @@ class VbaAssignmentParser {
         r = {
           kind: "command",
           command: {
-            line: n,
+            line: line,
             kind: "clear-contents",
             sheet: r.sheet,
             range: r.range,
@@ -1936,9 +1957,9 @@ class VbaAssignmentParser {
               this.take(";"),
               this.commands.push(t.command));
           }
-        } catch (t) {
+        } catch (error) {
           for (
-            this.issues.push(createVbaSyntaxError(t));
+            this.issues.push(createVbaSyntaxError(error));
             this.pos < this.ts.length && !this.peek(";") && !this.peek("}");
           )
             this.pos++;
@@ -1949,13 +1970,13 @@ class VbaAssignmentParser {
           this.error(
             "Additional procedures or top-level executable statements are unsupported.",
           ));
-    } catch (r) {
-      this.issues.push(createVbaSyntaxError(r));
+    } catch (error) {
+      this.issues.push(createVbaSyntaxError(error));
     }
   }
 }
-function createVbaSyntaxError(e) {
-  const r = e;
+function createVbaSyntaxError(error) {
+  const r = error;
   return {
     line: r.line ?? 1,
     message: r.message ?? "Unsupported source syntax.",

@@ -48,48 +48,50 @@ function DataAnalysisDialog(e) {
   const { text } = useWorkbookMessages(),
     t = ne.useId(),
     n = ne.useRef(null),
-    o = e.workbook.sheets.find((te) => te.id === e.sheetId),
-    a = o.analysisReport,
-    [s, d] = ne.useState(a?.request.kind ?? e.initialKind ?? "statistics"),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    analysisReport = sheet.analysisReport,
+    [s, d] = ne.useState(
+      analysisReport?.request.kind ?? e.initialKind ?? "statistics",
+    ),
     [u, l] = ne.useState("Setup"),
     [c, h] = ne.useState(""),
     [f, p] = ne.useState(null),
-    [m, v] = ne.useState(a?.includeHidden ?? false),
+    [checked, v] = ne.useState(analysisReport?.includeHidden ?? false),
     [g, b] = ne.useState(0),
     y = () => {
       let te = 1;
       for (
         ;
         e.workbook.sheets.some(
-          (ae) => ae.name.toLowerCase() === `analysis ${te}`,
+          (sheet) => sheet.name.toLowerCase() === `analysis ${te}`,
         );
       )
         te++;
       return `Analysis ${te}`;
     },
-    [w, E] = ne.useState(y),
+    [outputName, E] = ne.useState(y),
     [A, k] = ne.useState(() =>
-      a?.request.kind === "solver"
-        ? a.request
+      analysisReport?.request.kind === "solver"
+        ? analysisReport.request
         : {
             kind: "solver",
-            outputName: w,
+            outputName: outputName,
             objective: {
               sheetId: e.sheetId,
               address:
-                Object.entries(o.cells).find(
-                  ([, ae]) =>
-                    !ae.literal &&
-                    typeof ae.raw == "string" &&
-                    ae.raw.startsWith("="),
+                Object.entries(sheet.cells).find(
+                  ([, cell]) =>
+                    !cell.literal &&
+                    typeof cell.raw == "string" &&
+                    cell.raw.startsWith("="),
                 )?.[0] ?? "C2",
             },
             direction: "maximize",
-            variables: Object.entries(o.cells)
-              .filter(([, ae]) => typeof ae.raw == "number")
+            variables: Object.entries(sheet.cells)
+              .filter(([, cell]) => typeof cell.raw == "number")
               .slice(0, 2)
-              .map(([ae]) => ({
-                cell: { sheetId: e.sheetId, address: ae },
+              .map(([address]) => ({
+                cell: { sheetId: e.sheetId, address: address },
                 lower: 0,
                 upper: 100,
                 domain: "continuous",
@@ -100,15 +102,15 @@ function DataAnalysisDialog(e) {
           },
     ),
     [F, I] = ne.useState(() =>
-      a?.request.kind === "statistics"
-        ? a.request
+      analysisReport?.request.kind === "statistics"
+        ? analysisReport.request
         : {
             kind: "statistics",
-            outputName: w,
+            outputName: outputName,
             sheetId: e.sheetId,
             range: e.range.includes(":")
               ? e.range
-              : formatOccupiedRangeAddress(o),
+              : formatOccupiedRangeAddress(sheet),
             method: "descriptive",
             missing: "reject",
           },
@@ -118,12 +120,16 @@ function DataAnalysisDialog(e) {
     [D, B] = ne.useState(-1),
     [_, C] = ne.useState(null),
     [T, N] = ne.useState(""),
-    R = JSON.stringify([e.readOnly, e.allowedSheetIds, !!e.allowHidden && m]),
+    R = JSON.stringify([
+      e.readOnly,
+      e.allowedSheetIds,
+      !!e.allowHidden && checked,
+    ]),
     L = !!f && D === z && _ === e.workbook && T === R,
     $ = {
       readOnly: e.readOnly,
       allowedSheetIds: e.allowedSheetIds,
-      includeHidden: !!e.allowHidden && m,
+      includeHidden: !!e.allowHidden && checked,
     },
     U = () => {
       (V((te) => te + 1), p(null), h(""), b(0));
@@ -135,17 +141,17 @@ function DataAnalysisDialog(e) {
       (I((ae) => ({ ...ae, ...te })), U());
     },
     Q = e.workbook.sheets.filter(
-      (te) =>
-        !te.analysisReport &&
-        !te.dataModelReport &&
-        (!e.allowedSheetIds || e.allowedSheetIds.includes(te.id)) &&
-        ($.includeHidden || (!te.hidden && !te.veryHidden)),
+      (sheet) =>
+        !sheet.analysisReport &&
+        !sheet.dataModelReport &&
+        (!e.allowedSheetIds || e.allowedSheetIds.includes(sheet.id)) &&
+        ($.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     ),
     X$1 = (te, ae, oe) =>
       i.jsx("select", {
         "aria-label": text(oe),
         value: te,
-        onChange: (de) => ae(de.target.value),
+        onChange: (event) => ae(event.target.value),
         children: Q.map((de) =>
           i.jsx("option", { value: de.id, children: de.name }, de.id),
         ),
@@ -157,11 +163,11 @@ function DataAnalysisDialog(e) {
         onValueChange: (de) => oe(parseNumericText(de)),
       });
   (ne.useEffect(() => {
-    const te = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       n.current?.querySelector("button")?.focus(),
       () => {
-        te?.isConnected && te.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []),
@@ -169,23 +175,23 @@ function DataAnalysisDialog(e) {
       const te = n.current?.querySelector(".lg-model-body");
       te && (te.scrollTop = 0);
     }, [u, f]));
-  const q = () => {
+  const onClick = () => {
       (p(null), h(""));
       try {
-        const te =
+        const request =
             s === "solver"
-              ? { ...A, outputName: w }
+              ? { ...A, outputName: outputName }
               : {
                   ...F,
-                  outputName: w,
+                  outputName: outputName,
                   ...(F.method === "histogram"
                     ? { bins: O.split(",").map(parseNumericText) }
                     : {}),
                 },
-          ae = runAnalysisRequest(e.workbook, te, $);
+          ae = runAnalysisRequest(e.workbook, request, $);
         (p(ae), B(z), C(e.workbook), N(R), l("Results"), b(0));
-      } catch (te) {
-        h(te instanceof Error ? te.message : "Analysis failed.");
+      } catch (error) {
+        h(error instanceof Error ? error.message : "Analysis failed.");
       }
     },
     W = (te) => {
@@ -201,8 +207,12 @@ function DataAnalysisDialog(e) {
         ),
           p(null),
           e.onClose());
-      } catch (ae) {
-        h(ae instanceof Error ? ae.message : "The analysis was not saved.");
+      } catch (error) {
+        h(
+          error instanceof Error
+            ? error.message
+            : "The analysis was not saved.",
+        );
       }
     };
   return i.jsx("div", {
@@ -213,10 +223,10 @@ function DataAnalysisDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": t,
-      onKeyDown: (te) => {
+      onKeyDown: (event) => {
         if (
-          (te.key === "Escape" && (te.stopPropagation(), e.onClose()),
-          te.key === "Tab")
+          (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+          event.key === "Tab")
         ) {
           const ae = [
               ...n.current.querySelectorAll(
@@ -230,11 +240,11 @@ function DataAnalysisDialog(e) {
             ),
             oe = ae[0],
             de = ae.at(-1);
-          te.shiftKey && document.activeElement === oe
-            ? (te.preventDefault(), de == null || de.focus())
-            : !te.shiftKey &&
+          event.shiftKey && document.activeElement === oe
+            ? (event.preventDefault(), de == null || de.focus())
+            : !event.shiftKey &&
               document.activeElement === de &&
-              (te.preventDefault(), oe == null || oe.focus());
+              (event.preventDefault(), oe == null || oe.focus());
         }
       },
       children: [
@@ -291,8 +301,8 @@ function DataAnalysisDialog(e) {
                 "Tool",
                 i.jsxs("select", {
                   value: s,
-                  onChange: (te) => {
-                    (d(te.target.value), U(), l("Setup"));
+                  onChange: (event) => {
+                    (d(event.target.value), U(), l("Setup"));
                   },
                   children: [
                     i.jsx("option", { value: "solver", children: "Solver" }),
@@ -309,7 +319,7 @@ function DataAnalysisDialog(e) {
         i.jsxs("div", {
           className: "lg-model-body",
           children: [
-            a &&
+            analysisReport &&
               i.jsx("p", {
                 className: "lg-analysis-hint",
                 children: i.jsx(LocalizedText, {
@@ -332,9 +342,9 @@ function DataAnalysisDialog(e) {
                         LabeledField(
                           "Output worksheet",
                           i.jsx("input", {
-                            value: w,
-                            onChange: (te) => {
-                              (E(te.target.value), U());
+                            value: outputName,
+                            onChange: (event) => {
+                              (E(event.target.value), U());
                             },
                           }),
                         ),
@@ -343,9 +353,9 @@ function DataAnalysisDialog(e) {
                             "Include hidden source cells",
                             i.jsx("input", {
                               type: "checkbox",
-                              checked: m,
-                              onChange: (te) => {
-                                (v(te.target.checked), U());
+                              checked: checked,
+                              onChange: (event) => {
+                                (v(event.target.checked), U());
                               },
                             }),
                           ),
@@ -368,11 +378,11 @@ function DataAnalysisDialog(e) {
                                       "Objective worksheet",
                                       X$1(
                                         A.objective.sheetId,
-                                        (te) =>
+                                        (sheetId) =>
                                           G({
                                             objective: {
                                               ...A.objective,
-                                              sheetId: te,
+                                              sheetId: sheetId,
                                             },
                                           }),
                                         "Objective worksheet",
@@ -382,11 +392,11 @@ function DataAnalysisDialog(e) {
                                       "Objective formula cell",
                                       i.jsx("input", {
                                         value: A.objective.address,
-                                        onChange: (te) =>
+                                        onChange: (event) =>
                                           G({
                                             objective: {
                                               ...A.objective,
-                                              address: te.target.value
+                                              address: event.target.value
                                                 .replace(/\$/g, "")
                                                 .toUpperCase(),
                                             },
@@ -397,8 +407,8 @@ function DataAnalysisDialog(e) {
                                       "Direction",
                                       i.jsxs("select", {
                                         value: A.direction,
-                                        onChange: (te) =>
-                                          G({ direction: te.target.value }),
+                                        onChange: (event) =>
+                                          G({ direction: event.target.value }),
                                         children: [
                                           i.jsx("option", {
                                             value: "maximize",
@@ -418,8 +428,8 @@ function DataAnalysisDialog(e) {
                                     A.direction === "target" &&
                                       LabeledField(
                                         "Target value",
-                                        J("Target value", A.target, (te) =>
-                                          G({ target: te }),
+                                        J("Target value", A.target, (target) =>
+                                          G({ target: target }),
                                         ),
                                       ),
                                   ],
@@ -440,7 +450,7 @@ function DataAnalysisDialog(e) {
                                       "Up to six numeric inputs. Give every input finite lower and upper bounds. Use continuous inputs together, or integer and binary inputs together.",
                                   }),
                                 }),
-                                A.variables.map((te, ae) =>
+                                A.variables.map((variable, ae) =>
                                   i.jsxs(
                                     "div",
                                     {
@@ -450,20 +460,20 @@ function DataAnalysisDialog(e) {
                                         LabeledField(
                                           `Variable ${ae + 1} worksheet`,
                                           X$1(
-                                            te.cell.sheetId,
-                                            (oe) =>
+                                            variable.cell.sheetId,
+                                            (sheetId) =>
                                               G({
                                                 variables: A.variables.map(
-                                                  (de, he) =>
+                                                  (variable, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...variable,
                                                           cell: {
-                                                            ...de.cell,
-                                                            sheetId: oe,
+                                                            ...variable.cell,
+                                                            sheetId: sheetId,
                                                           },
                                                         }
-                                                      : de,
+                                                      : variable,
                                                 ),
                                               }),
                                             `Variable ${ae + 1} worksheet`,
@@ -472,18 +482,18 @@ function DataAnalysisDialog(e) {
                                         LabeledField(
                                           `Variable ${ae + 1} cell`,
                                           i.jsx("input", {
-                                            value: te.cell.address,
-                                            onChange: (oe) =>
+                                            value: variable.cell.address,
+                                            onChange: (event) =>
                                               G({
                                                 variables: A.variables.map(
-                                                  (de, he) =>
+                                                  (variable, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...variable,
                                                           cell: {
-                                                            ...de.cell,
+                                                            ...variable.cell,
                                                             address:
-                                                              oe.target.value
+                                                              event.target.value
                                                                 .replace(
                                                                   /\$/g,
                                                                   "",
@@ -491,7 +501,7 @@ function DataAnalysisDialog(e) {
                                                                 .toUpperCase(),
                                                           },
                                                         }
-                                                      : de,
+                                                      : variable,
                                                 ),
                                               }),
                                           }),
@@ -501,14 +511,17 @@ function DataAnalysisDialog(e) {
                                             `Variable ${ae + 1} ${oe}`,
                                             J(
                                               `Variable ${ae + 1} ${oe}`,
-                                              te[oe],
+                                              variable[oe],
                                               (de) =>
                                                 G({
                                                   variables: A.variables.map(
-                                                    (he, Se) =>
+                                                    (variable, Se) =>
                                                       Se === ae
-                                                        ? { ...he, [oe]: de }
-                                                        : he,
+                                                        ? {
+                                                            ...variable,
+                                                            [oe]: de,
+                                                          }
+                                                        : variable,
                                                   ),
                                                 }),
                                             ),
@@ -517,17 +530,17 @@ function DataAnalysisDialog(e) {
                                         LabeledField(
                                           `Variable ${ae + 1} domain`,
                                           i.jsxs("select", {
-                                            value: te.domain,
-                                            onChange: (oe) =>
+                                            value: variable.domain,
+                                            onChange: (event) =>
                                               G({
                                                 variables: A.variables.map(
-                                                  (de, he) =>
+                                                  (variable, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...variable,
                                                           domain:
-                                                            oe.target.value,
-                                                          ...(oe.target
+                                                            event.target.value,
+                                                          ...(event.target
                                                             .value === "binary"
                                                             ? {
                                                                 lower: 0,
@@ -535,7 +548,7 @@ function DataAnalysisDialog(e) {
                                                               }
                                                             : {}),
                                                         }
-                                                      : de,
+                                                      : variable,
                                                 ),
                                               }),
                                             children: [
@@ -561,7 +574,7 @@ function DataAnalysisDialog(e) {
                                           onClick: () =>
                                             G({
                                               variables: A.variables.filter(
-                                                (oe, de) => de !== ae,
+                                                (variable, de) => de !== ae,
                                               ),
                                             }),
                                           children: "×",
@@ -601,7 +614,7 @@ function DataAnalysisDialog(e) {
                                     children: "Constraints",
                                   }),
                                 }),
-                                A.constraints.map((te, ae) =>
+                                A.constraints.map((constraint, ae) =>
                                   i.jsxs(
                                     "div",
                                     {
@@ -611,20 +624,20 @@ function DataAnalysisDialog(e) {
                                         LabeledField(
                                           `Constraint ${ae + 1} worksheet`,
                                           X$1(
-                                            te.left.sheetId,
-                                            (oe) =>
+                                            constraint.left.sheetId,
+                                            (sheetId) =>
                                               G({
                                                 constraints: A.constraints.map(
-                                                  (de, he) =>
+                                                  (constraint, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...constraint,
                                                           left: {
-                                                            ...de.left,
-                                                            sheetId: oe,
+                                                            ...constraint.left,
+                                                            sheetId: sheetId,
                                                           },
                                                         }
-                                                      : de,
+                                                      : constraint,
                                                 ),
                                               }),
                                             `Constraint ${ae + 1} worksheet`,
@@ -633,18 +646,18 @@ function DataAnalysisDialog(e) {
                                         LabeledField(
                                           `Constraint ${ae + 1} cell`,
                                           i.jsx("input", {
-                                            value: te.left.address,
-                                            onChange: (oe) =>
+                                            value: constraint.left.address,
+                                            onChange: (event) =>
                                               G({
                                                 constraints: A.constraints.map(
-                                                  (de, he) =>
+                                                  (constraint, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...constraint,
                                                           left: {
-                                                            ...de.left,
+                                                            ...constraint.left,
                                                             address:
-                                                              oe.target.value
+                                                              event.target.value
                                                                 .replace(
                                                                   /\$/g,
                                                                   "",
@@ -652,7 +665,7 @@ function DataAnalysisDialog(e) {
                                                                 .toUpperCase(),
                                                           },
                                                         }
-                                                      : de,
+                                                      : constraint,
                                                 ),
                                               }),
                                           }),
@@ -660,18 +673,18 @@ function DataAnalysisDialog(e) {
                                         LabeledField(
                                           `Constraint ${ae + 1} relation`,
                                           i.jsx("select", {
-                                            value: te.operator,
-                                            onChange: (oe) =>
+                                            value: constraint.operator,
+                                            onChange: (event) =>
                                               G({
                                                 constraints: A.constraints.map(
-                                                  (de, he) =>
+                                                  (constraint, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...constraint,
                                                           operator:
-                                                            oe.target.value,
+                                                            event.target.value,
                                                         }
-                                                      : de,
+                                                      : constraint,
                                                 ),
                                               }),
                                             children: ["<=", ">=", "="].map(
@@ -688,10 +701,11 @@ function DataAnalysisDialog(e) {
                                           `Constraint ${ae + 1} right type`,
                                           i.jsxs("select", {
                                             value:
-                                              typeof te.right == "number"
+                                              typeof constraint.right ==
+                                              "number"
                                                 ? "number"
                                                 : "cell",
-                                            onChange: (oe) =>
+                                            onChange: (event) =>
                                               G({
                                                 constraints: A.constraints.map(
                                                   (de, he) =>
@@ -699,12 +713,14 @@ function DataAnalysisDialog(e) {
                                                       ? {
                                                           ...de,
                                                           right:
-                                                            oe.target.value ===
+                                                            event.target
+                                                              .value ===
                                                             "number"
                                                               ? 0
                                                               : {
                                                                   sheetId:
-                                                                    te.left
+                                                                    constraint
+                                                                      .left
                                                                       .sheetId,
                                                                   address: "A2",
                                                                 },
@@ -724,23 +740,23 @@ function DataAnalysisDialog(e) {
                                             ],
                                           }),
                                         ),
-                                        typeof te.right == "number"
+                                        typeof constraint.right == "number"
                                           ? LabeledField(
                                               `Constraint ${ae + 1} value`,
                                               J(
                                                 `Constraint ${ae + 1} value`,
-                                                te.right,
-                                                (oe) =>
+                                                constraint.right,
+                                                (right) =>
                                                   G({
                                                     constraints:
                                                       A.constraints.map(
-                                                        (de, he) =>
+                                                        (constraint, he) =>
                                                           he === ae
                                                             ? {
-                                                                ...de,
-                                                                right: oe,
+                                                                ...constraint,
+                                                                right: right,
                                                               }
-                                                            : de,
+                                                            : constraint,
                                                       ),
                                                   }),
                                               ),
@@ -750,8 +766,8 @@ function DataAnalysisDialog(e) {
                                                 LabeledField(
                                                   `Constraint ${ae + 1} right worksheet`,
                                                   X$1(
-                                                    te.right.sheetId,
-                                                    (oe) =>
+                                                    constraint.right.sheetId,
+                                                    (sheetId) =>
                                                       G({
                                                         constraints:
                                                           A.constraints.map(
@@ -760,9 +776,9 @@ function DataAnalysisDialog(e) {
                                                                 ? {
                                                                     ...de,
                                                                     right: {
-                                                                      ...te.right,
+                                                                      ...constraint.right,
                                                                       sheetId:
-                                                                        oe,
+                                                                        sheetId,
                                                                     },
                                                                   }
                                                                 : de,
@@ -774,8 +790,9 @@ function DataAnalysisDialog(e) {
                                                 LabeledField(
                                                   `Constraint ${ae + 1} right cell`,
                                                   i.jsx("input", {
-                                                    value: te.right.address,
-                                                    onChange: (oe) =>
+                                                    value:
+                                                      constraint.right.address,
+                                                    onChange: (event) =>
                                                       G({
                                                         constraints:
                                                           A.constraints.map(
@@ -784,9 +801,9 @@ function DataAnalysisDialog(e) {
                                                                 ? {
                                                                     ...de,
                                                                     right: {
-                                                                      ...te.right,
+                                                                      ...constraint.right,
                                                                       address:
-                                                                        oe.target.value
+                                                                        event.target.value
                                                                           .replace(
                                                                             /\$/g,
                                                                             "",
@@ -808,7 +825,7 @@ function DataAnalysisDialog(e) {
                                           onClick: () =>
                                             G({
                                               constraints: A.constraints.filter(
-                                                (oe, de) => de !== ae,
+                                                (constraint, de) => de !== ae,
                                               ),
                                             }),
                                           children: "×",
@@ -848,7 +865,7 @@ function DataAnalysisDialog(e) {
                                   J(
                                     "Feasibility tolerance",
                                     A.tolerance,
-                                    (te) => G({ tolerance: te }),
+                                    (tolerance) => G({ tolerance: tolerance }),
                                   ),
                                 ),
                                 LabeledField(
@@ -856,7 +873,8 @@ function DataAnalysisDialog(e) {
                                   J(
                                     "Maximum candidates",
                                     A.maxCandidates,
-                                    (te) => G({ maxCandidates: te }),
+                                    (maxCandidates) =>
+                                      G({ maxCandidates: maxCandidates }),
                                   ),
                                 ),
                               ],
@@ -886,7 +904,7 @@ function DataAnalysisDialog(e) {
                                       "Source worksheet",
                                       X$1(
                                         F.sheetId,
-                                        (te) => H({ sheetId: te }),
+                                        (sheetId) => H({ sheetId: sheetId }),
                                         "Source worksheet",
                                       ),
                                     ),
@@ -894,9 +912,9 @@ function DataAnalysisDialog(e) {
                                       "Headed source range",
                                       i.jsx("input", {
                                         value: F.range,
-                                        onChange: (te) =>
+                                        onChange: (event) =>
                                           H({
-                                            range: te.target.value
+                                            range: event.target.value
                                               .replace(/\$/g, "")
                                               .toUpperCase(),
                                           }),
@@ -906,8 +924,8 @@ function DataAnalysisDialog(e) {
                                       "Analysis method",
                                       i.jsx("select", {
                                         value: F.method,
-                                        onChange: (te) =>
-                                          H({ method: te.target.value }),
+                                        onChange: (event) =>
+                                          H({ method: event.target.value }),
                                         children: [
                                           [
                                             "descriptive",
@@ -935,8 +953,8 @@ function DataAnalysisDialog(e) {
                                       "Incomplete rows",
                                       i.jsxs("select", {
                                         value: F.missing,
-                                        onChange: (te) =>
-                                          H({ missing: te.target.value }),
+                                        onChange: (event) =>
+                                          H({ missing: event.target.value }),
                                         children: [
                                           i.jsx("option", {
                                             value: "reject",
@@ -973,8 +991,8 @@ function DataAnalysisDialog(e) {
                                 "Bin upper bounds",
                                 i.jsx("input", {
                                   value: O,
-                                  onChange: (te) => {
-                                    (j(te.target.value), U());
+                                  onChange: (event) => {
+                                    (j(event.target.value), U());
                                   },
                                 }),
                               ),
@@ -993,9 +1011,9 @@ function DataAnalysisDialog(e) {
                                         "Distribution",
                                         i.jsxs("select", {
                                           value: F.distribution ?? "normal",
-                                          onChange: (te) =>
+                                          onChange: (event) =>
                                             H({
-                                              distribution: te.target.value,
+                                              distribution: event.target.value,
                                             }),
                                           children: [
                                             i.jsx("option", {
@@ -1019,8 +1037,8 @@ function DataAnalysisDialog(e) {
                                             children: [
                                               LabeledField(
                                                 "Mean",
-                                                J("Mean", F.mean, (te) =>
-                                                  H({ mean: te }),
+                                                J("Mean", F.mean, (mean) =>
+                                                  H({ mean: mean }),
                                                 ),
                                               ),
                                               LabeledField(
@@ -1028,9 +1046,10 @@ function DataAnalysisDialog(e) {
                                                 J(
                                                   "Standard deviation",
                                                   F.standardDeviation,
-                                                  (te) =>
+                                                  (standardDeviation) =>
                                                     H({
-                                                      standardDeviation: te,
+                                                      standardDeviation:
+                                                        standardDeviation,
                                                     }),
                                                 ),
                                               ),
@@ -1041,8 +1060,11 @@ function DataAnalysisDialog(e) {
                                               children: [
                                                 LabeledField(
                                                   "Trials",
-                                                  J("Trials", F.trials, (te) =>
-                                                    H({ trials: te }),
+                                                  J(
+                                                    "Trials",
+                                                    F.trials,
+                                                    (trials) =>
+                                                      H({ trials: trials }),
                                                   ),
                                                 ),
                                                 LabeledField(
@@ -1050,8 +1072,11 @@ function DataAnalysisDialog(e) {
                                                   J(
                                                     "Success probability",
                                                     F.probability,
-                                                    (te) =>
-                                                      H({ probability: te }),
+                                                    (probability) =>
+                                                      H({
+                                                        probability:
+                                                          probability,
+                                                      }),
                                                   ),
                                                 ),
                                               ],
@@ -1061,7 +1086,8 @@ function DataAnalysisDialog(e) {
                                               J(
                                                 "Rate (lambda)",
                                                 F.lambda,
-                                                (te) => H({ lambda: te }),
+                                                (lambda) =>
+                                                  H({ lambda: lambda }),
                                               ),
                                             ),
                                     ],
@@ -1089,8 +1115,8 @@ function DataAnalysisDialog(e) {
                                         "Forecast method",
                                         i.jsxs("select", {
                                           value: F.forecast ?? "linear",
-                                          onChange: (te) =>
-                                            H({ forecast: te.target.value }),
+                                          onChange: (event) =>
+                                            H({ forecast: event.target.value }),
                                           children: [
                                             i.jsx("option", {
                                               value: "linear",
@@ -1112,7 +1138,7 @@ function DataAnalysisDialog(e) {
                                         J(
                                           "Forecast periods",
                                           F.horizon ?? 6,
-                                          (te) => H({ horizon: te }),
+                                          (horizon) => H({ horizon: horizon }),
                                         ),
                                       ),
                                       F.forecast === "moving-average" &&
@@ -1130,7 +1156,7 @@ function DataAnalysisDialog(e) {
                                           J(
                                             "Smoothing alpha",
                                             F.alpha ?? 0.3,
-                                            (te) => H({ alpha: te }),
+                                            (alpha) => H({ alpha: alpha }),
                                           ),
                                         ),
                                     ],
@@ -1290,8 +1316,9 @@ function DataAnalysisDialog(e) {
                                 }),
                               }),
                               i.jsx("ul", {
-                                children: f.result.assumptions.map((te, ae) =>
-                                  i.jsx("li", { children: te }, ae),
+                                children: f.result.assumptions.map(
+                                  (assumption, ae) =>
+                                    i.jsx("li", { children: assumption }, ae),
                                 ),
                               }),
                             ],
@@ -1305,11 +1332,17 @@ function DataAnalysisDialog(e) {
                                   ")",
                                 ],
                               }),
-                              f.result.exclusions.map((te) =>
+                              f.result.exclusions.map((exclusion) =>
                                 i.jsxs(
                                   "p",
-                                  { children: [te.locator, " — ", te.reason] },
-                                  te.row,
+                                  {
+                                    children: [
+                                      exclusion.locator,
+                                      " — ",
+                                      exclusion.reason,
+                                    ],
+                                  },
+                                  exclusion.row,
                                 ),
                               ),
                             ],
@@ -1335,7 +1368,7 @@ function DataAnalysisDialog(e) {
               }),
             }),
             i.jsx("button", {
-              onClick: q,
+              onClick: onClick,
               children: i.jsx(LocalizedText, { children: "Preview analysis" }),
             }),
             i.jsx("button", {
@@ -1359,17 +1392,21 @@ function DataAnalysisDialog(e) {
   });
 }
 function AnalysisSnapshotNotice({ workbook, sheetId, onReview }) {
-  const n = workbook.sheets.find((s) => s.id === sheetId)?.analysisReport;
+  const n = workbook.sheets.find(
+    (sheet) => sheet.id === sheetId,
+  )?.analysisReport;
   if (!n) return null;
-  const o = readSavedAnalysisReport(workbook, sheetId, {
+  const savedAnalysisReport = readSavedAnalysisReport(workbook, sheetId, {
     includeHidden: n.includeHidden,
   });
   return i.jsxs("div", {
     className: "lg-notice",
     role: "status",
     children: [
-      i.jsxs("strong", { children: ["Analysis snapshot · ", o.status] }),
-      i.jsx("span", { children: o.message }),
+      i.jsxs("strong", {
+        children: ["Analysis snapshot · ", savedAnalysisReport.status],
+      }),
+      i.jsx("span", { children: savedAnalysisReport.message }),
       i.jsx("button", {
         onClick: onReview,
         children: i.jsx(LocalizedText, { children: "Review analysis" }),
@@ -1377,15 +1414,15 @@ function AnalysisSnapshotNotice({ workbook, sheetId, onReview }) {
     ],
   });
 }
-function captureAnalysisWorkbookState(e) {
+function captureAnalysisWorkbookState(workbookInput) {
   return fingerprintCanonicalValue({
-    id: e.id,
-    name: e.name,
-    sheets: e.sheets,
-    datePolicy: e.datePolicy ?? null,
-    calculation: e.calculation ?? null,
-    definedNames: e.definedNames ?? null,
-    styleCatalog: e.styleCatalog ?? null,
+    id: workbookInput.id,
+    name: workbookInput.name,
+    sheets: workbookInput.sheets,
+    datePolicy: workbookInput.datePolicy ?? null,
+    calculation: workbookInput.calculation ?? null,
+    definedNames: workbookInput.definedNames ?? null,
+    styleCatalog: workbookInput.styleCatalog ?? null,
   });
 }
 const isCellHiddenInSheet = (e, r, t) =>
@@ -1395,159 +1432,190 @@ const isCellHiddenInSheet = (e, r, t) =>
     cn(e, "row").some((n) => n.start <= r && n.end >= r) ||
     cn(e, "column").some((n) => n.start <= t && n.end >= t)
   );
-function buildReportSourceSheet(e) {
+function buildReportSourceSheet(reportSnapshot) {
   return {
-    id: e.request.sheetId,
-    name: e.sheetName,
+    id: reportSnapshot.request.sheetId,
+    name: reportSnapshot.sheetName,
     rowCount: 1048576,
     colCount: 16384,
     cells: Object.fromEntries(
-      e.rows.flatMap((r) =>
-        r.cells.map((t) => [
-          t.address,
-          { raw: t.value, literal: true, style: t.style },
+      reportSnapshot.rows.flatMap((row) =>
+        row.cells.map((cell) => [
+          cell.address,
+          { raw: cell.value, literal: true, style: cell.style },
         ]),
       ),
     ),
   };
 }
-function buildReportSnapshot(e, r, t = {}) {
-  const n = validateObjectReportRequest(r),
-    o = normalizeAnalysisPermissions(e, t),
-    a = normalizeWorkbookInput(e),
-    s = a.sheets.find((j) => j.id === n.sheetId);
-  if (!s || !o.allowedSheetIds.includes(s.id))
+function buildReportSnapshot(workbook, r, t = {}) {
+  const request = validateObjectReportRequest(r),
+    analysisPermissions = normalizeAnalysisPermissions(workbook, t),
+    workbookInput = normalizeWorkbookInput(workbook),
+    sheet = workbookInput.sheets.find((sheet) => sheet.id === request.sheetId);
+  if (!sheet || !analysisPermissions.allowedSheetIds.includes(sheet.id))
     throw Error("The report source is outside the authorized host context.");
-  if (!o.includeHidden && (s.hidden || s.veryHidden))
+  if (!analysisPermissions.includeHidden && (sheet.hidden || sheet.veryHidden))
     throw Error("The report source worksheet is hidden.");
-  if (a.calculation?.mode === "manual" || a.calculation?.iterative)
+  if (
+    workbookInput.calculation?.mode === "manual" ||
+    workbookInput.calculation?.iterative
+  )
     throw Error(
       "Report capture requires automatic, non-iterative calculation. Recalculate and retry.",
     );
-  const d =
-    n.kind === "object"
-      ? structuredClone(s.objects?.find((j) => j.id === n.objectId))
+  const object =
+    request.kind === "object"
+      ? structuredClone(
+          sheet.objects?.find((object) => object.id === request.objectId),
+        )
       : undefined;
-  if (n.kind === "object" && !d)
+  if (request.kind === "object" && !object)
     throw Error("The source drawing no longer exists.");
   if (
-    d &&
-    parseReportRange(d.kind === "chart" ? d.range : d.anchor) !== n.range
+    object &&
+    parseReportRange(object.kind === "chart" ? object.range : object.anchor) !==
+      request.range
   )
     throw Error("The report range must match the drawing source.");
-  if (d && d.kind !== "chart" && n.filter)
+  if (object && object.kind !== "chart" && request.filter)
     throw Error("Pictures and shapes do not use population filters.");
-  const u = parseRangeAddress(n.range),
-    l = Array.from(
-      { length: u.lastCol - u.firstCol + 1 },
-      (j, z) => u.firstCol + z,
+  const rangeAddress = parseRangeAddress(request.range),
+    columns = Array.from(
+      { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
+      (j, z) => rangeAddress.firstCol + z,
     );
   let c,
     h = [];
-  if (d && d.kind !== "chart") {
-    if (!o.includeHidden && isCellHiddenInSheet(s, u.firstRow, u.firstCol))
+  if (object && object.kind !== "chart") {
+    if (
+      !analysisPermissions.includeHidden &&
+      isCellHiddenInSheet(sheet, rangeAddress.firstRow, rangeAddress.firstCol)
+    )
       throw Error(
         "The drawing anchor is hidden. Explicit authorization is required.",
       );
-    ((c = [[null]]), (h = [{ sheetId: s.id, address: d.anchor }]));
+    ((c = [[null]]), (h = [{ sheetId: sheet.id, address: object.anchor }]));
   } else {
-    const j = readSourceRectangles(a, [{ sheetId: s.id, range: n.range }], t);
-    ((c = j.grids[0].values), (h = j.dependencyCells));
+    const sourceRectangles = readSourceRectangles(
+      workbookInput,
+      [{ sheetId: sheet.id, range: request.range }],
+      t,
+    );
+    ((c = sourceRectangles.grids[0].values),
+      (h = sourceRectangles.dependencyCells));
   }
   const f = new Map();
   c.forEach((j, z) =>
     j.forEach((V, D) =>
-      f.set(`${columnIndexToLetters(u.firstCol + D)}${u.firstRow + z + 1}`, V),
+      f.set(
+        `${columnIndexToLetters(rangeAddress.firstCol + D)}${rangeAddress.firstRow + z + 1}`,
+        V,
+      ),
     ),
   );
   const p = (j, z) => {
-      if (j !== s.id || !f.has(z))
+      if (j !== sheet.id || !f.has(z))
         throw Error("Report calculation is outside the captured range.");
       return f.get(z);
     },
-    m = n.filter ? applyFilterConditions(a, s.id, n.filter, p) : undefined;
-  m && (n.filter = m.context.definition);
-  const v = c.map((j, z) => u.firstRow + z + 1),
+    m = request.filter
+      ? applyFilterConditions(workbookInput, sheet.id, request.filter, p)
+      : undefined;
+  m && (request.filter = m.context.definition);
+  const v = c.map((j, z) => rangeAddress.firstRow + z + 1),
     g =
-      n.population === "visible"
+      request.population === "visible"
         ? v.filter(
             (j) =>
-              !cn(s, "row").some((z) => z.start <= j - 1 && z.end >= j - 1) &&
+              !cn(sheet, "row").some(
+                (z) => z.start <= j - 1 && z.end >= j - 1,
+              ) &&
               (!m ||
-                j === u.firstRow + 1 ||
+                j === rangeAddress.firstRow + 1 ||
                 m.context.matchingSourceRows.includes(j)),
           )
         : v;
   let b = g;
-  if (d?.kind === "chart") {
-    const j = d.chartOptions?.includedRows,
+  if (object?.kind === "chart") {
+    const j = object.chartOptions?.includedRows,
       z = g.filter(
         (D) =>
-          (d.headers !== false && D === u.firstRow + 1) || !j || j.includes(D),
+          (object.headers !== false && D === rangeAddress.firstRow + 1) ||
+          !j ||
+          j.includes(D),
       );
-    d.chartOptions = {
-      ...d.chartOptions,
+    object.chartOptions = {
+      ...object.chartOptions,
       includedRows: z.filter(
-        (D) => !(d.headers !== false && D === u.firstRow + 1),
+        (D) => !(object.headers !== false && D === rangeAddress.firstRow + 1),
       ),
     };
-    const V = inspectChartSource(s, d, p);
+    const V = inspectChartSource(sheet, object, p);
     (formatDiagnosticsMessage(V), (b = z));
   }
   if (!b.length) throw Error("No rows remain in the report population.");
-  const y = [
+  const warnings = [
     "Fixed values and formatting captured locally; links refresh only after host authorization and explicit review. No network access or remote refresh is performed.",
     "Table images use readable, wrapped cell text with portable fonts. Merges are refused; conditional formatting, layout fidelity and native Office OLE links are not represented.",
   ];
-  ((s.analysisReport ||
-    s.dataModelReport ||
-    s.pivots?.length ||
-    s.queries?.length) &&
-    y.push(
+  ((sheet.analysisReport ||
+    sheet.dataModelReport ||
+    sheet.pivots?.length ||
+    sheet.queries?.length) &&
+    warnings.push(
       "This worksheet contains generated report output. Captured cells are historical source values; verify the underlying analysis, model, pivot or query freshness separately.",
     ),
-    n.filter &&
-      y.push(
-        n.population === "full"
+    request.filter &&
+      warnings.push(
+        request.population === "full"
           ? "Filter criteria are recorded, but full population was selected: filtered rows are included."
           : "Only matching visible rows are retained; excluded rows have locators but no values in this snapshot.",
       ),
-    d?.kind === "chart" &&
-      y.push(
+    object?.kind === "chart" &&
+      warnings.push(
         "Chart row selections are preserved. Explicitly excluded chart rows are omitted from retained cells.",
       ));
   const w = {
     engine: reportOutputFormatVersion,
     id: crypto.randomUUID(),
-    request: n,
-    workbookId: a.id,
-    workbookName: a.name,
-    revision: a.revision,
-    sheetName: s.name,
+    request: request,
+    workbookId: workbookInput.id,
+    workbookName: workbookInput.name,
+    revision: workbookInput.revision,
+    sheetName: sheet.name,
     calculatedAt: new Date().toISOString(),
-    sourceHash: captureAnalysisWorkbookState(a),
-    includeHidden: o.includeHidden,
-    authorizedSheetIds: [...new Set([s.id, ...h.map((j) => j.sheetId)])].sort(),
+    sourceHash: captureAnalysisWorkbookState(workbookInput),
+    includeHidden: analysisPermissions.includeHidden,
+    authorizedSheetIds: [
+      ...new Set([sheet.id, ...h.map((j) => j.sheetId)]),
+    ].sort(),
     sourceCells: h.map((j) => ({ sheetId: j.sheetId, address: j.address })),
-    rows: b.map((j) => ({
-      row: j,
-      cells: l.map((z, V) => {
-        const D = `${columnIndexToLetters(z)}${j}`,
-          B = c[j - u.firstRow - 1][V],
-          _ = s.cells[D];
+    rows: b.map((row) => ({
+      row: row,
+      cells: columns.map((column, V) => {
+        const address = `${columnIndexToLetters(column)}${row}`,
+          B = c[row - rangeAddress.firstRow - 1][V],
+          cell = sheet.cells[address];
         return {
-          address: D,
+          address: address,
           value: B,
-          text: formatNumberWithPattern(B, _, a.datePolicy?.dateSystem),
-          ...(_?.style ? { style: resolveEffectiveCellStyle(_.style) } : {}),
+          text: formatNumberWithPattern(
+            B,
+            cell,
+            workbookInput.datePolicy?.dateSystem,
+          ),
+          ...(cell?.style
+            ? { style: resolveEffectiveCellStyle(cell.style) }
+            : {}),
         };
       }),
     })),
-    columns: l,
-    widths: l.map((j) => s.columnWidths?.[String(j)] ?? 84),
+    columns: columns,
+    widths: columns.map((column) => sheet.columnWidths?.[String(column)] ?? 84),
     excludedRows: v.filter((j) => !b.includes(j)),
-    ...(d ? { object: d } : {}),
-    warnings: y,
+    ...(object ? { object: object } : {}),
+    warnings: warnings,
     hash: "",
   };
   return (
@@ -1556,126 +1624,150 @@ function buildReportSnapshot(e, r, t = {}) {
   );
 }
 const qT = new WeakMap();
-function refreshReportOutput(e, r, t = {}, n) {
-  if (n) {
-    const d = e.reportOutputs?.find((u) => u.id === n);
+function refreshReportOutput(workbook, request, t = {}, refreshId) {
+  if (refreshId) {
+    const d = workbook.reportOutputs?.find(
+      (reportOutput) => reportOutput.id === refreshId,
+    );
     if (!d || d.snapshot.request.mode !== "linked")
       throw Error("Only an existing linked output can be refreshed.");
     if (
-      fingerprintCanonicalValue(validateObjectReportRequest(r)) !==
+      fingerprintCanonicalValue(validateObjectReportRequest(request)) !==
       fingerprintCanonicalValue(d.snapshot.request)
     )
       throw Error(
         "Refresh uses the saved definition. Publish a new output to change it.",
       );
-    if (d.snapshot.workbookId !== e.id)
+    if (d.snapshot.workbookId !== workbook.id)
       throw Error(
         "This link belongs to a different workbook. Publish a new output after reviewing the source.",
       );
   }
-  const o = buildReportSnapshot(e, r, t),
+  const reportSnapshot = buildReportSnapshot(workbook, request, t),
     a = {
-      request: o.request,
-      snapshot: o,
-      workbookHash: fingerprintCanonicalValue(e),
+      request: reportSnapshot.request,
+      snapshot: reportSnapshot,
+      workbookHash: fingerprintCanonicalValue(workbook),
       contextHash: fingerprintCanonicalValue(
-        normalizeAnalysisPermissions(e, t),
+        normalizeAnalysisPermissions(workbook, t),
       ),
-      ...(n ? { refreshId: n } : {}),
+      ...(refreshId ? { refreshId: refreshId } : {}),
     };
   return (qT.set(a, fingerprintCanonicalValue(a)), a);
 }
-function publishReportOutput(e, r, t = {}) {
+function publishReportOutput(workbook, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
   if (
-    (assertWorkbookStructureEditable(e),
+    (assertWorkbookStructureEditable(workbook),
     qT.get(r) !== fingerprintCanonicalValue(r) ||
-      r.workbookHash !== fingerprintCanonicalValue(e) ||
+      r.workbookHash !== fingerprintCanonicalValue(workbook) ||
       r.contextHash !==
-        fingerprintCanonicalValue(normalizeAnalysisPermissions(e, t)))
+        fingerprintCanonicalValue(normalizeAnalysisPermissions(workbook, t)))
   )
     throw Error(
       "The preview, workbook or permissions changed. Preview the report again.",
     );
-  const n = normalizeWorkbookInput(e),
-    o = [...(n.reportOutputs ?? [])];
+  const workbookInput = normalizeWorkbookInput(workbook),
+    reportOutputs = [...(workbookInput.reportOutputs ?? [])];
   if (r.refreshId) {
-    const s = o.findIndex((d) => d.id === r.refreshId);
+    const s = reportOutputs.findIndex(
+      (reportOutput) => reportOutput.id === r.refreshId,
+    );
     if (s < 0) throw Error("The linked output was removed.");
-    o[s] = {
-      ...o[s],
-      version: o[s].version + 1,
+    reportOutputs[s] = {
+      ...reportOutputs[s],
+      version: reportOutputs[s].version + 1,
       snapshot: structuredClone(r.snapshot),
     };
   } else {
     if (
-      o.some(
-        (s) =>
-          s.snapshot.request.name.toLowerCase() ===
+      reportOutputs.some(
+        (reportOutput) =>
+          reportOutput.snapshot.request.name.toLowerCase() ===
           r.request.name.toLowerCase(),
       )
     )
       throw Error("A report with this name already exists.");
-    o.push({
+    reportOutputs.push({
       id: crypto.randomUUID(),
       version: 1,
       snapshot: structuredClone(r.snapshot),
     });
   }
-  const a = normalizeWorkbookInput({ ...n, reportOutputs: o });
+  const a = normalizeWorkbookInput({
+    ...workbookInput,
+    reportOutputs: reportOutputs,
+  });
   return (qT.delete(r), a);
 }
-function removeReportOutput(e, r, t = {}) {
+function removeReportOutput(workbook, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  assertWorkbookStructureEditable(e);
-  const n = e.reportOutputs?.find((a) => a.id === r);
+  assertWorkbookStructureEditable(workbook);
+  const n = workbook.reportOutputs?.find(
+    (reportOutput) => reportOutput.id === r,
+  );
   if (!n) throw Error("Report output not found.");
   return (
-    validateReportSourceScope(e, n.snapshot, t),
+    validateReportSourceScope(workbook, n.snapshot, t),
     normalizeWorkbookInput({
-      ...e,
-      reportOutputs: e.reportOutputs.filter((a) => a.id !== r),
+      ...workbook,
+      reportOutputs: workbook.reportOutputs.filter(
+        (reportOutput) => reportOutput.id !== r,
+      ),
     })
   );
 }
-function validateReportSourceScope(e, r, t = {}) {
-  const n = normalizeAnalysisPermissions(e, t);
+function validateReportSourceScope(workbook, snapshot, t = {}) {
+  const analysisPermissions = normalizeAnalysisPermissions(workbook, t);
   if (
-    r.workbookId !== e.id ||
-    r.authorizedSheetIds.some((o) => !n.allowedSheetIds.includes(o)) ||
-    (r.includeHidden && !n.includeHidden)
+    snapshot.workbookId !== workbook.id ||
+    snapshot.authorizedSheetIds.some(
+      (authorizedSheetId) =>
+        !analysisPermissions.allowedSheetIds.includes(authorizedSheetId),
+    ) ||
+    (snapshot.includeHidden && !analysisPermissions.includeHidden)
   )
     throw Error("The report is outside the current authorized source context.");
-  for (const o of r.sourceCells) {
-    const a = e.sheets.find((d) => d.id === o.sheetId),
-      s = _t(o.address);
+  for (const sourceCell of snapshot.sourceCells) {
+    const sheet = workbook.sheets.find(
+        (sheet) => sheet.id === sourceCell.sheetId,
+      ),
+      s = _t(sourceCell.address);
     if (
-      !a ||
-      !n.allowedSheetIds.includes(o.sheetId) ||
-      (!n.includeHidden && isCellHiddenInSheet(a, s.row, s.col))
+      !sheet ||
+      !analysisPermissions.allowedSheetIds.includes(sourceCell.sheetId) ||
+      (!analysisPermissions.includeHidden &&
+        isCellHiddenInSheet(sheet, s.row, s.col))
     )
       throw Error(
         "A report source cell is missing, hidden or outside the authorized context.",
       );
   }
-  for (const o of r.authorizedSheetIds) {
-    const a = e.sheets.find((s) => s.id === o);
-    if (!a || (!n.includeHidden && (a.hidden || a.veryHidden)))
+  for (const authorizedSheetId of snapshot.authorizedSheetIds) {
+    const sheet = workbook.sheets.find(
+      (sheet) => sheet.id === authorizedSheetId,
+    );
+    if (
+      !sheet ||
+      (!analysisPermissions.includeHidden && (sheet.hidden || sheet.veryHidden))
+    )
       throw Error("The report source is missing or hidden.");
   }
 }
-function describeReportOutputStatus(e, r, t = {}) {
+function describeReportOutputStatus(workbook, r, t = {}) {
   try {
-    const o = e.reportOutputs?.find((s) => s.id === r);
+    const o = workbook.reportOutputs?.find(
+      (reportOutput) => reportOutput.id === r,
+    );
     if (!o) throw Error("Report output not found.");
-    validateReportSourceScope(e, o.snapshot, t);
-    const a = parseReportSnapshot(o.snapshot);
-    return a.request.mode === "snapshot"
+    validateReportSourceScope(workbook, o.snapshot, t);
+    const reportSnapshot = parseReportSnapshot(o.snapshot);
+    return reportSnapshot.request.mode === "snapshot"
       ? {
           status: "snapshot",
-          message: `Fixed snapshot of revision ${a.revision}. Later edits do not change it.`,
+          message: `Fixed snapshot of revision ${reportSnapshot.revision}. Later edits do not change it.`,
         }
-      : captureAnalysisWorkbookState(e) !== a.sourceHash
+      : captureAnalysisWorkbookState(workbook) !== reportSnapshot.sourceHash
         ? {
             status: "stale",
             message:
@@ -1686,10 +1778,10 @@ function describeReportOutputStatus(e, r, t = {}) {
             message:
               "Source fingerprint matches. The rendered content remains the saved snapshot; use a trusted read for current values.",
           };
-  } catch (o) {
+  } catch (error) {
     return {
       status: "unavailable",
-      message: o instanceof Error ? o.message : String(o),
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -1728,15 +1820,17 @@ function wrapTextByCharacters(e, r) {
     });
 }
 function renderReportSvg(e) {
-  const r = parseReportSnapshot(e),
-    t = r.object;
+  const reportSnapshot = parseReportSnapshot(e),
+    object = reportSnapshot.object;
   if (
     [
-      r.request.name,
-      r.workbookName,
-      r.sheetName,
-      t?.label ?? "",
-      ...r.rows.flatMap((h) => h.cells.map((f) => f.text)),
+      reportSnapshot.request.name,
+      reportSnapshot.workbookName,
+      reportSnapshot.sheetName,
+      object?.label ?? "",
+      ...reportSnapshot.rows.flatMap((row) =>
+        row.cells.map((cell) => cell.text),
+      ),
     ].some((h) =>
       new RegExp(
         "[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\uFFFE\\uFFFF]|\\p{Surrogate}",
@@ -1747,136 +1841,146 @@ function renderReportSvg(e) {
     throw Error(
       "Source text contains characters SVG cannot represent. Clean the text or export JSON/HTML.",
     );
-  let n = 640,
-    o = 0,
+  let width = 640,
+    height = 0,
     a = "";
-  if (t?.kind === "chart") {
-    const h = buildReportSourceSheet(r),
-      f = inspectChartSource(h, t, (m, v) => h.cells[v]?.raw ?? null);
-    formatDiagnosticsMessage(f);
-    const p = c_.renderToStaticMarkup(i.jsx(ChartReportSvg, { report: f }));
-    ((n = 640),
-      (o = t.chart === "sparkline" ? 128 : 380),
-      (a = `<svg x="18" y="112" width="${n}" height="${o}" viewBox="${t.chart === "sparkline" ? "0 0 200 40" : "0 0 640 380"}">${p}</svg>`));
-  } else if (t?.kind === "picture")
-    (inspectPictureDataUrl(t.dataURL),
-      (n = Math.max(640, t.width)),
-      (o = t.height),
-      (a = `<image x="18" y="112" width="${t.width}" height="${o}" href="${escapeHtmlText(t.dataURL)}"/>`));
-  else if (t?.kind === "shape") {
-    ((n = Math.max(640, t.width)), (o = Math.max(80, t.height)));
-    const h = `fill="${t.fill}" stroke="${t.stroke}" stroke-width="2"`,
-      f =
-        t.shape === "ellipse"
-          ? `<ellipse cx="${t.width / 2}" cy="${o / 2}" rx="${t.width / 2 - 2}" ry="${o / 2 - 2}" ${h}/>`
-          : t.shape === "arrow"
-            ? `<path d="M2 20 H${t.width - 30} V2 L${t.width - 2} ${o / 2} L${t.width - 30} ${o - 2} V${o - 20} H2 Z" ${h}/>`
-            : t.shape === "text"
-              ? ""
-              : `<rect x="1" y="1" width="${t.width - 2}" height="${o - 2}" ${h}/>`,
-      p = wrapTextByCharacters(
-        t.label,
-        Math.max(4, Math.floor((t.width - 16) / 8)),
+  if (object?.kind === "chart") {
+    const reportSourceSheet = buildReportSourceSheet(reportSnapshot),
+      report = inspectChartSource(
+        reportSourceSheet,
+        object,
+        (m, v) => reportSourceSheet.cells[v]?.raw ?? null,
       );
-    if (p.length * 18 + 16 > o)
+    formatDiagnosticsMessage(report);
+    const p = c_.renderToStaticMarkup(
+      i.jsx(ChartReportSvg, { report: report }),
+    );
+    ((width = 640),
+      (height = object.chart === "sparkline" ? 128 : 380),
+      (a = `<svg x="18" y="112" width="${width}" height="${height}" viewBox="${object.chart === "sparkline" ? "0 0 200 40" : "0 0 640 380"}">${p}</svg>`));
+  } else if (object?.kind === "picture")
+    (inspectPictureDataUrl(object.dataURL),
+      (width = Math.max(640, object.width)),
+      (height = object.height),
+      (a = `<image x="18" y="112" width="${object.width}" height="${height}" href="${escapeHtmlText(object.dataURL)}"/>`));
+  else if (object?.kind === "shape") {
+    ((width = Math.max(640, object.width)),
+      (height = Math.max(80, object.height)));
+    const h = `fill="${object.fill}" stroke="${object.stroke}" stroke-width="2"`,
+      f =
+        object.shape === "ellipse"
+          ? `<ellipse cx="${object.width / 2}" cy="${height / 2}" rx="${object.width / 2 - 2}" ry="${height / 2 - 2}" ${h}/>`
+          : object.shape === "arrow"
+            ? `<path d="M2 20 H${object.width - 30} V2 L${object.width - 2} ${height / 2} L${object.width - 30} ${height - 2} V${height - 20} H2 Z" ${h}/>`
+            : object.shape === "text"
+              ? ""
+              : `<rect x="1" y="1" width="${object.width - 2}" height="${height - 2}" ${h}/>`,
+      p = wrapTextByCharacters(
+        object.label,
+        Math.max(4, Math.floor((object.width - 16) / 8)),
+      );
+    if (p.length * 18 + 16 > height)
       throw Error(
         "The shape label does not fit the report image. Enlarge the source shape before publishing.",
       );
     a = `<g transform="translate(18 112)">${f}${p.map((m, v) => `<text x="8" y="${24 + v * 18}" font-size="13" fill="#202334">${escapeHtmlText(m)}</text>`).join("")}</g>`;
   } else {
-    const h = r.columns.map((p, m) =>
+    const h = reportSnapshot.columns.map((column, m) =>
       Math.min(
         600,
         Math.max(
           84,
-          r.widths[m],
-          ...r.rows.map((v) =>
-            typeof v.cells[m].value == "number"
-              ? Array.from(v.cells[m].text).length * 8 + 20
+          reportSnapshot.widths[m],
+          ...reportSnapshot.rows.map((row) =>
+            typeof row.cells[m].value == "number"
+              ? Array.from(row.cells[m].text).length * 8 + 20
               : 84,
           ),
         ),
       ),
     );
-    n = Math.max(
+    width = Math.max(
       640,
       h.reduce((p, m) => p + m, 0),
     );
     let f = 112;
-    for (const p of r.rows) {
-      const m = p.cells.map((b, y) =>
+    for (const row of reportSnapshot.rows) {
+      const m = row.cells.map((cell, y) =>
           wrapTextByCharacters(
-            b.text,
+            cell.text,
             Math.max(1, Math.floor((h[y] - 16) / 8)),
           ),
         ),
         v = Math.max(28, ...m.map((b) => b.length * 18 + 12));
       let g = 18;
-      (p.cells.forEach((b, y) => {
-        const w = b.style ?? {},
+      (row.cells.forEach((cell, y) => {
+        const w = cell.style ?? {},
           E = h[y];
         ((a += `<rect x="${g}" y="${f}" width="${E}" height="${v}" fill="${escapeHtmlText(w.fill ?? "#ffffff")}" stroke="#ccd6fa"/><text font-family="Courier New,monospace" font-size="13" fill="${escapeHtmlText(w.color ?? "#202334")}"${w.bold ? ' font-weight="bold"' : ""}${w.italic ? ' font-style="italic"' : ""}${w.underline ? ' text-decoration="underline"' : ""}>${m[y].map((A, k) => `<tspan x="${g + 8}" y="${f + 20 + k * 18}">${escapeHtmlText(A)}</tspan>`).join("")}</text>`),
           (g += E));
       }),
         (f += v));
     }
-    o = f - 112;
+    height = f - 112;
   }
   if (
-    ((n += 36),
-    (o += 162),
-    n > reportOutputLimits.imageWidth ||
-      o > reportOutputLimits.imageHeight ||
-      n * o > reportOutputLimits.imagePixels)
+    ((width += 36),
+    (height += 162),
+    width > reportOutputLimits.imageWidth ||
+      height > reportOutputLimits.imageHeight ||
+      width * height > reportOutputLimits.imagePixels)
   )
     throw Error(
       "Report image exceeds 4,096 × 16,384 / 16 megapixels. Narrow the range or export JSON/HTML instead.",
     );
-  const s = `${r.request.population} population · ${r.rows.length} retained / ${r.rows.length + r.excludedRows.length} range rows · ${r.request.filter ? "filter criteria recorded" : "no population filter"}`,
+  const s = `${reportSnapshot.request.population} population · ${reportSnapshot.rows.length} retained / ${reportSnapshot.rows.length + reportSnapshot.excludedRows.length} range rows · ${reportSnapshot.request.filter ? "filter criteria recorded" : "no population filter"}`,
     d = wrapTextByCharacters(
-      formatReportCaption(r),
-      Math.floor((n - 36) / 7.4),
+      formatReportCaption(reportSnapshot),
+      Math.floor((width - 36) / 7.4),
     ),
     u = [
-      ...wrapTextByCharacters(r.request.name, Math.floor((n - 36) / 9)),
+      ...wrapTextByCharacters(
+        reportSnapshot.request.name,
+        Math.floor((width - 36) / 9),
+      ),
       ...d,
-      ...wrapTextByCharacters(s, Math.floor((n - 36) / 7.4)),
+      ...wrapTextByCharacters(s, Math.floor((width - 36) / 7.4)),
     ],
     l = Math.max(0, u.length * 18 + 24 - 112);
   if (
-    ((o += l),
+    ((height += l),
     (a = `<g transform="translate(0 ${l})">${a}</g>`),
-    o > reportOutputLimits.imageHeight ||
-      n * o > reportOutputLimits.imagePixels)
+    height > reportOutputLimits.imageHeight ||
+      width * height > reportOutputLimits.imagePixels)
   )
     throw Error(
       "Report image exceeds its pixel budget. Narrow the range or export JSON/HTML.",
     );
-  const c = `<svg xmlns="http://www.w3.org/2000/svg" width="${n}" height="${o}" viewBox="0 0 ${n} ${o}" role="img"><title>${escapeHtmlText(r.request.name)}</title><desc>${escapeHtmlText(formatReportCaption(r))}. ${escapeHtmlText(s)}. Fixed snapshot; no automatic refresh.</desc><metadata>${escapeHtmlText(JSON.stringify({ engine: r.engine, hash: r.hash, request: r.request, workbookId: r.workbookId, revision: r.revision, calculatedAt: r.calculatedAt }))}</metadata><rect width="100%" height="100%" fill="white"/><g font-family="Arial,sans-serif">${u.map((h, f) => `<text x="18" y="${25 + f * 18}" font-size="${f === 0 ? 16 : 12}" fill="#362c63">${escapeHtmlText(h)}</text>`).join("")}${a}<text x="18" y="${o - 17}" font-size="11" fill="#545969">Fixed snapshot · ${escapeHtmlText(r.id)} · full values and context in the JSON export</text></g></svg>`;
+  const content = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img"><title>${escapeHtmlText(reportSnapshot.request.name)}</title><desc>${escapeHtmlText(formatReportCaption(reportSnapshot))}. ${escapeHtmlText(s)}. Fixed snapshot; no automatic refresh.</desc><metadata>${escapeHtmlText(JSON.stringify({ engine: reportSnapshot.engine, hash: reportSnapshot.hash, request: reportSnapshot.request, workbookId: reportSnapshot.workbookId, revision: reportSnapshot.revision, calculatedAt: reportSnapshot.calculatedAt }))}</metadata><rect width="100%" height="100%" fill="white"/><g font-family="Arial,sans-serif">${u.map((h, f) => `<text x="18" y="${25 + f * 18}" font-size="${f === 0 ? 16 : 12}" fill="#362c63">${escapeHtmlText(h)}</text>`).join("")}${a}<text x="18" y="${height - 17}" font-size="11" fill="#545969">Fixed snapshot · ${escapeHtmlText(reportSnapshot.id)} · full values and context in the JSON export</text></g></svg>`;
   return {
-    filename: toSafeFileName(r.request.name) + ".svg",
+    filename: toSafeFileName(reportSnapshot.request.name) + ".svg",
     mime: "image/svg+xml",
-    content: c,
-    width: n,
-    height: o,
+    content: content,
+    width: width,
+    height: height,
   };
 }
 function buildReportSvgFile(e) {
-  const r = parseReportSnapshot(e);
+  const reportSnapshot = parseReportSnapshot(e);
   return {
-    filename: toSafeFileName(r.request.name) + ".json",
+    filename: toSafeFileName(reportSnapshot.request.name) + ".json",
     mime: "application/json",
-    content: JSON.stringify(r, null, 2),
+    content: JSON.stringify(reportSnapshot, null, 2),
   };
 }
 function ReportOutputView({ snapshot, showData = true }) {
-  const t = parseReportSnapshot(snapshot);
+  const reportSnapshot = parseReportSnapshot(snapshot);
   let n,
     o = "";
   try {
-    n = renderReportSvg(t);
-  } catch (a) {
-    o = a.message;
+    n = renderReportSvg(reportSnapshot);
+  } catch (error) {
+    o = error.message;
   }
   return i.jsxs("figure", {
     className: "lg-report-output-view",
@@ -1884,20 +1988,20 @@ function ReportOutputView({ snapshot, showData = true }) {
     children: [
       i.jsxs("figcaption", {
         children: [
-          i.jsx("strong", { children: t.request.name }),
-          i.jsx("p", { children: formatReportCaption(t) }),
+          i.jsx("strong", { children: reportSnapshot.request.name }),
+          i.jsx("p", { children: formatReportCaption(reportSnapshot) }),
           i.jsxs("p", {
             children: [
               "Fixed snapshot · ",
-              t.request.population,
+              reportSnapshot.request.population,
               " population · ",
-              t.rows.length,
+              reportSnapshot.rows.length,
               " ",
               "retained / ",
-              t.rows.length + t.excludedRows.length,
+              reportSnapshot.rows.length + reportSnapshot.excludedRows.length,
               " range rows.",
               " ",
-              t.request.filter
+              reportSnapshot.request.filter
                 ? "Filter criteria retained in context."
                 : "No population filter.",
             ],
@@ -1906,7 +2010,10 @@ function ReportOutputView({ snapshot, showData = true }) {
       }),
       n
         ? i.jsx("img", {
-            alt: t.request.name + " — " + formatReportCaption(t),
+            alt:
+              reportSnapshot.request.name +
+              " — " +
+              formatReportCaption(reportSnapshot),
             src:
               "data:image/svg+xml;charset=utf-8," +
               encodeURIComponent(n.content),
@@ -1926,36 +2033,40 @@ function ReportOutputView({ snapshot, showData = true }) {
               style: { borderCollapse: "collapse" },
               children: [
                 i.jsxs("caption", {
-                  children: [t.sheetName, "!", t.request.range],
+                  children: [
+                    reportSnapshot.sheetName,
+                    "!",
+                    reportSnapshot.request.range,
+                  ],
                 }),
                 i.jsx("thead", {
                   children: i.jsxs("tr", {
                     children: [
                       i.jsx("th", { children: "Source row" }),
-                      t.columns.map((a) =>
+                      reportSnapshot.columns.map((column) =>
                         i.jsxs(
                           "th",
                           {
                             children: [
-                              columnIndexToLetters(a),
+                              columnIndexToLetters(column),
                               " · column ",
-                              a + 1,
+                              column + 1,
                             ],
                           },
-                          a,
+                          column,
                         ),
                       ),
                     ],
                   }),
                 }),
                 i.jsx("tbody", {
-                  children: t.rows.map((a) =>
+                  children: reportSnapshot.rows.map((row) =>
                     i.jsxs(
                       "tr",
                       {
                         children: [
-                          i.jsx("th", { scope: "row", children: a.row }),
-                          a.cells.map((s) =>
+                          i.jsx("th", { scope: "row", children: row.row }),
+                          row.cells.map((cell) =>
                             i.jsx(
                               "td",
                               {
@@ -1964,14 +2075,14 @@ function ReportOutputView({ snapshot, showData = true }) {
                                   padding: 8,
                                   whiteSpace: "pre-wrap",
                                 },
-                                children: s.text,
+                                children: cell.text,
                               },
-                              s.address,
+                              cell.address,
                             ),
                           ),
                         ],
                       },
-                      a.row,
+                      row.row,
                     ),
                   ),
                 }),
@@ -1980,28 +2091,36 @@ function ReportOutputView({ snapshot, showData = true }) {
             i.jsxs("p", {
               children: [
                 "Excluded source rows: ",
-                t.excludedRows.join(", ") || "none",
+                reportSnapshot.excludedRows.join(", ") || "none",
                 ".",
               ],
             }),
-            t.request.filter &&
+            reportSnapshot.request.filter &&
               i.jsx("pre", {
                 style: { whiteSpace: "pre-wrap" },
-                children: JSON.stringify(t.request.filter, null, 2),
+                children: JSON.stringify(
+                  reportSnapshot.request.filter,
+                  null,
+                  2,
+                ),
               }),
-            t.warnings.map((a, s) => i.jsx("p", { children: a }, s)),
+            reportSnapshot.warnings.map((warning, s) =>
+              i.jsx("p", { children: warning }, s),
+            ),
           ],
         }),
     ],
   });
 }
 function buildReportHtmlFile(e) {
-  const r = parseReportSnapshot(e),
-    t = c_.renderToStaticMarkup(i.jsx(ReportOutputView, { snapshot: r }));
+  const reportSnapshot = parseReportSnapshot(e),
+    t = c_.renderToStaticMarkup(
+      i.jsx(ReportOutputView, { snapshot: reportSnapshot }),
+    );
   return {
-    filename: toSafeFileName(r.request.name) + ".html",
+    filename: toSafeFileName(reportSnapshot.request.name) + ".html",
     mime: "text/html",
-    content: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtmlText(r.request.name)}</title></head><body style="padding:18px;overflow:auto">${t}</body></html>`,
+    content: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtmlText(reportSnapshot.request.name)}</title></head><body style="padding:18px;overflow:auto">${t}</body></html>`,
   };
 }
 async function renderReportPngBlob(e) {
@@ -2031,15 +2150,15 @@ async function renderReportPngBlob(e) {
     const a = o.getContext("2d");
     if (!a) throw Error("PNG rendering is unavailable in this browser.");
     a.drawImage(n, 0, 0);
-    const s = await new Promise((d, u) => {
+    const blob = await new Promise((d, u) => {
       const l = setTimeout(() => u(Error("PNG encoding timed out.")), 15e3);
       o.toBlob((c) => {
         (clearTimeout(l), c ? d(c) : u(Error("PNG encoding failed.")));
       }, "image/png");
     });
-    if (s.size > 16 * 1024 * 1024)
+    if (blob.size > 16 * 1024 * 1024)
       throw Error("PNG exceeds 16 MB. Export SVG or narrow the report.");
-    return { filename: toSafeFileName(e.request.name) + ".png", blob: s };
+    return { filename: toSafeFileName(e.request.name) + ".png", blob: blob };
   } finally {
     URL.revokeObjectURL(t);
   }

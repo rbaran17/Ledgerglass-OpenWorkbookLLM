@@ -10,6 +10,9 @@ import { workbookLimits } from "../02-text-and-financial-functions.js";
 import { wy } from "../55-external-source-refresh.js";
 
 function createClipboardAndFindActions({
+  viewAndSelectionActions,
+  cellEditActions,
+  navigationActions,
   selectionState,
   operationStatusState,
   findReplaceState,
@@ -17,21 +20,16 @@ function createClipboardAndFindActions({
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  selectSingleRange,
   selectionAreasKey,
-  requireSingleSelectionRange,
   workbookCalculator,
   rowVisibilityIndex,
   columnVisibilityIndex,
   latestEditStateRef,
   selectionRangeBounds,
-  getSelectedCellAddresses,
-  runGuardedAction,
-  applyCellPatches,
-  selectCellAddress,
 }) {
   function selectionToTsv(fe = false) {
-    (requireSingleSelectionRange(), getSelectedCellAddresses());
+    (viewAndSelectionActions.requireSingleSelectionRange(),
+      viewAndSelectionActions.getSelectedCellAddresses());
     const Oe = {
         row: selectionRangeBounds.firstRow,
         col: selectionRangeBounds.firstCol,
@@ -41,10 +39,10 @@ function createClipboardAndFindActions({
         col: selectionRangeBounds.lastCol,
       },
       Ue = [];
-    for (let Nt = Oe.row; Nt <= Be.row; Nt++) {
+    for (let row = Oe.row; row <= Be.row; row++) {
       const wt = [];
-      for (let jt = Oe.col; jt <= Be.col; jt++) {
-        const rr = `${columnIndexToLetters(jt)}${Nt + 1}`,
+      for (let col = Oe.col; col <= Be.col; col++) {
+        const rr = `${columnIndexToLetters(col)}${row + 1}`,
           Mr = workbookCalculator(activeSheet.id, rr);
         wt.push(
           typeof Mr == "string" && /^[=+@-]/.test(Mr)
@@ -59,7 +57,7 @@ function createClipboardAndFindActions({
         newline: `
 `,
       }),
-      gt = fe
+      snapshot = fe
         ? createCutSourceSnapshot(
             activeWorkbook,
             activeSheet.id,
@@ -68,7 +66,7 @@ function createClipboardAndFindActions({
         : null;
     return (
       clipboardState.setClipboardSnapshotState(
-        gt ? { snapshot: gt, text: Xe } : null,
+        snapshot ? { snapshot: snapshot, text: Xe } : null,
       ),
       (clipboardState.internalClipboardRef.current = {
         text: Xe,
@@ -99,20 +97,21 @@ function createClipboardAndFindActions({
         );
       }
       fe || operationStatusState.setStatusNotice("Selection copied.");
-    } catch (Be) {
+    } catch (error) {
       (fe && clipboardState.setClipboardSnapshotState(null),
         operationStatusState.setErrorNotice(
-          Be instanceof Error && Be.name !== "NotAllowedError"
-            ? Be.message
+          error instanceof Error && error.name !== "NotAllowedError"
+            ? error.message
             : "Clipboard access is unavailable. Use Ctrl/⌘ C or X with the grid focused.",
         ),
         selectionState.gridContainerRef.current?.focus());
     }
   }
   function pasteClipboardText(fe) {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (
-        (requireSingleSelectionRange(), fe.length > workbookLimits.maxFileBytes)
+        (viewAndSelectionActions.requireSingleSelectionRange(),
+        fe.length > workbookLimits.maxFileBytes)
       )
         throw new Error("Clipboard text is too large.");
       const Oe =
@@ -126,7 +125,7 @@ function createClipboardAndFindActions({
         return;
       }
       if (Oe) {
-        const wt = buildPastePreview(
+        const pastePreview = buildPastePreview(
           activeWorkbook,
           activeSheet.id,
           selectionState.activeSelectionRange,
@@ -137,8 +136,8 @@ function createClipboardAndFindActions({
             readOnly: latestEditStateRef.current.readOnly,
           },
         );
-        (applyCellPatches(wt.patches, "Paste cells"),
-          selectSingleRange(wt.targetRange));
+        (cellEditActions.applyCellPatches(pastePreview.patches, "Paste cells"),
+          viewAndSelectionActions.selectSingleRange(pastePreview.targetRange));
         return;
       }
       const Be = x7.parse(fe.replace(/\r?\n$/, ""), {
@@ -147,16 +146,16 @@ function createClipboardAndFindActions({
       });
       if (Be.errors.length)
         throw new Error("Clipboard text contains malformed quoted cells.");
-      const Ue = Be.data,
+      const data = Be.data,
         Xe = _t(selectionState.activeCellAddress),
         gt = [];
-      if (!Ue.length || Ue.some((wt) => wt.length !== Ue[0].length))
+      if (!data.length || data.some((wt) => wt.length !== data[0].length))
         throw new Error("Paste requires a rectangular range.");
-      if (Ue.length * Ue[0].length > workbookLimits.maxPatches)
+      if (data.length * data[0].length > workbookLimits.maxPatches)
         throw new Error(
           `Paste at most ${workbookLimits.maxPatches} cells at a time.`,
         );
-      (Ue.forEach((wt, jt) =>
+      (data.forEach((wt, jt) =>
         wt.forEach((rr, Mr) => {
           if (
             Xe.row + jt >= activeSheet.rowCount ||
@@ -165,20 +164,24 @@ function createClipboardAndFindActions({
             throw new Error(
               "Paste exceeds the Excel worksheet boundary (XFD1048576).",
             );
-          const Br = `${columnIndexToLetters(Xe.col + Mr)}${Xe.row + jt + 1}`,
-            xr = parseDateCellEntry(
+          const address = `${columnIndexToLetters(Xe.col + Mr)}${Xe.row + jt + 1}`,
+            dateCellEntry = parseDateCellEntry(
               rr,
-              activeSheet.cells[Br],
+              activeSheet.cells[address],
               latestEditStateRef.current.book.datePolicy?.dateSystem,
             );
-          gt.push({ sheetId: activeSheet.id, address: Br, cell: xr });
+          gt.push({
+            sheetId: activeSheet.id,
+            address: address,
+            cell: dateCellEntry,
+          });
         }),
       ),
-        applyCellPatches(gt, "Paste cells"),
-        selectSingleRange(
+        cellEditActions.applyCellPatches(gt, "Paste cells"),
+        viewAndSelectionActions.selectSingleRange(
           wy(
             selectionState.activeCellAddress,
-            `${columnIndexToLetters(Xe.col + Ue[0].length - 1)}${Xe.row + Ue.length}`,
+            `${columnIndexToLetters(Xe.col + data[0].length - 1)}${Xe.row + data.length}`,
           ),
         ));
     });
@@ -202,15 +205,15 @@ function createClipboardAndFindActions({
     }
   }
   function findNextTextMatch() {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (!findReplaceState.findQuery) return;
       const fe = Object.keys(activeSheet.cells)
-        .filter((Ue) => {
-          const Xe = _t(Ue);
+        .filter((cell) => {
+          const Xe = _t(cell);
           return (
             !rowVisibilityIndex.isHidden(Xe.row) &&
             !columnVisibilityIndex.isHidden(Xe.col) &&
-            String(activeSheet.cells[Ue]?.raw ?? "")
+            String(activeSheet.cells[cell]?.raw ?? "")
               .toLowerCase()
               .includes(findReplaceState.findQuery.toLowerCase())
           );
@@ -232,20 +235,21 @@ function createClipboardAndFindActions({
             const Xe = _t(Ue);
             return Xe.row > Oe.row || (Xe.row === Oe.row && Xe.col > Oe.col);
           }) ?? fe[0];
-      (selectCellAddress(Be),
+      (navigationActions.selectCellAddress(Be),
         operationStatusState.setStatusNotice(
           `${fe.length} matching cell${fe.length === 1 ? "" : "s"}.`,
         ));
     });
   }
   function replaceTextInSelection() {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (!findReplaceState.findQuery) throw new Error("Enter text to find.");
       const fe = new RegExp(
           findReplaceState.findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
           "gi",
         ),
-        Oe = getSelectedCellAddresses()
+        Oe = viewAndSelectionActions
+          .getSelectedCellAddresses()
           .filter(
             (Be) =>
               typeof activeSheet.cells[Be]?.raw == "string" &&
@@ -253,18 +257,19 @@ function createClipboardAndFindActions({
                 .toLowerCase()
                 .includes(findReplaceState.findQuery.toLowerCase()),
           )
-          .map((Be) => ({
+          .map((address) => ({
             sheetId: activeSheet.id,
-            address: Be,
+            address: address,
             cell: {
-              ...activeSheet.cells[Be],
-              raw: String(activeSheet.cells[Be].raw).replace(
+              ...activeSheet.cells[address],
+              raw: String(activeSheet.cells[address].raw).replace(
                 fe,
                 () => findReplaceState.replaceWithText,
               ),
             },
           }));
-      (Oe.length && applyCellPatches(Oe, "Replace text in selection"),
+      (Oe.length &&
+        cellEditActions.applyCellPatches(Oe, "Replace text in selection"),
         operationStatusState.setStatusNotice(
           `Replaced text in ${Oe.length} cells.`,
         ));

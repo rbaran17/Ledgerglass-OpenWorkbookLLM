@@ -40,16 +40,17 @@ import {
 } from "./13-consolidation-dialog.js";
 
 function evaluateDaxExpression(e) {
-  const r = e.definition,
-    t = new Map(r.tables.map((N) => [N.id, N])),
+  const definition = e.definition,
+    t = new Map(definition.tables.map((table) => [table.id, table])),
     n = new Map(),
     o = new Map(),
     a = new Set(),
     s = [],
     d = new WeakMap(),
     u = (N) =>
-      r.tables.find((R) => caseFoldText(R.name) === caseFoldText(N)) ??
-      throwDaxError("DAX_REFERENCE", `Unknown model table ${N}.`),
+      definition.tables.find(
+        (table) => caseFoldText(table.name) === caseFoldText(N),
+      ) ?? throwDaxError("DAX_REFERENCE", `Unknown model table ${N}.`),
     l = (N) => {
       if (N.kind !== "field")
         return throwDaxError(
@@ -57,32 +58,34 @@ function evaluateDaxExpression(e) {
           "A fully qualified model column is required.",
         );
       const R = u(N.table),
-        L = R.columns.find(
-          ($) => caseFoldText($.name) === caseFoldText(N.column),
+        column = R.columns.find(
+          (column) => caseFoldText(column.name) === caseFoldText(N.column),
         );
-      return L
-        ? { tableId: R.id, column: L.name }
+      return column
+        ? { tableId: R.id, column: column.name }
         : throwDaxError(
             "DAX_REFERENCE",
             `Unknown model column ${N.table}[${N.column}].`,
           );
     },
     c = (N) =>
-      r.measures.find((R) => caseFoldText(R.name) === caseFoldText(N)) ??
+      definition.measures.find(
+        (measure) => caseFoldText(measure.name) === caseFoldText(N),
+      ) ??
       throwDaxError(
         "DAX_REFERENCE",
         `Unknown measure [${N}]. Use qualified table[column] references for columns.`,
       );
-  for (const N of r.tables)
-    for (const R of N.columns)
-      R.expression !== undefined &&
+  for (const table of definition.tables)
+    for (const column of table.columns)
+      column.expression !== undefined &&
         n.set(
-          buildTableColumnKey({ tableId: N.id, column: R.name }),
-          parseDaxExpression(R.expression),
+          buildTableColumnKey({ tableId: table.id, column: column.name }),
+          parseDaxExpression(column.expression),
         );
-  for (const N of r.measures)
-    N.operation === "dax" &&
-      n.set(`measure:${N.id}`, parseDaxExpression(N.expression));
+  for (const measure of definition.measures)
+    measure.operation === "dax" &&
+      n.set(`measure:${measure.id}`, parseDaxExpression(measure.expression));
   for (const N of n.values())
     walkDaxSyntaxTree(N, (R) => {
       (R.kind === "field" && l(R),
@@ -122,8 +125,8 @@ function evaluateDaxExpression(e) {
         ["SUM", "AVERAGE", "MIN", "MAX"].includes(R.name))
       ) {
         const $ = l(R.args[0]);
-        t.get($.tableId).columns.find((U) => U.name === $.column).type !==
-          "number" &&
+        t.get($.tableId).columns.find((column) => column.name === $.column)
+          .type !== "number" &&
           throwDaxError(
             "DAX_TYPE",
             `${R.name} requires a number column in this subset.`,
@@ -149,8 +152,8 @@ function evaluateDaxExpression(e) {
             "DAX_ARGUMENT",
             "DIVIDE alternate result must be a numeric literal or BLANK().",
           ),
-        R.args.forEach(($, U) => {
-          if (!h($)) return;
+        R.args.forEach((arg, U) => {
+          if (!h(arg)) return;
           (["FILTER", "SUMX", "COUNTROWS", "ALL"].includes(R.name) &&
             U === 0) ||
             (R.name === "CALCULATE" && U > 0) ||
@@ -190,13 +193,14 @@ function evaluateDaxExpression(e) {
     y = (N, R) => {
       e.tick();
       const L = t.get(N.tableId),
-        $ = L.columns.find((Q) => Q.name === N.column);
-      if ($.expression === undefined) return e.value(N.tableId, N.column, R);
-      const U = buildTableColumnKey(N),
-        G = `${U}:${R}`;
-      let H = o.get(U);
+        column = L.columns.find((column) => column.name === N.column);
+      if (column.expression === undefined)
+        return e.value(N.tableId, N.column, R);
+      const tableColumnKey = buildTableColumnKey(N),
+        G = `${tableColumnKey}:${R}`;
+      let H = o.get(tableColumnKey);
       if (
-        (H || ((H = Array(e.count(N.tableId))), o.set(U, H)),
+        (H || ((H = Array(e.count(N.tableId))), o.set(tableColumnKey, H)),
         Object.prototype.hasOwnProperty.call(H, R))
       )
         return H[R];
@@ -208,16 +212,16 @@ function evaluateDaxExpression(e) {
       a.add(G);
       try {
         const Q = requireScalarValue(
-          C(n.get(U), {
+          C(n.get(tableColumnKey), {
             filters: [],
             rows: [{ tableId: N.tableId, index: R }],
           }),
         );
         return (
-          isValidColumnValue(Q, $) ||
+          isValidColumnValue(Q, column) ||
             throwDaxError(
               "DAX_TYPE",
-              `${L.name}[${$.name}] row ${R + 1} does not match its declared ${$.type}${$.nullable ? " or BLANK" : ""} type.`,
+              `${L.name}[${column.name}] row ${R + 1} does not match its declared ${column.type}${column.nullable ? " or BLANK" : ""} type.`,
             ),
           (H[R] = Q),
           Q
@@ -230,15 +234,20 @@ function evaluateDaxExpression(e) {
       const R = d.get(N.filters);
       if (R) return R;
       const L = new Map(
-        r.tables.map(($) => [$.id, new Uint8Array(e.count($.id)).fill(1)]),
+        definition.tables.map((table) => [
+          table.id,
+          new Uint8Array(e.count(table.id)).fill(1),
+        ]),
       );
-      for (const $ of N.filters) {
-        const U = L.get($.tableId);
+      for (const filter of N.filters) {
+        const U = L.get(filter.tableId);
         for (let G = 0; G < U.length; G++)
-          (e.tick(), U[G] && !$.test(G) && (U[G] = 0));
+          (e.tick(), U[G] && !filter.test(G) && (U[G] = 0));
       }
       for (const $ of e.order)
-        for (const U of r.relationships.filter((G) => G.one.tableId === $)) {
+        for (const U of definition.relationships.filter(
+          (relationship) => relationship.one.tableId === $,
+        )) {
           const G = L.get($),
             H = L.get(U.many.tableId);
           for (let Q = 0; Q < H.length; Q++) {
@@ -253,7 +262,8 @@ function evaluateDaxExpression(e) {
     A = (N, R) =>
       N.flatMap((L) => {
         const $ = L.columns.filter(
-          (U) => !R.has(buildTableColumnKey({ tableId: L.tableId, column: U })),
+          (column) =>
+            !R.has(buildTableColumnKey({ tableId: L.tableId, column: column })),
         );
         return $.length === L.columns.length
           ? [L]
@@ -269,29 +279,33 @@ function evaluateDaxExpression(e) {
     k = (N, R) => {
       const L = new Set(
         R.flatMap(($) =>
-          $.columns.map((U) =>
-            buildTableColumnKey({ tableId: $.tableId, column: U }),
+          $.columns.map((column) =>
+            buildTableColumnKey({ tableId: $.tableId, column: column }),
           ),
         ),
       );
       return [...A(N, L), ...R];
     },
-    F = (N) => r.tables.filter((R) => e.canFilter(R.id, N)),
-    I = (N, R, L) => {
+    F = (N) => definition.tables.filter((table) => e.canFilter(table.id, N)),
+    I = (tableId, columns, L) => {
       const $ = L.map((G) =>
-          R.map((H) => buildTypedValueKey(y({ tableId: N, column: H }, G))),
+          columns.map((column) =>
+            buildTypedValueKey(y({ tableId: tableId, column: column }, G)),
+          ),
         ),
         U = new Set($.map((G) => JSON.stringify(G)));
       return {
-        tableId: N,
-        columns: R,
+        tableId: tableId,
+        columns: columns,
         test: (G) =>
           U.has(
             JSON.stringify(
-              R.map((H) => buildTypedValueKey(y({ tableId: N, column: H }, G))),
+              columns.map((column) =>
+                buildTypedValueKey(y({ tableId: tableId, column: column }, G)),
+              ),
             ),
           ),
-        project: (G) => I(N, G, L),
+        project: (G) => I(tableId, G, L),
       };
     },
     O = (N) =>
@@ -299,22 +313,22 @@ function evaluateDaxExpression(e) {
         const $ =
             N.columns ??
             L.columns
-              .filter((G) => G.expression === undefined)
+              .filter((column) => column.expression === undefined)
               .map((G) => G.name),
           U = N.rows
-            .map((G) => e.parentRow(N.tableId, L.id, G))
+            .map((row) => e.parentRow(N.tableId, L.id, row))
             .filter((G) => G !== undefined);
         return I(L.id, $, U);
       }),
     j = (N) => {
       if (N.transitioned || !N.rows.length) return N;
-      let R = [...N.filters];
-      for (const L of N.rows)
-        R = k(
-          R,
-          O({ tableId: L.tableId, rows: [L.index], columns: L.columns }),
+      let filters = [...N.filters];
+      for (const row of N.rows)
+        filters = k(
+          filters,
+          O({ tableId: row.tableId, rows: [row.index], columns: row.columns }),
         );
-      return { ...N, filters: R, transitioned: true };
+      return { ...N, filters: filters, transitioned: true };
     },
     z = (N, R, L) => ({
       ...N,
@@ -447,8 +461,8 @@ function evaluateDaxExpression(e) {
                 : H ** Q,
       );
     }
-    const L = N.args,
-      $ = (U) => requireScalarValue(C(L[U], R));
+    const args = N.args,
+      $ = (U) => requireScalarValue(C(args[U], R));
     switch (N.name) {
       case "BLANK":
         return null;
@@ -459,15 +473,15 @@ function evaluateDaxExpression(e) {
       case "ISBLANK":
         return $(0) === null;
       case "IF":
-        return requireLogicalOperand($(0)) ? $(1) : L[2] ? $(2) : null;
+        return requireLogicalOperand($(0)) ? $(1) : args[2] ? $(2) : null;
       case "COALESCE":
-        for (let U = 0; U < L.length; U++) {
+        for (let U = 0; U < args.length; U++) {
           const G = $(U);
           if (G !== null) return G;
         }
         return null;
       case "DIVIDE": {
-        if (L[2] && !f(L[2]))
+        if (args[2] && !f(args[2]))
           return throwDaxError(
             "DAX_ARGUMENT",
             "DIVIDE alternate result must be a numeric literal or BLANK().",
@@ -475,7 +489,7 @@ function evaluateDaxExpression(e) {
         const U = $(0),
           G = $(1);
         return G === null || requireNumericOperand(G) === 0
-          ? L[2]
+          ? args[2]
             ? $(2)
             : null
           : U === null
@@ -488,16 +502,16 @@ function evaluateDaxExpression(e) {
       case "AVERAGE":
       case "MIN":
       case "MAX": {
-        const { f, values } = _(L[0], R);
+        const { f, values } = _(args[0], R);
         if (
-          t.get(f.tableId).columns.find((Q) => Q.name === f.column).type !==
-          "number"
+          t.get(f.tableId).columns.find((column) => column.name === f.column)
+            .type !== "number"
         )
           return throwDaxError(
             "DAX_TYPE",
             `${N.name} requires a number column in this subset.`,
           );
-        const H = values.filter((Q) => typeof Q == "number");
+        const H = values.filter((value) => typeof value == "number");
         return H.length
           ? N.name === "SUM"
             ? sumWithCompensation(H)
@@ -509,54 +523,56 @@ function evaluateDaxExpression(e) {
           : null;
       }
       case "DISTINCTCOUNT": {
-        const { values } = _(L[0], R);
+        const { values } = _(args[0], R);
         return values.length
           ? new Set(values.map(buildTypedValueKey)).size
           : null;
       }
       case "SELECTEDVALUE": {
-        const { values } = _(L[0], R),
-          G = new Map(values.map((H) => [buildTypedValueKey(H), H]));
-        return G.size === 1 ? [...G.values()][0] : L[1] ? $(1) : null;
+        const { values } = _(args[0], R),
+          G = new Map(
+            values.map((value) => [buildTypedValueKey(value), value]),
+          );
+        return G.size === 1 ? [...G.values()][0] : args[1] ? $(1) : null;
       }
       case "COUNTROWS":
-        return D(C(L[0], R)).rows.length || null;
+        return D(C(args[0], R)).rows.length || null;
       case "SUMX": {
-        const U = D(C(L[0], R));
+        const U = D(C(args[0], R));
         return sumWithCompensation(
-          U.rows.map((G) => requireScalarValue(C(L[1], z(R, U, G)))),
+          U.rows.map((row) => requireScalarValue(C(args[1], z(R, U, row)))),
         );
       }
       case "FILTER": {
-        const U = D(C(L[0], R));
+        const U = D(C(args[0], R));
         return {
           ...U,
-          rows: U.rows.filter((G) =>
-            requireLogicalOperand(requireScalarValue(C(L[1], z(R, U, G)))),
+          rows: U.rows.filter((row) =>
+            requireLogicalOperand(requireScalarValue(C(args[1], z(R, U, row)))),
           ),
         };
       }
       case "ALL": {
-        const U = L[0];
+        const U = args[0];
         if (U.kind === "table") {
-          const X = u(U.name).id;
-          return { kind: "rows", tableId: X, rows: b(X) };
+          const tableId = u(U.name).id;
+          return { kind: "rows", tableId: tableId, rows: b(tableId) };
         }
         const G = l(U),
           H = new Set(),
-          Q = b(G.tableId).filter((X) => {
-            const J = buildTypedValueKey(y(G, X));
-            return H.has(J) ? false : (H.add(J), true);
+          rows = b(G.tableId).filter((X) => {
+            const typedValueKey = buildTypedValueKey(y(G, X));
+            return H.has(typedValueKey) ? false : (H.add(typedValueKey), true);
           });
         return {
           kind: "rows",
           tableId: G.tableId,
-          rows: Q,
+          rows: rows,
           columns: [G.column],
         };
       }
       case "RELATED": {
-        const U = l(L[0]),
+        const U = l(args[0]),
           G = R.rows.at(-1);
         if (!G || G.columns || G.tableId === U.tableId)
           return throwDaxError(
@@ -572,7 +588,7 @@ function evaluateDaxExpression(e) {
           : y(U, H);
       }
       case "CALCULATE": {
-        const U = L.slice(1).map((H) => {
+        const U = args.slice(1).map((H) => {
           if (H.kind === "call" && H.name === "ALL")
             return { remove: H.args[0] };
           if (
@@ -621,32 +637,34 @@ function evaluateDaxExpression(e) {
               "DAX_FILTER",
               "A Boolean CALCULATE filter must reference columns from one table.",
             );
-          const X = Q[0].tableId,
-            J = b(X).filter((q) =>
+          const tableId = Q[0].tableId,
+            J = b(tableId).filter((q) =>
               requireLogicalOperand(
                 requireScalarValue(
                   C(H, {
                     ...R,
-                    rows: [...R.rows, { tableId: X, index: q }],
+                    rows: [...R.rows, { tableId: tableId, index: q }],
                     transitioned: false,
                   }),
                 ),
               ),
             );
-          return { filters: [I(X, [...new Set(Q.map((q) => q.column))], J)] };
+          return {
+            filters: [I(tableId, [...new Set(Q.map((q) => q.column))], J)],
+          };
         });
-        let G = [...j(R).filters];
-        for (const H of U) H.remove && (G = V(G, H.remove));
+        let filters = [...j(R).filters];
+        for (const H of U) H.remove && (filters = V(filters, H.remove));
         return (
-          (G = k(
-            G,
+          (filters = k(
+            filters,
             U.flatMap((H) => H.filters ?? []),
           )),
-          C(L[0], { ...R, filters: G, transitioned: true })
+          C(args[0], { ...R, filters: filters, transitioned: true })
         );
       }
       case "TOTALYTD": {
-        const U = l(L[1]),
+        const U = l(args[1]),
           G = t.get(U.tableId);
         if (G.dateColumn !== U.column)
           return throwDaxError(
@@ -662,17 +680,17 @@ function evaluateDaxExpression(e) {
         if (!X.length) return null;
         const J = X.at(-1),
           q = J.slice(0, 4) + "-01-01",
-          W = Q.filters.filter((K) => K.tableId !== G.id);
+          filters = Q.filters.filter((filter) => filter.tableId !== G.id);
         return (
-          W.push({
+          filters.push({
             tableId: G.id,
-            columns: G.columns.map((K) => K.name),
+            columns: G.columns.map((column) => column.name),
             test: (K) => {
               const te = String(y(U, K));
               return te >= q && te <= J;
             },
           }),
-          C(L[0], { ...Q, filters: W, transitioned: true })
+          C(args[0], { ...Q, filters: filters, transitioned: true })
         );
       }
     }
@@ -711,56 +729,67 @@ function evaluateDaxExpression(e) {
   };
   return {
     calculatedColumns: () =>
-      r.tables.flatMap((N) =>
-        N.columns
-          .filter((R) => R.expression !== undefined)
+      definition.tables.flatMap((table) =>
+        table.columns
+          .filter((column) => column.expression !== undefined)
           .map((R) => ({
-            tableId: N.id,
+            tableId: table.id,
             name: R.name,
             type: R.type,
-            values: b(N.id).map((L) => y({ tableId: N.id, column: R.name }, L)),
+            values: b(table.id).map((L) =>
+              y({ tableId: table.id, column: R.name }, L),
+            ),
           })),
       ),
     query(N, R) {
-      const L = N.measureIds.map((X) => r.measures.find((J) => J.id === X)),
+      const L = N.measureIds.map((measureId) =>
+          definition.measures.find((measure) => measure.id === measureId),
+        ),
         $ = new Set(L.flatMap((X) => [...T(X)])),
-        U = N.filters.map((X) => {
-          const J = t.get(X.tableId).columns.find((q) => q.name === X.column);
+        filters = N.filters.map((filter) => {
+          const column = t
+            .get(filter.tableId)
+            .columns.find((column) => column.name === filter.column);
           return (
-            !["blank", "notBlank"].includes(X.operator) &&
-              (X.value === undefined ||
-                !isValidColumnValue(X.value, { ...J, nullable: true })) &&
+            !["blank", "notBlank"].includes(filter.operator) &&
+              (filter.value === undefined ||
+                !isValidColumnValue(filter.value, {
+                  ...column,
+                  nullable: true,
+                })) &&
               throwDaxError(
                 "DAX_FILTER",
                 "Filter value does not match its declared column type.",
               ),
-            ["gt", "gte", "lt", "lte"].includes(X.operator) &&
-              (!["number", "date"].includes(J.type) || X.value == null) &&
+            ["gt", "gte", "lt", "lte"].includes(filter.operator) &&
+              (!["number", "date"].includes(column.type) ||
+                filter.value == null) &&
               throwDaxError(
                 "DAX_FILTER",
                 "Ordered query filters require a nonblank number or date.",
               ),
             L.length &&
-              ![...$].some((q) => e.canFilter(X.tableId, q)) &&
+              ![...$].some((q) => e.canFilter(filter.tableId, q)) &&
               throwDaxError(
                 "DAX_FILTER",
                 "A query filter cannot reach any selected measure.",
               ),
             {
-              tableId: X.tableId,
-              columns: [X.column],
+              tableId: filter.tableId,
+              columns: [filter.column],
               test: (q) =>
                 matchesQueryFilter(
-                  y({ tableId: X.tableId, column: X.column }, q),
-                  X.operator,
-                  X.value,
+                  y({ tableId: filter.tableId, column: filter.column }, q),
+                  filter.operator,
+                  filter.value,
                 ),
             }
           );
         }),
-        G = { filters: U, rows: [] };
-      for (const X of R.tables)
-        ((X.included = E(X.id, G).length), (X.excluded = X.rows - X.included));
+        G = { filters: filters, rows: [] };
+      for (const table of R.tables)
+        ((table.included = E(table.id, G).length),
+          (table.excluded = table.rows - table.included));
       for (const X of N.groupBy)
         for (const J of $)
           e.canFilter(X.tableId, J) ||
@@ -808,31 +837,31 @@ function evaluateDaxExpression(e) {
                 "The model query exceeds 1,000 groups.",
               ));
         }
-      R.rows = [...Q.values()].map((X) => {
+      R.rows = [...Q.values()].map((keys) => {
         const J = {
           rows: [],
           filters: [
-            ...U,
+            ...filters,
             ...N.groupBy.map((q, W) => ({
               tableId: q.tableId,
               columns: [q.column],
-              test: (K) => y(q, K) === X[W],
+              test: (K) => y(q, K) === keys[W],
             })),
           ],
         };
-        return { keys: X, values: L.map((q) => H(B(q, J))) };
+        return { keys: keys, values: L.map((q) => H(B(q, J))) };
       });
     },
   };
 }
-function isValidColumnValue(e, r) {
+function isValidColumnValue(e, column) {
   return e === null
-    ? r.nullable
-    : r.type === "number"
+    ? column.nullable
+    : column.type === "number"
       ? typeof e == "number" && Number.isFinite(e)
-      : r.type === "boolean"
+      : column.type === "boolean"
         ? typeof e == "boolean"
-        : r.type === "text"
+        : column.type === "text"
           ? typeof e == "string" && e.length <= 32767
           : typeof e == "string" &&
             /^\d{4}-\d{2}-\d{2}$/.test(e) &&
@@ -860,8 +889,8 @@ function validateMarkedCalendarDays(e) {
         "The marked calendar has a missing or invalid day.",
       );
 }
-function matchesQueryFilter(e, r, t) {
-  switch (r) {
+function matchesQueryFilter(e, operator, t) {
+  switch (operator) {
     case "blank":
       return e === null || e === "";
     case "notBlank":
@@ -913,37 +942,40 @@ const decodeColumnValue = (e, r) =>
       : e.definition.type === "boolean"
         ? !!e.data[r]
         : e.data[r];
-function encodeColumnDictionary(e, r) {
-  const t = new Uint8Array(r.length),
-    n = [],
+function encodeColumnDictionary(definition, values) {
+  const nulls = new Uint8Array(values.length),
+    dictionary = [],
     o = new Map(),
     a =
-      e.type === "number"
-        ? new Float64Array(r.length)
-        : e.type === "boolean"
-          ? new Uint8Array(r.length)
-          : new Uint32Array(r.length);
+      definition.type === "number"
+        ? new Float64Array(values.length)
+        : definition.type === "boolean"
+          ? new Uint8Array(values.length)
+          : new Uint32Array(values.length);
   return (
-    r.forEach((s, d) => {
-      if (s === null) t[d] = 1;
-      else if (e.type === "number") a[d] = s;
-      else if (e.type === "boolean") a[d] = s ? 1 : 0;
+    values.forEach((value, d) => {
+      if (value === null) nulls[d] = 1;
+      else if (definition.type === "number") a[d] = value;
+      else if (definition.type === "boolean") a[d] = value ? 1 : 0;
       else {
-        const u = String(s);
-        (o.has(u) || (o.set(u, n.length), n.push(u)), (a[d] = o.get(u)));
+        const u = String(value);
+        (o.has(u) || (o.set(u, dictionary.length), dictionary.push(u)),
+          (a[d] = o.get(u)));
       }
     }),
     {
-      definition: e,
-      nulls: t,
+      definition: definition,
+      nulls: nulls,
       data: a,
-      ...(["text", "date"].includes(e.type) ? { dictionary: n } : {}),
+      ...(["text", "date"].includes(definition.type)
+        ? { dictionary: dictionary }
+        : {}),
     }
   );
 }
-function resolveModelTableRange(e, r) {
-  const t = e.sheets.find((s) => s.id === r.sheetId);
-  if (!t)
+function resolveModelTableRange(workbook, r) {
+  const sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+  if (!sheet)
     return throwDaxModelError(
       "SOURCE",
       `Model table ${r.name} has a missing worksheet.`,
@@ -952,7 +984,7 @@ function resolveModelTableRange(e, r) {
       },
     );
   if (!r.tableId) return r.range;
-  const n = t.tables?.find((s) => s.id === r.tableId);
+  const n = sheet.tables?.find((table) => table.id === r.tableId);
   if (!n)
     return throwDaxModelError(
       "SOURCE",
@@ -961,36 +993,36 @@ function resolveModelTableRange(e, r) {
         tableId: r.id,
       },
     );
-  const o = parseRangeAddress(n.range);
-  return `${columnIndexToLetters(o.firstCol)}${o.firstRow + 1}:${columnIndexToLetters(o.lastCol)}${o.lastRow + 1 - (n.showTotals ? 1 : 0)}`;
+  const rangeAddress = parseRangeAddress(n.range);
+  return `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1 - (n.showTotals ? 1 : 0)}`;
 }
-function buildModelTableFromRange(e, r, t, n, o = {}) {
-  const a = e.sheets.find((u) => u.id === r);
-  if (!a) throw Error("Choose a source worksheet.");
+function buildModelTableFromRange(workbook, sheetId, t, tableId, o = {}) {
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Choose a source worksheet.");
   const s = {
       id: crypto.randomUUID(),
-      name: a.name,
-      sheetId: r,
-      range: t ?? formatOccupiedRangeAddress(a),
-      ...(n ? { tableId: n } : {}),
+      name: sheet.name,
+      sheetId: sheetId,
+      range: t ?? formatOccupiedRangeAddress(sheet),
+      ...(tableId ? { tableId: tableId } : {}),
       columns: [],
     },
     d = readSourceHeaders(
-      e,
-      [{ sheetId: r, range: resolveModelTableRange(e, s) }],
+      workbook,
+      [{ sheetId: sheetId, range: resolveModelTableRange(workbook, s) }],
       o,
     ).snapshots[0];
   return (
     (s.range = d.source.range),
-    (s.columns = d.headers.map((u, l) => {
-      const c = d.records.map((p) => p.values[l]),
+    (s.columns = d.headers.map((header, l) => {
+      const c = d.records.map((record) => record.values[l]),
         h = c.filter((p) => p !== null);
       if (new Set(h.map((p) => typeof p)).size > 1)
         throw Error(
-          `Column ${u} contains mixed types. Clean the source before adding it to the model.`,
+          `Column ${header} contains mixed types. Clean the source before adding it to the model.`,
         );
       return {
-        name: u,
+        name: header,
         type:
           h.length && typeof h[0] == "number"
             ? "number"
@@ -1003,37 +1035,42 @@ function buildModelTableFromRange(e, r, t, n, o = {}) {
     s
   );
 }
-function normalizeModelHostPermissions(e, r) {
+function normalizeModelHostPermissions(workbook, r) {
   if (r.readOnly !== undefined && typeof r.readOnly != "boolean")
     throw Error("Host read-only must be boolean.");
   return {
     readOnly: !!r.readOnly,
     includeHidden: !!r.includeHidden,
     allowedSheetIds: [
-      ...new Set(r.allowedSheetIds ?? e.sheets.map((t) => t.id)),
+      ...new Set(r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id)),
     ].sort(),
   };
 }
-function buildModelTableSnapshots(e, r, t, n) {
-  normalizeModelHostPermissions(e, t);
-  for (const c of r.tables)
-    e.sheets.find((h) => h.id === c.sheetId)?.dataModelReport &&
+function buildModelTableSnapshots(workbook, r, t, n) {
+  normalizeModelHostPermissions(workbook, t);
+  for (const table of r.tables)
+    workbook.sheets.find((sheet) => sheet.id === table.sheetId)
+      ?.dataModelReport &&
       throwDaxModelError(
         "SNAPSHOT_SOURCE",
         "Model report snapshots cannot be calculation sources. Use the original typed source tables; retained measure caches are not trusted inputs.",
       );
-  const o = r.tables.map((c) => ({
-    sheetId: c.sheetId,
-    range: resolveModelTableRange(e, c),
+  const o = r.tables.map((table) => ({
+    sheetId: table.sheetId,
+    range: resolveModelTableRange(workbook, table),
   }));
   let a = 0;
   for (const c of o) {
-    const h = parseRangeAddress(c.range),
-      f = (h.lastRow - h.firstRow + 1) * (h.lastCol - h.firstCol + 1);
+    const rangeAddress = parseRangeAddress(c.range),
+      f =
+        (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+        (rangeAddress.lastCol - rangeAddress.firstCol + 1);
     ((a += f),
       (f > dataModelLimits.cellsPerTable ||
-        h.lastRow - h.firstRow > dataModelLimits.rowsPerTable ||
-        h.lastCol - h.firstCol + 1 > dataModelLimits.columns) &&
+        rangeAddress.lastRow - rangeAddress.firstRow >
+          dataModelLimits.rowsPerTable ||
+        rangeAddress.lastCol - rangeAddress.firstCol + 1 >
+          dataModelLimits.columns) &&
         throwDaxModelError(
           "LIMIT",
           "A model table supports at most 500 data rows, 50 fields and 2,000 cells including headers.",
@@ -1041,70 +1078,72 @@ function buildModelTableSnapshots(e, r, t, n) {
   }
   a > dataModelLimits.modelCells &&
     throwDaxModelError("LIMIT", "The data model exceeds 16,000 source cells.");
-  const s = readSourceHeaders(e, o, t),
+  const sourceHeaders = readSourceHeaders(workbook, o, t),
     d = new Map();
   return (
-    e.calculation?.mode === "manual" &&
-      s.dependencyCells.some(
-        (c) =>
-          typeof c.cell?.raw == "string" &&
-          c.cell.raw.startsWith("=") &&
-          !c.cell.literal,
+    workbook.calculation?.mode === "manual" &&
+      sourceHeaders.dependencyCells.some(
+        (dependencyCell) =>
+          typeof dependencyCell.cell?.raw == "string" &&
+          dependencyCell.cell.raw.startsWith("=") &&
+          !dependencyCell.cell.literal,
       ) &&
       throwDaxModelError(
         "MANUAL",
         "Model source formulas require Automatic calculation. In Manual mode use an explicitly reviewed values snapshot; pending or historical formula values cannot enter the model.",
       ),
-    s.snapshots.forEach((c, h) => {
-      const f = r.tables[h],
-        p = f.columns.filter((g) => g.expression === undefined);
-      (c.headers.length !== p.length ||
-        c.headers.some((g, b) => g !== p[b].name)) &&
+    sourceHeaders.snapshots.forEach((snapshot, h) => {
+      const definition = r.tables[h],
+        p = definition.columns.filter(
+          (column) => column.expression === undefined,
+        );
+      (snapshot.headers.length !== p.length ||
+        snapshot.headers.some((header, b) => header !== p[b].name)) &&
         throwDaxModelError(
           "SCHEMA",
-          `The source schema of ${f.name} changed. Review the model columns.`,
-          { tableId: f.id },
+          `The source schema of ${definition.name} changed. Review the model columns.`,
+          { tableId: definition.id },
         );
-      const m = new Map();
-      let v = 0;
+      const columns = new Map();
+      let bytes = 0;
       (p.forEach((g, b) => {
-        const y = c.records.map((A) => {
-            const k = A.values[b];
+        const values = snapshot.records.map((record) => {
+            const k = record.values[b];
             return (
               isValidColumnValueForType(k, g) ||
                 throwDaxModelError(
                   "TYPE",
-                  `${f.name}.${g.name} has an invalid ${g.type} value on worksheet row ${A.row}.`,
-                  { tableId: f.id, column: g.name, row: A.row },
+                  `${definition.name}.${g.name} has an invalid ${g.type} value on worksheet row ${record.row}.`,
+                  { tableId: definition.id, column: g.name, row: record.row },
                 ),
               k
             );
           }),
-          w = encodeColumnDictionary(g, y);
-        (m.set(g.name, w),
-          (v +=
+          w = encodeColumnDictionary(g, values);
+        (columns.set(g.name, w),
+          (bytes +=
             w.data.byteLength +
             w.nulls.byteLength +
             (w.dictionary?.reduce((A, k) => A + k.length * 2, 0) ?? 0)));
       }),
-        d.set(f.id, {
-          definition: f,
-          columns: m,
-          count: c.records.length,
-          range: c.source.range,
-          sheetName: c.sheetName,
-          bytes: v,
+        d.set(definition.id, {
+          definition: definition,
+          columns: columns,
+          count: snapshot.records.length,
+          range: snapshot.source.range,
+          sheetName: snapshot.sheetName,
+          bytes: bytes,
         }));
     }),
     (n.sourceHash = fingerprintCanonicalValue({
-      sources: s.snapshots,
-      dependencies: s.dependencyCells,
-      datePolicy: e.datePolicy,
+      sources: sourceHeaders.snapshots,
+      dependencies: sourceHeaders.dependencyCells,
+      datePolicy: workbook.datePolicy,
     })),
     d
   );
 }
-function evaluateDataModelQuery(e, r, t, n = {}) {
+function evaluateDataModelQuery(workbook, definition, query, n = {}) {
   const o = {
     complete: false,
     diagnostics: [],
@@ -1117,11 +1156,11 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
     engine: columnarModelFormatVersion,
   };
   try {
-    const s = validateDataModel(r),
-      d = validateModelQuery(t, s),
-      u = buildModelTableSnapshots(e, s, n, o),
-      l = s.tables.map((A) => A.id),
-      c = (A = 1) => {
+    const s = validateDataModel(definition),
+      d = validateModelQuery(query, s),
+      modelTableSnapshots = buildModelTableSnapshots(workbook, s, n, o),
+      l = s.tables.map((table) => table.id),
+      tick = (A = 1) => {
         ((o.operations += A),
           o.operations > dataModelLimits.operations &&
             throwDaxModelError(
@@ -1130,18 +1169,23 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
             ));
       },
       h = new Map(
-        l.map((A) => [A, s.relationships.filter((k) => k.one.tableId === A)]),
+        l.map((A) => [
+          A,
+          s.relationships.filter(
+            (relationship) => relationship.one.tableId === A,
+          ),
+        ]),
       ),
       f = new Map(l.map((A) => [A, 0]));
-    for (const A of s.relationships)
-      f.set(A.many.tableId, f.get(A.many.tableId) + 1);
-    const p = l.filter((A) => !f.get(A));
-    for (let A = 0; A < p.length; A++)
-      for (const k of h.get(p[A])) {
+    for (const relationship of s.relationships)
+      f.set(relationship.many.tableId, f.get(relationship.many.tableId) + 1);
+    const order = l.filter((A) => !f.get(A));
+    for (let A = 0; A < order.length; A++)
+      for (const k of h.get(order[A])) {
         const F = f.get(k.many.tableId) - 1;
-        (f.set(k.many.tableId, F), F || p.push(k.many.tableId));
+        (f.set(k.many.tableId, F), F || order.push(k.many.tableId));
       }
-    p.length !== l.length &&
+    order.length !== l.length &&
       throwDaxModelError(
         "CYCLE",
         "Relationships form a cycle. Use a single-direction acyclic model.",
@@ -1149,66 +1193,66 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
     const m = new Map();
     for (const A of l) {
       const k = new Map([[A, []]]);
-      for (const F of p) {
+      for (const F of order) {
         const I = k.get(F);
         if (I)
           for (const O of h.get(F))
             (k.has(O.many.tableId) &&
               throwDaxModelError(
                 "AMBIGUOUS",
-                `More than one filter path connects ${u.get(A).definition.name} to ${u.get(O.many.tableId).definition.name}. Remove the ambiguous relationship.`,
+                `More than one filter path connects ${modelTableSnapshots.get(A).definition.name} to ${modelTableSnapshots.get(O.many.tableId).definition.name}. Remove the ambiguous relationship.`,
               ),
               k.set(O.many.tableId, [...I, O.id]));
       }
       m.set(A, k);
     }
     const v = new Map();
-    for (const A of s.relationships) {
-      const k = u.get(A.one.tableId),
-        F = u.get(A.many.tableId),
+    for (const relationship of s.relationships) {
+      const k = modelTableSnapshots.get(relationship.one.tableId),
+        F = modelTableSnapshots.get(relationship.many.tableId),
         I = new Map(),
         O = new Set(),
         j = new Int32Array(F.count).fill(-1);
       for (let V = 0; V < k.count; V++) {
-        c();
-        const D = decodeColumnValue(k.columns.get(A.one.column), V),
+        tick();
+        const D = decodeColumnValue(k.columns.get(relationship.one.column), V),
           B = typedValueKey(D);
         ((D === null || D === "") &&
           throwDaxModelError(
             "BLANK_KEY",
-            `The one side of ${A.id} contains a blank key.`,
+            `The one side of ${relationship.id} contains a blank key.`,
             {
-              tableId: A.one.tableId,
-              column: A.one.column,
+              tableId: relationship.one.tableId,
+              column: relationship.one.column,
               row: parseRangeAddress(k.range).firstRow + V + 2,
-              relationshipId: A.id,
+              relationshipId: relationship.id,
             },
           ),
           I.has(B) &&
             throwDaxModelError(
               "DUPLICATE_KEY",
-              `The one side of ${A.id} contains a duplicate key.`,
+              `The one side of ${relationship.id} contains a duplicate key.`,
               {
-                tableId: A.one.tableId,
-                column: A.one.column,
+                tableId: relationship.one.tableId,
+                column: relationship.one.column,
                 row: parseRangeAddress(k.range).firstRow + V + 2,
-                relationshipId: A.id,
+                relationshipId: relationship.id,
               },
             ),
           I.set(B, V));
       }
       let z = 0;
       for (let V = 0; V < F.count; V++) {
-        c();
-        const D = decodeColumnValue(F.columns.get(A.many.column), V),
+        tick();
+        const D = decodeColumnValue(F.columns.get(relationship.many.column), V),
           B = typedValueKey(D),
           _ = I.get(B);
-        (A.cardinality === "one-to-one" &&
+        (relationship.cardinality === "one-to-one" &&
           O.has(B) &&
           throwDaxModelError(
             "CARDINALITY",
-            `The related side of ${A.id} is not unique. Choose one-to-many or correct its keys.`,
-            { relationshipId: A.id },
+            `The related side of ${relationship.id} is not unique. Choose one-to-many or correct its keys.`,
+            { relationshipId: relationship.id },
           ),
           O.add(B),
           _ === undefined
@@ -1216,27 +1260,30 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
               o.diagnostics.length < 100 &&
                 o.diagnostics.push({
                   code: "MISSING_KEY",
-                  message: `${F.definition.name}.${A.many.column} has no dimension key; correct the source before calculating.`,
-                  tableId: A.many.tableId,
-                  column: A.many.column,
+                  message: `${F.definition.name}.${relationship.many.column} has no dimension key; correct the source before calculating.`,
+                  tableId: relationship.many.tableId,
+                  column: relationship.many.column,
                   row: parseRangeAddress(F.range).firstRow + V + 2,
-                  relationshipId: A.id,
+                  relationshipId: relationship.id,
                 }))
             : (j[V] = _));
       }
       (z > 100 &&
         o.diagnostics.push({
           code: "MISSING_KEY_LIMIT",
-          message: `${A.id}: ${z} missing dimension keys; only the first 100 diagnostics are shown.`,
-          relationshipId: A.id,
+          message: `${relationship.id}: ${z} missing dimension keys; only the first 100 diagnostics are shown.`,
+          relationshipId: relationship.id,
         }),
-        v.set(A.id, j));
+        v.set(relationship.id, j));
     }
     const g = new Map(
-      [...u].map(([A, k]) => [A, new Uint8Array(k.count).fill(1)]),
+      [...modelTableSnapshots].map(([A, k]) => [
+        A,
+        new Uint8Array(k.count).fill(1),
+      ]),
     );
     if (
-      ((o.tables = [...u.values()].map((A) => ({
+      ((o.tables = [...modelTableSnapshots.values()].map((A) => ({
         id: A.definition.id,
         name: A.definition.name,
         sheetId: A.definition.sheetId,
@@ -1250,33 +1297,41 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
     )
       return o;
     if (
-      s.measures.some((A) => A.operation === "dax") ||
-      s.tables.some((A) => A.columns.some((k) => k.expression !== undefined))
+      s.measures.some((measure) => measure.operation === "dax") ||
+      s.tables.some((table) =>
+        table.columns.some((column) => column.expression !== undefined),
+      )
     ) {
       const A = evaluateDaxExpression({
         definition: s,
-        count: (k) => u.get(k).count,
-        value: (k, F, I) => decodeColumnValue(u.get(k).columns.get(F), I),
-        order: p,
-        tick: c,
+        count: (k) => modelTableSnapshots.get(k).count,
+        value: (k, F, I) =>
+          decodeColumnValue(modelTableSnapshots.get(k).columns.get(F), I),
+        order: order,
+        tick: tick,
         canFilter: (k, F) => m.get(k)?.has(F) ?? false,
         parentRow: (k, F, I) => {
           const O = m.get(F)?.get(k);
           if (!O) return;
           let j = I;
-          for (let V = O.length - 1; V >= 0; V--) (c(), (j = v.get(O[V])[j]));
+          for (let V = O.length - 1; V >= 0; V--)
+            (tick(), (j = v.get(O[V])[j]));
           return j;
         },
       });
       o.calculatedColumns = A.calculatedColumns();
-      for (const k of o.calculatedColumns) {
-        const F = u.get(k.tableId),
+      for (const calculatedColumn of o.calculatedColumns) {
+        const F = modelTableSnapshots.get(calculatedColumn.tableId),
           I = encodeColumnDictionary(
-            F.definition.columns.find((O) => O.name === k.name),
-            k.values,
+            F.definition.columns.find(
+              (column) => column.name === calculatedColumn.name,
+            ),
+            calculatedColumn.values,
           );
-        (F.columns.set(k.name, I),
-          (o.tables.find((O) => O.id === k.tableId).columnarBytes +=
+        (F.columns.set(calculatedColumn.name, I),
+          (o.tables.find(
+            (table) => table.id === calculatedColumn.tableId,
+          ).columnarBytes +=
             I.data.byteLength +
             I.nulls.byteLength +
             (I.dictionary?.reduce((O, j) => O + j.length * 2, 0) ?? 0)));
@@ -1292,14 +1347,16 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
         o
       );
     }
-    const b = d.measureIds.map((A) => s.measures.find((k) => k.id === A));
-    for (const A of d.filters) {
-      const k = u.get(A.tableId),
-        F = k.columns.get(A.column),
-        I = g.get(A.tableId);
-      (!["blank", "notBlank"].includes(A.operator) &&
-        (A.value === undefined ||
-          !isValidColumnValueForType(A.value, {
+    const b = d.measureIds.map((measureId) =>
+      s.measures.find((measure) => measure.id === measureId),
+    );
+    for (const filter of d.filters) {
+      const k = modelTableSnapshots.get(filter.tableId),
+        F = k.columns.get(filter.column),
+        I = g.get(filter.tableId);
+      (!["blank", "notBlank"].includes(filter.operator) &&
+        (filter.value === undefined ||
+          !isValidColumnValueForType(filter.value, {
             ...F.definition,
             nullable: true,
           })) &&
@@ -1307,35 +1364,35 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
           "FILTER",
           "Filter values must match the declared column type.",
         ),
-        ["gt", "gte", "lt", "lte"].includes(A.operator) &&
+        ["gt", "gte", "lt", "lte"].includes(filter.operator) &&
           (!["number", "date"].includes(F.definition.type) ||
-            A.value === null) &&
+            filter.value === null) &&
           throwDaxModelError(
             "FILTER",
             "Ordered filters require a nonblank number or ISO date.",
           ),
         b.length &&
-          !b.some((O) => m.get(A.tableId).has(O.tableId)) &&
+          !b.some((O) => m.get(filter.tableId).has(O.tableId)) &&
           throwDaxModelError(
             "DISCONNECTED",
             "A filter cannot reach any selected measure. Connect its table or remove the filter.",
           ));
       for (let O = 0; O < k.count; O++) {
-        c();
+        tick();
         const j = decodeColumnValue(F, O);
-        matchesComparisonOperator(j, A) || (I[O] = 0);
+        matchesComparisonOperator(j, filter) || (I[O] = 0);
       }
     }
-    for (const A of p)
+    for (const A of order)
       for (const k of h.get(A)) {
         const F = g.get(A),
           I = g.get(k.many.tableId),
           O = v.get(k.id);
-        for (let j = 0; j < I.length; j++) (c(), F[O[j]] || (I[j] = 0));
+        for (let j = 0; j < I.length; j++) (tick(), F[O[j]] || (I[j] = 0));
       }
-    for (const A of o.tables)
-      ((A.included = g.get(A.id).reduce((k, F) => k + F, 0)),
-        (A.excluded = A.rows - A.included));
+    for (const table of o.tables)
+      ((table.included = g.get(table.id).reduce((k, F) => k + F, 0)),
+        (table.excluded = table.rows - table.included));
     for (const A of d.groupBy)
       for (const k of b)
         m.get(A.tableId).has(k.tableId) ||
@@ -1345,11 +1402,12 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
           );
     ((o.headers = [
       ...d.groupBy.map(
-        (A) => `${u.get(A.tableId).definition.name}.${A.column}`,
+        (A) =>
+          `${modelTableSnapshots.get(A.tableId).definition.name}.${A.column}`,
       ),
       ...b.map((A) => A.name),
     ]),
-      new Set(o.headers.map((A) => A.toLowerCase())).size !==
+      new Set(o.headers.map((header) => header.toLowerCase())).size !==
         o.headers.length &&
         throwDaxModelError(
           "SCHEMA",
@@ -1359,37 +1417,46 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
         d.groupBy.map((F) => {
           let I = k;
           const O = m.get(F.tableId).get(A);
-          for (let j = O.length - 1; j >= 0; j--) (c(), (I = v.get(O[j])[I]));
-          return decodeColumnValue(u.get(F.tableId).columns.get(F.column), I);
+          for (let j = O.length - 1; j >= 0; j--)
+            (tick(), (I = v.get(O[j])[I]));
+          return decodeColumnValue(
+            modelTableSnapshots.get(F.tableId).columns.get(F.column),
+            I,
+          );
         }),
       w = new Map(),
       E = b.map(() => createSumAccumulator());
     for (const [A, k] of b.entries()) {
-      const F = u.get(k.tableId),
+      const F = modelTableSnapshots.get(k.tableId),
         I = g.get(k.tableId),
         O = k.column ? F.columns.get(k.column) : undefined;
       for (let j = 0; j < F.count; j++) {
-        if ((c(), !I[j])) continue;
+        if ((tick(), !I[j])) continue;
         const z = k.operation === "countRows" ? 1 : decodeColumnValue(O, j);
         if ((addAggregateValue(E[A], z), !d.groupBy.length)) continue;
-        const V = y(k.tableId, j),
-          D = JSON.stringify(V);
+        const keys = y(k.tableId, j),
+          D = JSON.stringify(keys);
         (w.has(D) ||
           (w.size >= dataModelLimits.groups &&
             throwDaxModelError(
               "LIMIT",
               "The model query exceeds 1,000 groups.",
             ),
-          w.set(D, { keys: V, states: b.map(() => createSumAccumulator()) })),
+          w.set(D, {
+            keys: keys,
+            states: b.map(() => createSumAccumulator()),
+          })),
           addAggregateValue(w.get(D).states[A], z));
       }
     }
     return (
-      (o.totals = E.map((A, k) => evaluateAggregation(A, b[k]))),
+      (o.totals = E.map((state, k) => evaluateAggregation(state, b[k]))),
       (o.rows = d.groupBy.length
         ? [...w.values()].map((A) => ({
             keys: A.keys,
-            values: A.states.map((k, F) => evaluateAggregation(k, b[F])),
+            values: A.states.map((state, F) =>
+              evaluateAggregation(state, b[F]),
+            ),
           }))
         : [{ keys: [], values: [...o.totals] }]),
       (o.rows.length + 2) * o.headers.length > dataModelLimits.outputCells &&
@@ -1400,41 +1467,42 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
       (o.complete = true),
       o
     );
-  } catch (s) {
+  } catch (error) {
     return (
       (o.rows = []),
       (o.totals = []),
       o.diagnostics.push({
         code:
-          s instanceof DaxModelError || s instanceof DaxError
-            ? s.code
+          error instanceof DaxModelError || error instanceof DaxError
+            ? error.code
             : "MODEL",
-        message: s instanceof Error ? s.message : "Model evaluation failed.",
-        ...(s instanceof DaxModelError ? s.context : {}),
+        message:
+          error instanceof Error ? error.message : "Model evaluation failed.",
+        ...(error instanceof DaxModelError ? error.context : {}),
       }),
       o
     );
   }
 }
-function matchesComparisonOperator(e, r) {
-  const t = r.value;
-  switch (r.operator) {
+function matchesComparisonOperator(e, filter) {
+  const value = filter.value;
+  switch (filter.operator) {
     case "blank":
       return e === null || e === "";
     case "notBlank":
       return e !== null && e !== "";
     case "equals":
-      return e === t;
+      return e === value;
     case "notEquals":
-      return e !== t;
+      return e !== value;
     case "gt":
-      return e !== null && e > t;
+      return e !== null && e > value;
     case "gte":
-      return e !== null && e >= t;
+      return e !== null && e >= value;
     case "lt":
-      return e !== null && e < t;
+      return e !== null && e < value;
     case "lte":
-      return e !== null && e <= t;
+      return e !== null && e <= value;
   }
 }
 function createSumAccumulator() {
@@ -1460,28 +1528,28 @@ function addAggregateValue(e, r) {
       (e.max = Math.max(e.max, r)));
   }
 }
-function evaluateAggregation(e, r) {
-  const t = e.sum + e.correction;
+function evaluateAggregation(state, r) {
+  const t = state.sum + state.correction;
   let n;
   switch (r.operation) {
     case "count":
     case "countRows":
-      n = e.count;
+      n = state.count;
       break;
     case "distinctCount":
-      n = e.distinct.size;
+      n = state.distinct.size;
       break;
     case "sum":
-      n = e.count ? t : null;
+      n = state.count ? t : null;
       break;
     case "average":
-      n = e.count ? t / e.count : null;
+      n = state.count ? t / state.count : null;
       break;
     case "min":
-      n = e.count ? e.min : null;
+      n = state.count ? state.min : null;
       break;
     case "max":
-      n = e.count ? e.max : null;
+      n = state.count ? state.max : null;
       break;
     case "dax":
       return throwDaxModelError(
@@ -1500,58 +1568,84 @@ function evaluateAggregation(e, r) {
   );
 }
 const dataModelResultCache = new WeakMap();
-function previewDataModelOutput(e, r, t = {}) {
-  const n = validateDataModel(r.definition),
-    o = validateModelQuery(r.query, n),
-    a = r.outputName.trim();
-  if (!a || a.length > 31 || /[\\/?*\[\]:\u0000-\u001f]/.test(a))
+function previewDataModelOutput(workbook, r, t = {}) {
+  const definition = validateDataModel(r.definition),
+    query = validateModelQuery(r.query, definition),
+    outputName = r.outputName.trim();
+  if (
+    !outputName ||
+    outputName.length > 31 ||
+    /[\\/?*\[\]:\u0000-\u001f]/.test(outputName)
+  )
     throw Error(
       "Enter a valid output worksheet name of at most 31 characters.",
     );
   const s = {
-    request: { definition: n, query: o, outputName: a },
-    workbookHash: fingerprintCanonicalValue(e),
-    contextHash: fingerprintCanonicalValue(normalizeModelHostPermissions(e, t)),
-    result: evaluateDataModelQuery(e, n, o, t),
+    request: { definition: definition, query: query, outputName: outputName },
+    workbookHash: fingerprintCanonicalValue(workbook),
+    contextHash: fingerprintCanonicalValue(
+      normalizeModelHostPermissions(workbook, t),
+    ),
+    result: evaluateDataModelQuery(workbook, definition, query, t),
   };
   return (dataModelResultCache.set(s, fingerprintCanonicalValue(s)), s);
 }
-function buildModelReportCells(e, r) {
-  const t = parseRangeAddress(r),
+function buildModelReportCells(worksheetRecord, outputRange) {
+  const rangeAddress = parseRangeAddress(outputRange),
     n = [];
   if (
-    (t.lastRow - t.firstRow + 1) * (t.lastCol - t.firstCol + 1) >
+    (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+      (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
     dataModelLimits.outputCells
   )
     throw Error("Model report range exceeds 20,000 cells.");
-  for (let o = t.firstRow; o <= t.lastRow; o++) {
+  for (
+    let firstRow = rangeAddress.firstRow;
+    firstRow <= rangeAddress.lastRow;
+    firstRow++
+  ) {
     const a = [];
-    for (let s = t.firstCol; s <= t.lastCol; s++) {
-      const d = e.cells[`${columnIndexToLetters(s)}${o + 1}`];
+    for (
+      let firstCol = rangeAddress.firstCol;
+      firstCol <= rangeAddress.lastCol;
+      firstCol++
+    ) {
+      const cell =
+        worksheetRecord.cells[
+          `${columnIndexToLetters(firstCol)}${firstRow + 1}`
+        ];
       a.push({
-        raw: d?.raw ?? null,
-        literal: !!d?.literal,
-        note: d?.note ?? "",
+        raw: cell?.raw ?? null,
+        literal: !!cell?.literal,
+        note: cell?.note ?? "",
       });
     }
     n.push(a);
   }
   return fingerprintCanonicalValue(n);
 }
-function publishDataModelReport(e, r, t, n = {}) {
+function publishDataModelReport(workbook, r, t, n = {}) {
   if (n.readOnly) throw Error("This workbook is read-only.");
-  if ((assertWorkbookStructureEditable(e), !["save", "publish"].includes(t)))
+  if (
+    (assertWorkbookStructureEditable(workbook),
+    !["save", "publish"].includes(t))
+  )
     throw Error("Choose Save model or Publish result.");
   if (
     dataModelResultCache.get(r) !== fingerprintCanonicalValue(r) ||
-    r.workbookHash !== fingerprintCanonicalValue(e) ||
+    r.workbookHash !== fingerprintCanonicalValue(workbook) ||
     r.contextHash !==
-      fingerprintCanonicalValue(normalizeModelHostPermissions(e, n))
+      fingerprintCanonicalValue(normalizeModelHostPermissions(workbook, n))
   )
     throw Error(
       "The model, workbook or host permissions changed. Preview again.",
     );
-  const o = evaluateDataModelQuery(e, r.request.definition, r.request.query, n);
+  const o = evaluateDataModelQuery(
+    workbook,
+    r.request.definition,
+    r.request.query,
+    n,
+  );
   if (
     !o.complete ||
     fingerprintCanonicalValue(o) !== fingerprintCanonicalValue(r.result)
@@ -1559,22 +1653,24 @@ function publishDataModelReport(e, r, t, n = {}) {
     throw Error(
       "Resolve model diagnostics and preview again. No partial model result is published.",
     );
-  const a = normalizeWorkbookInput(e);
+  const workbookInput = normalizeWorkbookInput(workbook);
   if (
-    ((a.dataModel = structuredClone(r.request.definition)), t === "publish")
+    ((workbookInput.dataModel = structuredClone(r.request.definition)),
+    t === "publish")
   ) {
     if (!r.request.query.measureIds.length)
       throw Error("Select at least one measure to publish.");
     if (
-      a.sheets.some(
-        (h) => h.name.toLowerCase() === r.request.outputName.toLowerCase(),
+      workbookInput.sheets.some(
+        (sheet) =>
+          sheet.name.toLowerCase() === r.request.outputName.toLowerCase(),
       )
     )
       throw Error("The output worksheet name is already in use.");
-    inspectOutputNameSafety(e, r.request.outputName);
-    const d = createWorksheetRecord(r.request.outputName),
+    inspectOutputNameSafety(workbook, r.request.outputName);
+    const worksheetRecord = createWorksheetRecord(r.request.outputName),
       u = r.request.query.groupBy.length > 0,
-      l = [o.headers, ...o.rows.map((h) => [...h.keys, ...h.values])];
+      l = [o.headers, ...o.rows.map((row) => [...row.keys, ...row.values])];
     (u &&
       l.push([
         "Grand total",
@@ -1582,10 +1678,10 @@ function publishDataModelReport(e, r, t, n = {}) {
         ...o.totals,
       ]),
       l.forEach((h, f) =>
-        h.forEach((p, m) => {
-          d.cells[`${columnIndexToLetters(m)}${f + 1}`] = {
-            raw: p,
-            ...(typeof p == "string" && p.startsWith("=")
+        h.forEach((raw, m) => {
+          worksheetRecord.cells[`${columnIndexToLetters(m)}${f + 1}`] = {
+            raw: raw,
+            ...(typeof raw == "string" && raw.startsWith("=")
               ? { literal: true }
               : {}),
             ...(f === 0
@@ -1599,55 +1695,58 @@ function publishDataModelReport(e, r, t, n = {}) {
           };
         }),
       ),
-      (d.columnWidths = Object.fromEntries(
-        o.headers.map((h, f) => [String(f), 160]),
+      (worksheetRecord.columnWidths = Object.fromEntries(
+        o.headers.map((header, f) => [String(f), 160]),
       )),
-      (d.frozenRows = 1));
-    const c = `A1:${columnIndexToLetters(o.headers.length - 1)}${l.length}`;
-    ((d.dataModelReport = {
+      (worksheetRecord.frozenRows = 1));
+    const outputRange = `A1:${columnIndexToLetters(o.headers.length - 1)}${l.length}`;
+    ((worksheetRecord.dataModelReport = {
       definition: structuredClone(r.request.definition),
       query: structuredClone(r.request.query),
       sourceHash: o.sourceHash,
       definitionHash: fingerprintCanonicalValue(r.request.definition),
-      outputHash: buildModelReportCells(d, c),
-      outputRange: c,
+      outputHash: buildModelReportCells(worksheetRecord, outputRange),
+      outputRange: outputRange,
       createdAt: new Date().toISOString(),
-      sourceRevision: e.revision,
+      sourceRevision: workbook.revision,
       includeHidden: !!n.includeHidden,
       totals: [...o.totals],
     }),
-      a.sheets.push(d));
+      workbookInput.sheets.push(worksheetRecord));
   }
-  const s = normalizeWorkbookInput(a);
+  const s = normalizeWorkbookInput(workbookInput);
   return (dataModelResultCache.delete(r), s);
 }
-function removeDataModelFromWorkbook(e, r = {}) {
+function removeDataModelFromWorkbook(workbook, r = {}) {
   if (r.readOnly) throw Error("This workbook is read-only.");
-  assertWorkbookStructureEditable(e);
-  const t = normalizeWorkbookInput(e);
-  return (delete t.dataModel, normalizeWorkbookInput(t));
+  assertWorkbookStructureEditable(workbook);
+  const workbookInput = normalizeWorkbookInput(workbook);
+  return (
+    delete workbookInput.dataModel,
+    normalizeWorkbookInput(workbookInput)
+  );
 }
-function getModelReportStatus(e, r, t = {}) {
-  const n = e.sheets.find((a) => a.id === r),
-    o = n?.dataModelReport;
-  if (!n || !o) return { status: "none", message: "No model report." };
+function getModelReportStatus(workbook, sheetId, options = {}) {
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
+    o = sheet?.dataModelReport;
+  if (!sheet || !o) return { status: "none", message: "No model report." };
   try {
     if (
-      !e.dataModel ||
-      fingerprintCanonicalValue(e.dataModel) !== o.definitionHash
+      !workbook.dataModel ||
+      fingerprintCanonicalValue(workbook.dataModel) !== o.definitionHash
     )
       return {
         status: "stale",
         message:
           "Model definition changed. Preview and publish a fresh result.",
       };
-    const a = evaluateDataModelQuery(e, o.definition, o.query, {
-      ...t,
-      includeHidden: o.includeHidden && !!t.includeHidden,
+    const a = evaluateDataModelQuery(workbook, o.definition, o.query, {
+      ...options,
+      includeHidden: o.includeHidden && !!options.includeHidden,
     });
     return a.complete
       ? a.sourceHash !== o.sourceHash ||
-        buildModelReportCells(n, o.outputRange) !== o.outputHash ||
+        buildModelReportCells(sheet, o.outputRange) !== o.outputHash ||
         fingerprintCanonicalValue(a.totals) !==
           fingerprintCanonicalValue(o.totals)
         ? {
@@ -1691,7 +1790,7 @@ function DaxExpressionInput({ label, value, onChange }) {
             maxLength: daxExpressionLimits.expressionCharacters,
             rows: 3,
             spellCheck: false,
-            onChange: (d) => onChange(d.target.value),
+            onChange: (event) => onChange(event.target.value),
           }),
         ],
       }),
@@ -1703,11 +1802,11 @@ function DaxExpressionInput({ label, value, onChange }) {
             i.jsxs("select", {
               "aria-label": text(`${label} insert function`),
               value: "",
-              onChange: (d) => {
-                if (!d.target.value) return;
+              onChange: (event) => {
+                if (!event.target.value) return;
                 const u = a.current?.selectionStart ?? value.length,
                   l = a.current?.selectionEnd ?? u,
-                  c = d.target.value + "(";
+                  c = event.target.value + "(";
                 (onChange(value.slice(0, u) + c + value.slice(l)),
                   requestAnimationFrame(() => {
                     (a.current?.focus(),
@@ -1719,8 +1818,12 @@ function DaxExpressionInput({ label, value, onChange }) {
                   value: "",
                   children: text("Choose a function"),
                 }),
-                Object.keys(daxFunctionNames).map((d) =>
-                  i.jsx("option", { value: d, children: d }, d),
+                Object.keys(daxFunctionNames).map((daxFunctionName) =>
+                  i.jsx(
+                    "option",
+                    { value: daxFunctionName, children: daxFunctionName },
+                    daxFunctionName,
+                  ),
                 ),
               ],
             }),
@@ -1745,13 +1848,17 @@ function DaxExpressionInput({ label, value, onChange }) {
 function DataModelDefinitionEditor({ definition, onChange }) {
   const { text } = useWorkbookMessages(),
     n = definition.tables.reduce(
-      (a, s) => a + s.columns.filter((d) => d.expression !== undefined).length,
+      (a, s) =>
+        a +
+        s.columns.filter((column) => column.expression !== undefined).length,
       0,
     ),
     o = (a, s) =>
       onChange({
         ...definition,
-        tables: definition.tables.map((d) => (d.id === a ? { ...d, ...s } : d)),
+        tables: definition.tables.map((table) =>
+          table.id === a ? { ...table, ...s } : table,
+        ),
       });
   return i.jsxs(i.Fragment, {
     children: [
@@ -1762,31 +1869,33 @@ function DataModelDefinitionEditor({ definition, onChange }) {
             "Calculated columns are evaluated for every source row before query filters. Sources remain unchanged. Preview is required before saving or publishing.",
         }),
       }),
-      definition.tables.map((a) =>
+      definition.tables.map((table) =>
         i.jsxs(
           "fieldset",
           {
             children: [
-              i.jsx("legend", { children: a.name }),
+              i.jsx("legend", { children: table.name }),
               i.jsxs("label", {
                 children: [
                   i.jsx(LocalizedText, { children: "Calendar date column" }),
                   i.jsxs("select", {
-                    "aria-label": text(`${a.name} calendar date column`),
-                    value: a.dateColumn ?? "",
-                    onChange: (s) =>
-                      o(a.id, { dateColumn: s.target.value || undefined }),
+                    "aria-label": text(`${table.name} calendar date column`),
+                    value: table.dateColumn ?? "",
+                    onChange: (event) =>
+                      o(table.id, {
+                        dateColumn: event.target.value || undefined,
+                      }),
                     children: [
                       i.jsx("option", {
                         value: "",
                         children: text("Not a marked calendar"),
                       }),
-                      a.columns
+                      table.columns
                         .filter(
-                          (s) =>
-                            s.expression === undefined &&
-                            s.type === "date" &&
-                            !s.nullable,
+                          (column) =>
+                            column.expression === undefined &&
+                            column.type === "date" &&
+                            !column.nullable,
                         )
                         .map((s) =>
                           i.jsx(
@@ -1806,11 +1915,11 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                     "TOTALYTD requires a marked table containing every day of one complete calendar year, without duplicate or blank dates.",
                 }),
               }),
-              a.columns.map((s, d) => {
-                const u = a.columns
+              table.columns.map((column, d) => {
+                const u = table.columns
                   .slice(0, d + 1)
                   .filter((l) => l.expression !== undefined).length;
-                return s.expression === undefined
+                return column.expression === undefined
                   ? null
                   : i.jsxs(
                       "fieldset",
@@ -1833,15 +1942,19 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                                   i.jsx(LocalizedText, { children: "Name" }),
                                   i.jsx("input", {
                                     "aria-label": text(
-                                      `${a.name} calculated column ${u} name`,
+                                      `${table.name} calculated column ${u} name`,
                                     ),
-                                    value: s.name,
-                                    onChange: (l) =>
-                                      o(a.id, {
-                                        columns: a.columns.map((c, h) =>
-                                          h === d
-                                            ? { ...c, name: l.target.value }
-                                            : c,
+                                    value: column.name,
+                                    onChange: (event) =>
+                                      o(table.id, {
+                                        columns: table.columns.map(
+                                          (column, h) =>
+                                            h === d
+                                              ? {
+                                                  ...column,
+                                                  name: event.target.value,
+                                                }
+                                              : column,
                                         ),
                                       }),
                                   }),
@@ -1852,15 +1965,19 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                                   i.jsx(LocalizedText, { children: "Type" }),
                                   i.jsx("select", {
                                     "aria-label": text(
-                                      `${a.name} calculated column ${u} type`,
+                                      `${table.name} calculated column ${u} type`,
                                     ),
-                                    value: s.type,
-                                    onChange: (l) =>
-                                      o(a.id, {
-                                        columns: a.columns.map((c, h) =>
-                                          h === d
-                                            ? { ...c, type: l.target.value }
-                                            : c,
+                                    value: column.type,
+                                    onChange: (event) =>
+                                      o(table.id, {
+                                        columns: table.columns.map(
+                                          (column, h) =>
+                                            h === d
+                                              ? {
+                                                  ...column,
+                                                  type: event.target.value,
+                                                }
+                                              : column,
                                         ),
                                       }),
                                     children: [
@@ -1883,18 +2000,20 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                                   i.jsx("input", {
                                     type: "checkbox",
                                     "aria-label": text(
-                                      `${a.name} calculated column ${u} nullable`,
+                                      `${table.name} calculated column ${u} nullable`,
                                     ),
-                                    checked: s.nullable,
-                                    onChange: (l) =>
-                                      o(a.id, {
-                                        columns: a.columns.map((c, h) =>
-                                          h === d
-                                            ? {
-                                                ...c,
-                                                nullable: l.target.checked,
-                                              }
-                                            : c,
+                                    checked: column.nullable,
+                                    onChange: (event) =>
+                                      o(table.id, {
+                                        columns: table.columns.map(
+                                          (column, h) =>
+                                            h === d
+                                              ? {
+                                                  ...column,
+                                                  nullable:
+                                                    event.target.checked,
+                                                }
+                                              : column,
                                         ),
                                       }),
                                   }),
@@ -1905,12 +2024,12 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                               }),
                               i.jsx("button", {
                                 "aria-label": text(
-                                  `Remove ${a.name} calculated column ${u}`,
+                                  `Remove ${table.name} calculated column ${u}`,
                                 ),
                                 onClick: () =>
-                                  o(a.id, {
-                                    columns: a.columns.filter(
-                                      (l, c) => c !== d,
+                                  o(table.id, {
+                                    columns: table.columns.filter(
+                                      (column, c) => c !== d,
                                     ),
                                   }),
                                 children: i.jsx(LocalizedText, {
@@ -1920,12 +2039,14 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                             ],
                           }),
                           i.jsx(DaxExpressionInput, {
-                            label: `${a.name} calculated column ${u} expression`,
-                            value: s.expression,
-                            onChange: (l) =>
-                              o(a.id, {
-                                columns: a.columns.map((c, h) =>
-                                  h === d ? { ...c, expression: l } : c,
+                            label: `${table.name} calculated column ${u} expression`,
+                            value: column.expression,
+                            onChange: (expression) =>
+                              o(table.id, {
+                                columns: table.columns.map((column, h) =>
+                                  h === d
+                                    ? { ...column, expression: expression }
+                                    : column,
                                 ),
                               }),
                           }),
@@ -1935,22 +2056,23 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                     );
               }),
               i.jsx("button", {
-                "aria-label": text(`Add calculated column to ${a.name}`),
+                "aria-label": text(`Add calculated column to ${table.name}`),
                 disabled:
                   n >= daxExpressionLimits.calculatedColumns ||
-                  a.columns.length >= dataModelLimits.columns,
+                  table.columns.length >= dataModelLimits.columns,
                 onClick: () => {
                   let s = 1;
                   for (
                     ;
-                    a.columns.some(
-                      (d) => d.name.toLowerCase() === `calculated ${s}`,
+                    table.columns.some(
+                      (column) =>
+                        column.name.toLowerCase() === `calculated ${s}`,
                     );
                   )
                     s++;
-                  o(a.id, {
+                  o(table.id, {
                     columns: [
-                      ...a.columns,
+                      ...table.columns,
                       {
                         name: `Calculated ${s}`,
                         type: "number",
@@ -1966,7 +2088,7 @@ function DataModelDefinitionEditor({ definition, onChange }) {
               }),
             ],
           },
-          a.id,
+          table.id,
         ),
       ),
       !definition.tables.length &&

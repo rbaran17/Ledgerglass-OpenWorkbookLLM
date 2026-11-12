@@ -3,6 +3,7 @@ import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { formatNumberWithPattern } from "../03-workbook-model.js";
 
 function EditorStatusBar({
+  navigationActions,
   dialogState,
   selectionState,
   operationStatusState,
@@ -14,7 +15,6 @@ function EditorStatusBar({
   selectedCellCount,
   selectedNumericValues,
   selectedNumericSum,
-  applyZoomPercent,
 }) {
   return i.jsxs("footer", {
     role: "group",
@@ -114,7 +114,9 @@ function EditorStatusBar({
           i.jsx("button", {
             "aria-label": text("Zoom out"),
             onClick: () =>
-              applyZoomPercent(Math.max(50, viewDisplayState.zoomPercent - 10)),
+              navigationActions.applyZoomPercent(
+                Math.max(50, viewDisplayState.zoomPercent - 10),
+              ),
             lang: language("Zoom out"),
             "data-ui-label": "Zoom out",
             children: "−",
@@ -126,14 +128,15 @@ function EditorStatusBar({
             max: "200",
             step: "10",
             value: viewDisplayState.zoomPercent,
-            onChange: (fe) => applyZoomPercent(Number(fe.target.value)),
+            onChange: (event) =>
+              navigationActions.applyZoomPercent(Number(event.target.value)),
             lang: language("Zoom"),
             "data-ui-label": "Zoom",
           }),
           i.jsx("button", {
             "aria-label": text("Zoom in"),
             onClick: () =>
-              applyZoomPercent(
+              navigationActions.applyZoomPercent(
                 Math.min(200, viewDisplayState.zoomPercent + 10),
               ),
             lang: language("Zoom in"),

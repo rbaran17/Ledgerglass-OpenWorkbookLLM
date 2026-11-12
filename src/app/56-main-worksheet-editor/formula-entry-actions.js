@@ -11,28 +11,22 @@ import {
 } from "../03-workbook-model.js";
 
 function createFormulaEntryActions({
+  cellEditActions,
+  viewAndSelectionActions,
+  navigationActions,
   formulaEntryState,
   selectionState,
   operationStatusState,
   dragFillState,
   activeWorkbook,
   activeSheet,
-  syncFormulaEditorSelection,
-  restoreFormulaEditorFocus,
-  isFormulaEditingLocked,
-  beginCellEdit,
-  requestCellScroll,
-  switchActiveWorksheet,
-  stepVisibleRowIndex,
-  stepVisibleColumnIndex,
-  jumpToDataEdge,
 }) {
   function insertFormulaReference(fe, Oe = false, Be) {
     const Ue = formulaEntryState.activeCellEditRef.current,
       Xe = formulaEntryState.formulaPointerStateRef.current;
     if (
       !Ue?.value.startsWith("=") ||
-      isFormulaEditingLocked() ||
+      cellEditActions.isFormulaEditingLocked() ||
       operationStatusState.isOperationBusy
     )
       return false;
@@ -40,15 +34,18 @@ function createFormulaEntryActions({
     if (!gt) return false;
     const Nt =
         Oe && Xe.sheetId === activeSheet.id && Xe.anchor ? Xe.anchor : fe,
-      wt = Be?.range ?? (Nt === fe ? fe : wy(Nt, fe)),
+      range = Be?.range ?? (Nt === fe ? fe : wy(Nt, fe)),
       jt = replaceFormulaReferenceSpan(
         Ue.value,
         gt,
-        wt,
+        range,
         Ue.sheetId === activeSheet.id ? undefined : activeSheet.name,
       );
     return (
-      beginCellEdit(jt.value, !!Xe.input?.classList.contains("lg-cell-editor")),
+      cellEditActions.beginCellEdit(
+        jt.value,
+        !!Xe.input?.classList.contains("lg-cell-editor"),
+      ),
       (Xe.span = jt.span),
       (Xe.start = Xe.end = jt.span.end),
       (Xe.anchor = Nt),
@@ -57,26 +54,26 @@ function createFormulaEntryActions({
       formulaEntryState.setFormulaCaretPosition(jt.span.end),
       formulaEntryState.setActiveFormulaReference({
         sheetId: activeSheet.id,
-        range: wt,
-        bounds: Be?.bounds ?? parseRangeAddress(wt),
+        range: range,
+        bounds: Be?.bounds ?? parseRangeAddress(range),
       }),
-      restoreFormulaEditorFocus(),
+      cellEditActions.restoreFormulaEditorFocus(),
       true
     );
   }
-  function handleFormulaPointerDown(fe) {
+  function handleFormulaPointerDown(event) {
     if (
-      fe.button !== 0 ||
+      event.button !== 0 ||
       !formulaEntryState.activeCellEditRef.current?.value.startsWith("=")
     )
       return false;
-    const Oe = fe.target;
-    if (Oe.closest('input,button,a,[role="separator"]')) return false;
-    const Be = Oe.closest("[data-address]"),
-      Ue = Oe.closest("[data-column]"),
-      Xe = Oe.closest("[data-row-header]");
+    const target = event.target;
+    if (target.closest('input,button,a,[role="separator"]')) return false;
+    const Be = target.closest("[data-address]"),
+      Ue = target.closest("[data-column]"),
+      Xe = target.closest("[data-row-header]");
     let gt = false;
-    if (Be) gt = insertFormulaReference(Be.dataset.address, fe.shiftKey);
+    if (Be) gt = insertFormulaReference(Be.dataset.address, event.shiftKey);
     else if (Ue) {
       const wt = Number(Ue.dataset.column);
       gt = insertFormulaReference(`${columnIndexToLetters(wt)}1`, false, {
@@ -101,78 +98,92 @@ function createFormulaEntryActions({
       });
     }
     return gt
-      ? (fe.preventDefault(),
-        fe.stopPropagation(),
+      ? (event.preventDefault(),
+        event.stopPropagation(),
         (formulaEntryState.formulaPointerStateRef.current.dragging = !!Be),
         (dragFillState.dragAnchorRef.current = null),
         true)
       : false;
   }
-  function handleFormulaKeyDown(fe) {
+  function handleFormulaKeyDown(event) {
     if (
-      fe.nativeEvent.isComposing ||
-      fe.altKey ||
-      isFormulaEditingLocked() ||
+      event.nativeEvent.isComposing ||
+      event.altKey ||
+      cellEditActions.isFormulaEditingLocked() ||
       operationStatusState.isOperationBusy
     )
       return false;
-    const Oe = fe.currentTarget;
-    if (!Oe.value.startsWith("=")) return false;
-    syncFormulaEditorSelection(Oe);
+    const currentTarget = event.currentTarget;
+    if (!currentTarget.value.startsWith("=")) return false;
+    cellEditActions.syncFormulaEditorSelection(currentTarget);
     const Be = formulaEntryState.formulaPointerStateRef.current;
-    if (fe.key === "F2" && !fe.ctrlKey && !fe.metaKey)
+    if (event.key === "F2" && !event.ctrlKey && !event.metaKey)
       return (
-        fe.preventDefault(),
-        formulaEntryState.activeCellEditRef.current || beginCellEdit(Oe.value),
+        event.preventDefault(),
+        formulaEntryState.activeCellEditRef.current ||
+          cellEditActions.beginCellEdit(currentTarget.value),
         (Be.mode = !Be.mode),
         formulaEntryState.setIsFormulaPointMode(Be.mode),
         true
       );
-    if (fe.key === "F4" && !fe.ctrlKey && !fe.metaKey) {
-      const jt = $ae(Oe.value, Be.start, Be.end);
+    if (event.key === "F4" && !event.ctrlKey && !event.metaKey) {
+      const jt = $ae(currentTarget.value, Be.start, Be.end);
       return jt
-        ? (fe.preventDefault(),
-          beginCellEdit(jt.value, Oe.classList.contains("lg-cell-editor")),
+        ? (event.preventDefault(),
+          cellEditActions.beginCellEdit(
+            jt.value,
+            currentTarget.classList.contains("lg-cell-editor"),
+          ),
           (Be.span = jt.span),
           (Be.start = Be.end = jt.span.end),
           formulaEntryState.setFormulaCaretPosition(jt.span.end),
-          restoreFormulaEditorFocus(),
+          cellEditActions.restoreFormulaEditorFocus(),
           true)
         : false;
     }
-    if ((fe.ctrlKey || fe.metaKey) && ["PageUp", "PageDown"].includes(fe.key)) {
-      fe.preventDefault();
-      const jt = activeWorkbook.sheets.filter((Br) => !Br.hidden),
+    if (
+      (event.ctrlKey || event.metaKey) &&
+      ["PageUp", "PageDown"].includes(event.key)
+    ) {
+      event.preventDefault();
+      const jt = activeWorkbook.sheets.filter((sheet) => !sheet.hidden),
         rr = jt.findIndex((Br) => Br.id === activeSheet.id),
-        Mr = jt[rr + (fe.key === "PageUp" ? -1 : 1)];
-      return (Mr && switchActiveWorksheet(Mr.id), true);
+        Mr = jt[rr + (event.key === "PageUp" ? -1 : 1)];
+      return (Mr && navigationActions.switchActiveWorksheet(Mr.id), true);
     }
     if (
       !Be.mode ||
-      !fe.key.startsWith("Arrow") ||
+      !event.key.startsWith("Arrow") ||
       !formulaEntryState.activeCellEditRef.current ||
-      !(Be.span ?? findFormulaReferenceSpan(Oe.value, Be.start, Be.end))
+      !(
+        Be.span ??
+        findFormulaReferenceSpan(currentTarget.value, Be.start, Be.end)
+      )
     )
       return false;
-    fe.preventDefault();
+    event.preventDefault();
     const Ue = _t(
         Be.sheetId === activeSheet.id && Be.head
           ? Be.head
           : selectionState.activeCellAddress,
       ),
-      Xe = ["ArrowUp", "ArrowDown"].includes(fe.key),
-      gt = ["ArrowUp", "ArrowLeft"].includes(fe.key) ? -1 : 1,
+      Xe = ["ArrowUp", "ArrowDown"].includes(event.key),
+      gt = ["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1,
       Nt =
-        fe.ctrlKey || fe.metaKey
-          ? jumpToDataEdge(Ue.row, Ue.col, Xe, gt)
+        event.ctrlKey || event.metaKey
+          ? viewAndSelectionActions.jumpToDataEdge(Ue.row, Ue.col, Xe, gt)
           : {
-              row: Xe ? stepVisibleRowIndex(Ue.row, gt) : Ue.row,
-              col: Xe ? Ue.col : stepVisibleColumnIndex(Ue.col, gt),
+              row: Xe
+                ? viewAndSelectionActions.stepVisibleRowIndex(Ue.row, gt)
+                : Ue.row,
+              col: Xe
+                ? Ue.col
+                : viewAndSelectionActions.stepVisibleColumnIndex(Ue.col, gt),
             },
       wt = `${columnIndexToLetters(Nt.col)}${Nt.row + 1}`;
     return (
-      insertFormulaReference(wt, fe.shiftKey),
-      requestCellScroll(wt),
+      insertFormulaReference(wt, event.shiftKey),
+      viewAndSelectionActions.requestCellScroll(wt),
       true
     );
   }

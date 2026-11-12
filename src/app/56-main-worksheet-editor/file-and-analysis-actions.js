@@ -21,6 +21,9 @@ import { requestAssistantAnswer } from "../21-aging-and-materiality-screens.js";
 import { buildAnswerCitations } from "../51-pattern-checks-and-citations.js";
 
 function createFileAndAnalysisActions({
+  persistenceActions,
+  viewAndSelectionActions,
+  navigationActions,
   dialogState,
   auditState,
   operationStatusState,
@@ -38,12 +41,9 @@ function createFileAndAnalysisActions({
   filterResult,
   latestEditStateRef,
   assistantSelection,
-  commitWorkbookChange,
-  runGuardedAction,
-  switchActiveWorksheet,
 }) {
-  async function importWorkbookFromFile(fe) {
-    if (!fe) return;
+  async function importWorkbookFromFile(file) {
+    if (!file) return;
     operationStatusState.activeOperationControllerRef.current?.abort();
     const Oe = new AbortController(),
       Be = ++operationStatusState.latestOperationIdRef.current;
@@ -59,15 +59,15 @@ function createFileAndAnalysisActions({
       operationStatusState.setErrorNotice(""));
     try {
       if (isEditingLocked) throw new Error("This workbook is read-only.");
-      if (/\.(xls|xlsb|xltx|ods)$/i.test(fe.name)) {
-        (importExportState.setPendingImportFile(fe),
+      if (/\.(xls|xlsb|xltx|ods)$/i.test(file.name)) {
+        (importExportState.setPendingImportFile(file),
           dialogState.setActiveDialogMode("workbookFormats"));
         return;
       }
-      if (/\.(bas|vba|cls|ts|osts|xlsm|xlam|xltm)$/i.test(fe.name)) {
-        if (fe.size > workbookLimits.maxFileBytes)
+      if (/\.(bas|vba|cls|ts|osts|xlsm|xlam|xltm)$/i.test(file.name)) {
+        if (file.size > workbookLimits.maxFileBytes)
           throw new Error("Files must be 10 MB or smaller.");
-        const wt = await importAutomationFile(fe, Ue);
+        const wt = await importAutomationFile(file, Ue);
         if (!Xe()) return;
         if (
           latestEditStateRef.current.book !== activeWorkbook ||
@@ -80,10 +80,10 @@ function createFileAndAnalysisActions({
           dialogState.setActiveDialogMode("automation"));
         return;
       }
-      if (/\.(csv|tsv)$/i.test(fe.name)) {
-        if (fe.size > workbookLimits.maxFileBytes)
+      if (/\.(csv|tsv)$/i.test(file.name)) {
+        if (file.size > workbookLimits.maxFileBytes)
           throw new Error("Files must be 10 MB or smaller.");
-        const wt = await importDelimitedFile(fe, {}, Ue);
+        const initial = await importDelimitedFile(file, {}, Ue);
         if (!Xe()) return;
         if (
           latestEditStateRef.current.book !== activeWorkbook ||
@@ -95,13 +95,13 @@ function createFileAndAnalysisActions({
         importExportState.setDelimitedImportExportSource({
           snapshot: activeWorkbook,
           bytes: new Uint8Array(),
-          file: fe,
-          initial: wt,
-          fileName: fe.name,
+          file: file,
+          initial: initial,
+          fileName: file.name,
         });
         return;
       }
-      const Nt = await importWorkbookFile(fe, Ue);
+      const Nt = await importWorkbookFile(file, Ue);
       if (!Xe()) return;
       if (
         latestEditStateRef.current.book !== activeWorkbook ||
@@ -115,27 +115,29 @@ function createFileAndAnalysisActions({
           snapshot: activeWorkbook,
           report: Nt.report,
           imported: Nt.workbook,
-          fileName: fe.name,
+          fileName: file.name,
         });
         return;
       }
-      (commitWorkbookChange(Nt.workbook),
-        switchActiveWorksheet(Nt.workbook.sheets.find((wt) => !wt.hidden).id),
+      (persistenceActions.commitWorkbookChange(Nt.workbook),
+        navigationActions.switchActiveWorksheet(
+          Nt.workbook.sheets.find((sheet) => !sheet.hidden).id,
+        ),
         operationStatusState.setStatusNotice(
           Nt.warnings.length ? Nt.warnings.join(" ") : "Workbook imported.",
         ));
-    } catch (Nt) {
+    } catch (error) {
       if (!Xe()) return;
       if (
         !Oe.signal.aborted &&
-        (!(Nt instanceof FileProcessingError) ||
-          ["FILE_ACTIVE", "FILE_INVALID"].includes(Nt.code)) &&
-        /\.xlsx$/i.test(fe.name) &&
-        fe.size <= workbookLimits.maxFileBytes &&
+        (!(error instanceof FileProcessingError) ||
+          ["FILE_ACTIVE", "FILE_INVALID"].includes(error.code)) &&
+        /\.xlsx$/i.test(file.name) &&
+        file.size <= workbookLimits.maxFileBytes &&
         latestEditStateRef.current.book === activeWorkbook
       )
         try {
-          const wt = await importAutomationFile(fe, Ue);
+          const wt = await importAutomationFile(file, Ue);
           if (
             Xe() &&
             !latestEditStateRef.current.readOnly &&
@@ -148,7 +150,9 @@ function createFileAndAnalysisActions({
           }
         } catch {}
       Xe() &&
-        operationStatusState.setErrorNotice(toFileProcessingError(Nt).message);
+        operationStatusState.setErrorNotice(
+          toFileProcessingError(error).message,
+        );
     } finally {
       Xe() &&
         ((operationStatusState.activeOperationControllerRef.current = null),
@@ -194,16 +198,16 @@ function createFileAndAnalysisActions({
             }),
             `${Oe}.json`,
           )));
-    } catch (Oe) {
+    } catch (error) {
       operationStatusState.setErrorNotice(
-        Oe instanceof Error ? Oe.message : "Export failed.",
+        error instanceof Error ? error.message : "Export failed.",
       );
     } finally {
       operationStatusState.setIsOperationBusy(false);
     }
   }
   function runCurrentAuditAnalysis() {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (auditState.auditPopulationScope === "visible" && !filterResult)
         throw Error(
           "Review and apply a current population filter before visible-only analysis.",
@@ -267,7 +271,7 @@ function createFileAndAnalysisActions({
         ));
     });
   }
-  async function askAssistantQuestion(fe, Oe) {
+  async function askAssistantQuestion(fe, conversation) {
     if (!fe.trim()) return null;
     if (selectionAreas.length > 1)
       throw (
@@ -286,15 +290,20 @@ function createFileAndAnalysisActions({
     const Ue = new AbortController();
     assistantState.assistantAbortControllerRef.current = Ue;
     try {
-      const gt = buildAssistantSelectionContext(
+      const assistantSelectionContext = buildAssistantSelectionContext(
           activeWorkbook,
           assistantSelection,
         ),
-        Nt = await requestAssistantAnswer(adapter, fe, gt, {
-          conversation: Oe,
-          signal: Ue.signal,
-          reliability: activeReliabilityMonitor,
-        });
+        Nt = await requestAssistantAnswer(
+          adapter,
+          fe,
+          assistantSelectionContext,
+          {
+            conversation: conversation,
+            signal: Ue.signal,
+            reliability: activeReliabilityMonitor,
+          },
+        );
       if (
         Ue.signal.aborted ||
         Be !== assistantState.assistantRequestIdRef.current
@@ -307,25 +316,30 @@ function createFileAndAnalysisActions({
       );
       return (
         assistantState.setAnswerCitations(
-          buildAnswerCitations(activeWorkbook, assistantSelection, wt, gt),
+          buildAnswerCitations(
+            activeWorkbook,
+            assistantSelection,
+            wt,
+            assistantSelectionContext,
+          ),
         ),
         assistantState.setAssistantProposal(wt),
         wt
       );
-    } catch (gt) {
+    } catch (error) {
       if (
         (Be === assistantState.assistantRequestIdRef.current &&
           !Ue.signal.aborted &&
           operationStatusState.setErrorNotice(
-            gt instanceof Error
-              ? gt.message
+            error instanceof Error
+              ? error.message
               : "The assistant could not complete the request.",
           ),
         Ue.signal.aborted ||
           Be !== assistantState.assistantRequestIdRef.current)
       )
         return null;
-      throw gt;
+      throw error;
     } finally {
       Be === assistantState.assistantRequestIdRef.current &&
         assistantState.setIsAssistantBusy(false);

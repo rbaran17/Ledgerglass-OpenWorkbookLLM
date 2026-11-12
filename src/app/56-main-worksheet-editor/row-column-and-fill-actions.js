@@ -14,13 +14,15 @@ import {
 import { wy } from "../55-external-source-refresh.js";
 
 function createRowColumnAndFillActions({
+  viewAndSelectionActions,
+  persistenceActions,
+  cellEditActions,
   selectionState,
   viewDisplayState,
   dragFillState,
   actor,
   activeSheet,
   isEditingLocked,
-  requireSingleSelectionRange,
   fillDragStateRef,
   columnVisibilityIndex,
   defaultRowHeight,
@@ -34,15 +36,9 @@ function createRowColumnAndFillActions({
   frozenColumnIndexes,
   shownRows,
   shownColumns,
-  getSelectedCellAddresses,
-  commitWorkbookChange,
-  runGuardedAction,
-  focusGridSurface,
-  commitCellEdit,
-  requestCellScroll,
 }) {
   function resolveSelectedAxisIndexes(fe, Oe) {
-    requireSingleSelectionRange();
+    viewAndSelectionActions.requireSingleSelectionRange();
     const { firstRow, lastRow, firstCol, lastCol } = selectionRangeBounds,
       Nt =
         fe === "column"
@@ -65,17 +61,17 @@ function createRowColumnAndFillActions({
     if (jt - wt < 500) for (let Br = wt; Br <= jt; Br++) rr.add(Br);
     return [...rr].sort((Br, xr) => Br - xr);
   }
-  function applyAxisSizes(fe, Oe, Be) {
-    const Ue = latestEditStateRef.current.book,
-      Xe = Ue.sheets.find((rr) => rr.id === activeSheet.id),
+  function applyAxisSizes(fe, Oe, action) {
+    const book = latestEditStateRef.current.book,
+      sheet = book.sheets.find((sheet) => sheet.id === activeSheet.id),
       gt = fe === "column" ? "columnWidths" : "rowHeights";
     if (
       !Object.entries(Oe).some(
         ([rr, Mr]) =>
-          (Xe[gt]?.[rr] ??
+          (sheet[gt]?.[rr] ??
             (fe === "column"
-              ? defaultColumnWidthOf(Xe)
-              : defaultRowHeightOf(Xe))) !== Mr,
+              ? defaultColumnWidthOf(sheet)
+              : defaultRowHeightOf(sheet))) !== Mr,
       )
     )
       return;
@@ -84,52 +80,59 @@ function createRowColumnAndFillActions({
         (shownColumns.includes(wt.col) ||
           frozenColumnIndexes.includes(wt.col)) &&
         (shownRows.includes(wt.row) || frozenRowIndexes.includes(wt.row));
-    (commitWorkbookChange({
-      ...Ue,
-      revision: Ue.revision + 1,
-      sheets: Ue.sheets.map((rr) =>
-        rr.id === activeSheet.id ? { ...rr, [gt]: { ...rr[gt], ...Oe } } : rr,
+    (persistenceActions.commitWorkbookChange({
+      ...book,
+      revision: book.revision + 1,
+      sheets: book.sheets.map((sheet) =>
+        sheet.id === activeSheet.id
+          ? { ...sheet, [gt]: { ...sheet[gt], ...Oe } }
+          : sheet,
       ),
       events: [
-        ...Ue.events,
+        ...book.events,
         {
           id: createUuid(),
           timestamp: new Date().toISOString(),
           actor,
-          action: Be,
+          action: action,
           changes: [],
         },
       ],
     }),
-      jt && requestCellScroll(selectionState.activeCellAddress));
+      jt &&
+        viewAndSelectionActions.requestCellScroll(
+          selectionState.activeCellAddress,
+        ));
   }
   function autoFitSelectedAxis(fe, Oe) {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (
         isEditingLocked ||
         latestEditStateRef.current.readOnly ||
-        !commitCellEdit()
+        !cellEditActions.commitCellEdit()
       )
         return;
-      const Be = resolveSelectedAxisIndexes(fe, Oe),
-        Ue = latestEditStateRef.current.book.sheets.find(
-          (jt) => jt.id === activeSheet.id,
+      const selectedAxisIndexes = resolveSelectedAxisIndexes(fe, Oe),
+        sheet = latestEditStateRef.current.book.sheets.find(
+          (sheet) => sheet.id === activeSheet.id,
         ),
-        Xe = calculateWorkbookWithSettings(latestEditStateRef.current.book),
+        workbookWithSettings = calculateWorkbookWithSettings(
+          latestEditStateRef.current.book,
+        ),
         gt =
           fe === "column"
             ? autoFitColumnWidths(
-                Ue,
-                Be,
-                Xe,
+                sheet,
+                selectedAxisIndexes,
+                workbookWithSettings,
                 textMeasurer,
                 viewDisplayState.isShowingFormulas,
                 latestEditStateRef.current.book.datePolicy?.dateSystem,
               )
             : autoFitRowHeights(
-                Ue,
-                Be,
-                Xe,
+                sheet,
+                selectedAxisIndexes,
+                workbookWithSettings,
                 textMeasurer,
                 viewDisplayState.isShowingFormulas,
                 latestEditStateRef.current.book.datePolicy?.dateSystem,
@@ -140,34 +143,38 @@ function createRowColumnAndFillActions({
         `AutoFit ${fe === "column" ? "column widths" : "row heights"}`,
       ),
         viewDisplayState.setAxisResizeState(null),
-        focusGridSurface());
+        viewAndSelectionActions.focusGridSurface());
     });
   }
-  function beginAxisResize(fe, Oe, Be) {
+  function beginAxisResize(axis, Oe, Be) {
     if (
       (Be.preventDefault(),
       Be.stopPropagation(),
-      Be.button !== 0 || isEditingLocked || !commitCellEdit())
+      Be.button !== 0 || isEditingLocked || !cellEditActions.commitCellEdit())
     )
       return;
     const Ue =
-      fe === "column"
+      axis === "column"
         ? columnAxisLayout.size(columnVisibilityIndex.viewIndex(Oe) ?? 0)
         : (effectiveRowHeights[Oe] ?? defaultRowHeight);
     viewDisplayState.setAxisResizeState({
-      axis: fe,
+      axis: axis,
       index: Oe,
-      start: fe === "column" ? Be.clientX : Be.clientY,
+      start: axis === "column" ? Be.clientX : Be.clientY,
       initial: Ue,
       size: Ue,
     });
   }
-  function beginFillDrag(fe) {
-    (fe.preventDefault(),
-      fe.stopPropagation(),
-      !(fe.button !== 0 || isEditingLocked || !commitCellEdit()) &&
-        runGuardedAction(() => {
-          getSelectedCellAddresses();
+  function beginFillDrag(event) {
+    (event.preventDefault(),
+      event.stopPropagation(),
+      !(
+        event.button !== 0 ||
+        isEditingLocked ||
+        !cellEditActions.commitCellEdit()
+      ) &&
+        viewAndSelectionActions.runGuardedAction(() => {
+          viewAndSelectionActions.getSelectedCellAddresses();
           const Oe = {
             book: latestEditStateRef.current.book,
             sheetId: activeSheet.id,
@@ -182,19 +189,37 @@ function createRowColumnAndFillActions({
   function extendFillDragTo(fe) {
     const Oe = fillDragStateRef.current;
     if (!Oe) return;
-    const Be = parseRangeAddress(Oe.sourceRange),
+    const rangeAddress = parseRangeAddress(Oe.sourceRange),
       Ue = _t(fe),
-      Xe = Math.max(Be.firstRow - Ue.row, Ue.row - Be.lastRow, 0),
-      gt = Math.max(Be.firstCol - Ue.col, Ue.col - Be.lastCol, 0),
-      Nt = Xe >= gt ? Math.min(Be.firstRow, Ue.row) : Be.firstRow,
-      wt = Xe >= gt ? Math.max(Be.lastRow, Ue.row) : Be.lastRow,
-      jt = gt > Xe ? Math.min(Be.firstCol, Ue.col) : Be.firstCol,
-      rr = gt > Xe ? Math.max(Be.lastCol, Ue.col) : Be.lastCol,
-      Mr = wy(
+      Xe = Math.max(
+        rangeAddress.firstRow - Ue.row,
+        Ue.row - rangeAddress.lastRow,
+        0,
+      ),
+      gt = Math.max(
+        rangeAddress.firstCol - Ue.col,
+        Ue.col - rangeAddress.lastCol,
+        0,
+      ),
+      Nt =
+        Xe >= gt
+          ? Math.min(rangeAddress.firstRow, Ue.row)
+          : rangeAddress.firstRow,
+      wt =
+        Xe >= gt
+          ? Math.max(rangeAddress.lastRow, Ue.row)
+          : rangeAddress.lastRow,
+      jt =
+        gt > Xe
+          ? Math.min(rangeAddress.firstCol, Ue.col)
+          : rangeAddress.firstCol,
+      rr =
+        gt > Xe ? Math.max(rangeAddress.lastCol, Ue.col) : rangeAddress.lastCol,
+      targetRange = wy(
         `${columnIndexToLetters(jt)}${Nt + 1}`,
         `${columnIndexToLetters(rr)}${wt + 1}`,
       ),
-      Br = { ...Oe, targetRange: Mr };
+      Br = { ...Oe, targetRange: targetRange };
     ((fillDragStateRef.current = Br), dragFillState.setFillDragState(Br));
   }
   return {

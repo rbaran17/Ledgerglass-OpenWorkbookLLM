@@ -56,7 +56,7 @@ import {
   rangeContainsCell,
 } from "./52-workbook-comparison.js";
 
-function replaceSearchMatches(e, r, t, n = {}) {
+function replaceSearchMatches(workbook, r, t, n = {}) {
   (n.readOnly && throwWithMessage("This workbook is read-only."),
     n.readOnly !== undefined &&
       typeof n.readOnly != "boolean" &&
@@ -70,15 +70,15 @@ function replaceSearchMatches(e, r, t, n = {}) {
       throwWithMessage(
         "Replace searches Raw contents or Formulas only. Calculated and formatted results are read-only search modes.",
       ));
-  const o = searchWorkbookCells(e, r),
-    a = o.options,
-    s = compileSearchPattern(a),
-    d = createSearchBudget(),
+  const o = searchWorkbookCells(workbook, r),
+    options = o.options,
+    s = compileSearchPattern(options),
+    searchBudget = createSearchBudget(),
     u = n.match
       ? o.results.filter(
-          (g) =>
-            g.sheetId === n.match.sheetId &&
-            g.address === n.match.address.toUpperCase(),
+          (result) =>
+            result.sheetId === n.match.sheetId &&
+            result.address === n.match.address.toUpperCase(),
         )
       : o.results;
   n.match &&
@@ -87,14 +87,14 @@ function replaceSearchMatches(e, r, t, n = {}) {
       "The chosen cell does not match this search. Find it again before replacing.",
     );
   const l = [];
-  let c = 0,
-    h = 0;
+  let excludedProtected = 0,
+    replacedOccurrences = 0;
   for (const g of u) {
     if (g.protected) {
-      c++;
+      excludedProtected++;
       continue;
     }
-    const b = matchTextWithBudget(g.text, a, s, d);
+    const b = matchTextWithBudget(g.text, options, s, searchBudget);
     let y = "",
       w = 0;
     g.text.length -
@@ -106,11 +106,16 @@ function replaceSearchMatches(e, r, t, n = {}) {
       );
     for (const [F, I] of b) ((y += g.text.slice(w, F) + t), (w = I));
     y += g.text.slice(w);
-    const A = findSheetOrThrow(e, g.sheetId).cells[g.address],
-      k = toComparableCellValue(A, y);
-    JSON.stringify(k) !== JSON.stringify(normalizeCellRecordInput(A)) &&
-      (l.push({ sheetId: g.sheetId, address: g.address, cell: k }),
-      (h += b.length),
+    const cell = findSheetOrThrow(workbook, g.sheetId).cells[g.address],
+      comparableCellValue = toComparableCellValue(cell, y);
+    JSON.stringify(comparableCellValue) !==
+      JSON.stringify(normalizeCellRecordInput(cell)) &&
+      (l.push({
+        sheetId: g.sheetId,
+        address: g.address,
+        cell: comparableCellValue,
+      }),
+      (replacedOccurrences += b.length),
       l.length > workbookLimits.maxPatches &&
         throwWithMessage(
           "Replace may change at most 500 cells, including dependent formula changes. Narrow the scope or replace one result.",
@@ -119,43 +124,43 @@ function replaceSearchMatches(e, r, t, n = {}) {
   const f = {
     targetSheetId:
       l[0]?.sheetId ??
-      e.sheets.find((g) => !g.protection?.enabled)?.id ??
-      a.sheetId,
-    targetRange: l[0]?.address ?? a.range,
+      workbook.sheets.find((sheet) => !sheet.protection?.enabled)?.id ??
+      options.sheetId,
+    targetRange: l[0]?.address ?? options.range,
     targetCount: l.length,
     matchedCells: u.length,
     replacedCells: l.length,
-    replacedOccurrences: h,
-    excludedProtected: c,
-    summary: `Replace in ${a.scope}: ${l.length} cells; ${c} protected matches excluded.`,
+    replacedOccurrences: replacedOccurrences,
+    excludedProtected: excludedProtected,
+    summary: `Replace in ${options.scope}: ${l.length} cells; ${excludedProtected} protected matches excluded.`,
   };
   return l.length
-    ? buildCellChangePreview(e, l, f, n.readOnly)
+    ? buildCellChangePreview(workbook, l, f, n.readOnly)
     : eI({
         ...f,
-        workbookId: e.id,
-        revision: e.revision,
+        workbookId: workbook.id,
+        revision: workbook.revision,
         patches: [],
         previewPatches: [],
         count: 0,
         dependentCount: 0,
-        snapshotGuard: JSON.stringify(e),
+        snapshotGuard: JSON.stringify(workbook),
       });
 }
-function assertReplacePreviewCurrent(e, r, t = {}) {
-  return r.count
-    ? applyCellChangePreview(e, r, t)
+function assertReplacePreviewCurrent(workbook, plan, t = {}) {
+  return plan.count
+    ? applyCellChangePreview(workbook, plan, t)
     : (t.readOnly !== undefined &&
         typeof t.readOnly != "boolean" &&
         throwWithMessage("Read-only must be boolean."),
       t.readOnly && throwWithMessage("This workbook is read-only."),
-      (r.workbookId !== e.id ||
-        r.revision !== e.revision ||
-        r.snapshotGuard !== JSON.stringify(e)) &&
+      (plan.workbookId !== workbook.id ||
+        plan.revision !== workbook.revision ||
+        plan.snapshotGuard !== JSON.stringify(workbook)) &&
         throwWithMessage(
           "The workbook changed after this preview. Create a new preview before applying it.",
         ),
-      e);
+      workbook);
 }
 function buildSelectionRanges(e) {
   const r = [];
@@ -180,57 +185,64 @@ function buildSelectionRanges(e) {
       : (t.push(o), n.set(a, o));
   }
   return t.map((o) => {
-    const a = formatCellAddress(o.firstRow, o.firstCol),
+    const cellAddress = formatCellAddress(o.firstRow, o.firstCol),
       s = formatCellAddress(o.lastRow, o.lastCol);
-    return a === s ? a : `${a}:${s}`;
+    return cellAddress === s ? cellAddress : `${cellAddress}:${s}`;
   });
 }
-function selectSpecialCells(e, r, t) {
-  const n = normalizeSearchRequest(e, r),
-    o = findSheetOrThrow(e, n.sheetId),
-    a = calculateWorkbookWithSettings(e),
-    s = describeHiddenState(o);
-  (n.scope === "workbook" &&
+function selectSpecialCells(workbook, r, t) {
+  const searchRequest = normalizeSearchRequest(workbook, r),
+    sheetOrThrow = findSheetOrThrow(workbook, searchRequest.sheetId),
+    workbookWithSettings = calculateWorkbookWithSettings(workbook),
+    s = describeHiddenState(sheetOrThrow);
+  (searchRequest.scope === "workbook" &&
     throwWithMessage(
       "Go To Special selects cells on one sheet. Choose Selection or Sheet.",
     ),
     ["formulas", "errors", "constants", "blanks", "notes"].includes(t) ||
       throwWithMessage("Choose a supported Go To Special category."));
-  const d = findOccupiedRangeBounds(o),
+  const occupiedRangeBounds = findOccupiedRangeBounds(sheetOrThrow),
     u =
-      n.scope === "selection"
-        ? n.ranges
-        : d
+      searchRequest.scope === "selection"
+        ? searchRequest.ranges
+        : occupiedRangeBounds
           ? [
-              formatCellAddress(d.firstRow, d.firstCol) +
+              formatCellAddress(
+                occupiedRangeBounds.firstRow,
+                occupiedRangeBounds.firstCol,
+              ) +
                 ":" +
-                formatCellAddress(d.lastRow, d.lastCol),
+                formatCellAddress(
+                  occupiedRangeBounds.lastRow,
+                  occupiedRangeBounds.lastCol,
+                ),
             ]
           : [],
     l = u.map(parseRangeAddress),
     c = [],
     h = [],
     f = () => {
-      h.sort((v, g) => compareCellPositions(n.order, v, g));
-      const m = buildSelectionRanges(h);
+      h.sort((v, g) => compareCellPositions(searchRequest.order, v, g));
+      const selectionRanges = buildSelectionRanges(h);
       return (
-        m.length > comparisonLimits.maxSpecialAreas &&
+        selectionRanges.length > comparisonLimits.maxSpecialAreas &&
           throwWithMessage(
             "This selection contains more than 256 separate areas. Narrow the selection.",
           ),
         eI({
-          sheetId: o.id,
+          sheetId: sheetOrThrow.id,
           kind: t,
           count: h.length,
           addresses: h.map((v) => formatCellAddress(v.row, v.col)),
-          ranges: m,
-          workbookId: e.id,
-          revision: e.revision,
-          snapshotGuard: JSON.stringify(e),
+          ranges: selectionRanges,
+          workbookId: workbook.id,
+          revision: workbook.revision,
+          snapshotGuard: JSON.stringify(workbook),
         })
       );
     };
-  if (!l.length || (o.hidden && !n.includeHidden)) return f();
+  if (!l.length || (sheetOrThrow.hidden && !searchRequest.includeHidden))
+    return f();
   if (t === "blanks")
     try {
       c.push(...enumerateSelectionCells(u, comparisonLimits.maxBlankScan));
@@ -239,9 +251,9 @@ function selectSpecialCells(e, r, t) {
         "Blank selection scans at most 100,000 cells. Select a smaller rectangle.",
       );
     }
-  else if ((c.push(...Object.keys(o.cells)), t === "errors"))
-    for (const m of a.getSpillEntries(o.id))
-      Object.hasOwn(o.cells, m.address) || c.push(m.address);
+  else if ((c.push(...Object.keys(sheetOrThrow.cells)), t === "errors"))
+    for (const m of workbookWithSettings.getSpillEntries(sheetOrThrow.id))
+      Object.hasOwn(sheetOrThrow.cells, m.address) || c.push(m.address);
   c.length > workbookLimits.maxCells &&
     throwWithMessage("Go To Special scans at most 100,000 cells.");
   let p = 0;
@@ -249,27 +261,28 @@ function selectSpecialCells(e, r, t) {
     const v = _t(m);
     if (
       !l.some((w) => rangeContainsCell(v.row, v.col, w)) ||
-      (!n.includeHidden && s(v.row, v.col))
+      (!searchRequest.includeHidden && s(v.row, v.col))
     )
       continue;
-    const g = o.cells[m],
-      b = isFormulaCellValue(g);
+    const cell = sheetOrThrow.cells[m],
+      b = isFormulaCellValue(cell);
     let y = false;
     if (t === "formulas") y = b;
-    else if (t === "notes") y = !!g?.note;
-    else if (t === "constants") y = !!g && g.raw !== null && g.raw !== "" && !b;
+    else if (t === "notes") y = !!cell?.note;
+    else if (t === "constants")
+      y = !!cell && cell.raw !== null && cell.raw !== "" && !b;
     else {
-      if (!b && g && g.raw !== null) continue;
+      if (!b && cell && cell.raw !== null) continue;
       ++p > comparisonLimits.maxCalculatedCells &&
         t === "errors" &&
         throwWithMessage(
           "Error selection calculates at most 10,000 cells. Narrow the selection.",
         );
-      const w = a(o.id, m);
+      const w = workbookWithSettings(sheetOrThrow.id, m);
       t === "blanks"
-        ? (y = (g?.raw === null || !g) && w === null)
+        ? (y = (cell?.raw === null || !cell) && w === null)
         : (y =
-            (b || !!a.getSpillAnchor(o.id, m)) &&
+            (b || !!workbookWithSettings.getSpillAnchor(sheetOrThrow.id, m)) &&
             typeof w == "string" &&
             /^#(?:BLOCKED!|CALC!|CYCLE!|DIV\/0!|ERROR!|LIMIT!|N\/A|NAME\?|NULL!|NUM!|REF!|SPILL!|VALUE!)$/.test(
               w,
@@ -307,14 +320,14 @@ function FindReplaceDialog(e) {
       range: e.range,
       ranges: e.ranges ? [...e.ranges] : [e.range],
       sheetName:
-        e.workbook.sheets.find((Re) => Re.id === e.sheetId)?.name ??
+        e.workbook.sheets.find((sheet) => sheet.id === e.sheetId)?.name ??
         "Worksheet",
     }),
     [u, l] = ne.useState(e.initialTab ?? "find"),
-    [c, h] = ne.useState("sheet"),
-    [f, p] = ne.useState("raw"),
-    [m, v] = ne.useState("rows"),
-    [g, b] = ne.useState(""),
+    [scope, h] = ne.useState("sheet"),
+    [lookIn, p] = ne.useState("raw"),
+    [order, v] = ne.useState("rows"),
+    [query, b] = ne.useState(""),
     [y, w] = ne.useState(""),
     [E, A] = ne.useState(false),
     [k, F] = ne.useState(false),
@@ -322,8 +335,8 @@ function FindReplaceDialog(e) {
     [j, z] = ne.useState(false),
     [V, D] = ne.useState("formulas"),
     [B, _] = ne.useState(null),
-    [C, T] = ne.useState(null),
-    [N, R] = ne.useState(null),
+    [match, T] = ne.useState(null),
+    [plan, R] = ne.useState(null),
     [L, $] = ne.useState(null),
     [U, G] = ne.useState(0),
     [H, Q] = ne.useState(0),
@@ -334,10 +347,10 @@ function FindReplaceDialog(e) {
       sheetId: d.current.sheetId,
       range: d.current.range,
       ranges: [...d.current.ranges],
-      scope: c,
-      query: g,
-      lookIn: f,
-      order: m,
+      scope: scope,
+      query: query,
+      lookIn: lookIn,
+      order: order,
       matchCase: E,
       wholeCell: k,
       wildcards: I,
@@ -348,12 +361,14 @@ function FindReplaceDialog(e) {
   }
   function de(Re) {
     (l(Re),
-      Re === "replace" && !["raw", "formulas"].includes(f ?? "raw") && p("raw"),
-      Re === "special" && c === "workbook" && h("sheet"),
+      Re === "replace" &&
+        !["raw", "formulas"].includes(lookIn ?? "raw") &&
+        p("raw"),
+      Re === "special" && scope === "workbook" && h("sheet"),
       oe());
   }
   ne.useEffect(() => {
-    const Re = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       (
         a.current ??
@@ -361,22 +376,22 @@ function FindReplaceDialog(e) {
         o.current?.querySelector("button")
       )?.focus(),
       () => {
-        Re?.isConnected && Re.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
   const he = (Re) => {
-    const Me = s.current.workbook;
+    const workbook = s.current.workbook;
     if (
-      Re.workbookId !== Me.id ||
-      Re.revision !== Me.revision ||
-      Re.snapshotGuard !== JSON.stringify(Me)
+      Re.workbookId !== workbook.id ||
+      Re.revision !== workbook.revision ||
+      Re.snapshotGuard !== JSON.stringify(workbook)
     )
       throw new Error(
         "The workbook changed. Find or preview again before using these results.",
       );
   };
-  function Se() {
+  function onClick() {
     try {
       (J(""), R(null), $(null));
       const Re = searchWorkbookCells(s.current.workbook, ae());
@@ -391,8 +406,8 @@ function FindReplaceDialog(e) {
         ),
         Re
       );
-    } catch (Re) {
-      return (J(describeOperationError(Re)), _(null), null);
+    } catch (error) {
+      return (J(describeOperationError(error)), _(null), null);
     }
   }
   function le(Re, Me = B) {
@@ -405,7 +420,8 @@ function FindReplaceDialog(e) {
         G(
           Math.floor(
             Me.results.findIndex(
-              (ke) => ke.sheetId === Re.sheetId && ke.address === Re.address,
+              (result) =>
+                result.sheetId === Re.sheetId && result.address === Re.address,
             ) / Bv,
           ),
         ),
@@ -420,47 +436,52 @@ function FindReplaceDialog(e) {
         W(
           `${Re.sheetName}!${Re.address}${Re.protected ? " · protected" : ""}`,
         ));
-    } catch (ke) {
-      J(describeOperationError(ke));
+    } catch (error) {
+      J(describeOperationError(error));
     }
   }
   function ce(Re) {
-    const Me = B ?? Se();
+    const Me = B ?? onClick();
     if (Me)
       try {
         he(Me);
-        const ke = parseRangeAddress(d.current.range),
-          je = C ?? {
+        const rangeAddress = parseRangeAddress(d.current.range),
+          je = match ?? {
             sheetId: d.current.sheetId,
             address:
               e.active ??
-              `${columnIndexToLetters(ke.firstCol)}${ke.firstRow + 1}`,
+              `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
           },
-          $e = findAdjacentSearchResult(Me, je, Re);
-        $e ? le($e, Me) : W("No matches found.");
-      } catch (ke) {
-        J(describeOperationError(ke));
+          adjacentSearchResult = findAdjacentSearchResult(Me, je, Re);
+        adjacentSearchResult
+          ? le(adjacentSearchResult, Me)
+          : W("No matches found.");
+      } catch (error) {
+        J(describeOperationError(error));
       }
   }
   function ge(Re) {
     try {
-      if ((J(""), Re && !C))
+      if ((J(""), Re && !match))
         throw new Error("Select a matching result before replacing one cell.");
       Re && B && he(B);
       const Me = replaceSearchMatches(s.current.workbook, ae(), y, {
         readOnly: s.current.readOnly,
-        ...(Re ? { match: C } : {}),
+        ...(Re ? { match: match } : {}),
       });
       (R(Me),
         te(
           Object.fromEntries(
-            Me.previewPatches.map((ke) => {
-              const je = findSheetOrThrow(s.current.workbook, ke.sheetId);
+            Me.previewPatches.map((previewPatch) => {
+              const sheetOrThrow = findSheetOrThrow(
+                s.current.workbook,
+                previewPatch.sheetId,
+              );
               return [
-                `${ke.sheetId}:${ke.address}`,
+                `${previewPatch.sheetId}:${previewPatch.address}`,
                 {
-                  sheetName: je.name,
-                  raw: je.cells[ke.address]?.raw ?? null,
+                  sheetName: sheetOrThrow.name,
+                  raw: sheetOrThrow.cells[previewPatch.address]?.raw ?? null,
                 },
               ];
             }),
@@ -473,39 +494,39 @@ function FindReplaceDialog(e) {
             ? `${Me.matchedCells} matched; ${Me.replacedCells} cells to replace; ${Me.excludedProtected} protected matches excluded.`
             : "No matches found.",
         ));
-    } catch (Me) {
-      (R(null), J(describeOperationError(Me)));
+    } catch (error) {
+      (R(null), J(describeOperationError(error)));
     }
   }
   function se() {
-    if (N)
+    if (plan)
       try {
         J("");
-        const Re = s.current.workbook,
-          Me = assertReplacePreviewCurrent(Re, N, {
+        const workbook = s.current.workbook,
+          Me = assertReplacePreviewCurrent(workbook, plan, {
             readOnly: s.current.readOnly,
           });
-        (Me !== Re &&
-          s.current.onWorkbookChange(Me, `Replace ${N.replacedCells} cells`),
+        (Me !== workbook &&
+          s.current.onWorkbookChange(Me, `Replace ${plan.replacedCells} cells`),
           s.current.onClose());
-      } catch (Re) {
-        J(describeOperationError(Re));
+      } catch (error) {
+        J(describeOperationError(error));
       }
   }
   function we() {
     try {
       J("");
-      const Re = selectSpecialCells(s.current.workbook, ae(), V);
-      ($(Re),
+      const specialCells = selectSpecialCells(s.current.workbook, ae(), V);
+      ($(specialCells),
         R(null),
         G(0),
         W(
-          Re.count
-            ? `${Re.count} cells in ${Re.ranges.length} areas.`
+          specialCells.count
+            ? `${specialCells.count} cells in ${specialCells.ranges.length} areas.`
             : "No matching cells found.",
         ));
-    } catch (Re) {
-      ($(null), J(describeOperationError(Re)));
+    } catch (error) {
+      ($(null), J(describeOperationError(error)));
     }
   }
   function Ee() {
@@ -519,28 +540,28 @@ function FindReplaceDialog(e) {
           throw new Error("Unhide this sheet before selecting its cells.");
         (s.current.onSelectRanges(L.sheetId, [...L.ranges]),
           s.current.onClose());
-      } catch (Re) {
-        J(describeOperationError(Re));
+      } catch (error) {
+        J(describeOperationError(error));
       }
   }
   const Ae = Math.max(1, Math.ceil((B?.total ?? 0) / Bv)),
     ye = Math.min(U, Ae - 1),
-    Te = Math.max(1, Math.ceil((N?.previewPatches.length ?? 0) / Bv)),
+    Te = Math.max(1, Math.ceil((plan?.previewPatches.length ?? 0) / Bv)),
     Pe = Math.min(H, Te - 1),
     qe = !!(
       (B &&
         (B.workbookId !== e.workbook.id ||
           B.revision !== e.workbook.revision)) ||
-      (N &&
-        (N.workbookId !== e.workbook.id ||
-          N.revision !== e.workbook.revision)) ||
+      (plan &&
+        (plan.workbookId !== e.workbook.id ||
+          plan.revision !== e.workbook.revision)) ||
       (L &&
         (L.workbookId !== e.workbook.id || L.revision !== e.workbook.revision))
     );
   return i.jsx("div", {
     className: "st-backdrop",
-    onMouseDown: (Re) => {
-      Re.target === Re.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
     children: i.jsxs("section", {
       className: "st-dialog",
@@ -548,10 +569,12 @@ function FindReplaceDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": n,
-      onKeyDown: (Re) => {
-        if (Re.key === "Escape")
-          (Re.preventDefault(), Re.stopPropagation(), s.current.onClose());
-        else if (Re.key === "Tab") {
+      onKeyDown: (event) => {
+        if (event.key === "Escape")
+          (event.preventDefault(),
+            event.stopPropagation(),
+            s.current.onClose());
+        else if (event.key === "Tab") {
           const je = Array.from(
               o.current?.querySelectorAll(
                 'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
@@ -559,14 +582,14 @@ function FindReplaceDialog(e) {
             ).filter((ze) => !ze.hidden),
             $e = je[0],
             Je = je.at(-1);
-          ((Re.shiftKey && document.activeElement === $e) ||
-            (!Re.shiftKey && document.activeElement === Je)) &&
-            (Re.preventDefault(), (Re.shiftKey ? Je : $e)?.focus());
+          ((event.shiftKey && document.activeElement === $e) ||
+            (!event.shiftKey && document.activeElement === Je)) &&
+            (event.preventDefault(), (event.shiftKey ? Je : $e)?.focus());
         } else
-          Re.key === "Enter" &&
-            Re.target instanceof HTMLInputElement &&
-            Re.target.type !== "checkbox" &&
-            (Re.preventDefault(), ce(Re.shiftKey ? "previous" : "next"));
+          event.key === "Enter" &&
+            event.target instanceof HTMLInputElement &&
+            event.target.type !== "checkbox" &&
+            (event.preventDefault(), ce(event.shiftKey ? "previous" : "next"));
       },
       children: [
         i.jsxs("header", {
@@ -608,20 +631,22 @@ function FindReplaceDialog(e) {
                 "aria-selected": u === Re,
                 tabIndex: u === Re ? 0 : -1,
                 onClick: () => de(Re),
-                onKeyDown: (je) => {
+                onKeyDown: (event) => {
                   if (
-                    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(je.key)
+                    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                      event.key,
+                    )
                   ) {
-                    je.preventDefault();
+                    event.preventDefault();
                     const ze = ["find", "replace", "special"],
                       at =
-                        je.key === "Home"
+                        event.key === "Home"
                           ? 0
-                          : je.key === "End"
+                          : event.key === "End"
                             ? 2
-                            : (ke + (je.key === "ArrowRight" ? 1 : 2)) % 3;
+                            : (ke + (event.key === "ArrowRight" ? 1 : 2)) % 3;
                     (de(ze[at]),
-                      je.currentTarget.parentElement?.children[at]?.focus());
+                      event.currentTarget.parentElement?.children[at]?.focus());
                   }
                 },
                 children: Me,
@@ -659,10 +684,10 @@ function FindReplaceDialog(e) {
                             i.jsx(LocalizedText, { children: "Find what" }),
                             i.jsx("input", {
                               ref: a,
-                              value: g,
+                              value: query,
                               maxLength: 256,
-                              onChange: (Re) => {
-                                (b(Re.target.value), oe());
+                              onChange: (event) => {
+                                (b(event.target.value), oe());
                               },
                             }),
                           ],
@@ -677,8 +702,8 @@ function FindReplaceDialog(e) {
                               i.jsx("input", {
                                 value: y,
                                 maxLength: 32767,
-                                onChange: (Re) => {
-                                  (w(Re.target.value), R(null), J(""));
+                                onChange: (event) => {
+                                  (w(event.target.value), R(null), J(""));
                                 },
                               }),
                             ],
@@ -693,8 +718,8 @@ function FindReplaceDialog(e) {
                         }),
                         i.jsxs("select", {
                           value: V,
-                          onChange: (Re) => {
-                            (D(Re.target.value), oe());
+                          onChange: (event) => {
+                            (D(event.target.value), oe());
                           },
                           children: [
                             i.jsx("option", {
@@ -725,9 +750,9 @@ function FindReplaceDialog(e) {
                   children: [
                     i.jsx(LocalizedText, { children: "Within" }),
                     i.jsxs("select", {
-                      value: c,
-                      onChange: (Re) => {
-                        (h(Re.target.value), oe());
+                      value: scope,
+                      onChange: (event) => {
+                        (h(event.target.value), oe());
                       },
                       children: [
                         i.jsx("option", {
@@ -748,9 +773,9 @@ function FindReplaceDialog(e) {
                   children: [
                     i.jsx(LocalizedText, { children: "Search order" }),
                     i.jsxs("select", {
-                      value: m,
-                      onChange: (Re) => {
-                        (v(Re.target.value), oe());
+                      value: order,
+                      onChange: (event) => {
+                        (v(event.target.value), oe());
                       },
                       children: [
                         i.jsx("option", { value: "rows", children: "By rows" }),
@@ -768,9 +793,9 @@ function FindReplaceDialog(e) {
                     children: [
                       i.jsx(LocalizedText, { children: "Look in" }),
                       i.jsxs("select", {
-                        value: f,
-                        onChange: (Re) => {
-                          (p(Re.target.value), oe());
+                        value: lookIn,
+                        onChange: (event) => {
+                          (p(event.target.value), oe());
                         },
                         children: [
                           i.jsx("option", {
@@ -812,8 +837,8 @@ function FindReplaceDialog(e) {
                           i.jsx("input", {
                             type: "checkbox",
                             checked: E,
-                            onChange: (Re) => {
-                              (A(Re.target.checked), oe());
+                            onChange: (event) => {
+                              (A(event.target.checked), oe());
                             },
                           }),
                           i.jsx(LocalizedText, { children: "Match case" }),
@@ -824,8 +849,8 @@ function FindReplaceDialog(e) {
                           i.jsx("input", {
                             type: "checkbox",
                             checked: k,
-                            onChange: (Re) => {
-                              (F(Re.target.checked), oe());
+                            onChange: (event) => {
+                              (F(event.target.checked), oe());
                             },
                           }),
                           i.jsx(LocalizedText, {
@@ -838,8 +863,8 @@ function FindReplaceDialog(e) {
                           i.jsx("input", {
                             type: "checkbox",
                             checked: I,
-                            onChange: (Re) => {
-                              (O(Re.target.checked), oe());
+                            onChange: (event) => {
+                              (O(event.target.checked), oe());
                             },
                           }),
                           i.jsx(LocalizedText, {
@@ -854,8 +879,8 @@ function FindReplaceDialog(e) {
                     i.jsx("input", {
                       type: "checkbox",
                       checked: j,
-                      onChange: (Re) => {
-                        (z(Re.target.checked), oe());
+                      onChange: (event) => {
+                        (z(event.target.checked), oe());
                       },
                     }),
                     i.jsx(LocalizedText, {
@@ -904,7 +929,7 @@ function FindReplaceDialog(e) {
                       children: [
                         i.jsx("button", {
                           type: "button",
-                          onClick: Se,
+                          onClick: onClick,
                           children: i.jsx(LocalizedText, {
                             children: "Find all",
                           }),
@@ -928,7 +953,7 @@ function FindReplaceDialog(e) {
                             children: [
                               i.jsx("button", {
                                 type: "button",
-                                disabled: e.readOnly || !C,
+                                disabled: e.readOnly || !match,
                                 onClick: () => ge(true),
                                 children: i.jsx(LocalizedText, {
                                   children: "Preview replace selected",
@@ -1002,8 +1027,8 @@ function FindReplaceDialog(e) {
                               "tr",
                               {
                                 className:
-                                  C?.sheetId === Re.sheetId &&
-                                  C.address === Re.address
+                                  match?.sheetId === Re.sheetId &&
+                                  match.address === Re.address
                                     ? "st-selected"
                                     : "",
                                 children: [
@@ -1075,7 +1100,7 @@ function FindReplaceDialog(e) {
                   }),
                 ],
               }),
-            N &&
+            plan &&
               i.jsxs("div", {
                 className: "st-preview",
                 "aria-label": text("Replacement preview"),
@@ -1089,29 +1114,29 @@ function FindReplaceDialog(e) {
                   }),
                   i.jsxs("p", {
                     children: [
-                      N.replacedCells,
+                      plan.replacedCells,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "directly replaced cells · ",
                       }),
-                      N.count,
+                      plan.count,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "total changed cells · ",
                       }),
-                      N.excludedProtected,
+                      plan.excludedProtected,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "protected matches excluded.",
                       }),
                     ],
                   }),
-                  N.dependentCount > 0 &&
+                  plan.dependentCount > 0 &&
                     i.jsxs("p", {
                       className: "st-notice",
                       children: [
                         i.jsx(LocalizedText, { children: "Includes " }),
-                        N.dependentCount,
+                        plan.dependentCount,
                         " ",
                         i.jsx(LocalizedText, {
                           children:
@@ -1145,36 +1170,37 @@ function FindReplaceDialog(e) {
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: N.previewPatches
+                          children: plan.previewPatches
                             .slice(Pe * Bv, (Pe + 1) * Bv)
-                            .map((Re) =>
+                            .map((patch) =>
                               i.jsxs(
                                 "tr",
                                 {
                                   children: [
                                     i.jsxs("td", {
                                       children: [
-                                        K[`${Re.sheetId}:${Re.address}`]
-                                          ?.sheetName ?? Re.sheetId,
+                                        K[`${patch.sheetId}:${patch.address}`]
+                                          ?.sheetName ?? patch.sheetId,
                                         "!",
-                                        Re.address,
+                                        patch.address,
                                       ],
                                     }),
                                     i.jsx("td", {
                                       className: "st-value",
                                       children: formatSearchResultValue(
-                                        K[`${Re.sheetId}:${Re.address}`]?.raw,
+                                        K[`${patch.sheetId}:${patch.address}`]
+                                          ?.raw,
                                       ),
                                     }),
                                     i.jsx("td", {
                                       className: "st-value",
                                       children: formatSearchResultValue(
-                                        Re.cell.raw,
+                                        patch.cell.raw,
                                       ),
                                     }),
                                   ],
                                 },
-                                `${Re.sheetId}:${Re.address}`,
+                                `${patch.sheetId}:${patch.address}`,
                               ),
                             ),
                         }),
@@ -1241,8 +1267,8 @@ function FindReplaceDialog(e) {
                   }),
                   i.jsx("div", {
                     className: "st-ranges",
-                    children: L.ranges.map((Re) =>
-                      i.jsx("code", { children: Re }, Re),
+                    children: L.ranges.map((range) =>
+                      i.jsx("code", { children: range }, range),
                     ),
                   }),
                   !e.onSelectRanges &&
@@ -1269,7 +1295,7 @@ function FindReplaceDialog(e) {
               i.jsx("button", {
                 type: "button",
                 className: "st-primary",
-                disabled: e.readOnly || !N?.count || qe,
+                disabled: e.readOnly || !plan?.count || qe,
                 onClick: se,
                 children: i.jsx(LocalizedText, {
                   children: "Apply replacement",
@@ -1313,34 +1339,36 @@ const paneQuadrantNames = [
   ],
   createDefaultPaneRects = () =>
     Object.fromEntries(
-      paneQuadrantNames.map((e) => [
-        e,
+      paneQuadrantNames.map((paneQuadrantName) => [
+        paneQuadrantName,
         { top: 0, left: 0, width: 1e3, height: 600 },
       ]),
     );
-function useSplitPaneSizes(e) {
-  const [r, t] = ne.useState(createDefaultPaneRects),
-    n = ne.useRef(r),
-    o = ne.useRef({}),
-    [a, s] = ne.useState("top-left"),
-    d = ne.useRef("top-left");
-  function u(h) {
+function useSplitPaneSizes(splitPaneSizesKey) {
+  const [views, t] = ne.useState(createDefaultPaneRects),
+    n = ne.useRef(views),
+    refs = ne.useRef({}),
+    [activeId, s] = ne.useState("top-left"),
+    active = ne.useRef("top-left");
+  function patch(h) {
     let f = n.current;
-    for (const p of paneQuadrantNames)
-      if (h[p]) {
-        const m = { ...f[p], ...h[p] };
-        Object.entries(m).some(([v, g]) => f[p][v] !== g) &&
-          (f = { ...f, [p]: m });
+    for (const paneQuadrantName of paneQuadrantNames)
+      if (h[paneQuadrantName]) {
+        const m = { ...f[paneQuadrantName], ...h[paneQuadrantName] };
+        Object.entries(m).some(([v, g]) => f[paneQuadrantName][v] !== g) &&
+          (f = { ...f, [paneQuadrantName]: m });
       }
     f !== n.current && ((n.current = f), t(f));
   }
-  const l = ne.useMemo(
+  const bindings = ne.useMemo(
     () =>
       Object.fromEntries(
-        paneQuadrantNames.map((h) => [
-          h,
+        paneQuadrantNames.map((paneQuadrantName) => [
+          paneQuadrantName,
           (f) => {
-            f ? (o.current[h] = f) : delete o.current[h];
+            f
+              ? (refs.current[paneQuadrantName] = f)
+              : delete refs.current[paneQuadrantName];
           },
         ]),
       ),
@@ -1349,33 +1377,36 @@ function useSplitPaneSizes(e) {
   ne.useEffect(() => {
     const h = () => {
       const p = {};
-      for (const m of paneQuadrantNames) {
-        const v = o.current[m];
+      for (const paneQuadrantName of paneQuadrantNames) {
+        const v = refs.current[paneQuadrantName];
         v?.clientWidth &&
           v.clientHeight &&
-          (p[m] = { width: v.clientWidth, height: v.clientHeight });
+          (p[paneQuadrantName] = {
+            width: v.clientWidth,
+            height: v.clientHeight,
+          });
       }
-      u(p);
+      patch(p);
     };
     if ((h(), typeof ResizeObserver > "u")) return;
     const f = new ResizeObserver(h);
     return (
-      Object.values(o.current).forEach((p) => f.observe(p)),
+      Object.values(refs.current).forEach((p) => f.observe(p)),
       () => f.disconnect()
     );
-  }, [e]);
-  function c(h) {
-    ((d.current = h), s(h));
+  }, [splitPaneSizesKey]);
+  function activate(h) {
+    ((active.current = h), s(h));
   }
   return {
-    views: r,
+    views: views,
     current: n,
-    refs: o,
-    bindings: l,
-    activeId: a,
-    active: d,
-    activate: c,
-    patch: u,
+    refs: refs,
+    bindings: bindings,
+    activeId: activeId,
+    active: active,
+    activate: activate,
+    patch: patch,
   };
 }
 function SplitPaneLayout(e) {
@@ -1387,7 +1418,7 @@ function SplitPaneLayout(e) {
     d = ne.useRef(a);
   d.current = a;
   const [u, l] = ne.useState(""),
-    c =
+    sheetSplitPanes =
       a && a.snapshot === e.snapshot && !e.readOnly
         ? { ...e.split, [a.axis]: a.value }
         : e.split,
@@ -1398,19 +1429,19 @@ function SplitPaneLayout(e) {
     };
   return i.jsxs("div", {
     ref: n,
-    className: `lg-pane-layout ${c ? "is-split" : ""}`,
+    className: `lg-pane-layout ${sheetSplitPanes ? "is-split" : ""}`,
     style: {
       gridTemplateColumns:
-        c?.vertical !== undefined
-          ? `minmax(0,${c.vertical}fr) 7px minmax(0,${100 - c.vertical}fr)`
+        sheetSplitPanes?.vertical !== undefined
+          ? `minmax(0,${sheetSplitPanes.vertical}fr) 7px minmax(0,${100 - sheetSplitPanes.vertical}fr)`
           : "minmax(0,1fr)",
       gridTemplateRows:
-        c?.horizontal !== undefined
-          ? `minmax(0,${c.horizontal}fr) 7px minmax(0,${100 - c.horizontal}fr)`
+        sheetSplitPanes?.horizontal !== undefined
+          ? `minmax(0,${sheetSplitPanes.horizontal}fr) 7px minmax(0,${100 - sheetSplitPanes.horizontal}fr)`
           : "minmax(0,1fr)",
     },
     children: [
-      Pv(c).map((f) =>
+      Pv(sheetSplitPanes).map((f) =>
         i.jsx(
           "div",
           {
@@ -1425,18 +1456,18 @@ function SplitPaneLayout(e) {
           f,
         ),
       ),
-      ["horizontal", "vertical"].map((f) =>
-        c?.[f] === undefined
+      ["horizontal", "vertical"].map((axis) =>
+        sheetSplitPanes?.[axis] === undefined
           ? null
           : i.jsx(
               "div",
               {
-                className: `lg-split-divider lg-split-${f}`,
+                className: `lg-split-divider lg-split-${axis}`,
                 role: "separator",
                 tabIndex: e.readOnly ? -1 : 0,
-                "aria-label": `Resize ${f} split`,
-                "aria-orientation": f,
-                "aria-valuenow": c[f],
+                "aria-label": `Resize ${axis} split`,
+                "aria-orientation": axis,
+                "aria-valuenow": sheetSplitPanes[axis],
                 "aria-valuemin": 20,
                 "aria-valuemax": 80,
                 "aria-disabled": e.readOnly,
@@ -1444,54 +1475,59 @@ function SplitPaneLayout(e) {
                   "Drag or use arrow keys to resize; double-click to center",
                 ),
                 style:
-                  f === "horizontal"
+                  axis === "horizontal"
                     ? { gridRow: 2, gridColumn: "1 / -1" }
                     : { gridColumn: 2, gridRow: "1 / -1" },
-                onDoubleClick: () => h(f, 50),
-                onKeyDown: (p) => {
-                  if (p.key === "Escape") {
+                onDoubleClick: () => h(axis, 50),
+                onKeyDown: (event) => {
+                  if (event.key === "Escape") {
                     ((d.current = null), s(null));
                     return;
                   }
                   const m = (
-                    f === "horizontal"
+                    axis === "horizontal"
                       ? ["ArrowUp", "ArrowDown"]
                       : ["ArrowLeft", "ArrowRight"]
-                  ).indexOf(p.key);
+                  ).indexOf(event.key);
                   m >= 0
-                    ? (p.preventDefault(),
-                      h(f, c[f] + (m ? 1 : -1) * (p.shiftKey ? 10 : 1)))
-                    : (p.key === "Home" || p.key === "End") &&
-                      (p.preventDefault(), h(f, p.key === "Home" ? 20 : 80));
+                    ? (event.preventDefault(),
+                      h(
+                        axis,
+                        sheetSplitPanes[axis] +
+                          (m ? 1 : -1) * (event.shiftKey ? 10 : 1),
+                      ))
+                    : (event.key === "Home" || event.key === "End") &&
+                      (event.preventDefault(),
+                      h(axis, event.key === "Home" ? 20 : 80));
                 },
-                onPointerDown: (p) => {
+                onPointerDown: (event) => {
                   var v;
-                  if (e.readOnly || p.button !== 0) return;
-                  (p.preventDefault(), p.currentTarget.focus(), l(""));
+                  if (e.readOnly || event.button !== 0) return;
+                  (event.preventDefault(), event.currentTarget.focus(), l(""));
                   const m = {
-                    axis: f,
-                    value: c[f],
+                    axis: axis,
+                    value: sheetSplitPanes[axis],
                     snapshot: e.snapshot,
                     snapshotGuard: JSON.stringify(e.snapshot),
                     split: e.split,
                   };
                   ((d.current = m),
                     s(m),
-                    (v = p.currentTarget).setPointerCapture?.call(
+                    (v = event.currentTarget).setPointerCapture?.call(
                       v,
-                      p.pointerId,
+                      event.pointerId,
                     ));
                 },
-                onPointerMove: (p) => {
+                onPointerMove: (event) => {
                   const m = d.current,
                     v = n.current?.getBoundingClientRect();
                   if (!m || !v) return;
-                  const g = f === "horizontal" ? v.height : v.width;
+                  const g = axis === "horizontal" ? v.height : v.width;
                   if (g <= 0) return;
                   const b =
-                      f === "horizontal"
-                        ? p.clientY - v.top
-                        : p.clientX - v.left,
+                      axis === "horizontal"
+                        ? event.clientY - v.top
+                        : event.clientX - v.left,
                     y = {
                       ...m,
                       value: Math.max(
@@ -1501,7 +1537,7 @@ function SplitPaneLayout(e) {
                     };
                   ((d.current = y), s(y));
                 },
-                onPointerUp: (p) => {
+                onPointerUp: (event) => {
                   var v;
                   const m = d.current;
                   if (((d.current = null), s(null), !!m)) {
@@ -1513,11 +1549,14 @@ function SplitPaneLayout(e) {
                       l("The workbook changed. Resize the split again.");
                       return;
                     }
-                    (m.value !== m.split[f] && h(f, m.value),
-                      (v = p.currentTarget).hasPointerCapture?.call(
+                    (m.value !== m.split[axis] && h(axis, m.value),
+                      (v = event.currentTarget).hasPointerCapture?.call(
                         v,
-                        p.pointerId,
-                      ) && p.currentTarget.releasePointerCapture(p.pointerId));
+                        event.pointerId,
+                      ) &&
+                        event.currentTarget.releasePointerCapture(
+                          event.pointerId,
+                        ));
                   }
                 },
                 onPointerCancel: () => {
@@ -1530,7 +1569,7 @@ function SplitPaneLayout(e) {
                   "Drag or use arrow keys to resize; double-click to center",
                 ),
               },
-              f,
+              axis,
             ),
       ),
       u &&
@@ -1543,10 +1582,12 @@ function SplitPaneLayout(e) {
   });
 }
 
-function isWithinFormulaSuggestions(e, r) {
-  if (!(r instanceof Node)) return false;
-  const t = document.getElementById(e.getAttribute("aria-controls") ?? "");
-  return !!t?.closest(".formula-suggestions")?.contains(r);
+function isWithinFormulaSuggestions(currentTarget, relatedTarget) {
+  if (!(relatedTarget instanceof Node)) return false;
+  const t = document.getElementById(
+    currentTarget.getAttribute("aria-controls") ?? "",
+  );
+  return !!t?.closest(".formula-suggestions")?.contains(relatedTarget);
 }
 const FormulaSuggestionList = ne.forwardRef(function (
     {
@@ -1688,9 +1729,9 @@ const FormulaSuggestionList = ne.forwardRef(function (
               ref: h,
               role: "region",
               "aria-label": "Formula assistance",
-              onBlur: (I) => {
-                I.currentTarget.contains(I.relatedTarget) ||
-                  I.relatedTarget === inputRef.current ||
+              onBlur: (event) => {
+                event.currentTarget.contains(event.relatedTarget) ||
+                  event.relatedTarget === inputRef.current ||
                   (y(false), onExit?.());
               },
               style: { position: "fixed", ...w },
@@ -1706,25 +1747,25 @@ const FormulaSuggestionList = ne.forwardRef(function (
                     onFocus: () => {
                       (y(true), p < 0 && m(0));
                     },
-                    onKeyDown: (I) => {
+                    onKeyDown: (event) => {
                       var O;
-                      I.nativeEvent.isComposing ||
-                        (I.key === "ArrowDown" || I.key === "ArrowUp"
-                          ? (I.preventDefault(),
+                      event.nativeEvent.isComposing ||
+                        (event.key === "ArrowDown" || event.key === "ArrowUp"
+                          ? (event.preventDefault(),
                             m((j) =>
-                              I.key === "ArrowDown"
+                              event.key === "ArrowDown"
                                 ? (j + 1) % f.items.length
                                 : (j <= 0 ? f.items.length : j) - 1,
                             ))
-                          : I.key === "Enter" ||
-                              (I.key === "Tab" && !I.shiftKey)
-                            ? (I.preventDefault(), F(Math.max(0, p)))
-                            : (I.key === "Escape" || I.key === "Tab") &&
-                              (I.preventDefault(),
-                              I.key === "Escape" && g(A),
+                          : event.key === "Enter" ||
+                              (event.key === "Tab" && !event.shiftKey)
+                            ? (event.preventDefault(), F(Math.max(0, p)))
+                            : (event.key === "Escape" || event.key === "Tab") &&
+                              (event.preventDefault(),
+                              event.key === "Escape" && g(A),
                               (O = inputRef.current) == null || O.focus()));
                     },
-                    children: f.items.map((I, O) =>
+                    children: f.items.map((item, O) =>
                       i.jsxs(
                         "li",
                         {
@@ -1734,29 +1775,29 @@ const FormulaSuggestionList = ne.forwardRef(function (
                           onClick: (j) => {
                             j.detail === 0 && F(O);
                           },
-                          onMouseDown: (j) => {
-                            (j.preventDefault(), F(O));
+                          onMouseDown: (event) => {
+                            (event.preventDefault(), F(O));
                           },
                           onMouseEnter: () => m(O),
                           children: [
                             i.jsx("span", {
                               className: "formula-suggestion-kind",
                               children:
-                                I.kind === "function"
+                                item.kind === "function"
                                   ? "ƒx"
-                                  : I.kind === "table"
+                                  : item.kind === "table"
                                     ? "▦"
                                     : "N",
                             }),
                             i.jsxs("div", {
                               children: [
-                                i.jsx("strong", { children: I.label }),
-                                i.jsx("small", { children: I.detail }),
+                                i.jsx("strong", { children: item.label }),
+                                i.jsx("small", { children: item.detail }),
                               ],
                             }),
                           ],
                         },
-                        `${I.kind}:${I.label}`,
+                        `${item.kind}:${item.label}`,
                       ),
                     ),
                   }),
@@ -1796,17 +1837,19 @@ const FormulaSuggestionList = ne.forwardRef(function (
   S2e = 1.35,
   clampNumber = (e, r, t) => Math.max(r, Math.min(t, e));
 function buildCellFontString(e) {
-  const r = resolveEffectiveCellStyle(e?.style),
-    t = r?.fontSize ? `${r.fontSize}pt` : "14px",
-    n = r?.fontFamily
-      ? JSON.stringify(r.fontFamily)
+  const effectiveCellStyle = resolveEffectiveCellStyle(e?.style),
+    t = effectiveCellStyle?.fontSize
+      ? `${effectiveCellStyle.fontSize}pt`
+      : "14px",
+    n = effectiveCellStyle?.fontFamily
+      ? JSON.stringify(effectiveCellStyle.fontFamily)
       : "Calibri, Aptos, Arial, sans-serif";
-  return `${r?.italic ? "italic" : "normal"} ${r?.bold ? "700" : "400"} ${t} ${n}`;
+  return `${effectiveCellStyle?.italic ? "italic" : "normal"} ${effectiveCellStyle?.bold ? "700" : "400"} ${t} ${n}`;
 }
-function parseFontSizePx(e, r) {
-  const t = r.match(/([\d.]+)(px|pt)/),
+function parseFontSizePx(e, cellFontString) {
+  const t = cellFontString.match(/([\d.]+)(px|pt)/),
     n = t ? Number(t[1]) * (t[2] === "pt" ? 4 / 3 : 1) : 14,
-    o = r.includes("700") ? 1.06 : 1;
+    o = cellFontString.includes("700") ? 1.06 : 1;
   return (
     Array.from(e).reduce(
       (a, s) =>
@@ -1833,88 +1876,127 @@ function createTextMeasurer() {
     const e = document.createElement("canvas").getContext("2d");
     if (!e) return parseFontSizePx;
     let r = "";
-    return (t, n) => {
-      r !== n && ((e.font = n), (r = n));
-      const o = e.measureText(t).width;
-      return Number.isFinite(o) && o >= 0 ? o : parseFontSizePx(t, n);
+    return (t, cellFontString) => {
+      r !== cellFontString && ((e.font = cellFontString), (r = cellFontString));
+      const width = e.measureText(t).width;
+      return Number.isFinite(width) && width >= 0
+        ? width
+        : parseFontSizePx(t, cellFontString);
     };
   } catch {
     return parseFontSizePx;
   }
 }
-function measureTextWidth(e, r, t) {
+function measureTextWidth(textMeasurer, r, cellFontString) {
   try {
-    const n = e(r, t);
+    const n = textMeasurer(r, cellFontString);
     if (Number.isFinite(n) && n >= 0) return n;
   } catch {}
-  return parseFontSizePx(r, t);
+  return parseFontSizePx(r, cellFontString);
 }
-function measureTextWithTabs(e, r, t) {
-  if (!e.includes("	")) return measureTextWidth(t, e, r);
-  const n = Math.max(1, measureTextWidth(t, " ", r) * 8);
+function measureTextWithTabs(e, cellFontString, textMeasurer) {
+  if (!e.includes("	")) return measureTextWidth(textMeasurer, e, cellFontString);
+  const n = Math.max(
+    1,
+    measureTextWidth(textMeasurer, " ", cellFontString) * 8,
+  );
   let o = 0;
   return (
     e.split("	").forEach((a, s) => {
       (s && (o = (Math.floor(o / n) + 1) * n),
-        (o += measureTextWidth(t, a, r)));
+        (o += measureTextWidth(textMeasurer, a, cellFontString)));
     }),
     o
   );
 }
-function resolveDisplayedCellText(e, r, t, n, o, a) {
-  return o && typeof t.raw == "string" && t.raw.startsWith("=") && !t.literal
-    ? t.raw
-    : formatNumberWithPattern(n(e.id, r), t, a);
+function resolveDisplayedCellText(
+  sheet,
+  r,
+  cell,
+  workbookWithSettings,
+  isShowingFormulas,
+  a,
+) {
+  return isShowingFormulas &&
+    typeof cell.raw == "string" &&
+    cell.raw.startsWith("=") &&
+    !cell.literal
+    ? cell.raw
+    : formatNumberWithPattern(workbookWithSettings(sheet.id, r), cell, a);
 }
-function measureNoteIndicatorWidth(e, r) {
+function measureNoteIndicatorWidth(e, textMeasurer) {
   return Math.max(
     e.note ? 5 : 0,
     e.tickmark
       ? Math.min(
           40,
-          measureTextWidth(r, e.tickmark, "normal 400 8px Arial") + 4,
+          measureTextWidth(textMeasurer, e.tickmark, "normal 400 8px Arial") +
+            4,
         )
       : 0,
   );
 }
-function computeCellTextAlignment(e, r) {
+function computeCellTextAlignment(e, textMeasurer) {
   return (
     k2e +
     measureCellBorderInsets(e.style).horizontal +
     (e.style?.align === "center" ? 0 : indentToPx(e.style)) +
-    measureNoteIndicatorWidth(e, r)
+    measureNoteIndicatorWidth(e, textMeasurer)
   );
 }
-function validateAutoFitIndices(e, r, t) {
-  for (const n of e)
-    if (!Number.isInteger(n) || n < 0 || n >= r)
+function validateAutoFitIndices(selectedAxisIndexes, r, t) {
+  for (const selectedAxisIndex of selectedAxisIndexes)
+    if (
+      !Number.isInteger(selectedAxisIndex) ||
+      selectedAxisIndex < 0 ||
+      selectedAxisIndex >= r
+    )
       throw new Error(`AutoFit ${t} index is outside the worksheet.`);
-  return new Set(e);
+  return new Set(selectedAxisIndexes);
 }
-function autoFitColumnWidths(e, r, t, n, o = false, a = "1900") {
-  const s = validateAutoFitIndices(r, e.colCount, "column"),
+function autoFitColumnWidths(
+  sheet,
+  selectedAxisIndexes,
+  workbookWithSettings,
+  textMeasurer,
+  isShowingFormulas = false,
+  a = "1900",
+) {
+  const s = validateAutoFitIndices(
+      selectedAxisIndexes,
+      sheet.colCount,
+      "column",
+    ),
     d = Object.fromEntries(
-      [...s].map((l) => [String(l), defaultColumnWidthOf(e)]),
+      [...s].map((l) => [String(l), defaultColumnWidthOf(sheet)]),
     ),
     u = new Set();
-  for (const [l, c] of Object.entries(vx(e, t))) {
+  for (const [l, c] of Object.entries(vx(sheet, workbookWithSettings))) {
     const { col } = _t(l);
     if (!s.has(col)) continue;
-    const f = resolveDisplayedCellText(e, l, c, t, o, a);
-    if (!f && !c.note && !c.tickmark) continue;
-    const p = buildCellFontString(c),
+    const displayedCellText = resolveDisplayedCellText(
+      sheet,
+      l,
+      c,
+      workbookWithSettings,
+      isShowingFormulas,
+      a,
+    );
+    if (!displayedCellText && !c.note && !c.tickmark) continue;
+    const cellFontString = buildCellFontString(c),
       m = resolveEffectiveCellStyle(c.style).wrap
-        ? f.replace(
+        ? displayedCellText.replace(
             /\r\n?/g,
             `
 `,
           ).split(`
 `)
-        : [f.replace(/[\t\n\r\f ]+/g, " ")];
+        : [displayedCellText.replace(/[\t\n\r\f ]+/g, " ")];
     let v = 0;
-    for (const b of m) v = Math.max(v, measureTextWithTabs(b, p, n));
+    for (const b of m)
+      v = Math.max(v, measureTextWithTabs(b, cellFontString, textMeasurer));
     const g = clampNumber(
-      Math.ceil(v + computeCellTextAlignment(c, n)),
+      Math.ceil(v + computeCellTextAlignment(c, textMeasurer)),
       minColumnWidth,
       maxColumnWidth,
     );
@@ -1923,9 +2005,15 @@ function autoFitColumnWidths(e, r, t, n, o = false, a = "1900") {
   }
   return d;
 }
-function countWrappedTextLines(e, r, t, n, o) {
+function countWrappedTextLines(
+  displayedCellText,
+  r,
+  cellFontString,
+  textMeasurer,
+  o,
+) {
   let a = 0;
-  for (const s of e.replace(
+  for (const s of displayedCellText.replace(
     /\r\n?/g,
     `
 `,
@@ -1943,7 +2031,11 @@ function countWrappedTextLines(e, r, t, n, o) {
         c = d.length;
       for (; l < c;) {
         const f = Math.ceil((l + c) / 2);
-        measureTextWithTabs(d.slice(u, f).join(""), t, n) <= r
+        measureTextWithTabs(
+          d.slice(u, f).join(""),
+          cellFontString,
+          textMeasurer,
+        ) <= r
           ? (l = f)
           : (c = f - 1);
       }
@@ -1960,30 +2052,54 @@ function countWrappedTextLines(e, r, t, n, o) {
   }
   return Math.max(1, a);
 }
-function autoFitRowHeights(e, r, t, n, o = false, a = "1900") {
-  const s = validateAutoFitIndices(r, e.rowCount, "row"),
+function autoFitRowHeights(
+  sheet,
+  selectedAxisIndexes,
+  workbookWithSettings,
+  textMeasurer,
+  isShowingFormulas = false,
+  a = "1900",
+) {
+  const s = validateAutoFitIndices(selectedAxisIndexes, sheet.rowCount, "row"),
     d = Object.fromEntries(
-      [...s].map((l) => [String(l), defaultRowHeightOf(e)]),
+      [...s].map((l) => [String(l), defaultRowHeightOf(sheet)]),
     ),
     u = new Set();
-  for (const [l, c] of Object.entries(vx(e, t))) {
+  for (const [l, c] of Object.entries(vx(sheet, workbookWithSettings))) {
     const { row, col } = _t(l);
     if (!s.has(row)) continue;
-    const p = resolveDisplayedCellText(e, l, c, t, o, a);
-    if (!p && !resolveEffectiveCellStyle(c.style).fontSize) continue;
-    const m = buildCellFontString(c),
+    const displayedCellText = resolveDisplayedCellText(
+      sheet,
+      l,
+      c,
+      workbookWithSettings,
+      isShowingFormulas,
+      a,
+    );
+    if (!displayedCellText && !resolveEffectiveCellStyle(c.style).fontSize)
+      continue;
+    const cellFontString = buildCellFontString(c),
       g =
         (resolveEffectiveCellStyle(c.style).fontSize
           ? (resolveEffectiveCellStyle(c.style).fontSize * 4) / 3
           : 14) * S2e,
-      b = measureCellBorderInsets(c.style).vertical,
-      y = Math.ceil((maxRowHeight - b) / g),
-      w = Math.max(1, columnWidthAt(e, col) - computeCellTextAlignment(c, n)),
+      vertical = measureCellBorderInsets(c.style).vertical,
+      y = Math.ceil((maxRowHeight - vertical) / g),
+      w = Math.max(
+        1,
+        columnWidthAt(sheet, col) - computeCellTextAlignment(c, textMeasurer),
+      ),
       E = resolveEffectiveCellStyle(c.style).wrap
-        ? countWrappedTextLines(p, w, m, n, y)
+        ? countWrappedTextLines(
+            displayedCellText,
+            w,
+            cellFontString,
+            textMeasurer,
+            y,
+          )
         : 1,
       A = clampNumber(
-        Math.ceil(Math.max(20, E * g) + b),
+        Math.ceil(Math.max(20, E * g) + vertical),
         minRowHeight,
         maxRowHeight,
       );
@@ -1993,8 +2109,13 @@ function autoFitRowHeights(e, r, t, n, o = false, a = "1900") {
   return d;
 }
 const D2e = 16e6;
-function Tp(e, r, t) {
-  return r >= e.firstRow && r <= e.lastRow && t >= e.firstCol && t <= e.lastCol;
+function Tp(e, row, col) {
+  return (
+    row >= e.firstRow &&
+    row <= e.lastRow &&
+    col >= e.firstCol &&
+    col <= e.lastCol
+  );
 }
 
 function lowerBoundIndex(e, r) {
@@ -2007,95 +2128,110 @@ function lowerBoundIndex(e, r) {
   return t;
 }
 function buildVisibleAxisLayout(e, r, t = {}, n = []) {
-  const o = createAxisVisibilityIndex(e, n),
+  const axisVisibilityIndex = createAxisVisibilityIndex(e, n),
     a = Object.fromEntries(
       Object.entries(t).flatMap(([l, c]) => {
-        const h = o.viewIndex(Number(l));
+        const h = axisVisibilityIndex.viewIndex(Number(l));
         return h === null ? [] : [[h, c]];
       }),
     );
-  e = o.count;
+  e = axisVisibilityIndex.count;
   const s = Object.keys(a)
       .map(Number)
       .filter((l) => l >= 0 && l < e && a[l] > 0 && a[l] !== r)
       .sort((l, c) => l - c),
     d = [0];
   for (const l of s) d.push(d.at(-1) + a[l] - r);
-  const u = (l) => {
+  const offset = (l) => {
     const c = clampNumber(l, 0, e);
     return c * r + d[lowerBoundIndex(s, c)];
   };
   return {
-    ...o,
-    total: u(e),
-    offset: u,
+    ...axisVisibilityIndex,
+    total: offset(e),
+    offset: offset,
     size: (l) => a[l] ?? r,
     indexAt: (l) => {
       let c = 0,
         h = e;
       for (; c < h;) {
         const f = Math.floor((c + h) / 2);
-        u(f + 1) <= l ? (c = f + 1) : (h = f);
+        offset(f + 1) <= l ? (c = f + 1) : (h = f);
       }
       return Math.min(Math.max(0, e - 1), c);
     },
   };
 }
-function sliceVisibleAxis(e, r) {
-  if (!Number.isInteger(r) || r < 0 || r > e.count)
+function sliceVisibleAxis(e, frozenRowCount) {
+  if (
+    !Number.isInteger(frozenRowCount) ||
+    frozenRowCount < 0 ||
+    frozenRowCount > e.count
+  )
     throw Error("Choose a valid visible-axis slice.");
-  const t = e.offset(r),
-    n = e.count - r,
-    o = (d) =>
-      Number.isInteger(d) && d >= 0 && d < n ? e.logicalIndex(d + r) : -1,
-    a = (d) => {
+  const t = e.offset(frozenRowCount),
+    count = e.count - frozenRowCount,
+    logicalIndex = (d) =>
+      Number.isInteger(d) && d >= 0 && d < count
+        ? e.logicalIndex(d + frozenRowCount)
+        : -1,
+    viewIndex = (d) => {
       const u = e.viewIndex(d);
-      return u === null || u < r ? null : u - r;
+      return u === null || u < frozenRowCount ? null : u - frozenRowCount;
     },
-    s = (d) => Math.max(0, e.countBefore(d) - r);
+    countBefore = (d) => Math.max(0, e.countBefore(d) - frozenRowCount);
   return {
-    count: n,
+    count: count,
     logicalCount: e.logicalCount,
-    logicalIndex: o,
-    viewIndex: a,
-    countBefore: s,
-    isHidden: (d) => a(d) === null,
+    logicalIndex: logicalIndex,
+    viewIndex: viewIndex,
+    countBefore: countBefore,
+    isHidden: (d) => viewIndex(d) === null,
     next: (d, u, l = false) => {
       const c = d + (l ? 0 : u),
         h =
-          u === 1 ? s(Math.max(0, c)) : s(Math.min(e.logicalCount, c + 1)) - 1,
-        f = o(h);
+          u === 1
+            ? countBefore(Math.max(0, c))
+            : countBefore(Math.min(e.logicalCount, c + 1)) - 1,
+        f = logicalIndex(h);
       return f < 0 ? null : f;
     },
     total: e.total - t,
-    size: (d) => e.size(d + r),
-    offset: (d) => e.offset(Math.max(0, Math.min(n, d)) + r) - t,
+    size: (d) => e.size(d + frozenRowCount),
+    offset: (d) =>
+      e.offset(Math.max(0, Math.min(count, d)) + frozenRowCount) - t,
     indexAt: (d) =>
-      n ? Math.max(0, Math.min(n - 1, e.indexAt(d + t) - r)) : 0,
+      count
+        ? Math.max(0, Math.min(count - 1, e.indexAt(d + t) - frozenRowCount))
+        : 0,
   };
 }
-function resolveAxisScale(e, r, t, n = D2e) {
-  const o = Math.max(1, r),
-    a = e * t,
-    s = Math.min(a, n);
+function resolveAxisScale(total, r, zoomScale, n = D2e) {
+  const viewport = Math.max(1, r),
+    logicalPixels = total * zoomScale,
+    physicalPixels = Math.min(logicalPixels, n);
   return {
-    viewport: o,
-    logicalPixels: a,
-    physicalPixels: s,
-    logicalMax: Math.max(0, a - o),
-    physicalMax: Math.max(0, s - o),
+    viewport: viewport,
+    logicalPixels: logicalPixels,
+    physicalPixels: physicalPixels,
+    logicalMax: Math.max(0, logicalPixels - viewport),
+    physicalMax: Math.max(0, physicalPixels - viewport),
   };
 }
-function physicalToLogicalPixels(e, r, t, n) {
-  const o = resolveAxisScale(r, t, n);
-  return o.physicalMax
-    ? ((clampNumber(e, 0, o.physicalMax) / o.physicalMax) * o.logicalMax) / n
+function physicalToLogicalPixels(e, total, t, zoomScale) {
+  const axisScale = resolveAxisScale(total, t, zoomScale);
+  return axisScale.physicalMax
+    ? ((clampNumber(e, 0, axisScale.physicalMax) / axisScale.physicalMax) *
+        axisScale.logicalMax) /
+        zoomScale
     : 0;
 }
-function logicalToPhysicalPixels(e, r, t, n) {
-  const o = resolveAxisScale(r, t, n);
-  return o.logicalMax
-    ? (clampNumber(e * n, 0, o.logicalMax) / o.logicalMax) * o.physicalMax
+function logicalToPhysicalPixels(logicalOffset, total, t, zoomScale) {
+  const axisScale = resolveAxisScale(total, t, zoomScale);
+  return axisScale.logicalMax
+    ? (clampNumber(logicalOffset * zoomScale, 0, axisScale.logicalMax) /
+        axisScale.logicalMax) *
+        axisScale.physicalMax
     : 0;
 }
 

@@ -30,52 +30,63 @@ function TransformationRecipesDialog(e) {
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
   a.current = e.onClose;
-  const [s, d] = ne.useState(() => ({
+  const [definition, d] = ne.useState(() => ({
       engine: recipeStoreFormatId,
       source: {
         sheetId: e.sheetId,
         range: e.range.includes(":")
           ? e.range
           : formatOccupiedRangeAddress(
-              e.workbook.sheets.find((ye) => ye.id === e.sheetId),
+              e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
             ),
       },
       steps: [],
     })),
     [u, l] = ne.useState("Transformation recipe"),
-    [c, h] = ne.useState(""),
+    [recipeId, h] = ne.useState(""),
     [f, p] = ne.useState(0),
     [m, v] = ne.useState(""),
     [g, b] = ne.useState(1),
     [y, w] = ne.useState(-1),
     [E, A] = ne.useState("types"),
-    [k, F] = ne.useState("Recipe result"),
-    [I, O] = ne.useState(false),
+    [outputName, F] = ne.useState("Recipe result"),
+    [checked, O] = ne.useState(false),
     [j, z] = ne.useState(null),
     [V, D] = ne.useState(null),
     [B, _] = ne.useState(""),
     [C, T] = ne.useState("output"),
     [N, R] = ne.useState(0),
-    L = [
-      ...new Set(e.allowedSheetIds ?? e.workbook.sheets.map((ye) => ye.id)),
+    allowedSheetIds = [
+      ...new Set(
+        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+      ),
     ].sort(),
     $ = {
       readOnly: e.readOnly,
-      includeHidden: !!e.allowHidden && I,
-      allowedSheetIds: L,
+      includeHidden: !!e.allowHidden && checked,
+      allowedSheetIds: allowedSheetIds,
     },
-    U = e.workbook.sheets.filter(
-      (ye) =>
-        L.includes(ye.id) &&
-        ($.includeHidden || (!ye.hidden && !ye.veryHidden)),
+    sheets = e.workbook.sheets.filter(
+      (sheet) =>
+        allowedSheetIds.includes(sheet.id) &&
+        ($.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     ),
     G = e.workbook.transformationRecipes ?? [],
     H = G.find((ye) => ye.id === m),
-    Q = G.find((ye) => ye.id === c),
-    X$1 = Q?.versions.find((ye) => ye.version === f),
-    J = !X$1 || X$1.definitionHash !== fingerprintCanonicalValue(s),
-    q = JSON.stringify([e.workbook, e.sheetId, e.range, s, c, f, k, $]),
-    W = j?.stamp === q,
+    Q = G.find((ye) => ye.id === recipeId),
+    X$1 = Q?.versions.find((version) => version.version === f),
+    J = !X$1 || X$1.definitionHash !== fingerprintCanonicalValue(definition),
+    stamp = JSON.stringify([
+      e.workbook,
+      e.sheetId,
+      e.range,
+      definition,
+      recipeId,
+      f,
+      outputName,
+      $,
+    ]),
+    W = j?.stamp === stamp,
     K = W ? j.plan.run : undefined;
   function te() {
     (z(null), D(null), R(0));
@@ -87,7 +98,7 @@ function TransformationRecipesDialog(e) {
     try {
       const Te = runTransformationRecipe(
         e.workbook,
-        { ...s, steps: s.steps.slice(0, ye) },
+        { ...definition, steps: definition.steps.slice(0, ye) },
         $,
       );
       return Te.status === "complete"
@@ -96,34 +107,34 @@ function TransformationRecipesDialog(e) {
             fields: Te.failure.inputSchema.map((Pe) => Pe.name),
             error: Te.failure.message,
           };
-    } catch (Te) {
-      return { fields: [], error: Te.message };
+    } catch (error) {
+      return { fields: [], error: error.message };
     }
   }
   const de = ne.useMemo(
       () => oe(Math.max(0, y)),
-      [e.workbook, s, y, JSON.stringify($)],
+      [e.workbook, definition, y, JSON.stringify($)],
     ),
-    he = s.steps[y],
-    Se = ne.useMemo(() => {
-      if (!he || !["merge", "append"].includes(he.kind)) return [];
+    step = definition.steps[y],
+    rightFields = ne.useMemo(() => {
+      if (!step || !["merge", "append"].includes(step.kind)) return [];
       try {
         const ye = runTransformationRecipe(
           e.workbook,
-          { engine: recipeStoreFormatId, source: he.source, steps: [] },
+          { engine: recipeStoreFormatId, source: step.source, steps: [] },
           $,
         );
         return ye.status === "complete" ? ye.output.fields : [];
       } catch {
         return [];
       }
-    }, [e.workbook, he, JSON.stringify($)]);
+    }, [e.workbook, step, JSON.stringify($)]);
   (ne.useEffect(() => {
-    const ye = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       n.current?.querySelector("input,select,button")?.focus(),
       () => {
-        ye?.isConnected && ye.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []),
@@ -137,14 +148,14 @@ function TransformationRecipesDialog(e) {
   const le = (ye) => {
     try {
       ye();
-    } catch (Te) {
-      D({ text: Te.message, stamp: q });
+    } catch (error) {
+      D({ text: error.message, stamp: stamp });
     }
   };
-  function ce() {
+  function onClick() {
     le(() => {
       const ye = G.find((Pe) => Pe.id === m),
-        Te = ye?.versions.find((Pe) => Pe.version === g);
+        Te = ye?.versions.find((version) => version.version === g);
       if (!ye || !Te) throw Error("Choose a saved recipe version.");
       (h(ye.id),
         p(Te.version),
@@ -159,39 +170,48 @@ function TransformationRecipesDialog(e) {
   }
   function ge() {
     le(() => {
-      const ye = saveTransformationRecipe(e.workbook, u, s, c || undefined, $),
-        Te = ye.transformationRecipes.find((Pe) =>
-          c ? Pe.id === c : Pe.name === u.trim(),
+      const ye = saveTransformationRecipe(
+          e.workbook,
+          u,
+          definition,
+          recipeId || undefined,
+          $,
+        ),
+        transformationRecipe = ye.transformationRecipes.find(
+          (transformationRecipe) =>
+            recipeId
+              ? transformationRecipe.id === recipeId
+              : transformationRecipe.name === u.trim(),
         );
       (e.onWorkbookChange(
         ye,
-        `Saved recipe ${Te.name} version ${Te.versions.length}`,
+        `Saved recipe ${transformationRecipe.name} version ${transformationRecipe.versions.length}`,
       ),
-        d(Te.versions.at(-1).definition),
-        h(Te.id),
-        p(Te.versions.length),
-        v(Te.id),
-        b(Te.versions.length),
+        d(transformationRecipe.versions.at(-1).definition),
+        h(transformationRecipe.id),
+        p(transformationRecipe.versions.length),
+        v(transformationRecipe.id),
+        b(transformationRecipe.versions.length),
         te(),
         _(
-          `Saved version ${Te.versions.length}. Preview this version before publishing.`,
+          `Saved version ${transformationRecipe.versions.length}. Preview this version before publishing.`,
         ));
     });
   }
   function se() {
     le(() => {
-      const ye = normalizeRecipeRunRequest(
+      const recipeRunRequest = normalizeRecipeRunRequest(
         e.workbook,
         {
-          definition: s,
-          ...(!J && c ? { recipeId: c, version: f } : {}),
-          outputName: k,
+          definition: definition,
+          ...(!J && recipeId ? { recipeId: recipeId, version: f } : {}),
+          outputName: outputName,
         },
         $,
       );
-      (z({ plan: ye, stamp: q }),
+      (z({ plan: recipeRunRequest, stamp: stamp }),
         R(0),
-        T(ye.run.status === "failed" ? "steps" : "output"),
+        T(recipeRunRequest.run.status === "failed" ? "steps" : "output"),
         D(null));
     });
   }
@@ -218,7 +238,7 @@ function TransformationRecipesDialog(e) {
       setTimeout(() => URL.revokeObjectURL(Pe), 5e3));
   }
   const Ae = e.workbook.sheets.filter(
-    (ye) => ye.transformationRun?.recipeId === c,
+    (sheet) => sheet.transformationRun?.recipeId === recipeId,
   );
   return i.jsx("div", {
     className: "recipe-backdrop",
@@ -228,10 +248,10 @@ function TransformationRecipesDialog(e) {
       "aria-labelledby": "recipe-title",
       className: "recipe-dialog",
       ref: n,
-      onKeyDown: (ye) => {
+      onKeyDown: (event) => {
         if (
-          (ye.key === "Escape" && (ye.preventDefault(), a.current()),
-          ye.key === "Tab")
+          (event.key === "Escape" && (event.preventDefault(), a.current()),
+          event.key === "Tab")
         ) {
           const Pe = Array.from(
               n.current?.querySelectorAll(
@@ -243,11 +263,11 @@ function TransformationRecipesDialog(e) {
             ),
             qe = Pe[0],
             ht = Pe.at(-1);
-          ye.shiftKey && document.activeElement === qe
-            ? (ye.preventDefault(), ht == null || ht.focus())
-            : !ye.shiftKey &&
+          event.shiftKey && document.activeElement === qe
+            ? (event.preventDefault(), ht == null || ht.focus())
+            : !event.shiftKey &&
               document.activeElement === ht &&
-              (ye.preventDefault(), qe == null || qe.focus());
+              (event.preventDefault(), qe == null || qe.focus());
         }
       },
       children: [
@@ -293,11 +313,11 @@ function TransformationRecipesDialog(e) {
                     i.jsxs("select", {
                       "aria-label": text("Saved recipe"),
                       value: m,
-                      onChange: (ye) => {
-                        (v(ye.target.value),
+                      onChange: (event) => {
+                        (v(event.target.value),
                           b(
-                            G.find((Pe) => Pe.id === ye.target.value)?.versions
-                              .length ?? 1,
+                            G.find((Pe) => Pe.id === event.target.value)
+                              ?.versions.length ?? 1,
                           ));
                       },
                       lang: language("Saved recipe"),
@@ -324,7 +344,7 @@ function TransformationRecipesDialog(e) {
                     i.jsx("select", {
                       "aria-label": text("Saved recipe version"),
                       value: g,
-                      onChange: (ye) => b(Number(ye.target.value)),
+                      onChange: (event) => b(Number(event.target.value)),
                       lang: language("Saved recipe version"),
                       "data-ui-label": "Saved recipe version",
                       children: (H?.versions ?? []).map((ye) =>
@@ -339,7 +359,7 @@ function TransformationRecipesDialog(e) {
                 }),
                 i.jsx("button", {
                   disabled: !H,
-                  onClick: ce,
+                  onClick: onClick,
                   children: i.jsx(LocalizedText, { children: "Load version" }),
                 }),
                 i.jsx("button", {
@@ -349,7 +369,7 @@ function TransformationRecipesDialog(e) {
                       l("Transformation recipe"),
                       d({
                         engine: recipeStoreFormatId,
-                        source: s.source,
+                        source: definition.source,
                         steps: [],
                       }),
                       w(-1),
@@ -367,7 +387,7 @@ function TransformationRecipesDialog(e) {
                         ye,
                         "Deleted saved recipe definition; outputs retained",
                       ),
-                        c === m && (h(""), p(0)),
+                        recipeId === m && (h(""), p(0)),
                         v(""),
                         te(),
                         _(
@@ -389,7 +409,7 @@ function TransformationRecipesDialog(e) {
                     i.jsx("input", {
                       "aria-label": text("Recipe name"),
                       value: u,
-                      onChange: (ye) => l(ye.target.value),
+                      onChange: (event) => l(event.target.value),
                       maxLength: 128,
                       lang: language("Recipe name"),
                       "data-ui-label": "Recipe name",
@@ -398,22 +418,22 @@ function TransformationRecipesDialog(e) {
                 }),
                 i.jsx("p", {
                   className: "recipe-version",
-                  children: c
+                  children: recipeId
                     ? `Version ${f}${J ? " · edited draft" : " · saved"}`
                     : "Unsaved draft",
                 }),
                 i.jsx("button", {
                   disabled: e.readOnly,
                   onClick: ge,
-                  children: c ? "Save next version" : "Save new recipe",
+                  children: recipeId ? "Save next version" : "Save new recipe",
                 }),
               ],
             }),
             i.jsx(RecipeSourceSelector, {
               label: text("Primary source"),
-              source: s.source,
-              sheets: U,
-              onChange: (ye) => ae({ ...s, source: ye }),
+              source: definition.source,
+              sheets: sheets,
+              onChange: (source) => ae({ ...definition, source: source }),
             }),
             e.allowHidden &&
               i.jsxs("label", {
@@ -421,9 +441,9 @@ function TransformationRecipesDialog(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: I,
-                    onChange: (ye) => {
-                      (O(ye.target.checked), te());
+                    checked: checked,
+                    onChange: (event) => {
+                      (O(event.target.checked), te());
                     },
                   }),
                   i.jsx(LocalizedText, {
@@ -452,7 +472,7 @@ function TransformationRecipesDialog(e) {
                       }),
                     }),
                     i.jsx("ol", {
-                      children: s.steps.map((ye, Te) =>
+                      children: definition.steps.map((step, Te) =>
                         i.jsxs(
                           "li",
                           {
@@ -463,7 +483,7 @@ function TransformationRecipesDialog(e) {
                                 children: [
                                   Te + 1,
                                   ". ",
-                                  recipeStepKindLabels[ye.kind],
+                                  recipeStepKindLabels[step.kind],
                                 ],
                               }),
                               i.jsxs("span", {
@@ -472,26 +492,27 @@ function TransformationRecipesDialog(e) {
                                     "aria-label": `Move step ${Te + 1} up`,
                                     disabled: Te === 0,
                                     onClick: () => {
-                                      const Pe = [...s.steps];
-                                      (([Pe[Te - 1], Pe[Te]] = [
-                                        Pe[Te],
-                                        Pe[Te - 1],
+                                      const steps = [...definition.steps];
+                                      (([steps[Te - 1], steps[Te]] = [
+                                        steps[Te],
+                                        steps[Te - 1],
                                       ]),
-                                        ae({ ...s, steps: Pe }),
+                                        ae({ ...definition, steps: steps }),
                                         w(Te - 1));
                                     },
                                     children: "↑",
                                   }),
                                   i.jsx("button", {
                                     "aria-label": `Move step ${Te + 1} down`,
-                                    disabled: Te === s.steps.length - 1,
+                                    disabled:
+                                      Te === definition.steps.length - 1,
                                     onClick: () => {
-                                      const Pe = [...s.steps];
-                                      (([Pe[Te], Pe[Te + 1]] = [
-                                        Pe[Te + 1],
-                                        Pe[Te],
+                                      const steps = [...definition.steps];
+                                      (([steps[Te], steps[Te + 1]] = [
+                                        steps[Te + 1],
+                                        steps[Te],
                                       ]),
-                                        ae({ ...s, steps: Pe }),
+                                        ae({ ...definition, steps: steps }),
                                         w(Te + 1));
                                     },
                                     children: "↓",
@@ -500,12 +521,17 @@ function TransformationRecipesDialog(e) {
                                     "aria-label": `Remove step ${Te + 1}`,
                                     onClick: () => {
                                       (ae({
-                                        ...s,
-                                        steps: s.steps.filter(
-                                          (Pe, qe) => qe !== Te,
+                                        ...definition,
+                                        steps: definition.steps.filter(
+                                          (step, qe) => qe !== Te,
                                         ),
                                       }),
-                                        w(Math.min(Te, s.steps.length - 2)));
+                                        w(
+                                          Math.min(
+                                            Te,
+                                            definition.steps.length - 2,
+                                          ),
+                                        ));
                                     },
                                     children: "×",
                                   }),
@@ -513,7 +539,7 @@ function TransformationRecipesDialog(e) {
                               }),
                             ],
                           },
-                          ye.id,
+                          step.id,
                         ),
                       ),
                     }),
@@ -525,7 +551,7 @@ function TransformationRecipesDialog(e) {
                         i.jsx("select", {
                           "aria-label": text("New transformation type"),
                           value: E,
-                          onChange: (ye) => A(ye.target.value),
+                          onChange: (event) => A(event.target.value),
                           lang: language("New transformation type"),
                           "data-ui-label": "New transformation type",
                           children: Object.entries(recipeStepKindLabels).map(
@@ -537,23 +563,24 @@ function TransformationRecipesDialog(e) {
                     }),
                     i.jsx("button", {
                       disabled:
-                        s.steps.length >= transformationRecipeLimits.steps,
+                        definition.steps.length >=
+                        transformationRecipeLimits.steps,
                       onClick: () => {
-                        const ye = oe(s.steps.length).fields;
+                        const fields = oe(definition.steps.length).fields;
                         (ae({
-                          ...s,
+                          ...definition,
                           steps: [
-                            ...s.steps,
-                            createRecipeStep(E, ye, s.source),
+                            ...definition.steps,
+                            createRecipeStep(E, fields, definition.source),
                           ],
                         }),
-                          w(s.steps.length));
+                          w(definition.steps.length));
                       },
                       children: i.jsx(LocalizedText, { children: "Add step" }),
                     }),
                     i.jsxs("p", {
                       children: [
-                        s.steps.length,
+                        definition.steps.length,
                         " / ",
                         transformationRecipeLimits.steps,
                         " ",
@@ -567,14 +594,14 @@ function TransformationRecipesDialog(e) {
                   "aria-label": text("Recipe step editor"),
                   lang: language("Recipe step editor"),
                   "data-ui-label": "Recipe step editor",
-                  children: he
+                  children: step
                     ? i.jsxs(i.Fragment, {
                         children: [
                           i.jsxs("h3", {
                             children: [
                               y + 1,
                               ". ",
-                              recipeStepKindLabels[he.kind],
+                              recipeStepKindLabels[step.kind],
                             ],
                           }),
                           de.error &&
@@ -589,15 +616,15 @@ function TransformationRecipesDialog(e) {
                               ],
                             }),
                           i.jsx(RecipeStepEditor, {
-                            step: he,
+                            step: step,
                             fields: de.fields,
-                            rightFields: Se,
-                            sheets: U,
+                            rightFields: rightFields,
+                            sheets: sheets,
                             onChange: (ye) =>
                               ae({
-                                ...s,
-                                steps: s.steps.map((Te, Pe) =>
-                                  Pe === y ? ye : Te,
+                                ...definition,
+                                steps: definition.steps.map((step, Pe) =>
+                                  Pe === y ? ye : step,
                                 ),
                               }),
                           }),
@@ -620,9 +647,9 @@ function TransformationRecipesDialog(e) {
                     i.jsx(LocalizedText, { children: "New output worksheet" }),
                     i.jsx("input", {
                       "aria-label": text("Recipe output worksheet"),
-                      value: k,
-                      onChange: (ye) => {
-                        (F(ye.target.value), te());
+                      value: outputName,
+                      onChange: (event) => {
+                        (F(event.target.value), te());
                       },
                       maxLength: 31,
                       lang: language("Recipe output worksheet"),
@@ -640,7 +667,7 @@ function TransformationRecipesDialog(e) {
               ],
             }),
             B && i.jsx("p", { role: "status", children: B }),
-            V?.stamp === q &&
+            V?.stamp === stamp &&
               i.jsx("p", {
                 role: "alert",
                 className: "recipe-error",
@@ -779,8 +806,8 @@ function TransformationRecipesDialog(e) {
                                 i.jsx("thead", {
                                   children: i.jsxs("tr", {
                                     children: [
-                                      K.output.fields.map((ye) =>
-                                        i.jsx("th", { children: ye }, ye),
+                                      K.output.fields.map((field) =>
+                                        i.jsx("th", { children: field }, field),
                                       ),
                                       i.jsx("th", {
                                         children: i.jsx(LocalizedText, {
@@ -798,13 +825,13 @@ function TransformationRecipesDialog(e) {
                                         "tr",
                                         {
                                           children: [
-                                            ye.values.map((Pe, qe) =>
+                                            ye.values.map((value, qe) =>
                                               i.jsx(
                                                 "td",
                                                 {
                                                   children:
                                                     formatCellValueForDisplay(
-                                                      Pe,
+                                                      value,
                                                     ),
                                                 },
                                                 qe,
@@ -825,11 +852,11 @@ function TransformationRecipesDialog(e) {
                                                         : "s",
                                                     ],
                                                   }),
-                                                  ye.sources.map((Pe) =>
+                                                  ye.sources.map((source) =>
                                                     i.jsx(
                                                       "p",
-                                                      { children: Pe },
-                                                      Pe,
+                                                      { children: source },
+                                                      source,
                                                     ),
                                                   ),
                                                 ],
@@ -896,25 +923,25 @@ function TransformationRecipesDialog(e) {
                       "aria-label": text("Recipe step trace"),
                       lang: language("Recipe step trace"),
                       "data-ui-label": "Recipe step trace",
-                      children: K.steps.map((ye) =>
+                      children: K.steps.map((step) =>
                         i.jsxs(
                           "details",
                           {
-                            open: ye.status === "failed",
+                            open: step.status === "failed",
                             children: [
                               i.jsxs("summary", {
                                 children: [
-                                  ye.index,
+                                  step.index,
                                   ".",
                                   " ",
-                                  recipeStepKindLabels[ye.kind] ?? ye.kind,
+                                  recipeStepKindLabels[step.kind] ?? step.kind,
                                   " ",
                                   "· ",
-                                  ye.status,
+                                  step.status,
                                   " · ",
-                                  ye.inputRows,
+                                  step.inputRows,
                                   " → ",
-                                  ye.outputRows ?? "—",
+                                  step.outputRows ?? "—",
                                   " ",
                                   i.jsx(LocalizedText, { children: "rows" }),
                                 ],
@@ -925,7 +952,7 @@ function TransformationRecipesDialog(e) {
                                     children: "Input schema:",
                                   }),
                                   " ",
-                                  ye.inputSchema
+                                  step.inputSchema
                                     .map(
                                       (Pe) =>
                                         `${Pe.name} (${Pe.types.join(" / ") || "empty"}${Pe.declaredType ? `; declared ${Pe.declaredType}` : ""})`,
@@ -933,14 +960,14 @@ function TransformationRecipesDialog(e) {
                                     .join(", ") || "not executed",
                                 ],
                               }),
-                              ye.outputSchema &&
+                              step.outputSchema &&
                                 i.jsxs("p", {
                                   children: [
                                     i.jsx(LocalizedText, {
                                       children: "Output schema:",
                                     }),
                                     " ",
-                                    ye.outputSchema
+                                    step.outputSchema
                                       .map(
                                         (Pe) =>
                                           `${Pe.name} (${Pe.types.join(" / ") || "empty"})`,
@@ -948,68 +975,68 @@ function TransformationRecipesDialog(e) {
                                       .join(", "),
                                   ],
                                 }),
-                              ye.error &&
+                              step.error &&
                                 i.jsx("p", {
                                   className: "recipe-error",
-                                  children: ye.error,
+                                  children: step.error,
                                 }),
-                              ye.controls &&
+                              step.controls &&
                                 i.jsxs("p", {
                                   children: [
                                     i.jsx(LocalizedText, {
                                       children: "Control totals:",
                                     }),
                                     " ",
-                                    ye.controls
+                                    step.controls
                                       .map(
-                                        (Pe) =>
-                                          `${Pe.field}: ${Pe.sum} across ${Pe.numericCount} numeric values; ${Pe.blankCount} blanks`,
+                                        (control) =>
+                                          `${control.field}: ${control.sum} across ${control.numericCount} numeric values; ${control.blankCount} blanks`,
                                       )
                                       .join(" · "),
                                   ],
                                 }),
-                              ye.details?.matchPairs !== undefined &&
+                              step.details?.matchPairs !== undefined &&
                                 i.jsxs("p", {
                                   children: [
                                     i.jsx(LocalizedText, {
                                       children: "Merge: ",
                                     }),
-                                    String(ye.details.matchPairs),
+                                    String(step.details.matchPairs),
                                     " ",
                                     i.jsx(LocalizedText, {
                                       children: "pairs · matched",
                                     }),
                                     " ",
-                                    String(ye.details.matchedLeft),
+                                    String(step.details.matchedLeft),
                                     " ",
                                     i.jsx(LocalizedText, {
                                       children: "left /",
                                     }),
                                     " ",
-                                    String(ye.details.matchedRight),
+                                    String(step.details.matchedRight),
                                     " ",
                                     i.jsx(LocalizedText, {
                                       children: "right · unmatched",
                                     }),
                                     " ",
-                                    ye.details.unmatchedLeft.length,
+                                    step.details.unmatchedLeft.length,
                                     " ",
                                     i.jsx(LocalizedText, {
                                       children: "left /",
                                     }),
                                     " ",
-                                    ye.details.unmatchedRight.length,
+                                    step.details.unmatchedRight.length,
                                     " ",
                                     i.jsx(LocalizedText, {
                                       children: "right · ",
                                     }),
-                                    String(ye.details.manyToMany),
+                                    String(step.details.manyToMany),
                                     " ",
                                     i.jsx(LocalizedText, {
                                       children: "many-to-many groups ·",
                                     }),
                                     " ",
-                                    String(ye.details.extraPairs),
+                                    String(step.details.extraPairs),
                                     " ",
                                     i.jsx(LocalizedText, {
                                       children:
@@ -1017,18 +1044,20 @@ function TransformationRecipesDialog(e) {
                                     }),
                                   ],
                                 }),
-                              ye.outputHash &&
+                              step.outputHash &&
                                 i.jsxs("p", {
                                   children: [
                                     i.jsx(LocalizedText, {
                                       children: "Output fingerprint ",
                                     }),
-                                    i.jsx("code", { children: ye.outputHash }),
+                                    i.jsx("code", {
+                                      children: step.outputHash,
+                                    }),
                                   ],
                                 }),
                             ],
                           },
-                          ye.id,
+                          step.id,
                         ),
                       ),
                     }),
@@ -1038,7 +1067,7 @@ function TransformationRecipesDialog(e) {
                       lang: language("Recipe sources and totals"),
                       "data-ui-label": "Recipe sources and totals",
                       children: [
-                        K.sources.map((ye, Te) =>
+                        K.sources.map((source, Te) =>
                           i.jsxs(
                             "details",
                             {
@@ -1046,11 +1075,11 @@ function TransformationRecipesDialog(e) {
                               children: [
                                 i.jsxs("summary", {
                                   children: [
-                                    ye.sheetName,
+                                    source.sheetName,
                                     "!",
-                                    ye.resolvedRange,
+                                    source.resolvedRange,
                                     " · ",
-                                    ye.rows,
+                                    source.rows,
                                     " ",
                                     i.jsx(LocalizedText, {
                                       children: "source records",
@@ -1058,7 +1087,7 @@ function TransformationRecipesDialog(e) {
                                   ],
                                 }),
                                 i.jsx("p", {
-                                  children: ye.schema
+                                  children: source.schema
                                     .map(
                                       (Pe) =>
                                         `${Pe.name}: ${Pe.types.join(" / ") || "empty"}`,
@@ -1066,14 +1095,14 @@ function TransformationRecipesDialog(e) {
                                     .join(", "),
                                 }),
                                 i.jsx("p", {
-                                  children: ye.controls
+                                  children: source.controls
                                     .map(
-                                      (Pe) =>
-                                        `${Pe.field}: ${Pe.sum} (${Pe.numericCount} numbers, ${Pe.blankCount} blanks)`,
+                                      (control) =>
+                                        `${control.field}: ${control.sum} (${control.numericCount} numbers, ${control.blankCount} blanks)`,
                                     )
                                     .join(" · "),
                                 }),
-                                i.jsx("code", { children: ye.hash }),
+                                i.jsx("code", { children: source.hash }),
                               ],
                             },
                             Te,
@@ -1087,30 +1116,30 @@ function TransformationRecipesDialog(e) {
                                   children: "Final controls",
                                 }),
                               }),
-                              K.controls.map((ye) =>
+                              K.controls.map((control) =>
                                 i.jsxs(
                                   "p",
                                   {
                                     children: [
-                                      ye.field,
+                                      control.field,
                                       i.jsx(LocalizedText, {
                                         children: ": sum ",
                                       }),
-                                      ye.sum,
+                                      control.sum,
                                       " · ",
-                                      ye.numericCount,
+                                      control.numericCount,
                                       " ",
                                       i.jsx(LocalizedText, {
                                         children: "numeric values · ",
                                       }),
-                                      ye.blankCount,
+                                      control.blankCount,
                                       " ",
                                       i.jsx(LocalizedText, {
                                         children: "blanks",
                                       }),
                                     ],
                                   },
-                                  ye.field,
+                                  control.field,
                                 ),
                               ),
                               i.jsxs("p", {
@@ -1168,8 +1197,8 @@ function TransformationRecipesDialog(e) {
     }),
   });
 }
-const createDefaultFilterCriterion = (e) => ({
-    column: e,
+const createDefaultFilterCriterion = (column) => ({
+    column: column,
     type: "text",
     operator: "contains",
     value: "",

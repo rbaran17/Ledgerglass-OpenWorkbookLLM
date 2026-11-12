@@ -53,12 +53,12 @@ function OutlineToolsPanel(e) {
   const [d, u] = ne.useState(/column/i.test(e.mode) ? "column" : "row"),
     [l, c] = ne.useState(0),
     [h, f] = ne.useState(""),
-    p = e.workbook.sheets.find((V) => V.id === e.sheetId),
-    m = ne.useMemo(() => (p ? addOutlineGroup(p, d) : []), [p, d]),
-    v = parseRangeAddress(e.range),
-    g = d === "row" ? v.firstRow : v.firstCol,
-    b = d === "row" ? v.lastRow : v.lastCol,
-    y = e.readOnly || !!p?.protection?.enabled,
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    m = ne.useMemo(() => (sheet ? addOutlineGroup(sheet, d) : []), [sheet, d]),
+    rangeAddress = parseRangeAddress(e.range),
+    g = d === "row" ? rangeAddress.firstRow : rangeAddress.firstCol,
+    b = d === "row" ? rangeAddress.lastRow : rangeAddress.lastCol,
+    y = e.readOnly || !!sheet?.protection?.enabled,
     w = s.current,
     E = ne.useMemo(
       () => JSON.stringify(e.workbook) !== w.snapshot,
@@ -70,17 +70,17 @@ function OutlineToolsPanel(e) {
       w.sheetId !== e.sheetId ||
       w.range !== e.range ||
       E ||
-      !p,
-    k = y || A,
+      !sheet,
+    disabled = y || A,
     F = Math.max(0, ...m.map((V) => V.depth)) + 1,
     I = Math.max(1, Math.ceil(m.length / wS)),
     O = Math.min(l, I - 1);
   ne.useEffect(() => {
-    const V = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       o.current?.querySelector("button:not(:disabled)")?.focus(),
       () => {
-        V?.isConnected && V.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
@@ -89,7 +89,8 @@ function OutlineToolsPanel(e) {
       const C = a.current;
       if (
         C.readOnly ||
-        C.workbook.sheets.find((N) => N.id === C.sheetId)?.protection?.enabled
+        C.workbook.sheets.find((sheet) => sheet.id === C.sheetId)?.protection
+          ?.enabled
       )
         throw Error(
           "This worksheet is read-only. Unlock it before changing outlines.",
@@ -104,8 +105,12 @@ function OutlineToolsPanel(e) {
         throw Error(staleOutlineMessage);
       const T = V(C.workbook);
       (T !== C.workbook && C.onWorkbookChange(T, D), C.onClose());
-    } catch (C) {
-      f(C instanceof Error ? C.message : "The outline could not be changed.");
+    } catch (error) {
+      f(
+        error instanceof Error
+          ? error.message
+          : "The outline could not be changed.",
+      );
     }
   }
   return i.jsx("div", {
@@ -117,11 +122,13 @@ function OutlineToolsPanel(e) {
       "aria-modal": "true",
       "aria-labelledby": n,
       tabIndex: -1,
-      onKeyDown: (V) => {
+      onKeyDown: (event) => {
         if (
-          (V.key === "Escape" &&
-            (V.preventDefault(), V.stopPropagation(), a.current.onClose()),
-          V.key === "Tab")
+          (event.key === "Escape" &&
+            (event.preventDefault(),
+            event.stopPropagation(),
+            a.current.onClose()),
+          event.key === "Tab")
         ) {
           const B = Array.from(
               o.current?.querySelectorAll(
@@ -130,12 +137,12 @@ function OutlineToolsPanel(e) {
             ),
             _ = B[0],
             C = B.at(-1);
-          V.shiftKey &&
+          event.shiftKey &&
           (document.activeElement === _ || document.activeElement === o.current)
-            ? (V.preventDefault(), C == null || C.focus())
-            : !V.shiftKey &&
+            ? (event.preventDefault(), C == null || C.focus())
+            : !event.shiftKey &&
               document.activeElement === C &&
-              (V.preventDefault(), _ == null || _.focus());
+              (event.preventDefault(), _ == null || _.focus());
         }
       },
       children: [
@@ -192,8 +199,8 @@ function OutlineToolsPanel(e) {
                     i.jsxs("select", {
                       "aria-label": text("Outline axis"),
                       value: d,
-                      onChange: (V) => {
-                        (u(V.target.value), c(0), f(""));
+                      onChange: (event) => {
+                        (u(event.target.value), c(0), f(""));
                       },
                       lang: language("Outline axis"),
                       "data-ui-label": "Outline axis",
@@ -221,10 +228,10 @@ function OutlineToolsPanel(e) {
                 i.jsx("button", {
                   type: "button",
                   className: "ot-primary",
-                  disabled: k,
+                  disabled: disabled,
                   onClick: () =>
                     j(
-                      (V) => EQ(V, e.sheetId, d, g, b),
+                      (workbook) => EQ(workbook, e.sheetId, d, g, b),
                       "Group " + formatRowColumnSpan(d, g, b).toLowerCase(),
                     ),
                   children: i.jsx(LocalizedText, {
@@ -244,11 +251,12 @@ function OutlineToolsPanel(e) {
                     "button",
                     {
                       type: "button",
-                      disabled: k || !m.length,
+                      disabled: disabled || !m.length,
                       "aria-label": "Show outline level " + (D + 1),
                       onClick: () =>
                         j(
-                          (B) => setOutlineGroupLevel(B, e.sheetId, d, D + 1),
+                          (workbook) =>
+                            setOutlineGroupLevel(workbook, e.sheetId, d, D + 1),
                           "Show " + d + " outline level " + (D + 1),
                         ),
                       children: D + 1,
@@ -287,10 +295,11 @@ function OutlineToolsPanel(e) {
                 }),
                 i.jsx("button", {
                   type: "button",
-                  disabled: k || !m.length,
+                  disabled: disabled || !m.length,
                   onClick: () =>
                     j(
-                      (V) => clearAxisOutlineGroups(V, e.sheetId, d),
+                      (workbook) =>
+                        clearAxisOutlineGroups(workbook, e.sheetId, d),
                       "Clear " + d + " outline groups",
                     ),
                   children: i.jsx(LocalizedText, { children: "Clear groups" }),
@@ -332,7 +341,7 @@ function OutlineToolsPanel(e) {
                             children: [
                               i.jsx("button", {
                                 type: "button",
-                                disabled: k,
+                                disabled: disabled,
                                 "aria-label":
                                   (V.collapsed ? "Expand " : "Collapse ") +
                                   formatRowColumnSpan(
@@ -342,9 +351,9 @@ function OutlineToolsPanel(e) {
                                   ).toLowerCase(),
                                 onClick: () =>
                                   j(
-                                    (D) =>
+                                    (workbook) =>
                                       setOutlineGroupCollapsed(
-                                        D,
+                                        workbook,
                                         e.sheetId,
                                         V.id,
                                         !V.collapsed,
@@ -360,7 +369,7 @@ function OutlineToolsPanel(e) {
                               }),
                               i.jsx("button", {
                                 type: "button",
-                                disabled: k,
+                                disabled: disabled,
                                 "aria-label":
                                   "Ungroup " +
                                   formatRowColumnSpan(
@@ -370,8 +379,12 @@ function OutlineToolsPanel(e) {
                                   ).toLowerCase(),
                                 onClick: () =>
                                   j(
-                                    (D) =>
-                                      removeOutlineGroup(D, e.sheetId, V.id),
+                                    (workbook) =>
+                                      removeOutlineGroup(
+                                        workbook,
+                                        e.sheetId,
+                                        V.id,
+                                      ),
                                     "Ungroup " +
                                       formatRowColumnSpan(
                                         d,
@@ -450,18 +463,18 @@ function OutlineToolsPanel(e) {
 }
 const reviewPageSize = 20;
 function resolveSelectionAnchorAddress(e) {
-  const r = parseRangeAddress(e.range);
+  const rangeAddress = parseRangeAddress(e.range);
   if (e.active) {
     const t = _t(e.active);
     if (
-      t.row >= r.firstRow &&
-      t.row <= r.lastRow &&
-      t.col >= r.firstCol &&
-      t.col <= r.lastCol
+      t.row >= rangeAddress.firstRow &&
+      t.row <= rangeAddress.lastRow &&
+      t.col >= rangeAddress.firstCol &&
+      t.col <= rangeAddress.lastCol
     )
       return `${columnIndexToLetters(t.col)}${t.row + 1}`;
   }
-  return `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}`;
+  return `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`;
 }
 const formatLocalDateTime = (e) => new Date(e).toLocaleString();
 function ReviewToolsPanel(e) {
@@ -478,18 +491,18 @@ function ReviewToolsPanel(e) {
       active: e.active,
       content: JSON.stringify(e.workbook),
     }),
-    d = e.workbook.sheets.find((se) => se.id === e.sheetId),
-    u = resolveSelectionAnchorAddress(e),
-    l = d?.cells[u]?.hyperlink,
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    selectionAnchorAddress = resolveSelectionAnchorAddress(e),
+    l = sheet?.cells[selectionAnchorAddress]?.hyperlink,
     [c, h] = ne.useState(e.mode ?? "comments"),
     [f, p] = ne.useState("cell"),
     [m, v] = ne.useState(0),
     [g, b] = ne.useState(
       e.workbook.reviewThreads?.find(
-        (se) =>
-          !se.orphaned &&
-          se.anchor.sheetId === e.sheetId &&
-          se.anchor.address === u,
+        (reviewThread) =>
+          !reviewThread.orphaned &&
+          reviewThread.anchor.sheetId === e.sheetId &&
+          reviewThread.anchor.address === selectionAnchorAddress,
       )?.id ?? "",
     ),
     [y, w] = ne.useState(0),
@@ -497,9 +510,9 @@ function ReviewToolsPanel(e) {
     [k, F] = ne.useState(""),
     [I, O] = ne.useState(""),
     [j, z] = ne.useState(l?.kind ?? "external"),
-    [V, D] = ne.useState(l?.kind === "external" ? l.url : ""),
-    [B, _] = ne.useState(l?.kind === "internal" ? l.sheetId : e.sheetId),
-    [C, T] = ne.useState(l?.kind === "internal" ? l.address : "A1"),
+    [url, D] = ne.useState(l?.kind === "external" ? l.url : ""),
+    [sheetId, _] = ne.useState(l?.kind === "internal" ? l.sheetId : e.sheetId),
+    [address, T] = ne.useState(l?.kind === "internal" ? l.address : "A1"),
     [N, R] = ne.useState(l?.label ?? ""),
     L =
       s.current.id !== e.workbook.id ||
@@ -508,7 +521,7 @@ function ReviewToolsPanel(e) {
       s.current.range !== e.range ||
       s.current.active !== e.active ||
       s.current.content !== JSON.stringify(e.workbook),
-    $ = e.readOnly || !!d?.protection?.enabled || L || !d,
+    disabled = e.readOnly || !!sheet?.protection?.enabled || L || !sheet,
     G = [...(e.workbook.reviewThreads ?? [])]
       .sort((se, we) => we.updatedAt.localeCompare(se.updatedAt))
       .filter(
@@ -520,18 +533,18 @@ function ReviewToolsPanel(e) {
               ? !se.resolved && !se.orphaned
               : !se.orphaned &&
                 se.anchor.sheetId === e.sheetId &&
-                se.anchor.address === u),
+                se.anchor.address === selectionAnchorAddress),
       ),
     H = G.find((se) => se.id === g),
-    Q = e.workbook.sheets.find((se) => se.id === H?.anchor.sheetId),
+    Q = e.workbook.sheets.find((sheet) => sheet.id === H?.anchor.sheetId),
     X$1 = e.readOnly || L || !!H?.orphaned || !Q || !!Q.protection?.enabled,
     J = e.actor?.trim() || "Reviewer";
   ne.useEffect(() => {
-    const se = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       o.current?.querySelector("button:not(:disabled)")?.focus(),
       () => {
-        se?.isConnected && se.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
@@ -547,10 +560,10 @@ function ReviewToolsPanel(e) {
           JSON.stringify(Ee) !== JSON.stringify(e.workbook) &&
           e.onWorkbookChange(Ee, we),
           e.onClose());
-      } catch (Ee) {
+      } catch (error) {
         O(
-          Ee instanceof Error
-            ? Ee.message
+          error instanceof Error
+            ? error.message
             : "The review change could not be saved.",
         );
       }
@@ -559,8 +572,13 @@ function ReviewToolsPanel(e) {
       try {
         return validateHyperlinkRecord(
           j === "external"
-            ? { kind: "external", url: V, label: N }
-            : { kind: "internal", sheetId: B, address: C, label: N },
+            ? { kind: "external", url: url, label: N }
+            : {
+                kind: "internal",
+                sheetId: sheetId,
+                address: address,
+                label: N,
+              },
         );
       } catch {
         return null;
@@ -569,10 +587,10 @@ function ReviewToolsPanel(e) {
     te = (se, we) => {
       try {
         (O(""), e.onNavigate?.(se, we), e.onClose());
-      } catch (Ae) {
+      } catch (error) {
         O(
-          Ae instanceof Error
-            ? Ae.message
+          error instanceof Error
+            ? error.message
             : "The link target could not be opened.",
         );
       }
@@ -585,11 +603,11 @@ function ReviewToolsPanel(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
-      onKeyDown: (se) => {
+      onKeyDown: (event) => {
         if (
-          (se.stopPropagation(),
-          se.key === "Escape" && (se.preventDefault(), a.current()),
-          se.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), a.current()),
+          event.key === "Tab")
         ) {
           const Ee = [
               ...(o.current?.querySelectorAll(
@@ -598,11 +616,11 @@ function ReviewToolsPanel(e) {
             ],
             Ae = Ee[0],
             ye = Ee.at(-1);
-          se.shiftKey && document.activeElement === Ae
-            ? (se.preventDefault(), ye == null || ye.focus())
-            : !se.shiftKey &&
+          event.shiftKey && document.activeElement === Ae
+            ? (event.preventDefault(), ye == null || ye.focus())
+            : !event.shiftKey &&
               document.activeElement === ye &&
-              (se.preventDefault(), Ae == null || Ae.focus());
+              (event.preventDefault(), Ae == null || Ae.focus());
         }
       },
       children: [
@@ -618,7 +636,11 @@ function ReviewToolsPanel(e) {
                   }),
                 }),
                 i.jsxs("p", {
-                  children: [d?.name ?? "Worksheet unavailable", "!", u],
+                  children: [
+                    sheet?.name ?? "Worksheet unavailable",
+                    "!",
+                    selectionAnchorAddress,
+                  ],
                 }),
               ],
             }),
@@ -649,15 +671,17 @@ function ReviewToolsPanel(e) {
                 onClick: () => {
                   (h(se), O(""));
                 },
-                onKeyDown: (Ee) => {
+                onKeyDown: (event) => {
                   if (
-                    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(Ee.key)
+                    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                      event.key,
+                    )
                   ) {
-                    Ee.preventDefault();
+                    event.preventDefault();
                     const ye =
-                      Ee.key === "Home"
+                      event.key === "Home"
                         ? "comments"
-                        : Ee.key === "End"
+                        : event.key === "End"
                           ? "hyperlink"
                           : we
                             ? "comments"
@@ -697,7 +721,7 @@ function ReviewToolsPanel(e) {
                 }),
               }),
             !e.readOnly &&
-              d?.protection?.enabled &&
+              sheet?.protection?.enabled &&
               i.jsx("p", {
                 className: "rv-muted",
                 children: i.jsx(LocalizedText, {
@@ -729,8 +753,8 @@ function ReviewToolsPanel(e) {
                         i.jsxs("select", {
                           "aria-label": text("Show discussions"),
                           value: f,
-                          onChange: (se) => {
-                            (p(se.target.value), v(0), b(""), F(""));
+                          onChange: (event) => {
+                            (p(event.target.value), v(0), b(""), F(""));
                           },
                           lang: language("Show discussions"),
                           "data-ui-label": "Show discussions",
@@ -1012,8 +1036,8 @@ function ReviewToolsPanel(e) {
                                     !H.orphaned &&
                                     i.jsxs("form", {
                                       className: "rv-compose",
-                                      onSubmit: (se) => {
-                                        (se.preventDefault(),
+                                      onSubmit: (event) => {
+                                        (event.preventDefault(),
                                           q(
                                             () =>
                                               addReviewThreadReply(
@@ -1041,8 +1065,8 @@ function ReviewToolsPanel(e) {
                                                 reviewThreadLimits.textLength,
                                               value: k,
                                               disabled: X$1,
-                                              onChange: (se) =>
-                                                F(se.target.value),
+                                              onChange: (event) =>
+                                                F(event.target.value),
                                               lang: language("Reply"),
                                               "data-ui-label": "Reply",
                                             }),
@@ -1071,13 +1095,20 @@ function ReviewToolsPanel(e) {
                     }),
                     i.jsxs("form", {
                       className: "rv-compose rv-new",
-                      onSubmit: (se) => {
-                        (se.preventDefault(),
+                      onSubmit: (event) => {
+                        (event.preventDefault(),
                           q(
                             () =>
-                              nQ(e.workbook, e.sheetId, u, E, J, {
-                                readOnly: e.readOnly,
-                              }),
+                              nQ(
+                                e.workbook,
+                                e.sheetId,
+                                selectionAnchorAddress,
+                                E,
+                                J,
+                                {
+                                  readOnly: e.readOnly,
+                                },
+                              ),
                             "Add review discussion",
                           ));
                       },
@@ -1087,16 +1118,16 @@ function ReviewToolsPanel(e) {
                             i.jsx(LocalizedText, {
                               children: "New comment on ",
                             }),
-                            d?.name,
+                            sheet?.name,
                             "!",
-                            u,
+                            selectionAnchorAddress,
                             i.jsx("textarea", {
                               "aria-label": text("New comment"),
                               rows: 3,
                               maxLength: reviewThreadLimits.textLength,
                               value: E,
-                              disabled: $,
-                              onChange: (se) => A(se.target.value),
+                              disabled: disabled,
+                              onChange: (event) => A(event.target.value),
                               lang: language("New comment"),
                               "data-ui-label": "New comment",
                             }),
@@ -1114,7 +1145,7 @@ function ReviewToolsPanel(e) {
                             }),
                             i.jsx("button", {
                               className: "rv-primary",
-                              disabled: $ || !E.trim(),
+                              disabled: disabled || !E.trim(),
                               children: i.jsx(LocalizedText, {
                                 children: "Post comment",
                               }),
@@ -1145,20 +1176,20 @@ function ReviewToolsPanel(e) {
                     }),
                     i.jsxs("form", {
                       className: "rv-link-form",
-                      onSubmit: (se) => {
-                        (se.preventDefault(),
+                      onSubmit: (event) => {
+                        (event.preventDefault(),
                           q(
                             () =>
                               setCellHyperlink(
                                 e.workbook,
                                 e.sheetId,
-                                u,
+                                selectionAnchorAddress,
                                 j === "external"
-                                  ? { kind: "external", url: V, label: N }
+                                  ? { kind: "external", url: url, label: N }
                                   : {
                                       kind: "internal",
-                                      sheetId: B,
-                                      address: C,
+                                      sheetId: sheetId,
+                                      address: address,
                                       label: N,
                                     },
                                 { readOnly: e.readOnly },
@@ -1173,8 +1204,8 @@ function ReviewToolsPanel(e) {
                             i.jsxs("select", {
                               "aria-label": text("Link type"),
                               value: j,
-                              disabled: $,
-                              onChange: (se) => z(se.target.value),
+                              disabled: disabled,
+                              onChange: (event) => z(event.target.value),
                               lang: language("Link type"),
                               "data-ui-label": "Link type",
                               children: [
@@ -1197,13 +1228,13 @@ function ReviewToolsPanel(e) {
                                 i.jsx("input", {
                                   "aria-label": text("Link address"),
                                   type: "text",
-                                  value: V,
-                                  disabled: $,
+                                  value: url,
+                                  disabled: disabled,
                                   placeholder: text(
                                     "https://example.com/evidence",
                                   ),
                                   maxLength: reviewThreadLimits.urlLength,
-                                  onChange: (se) => D(se.target.value),
+                                  onChange: (event) => D(event.target.value),
                                   lang: language("Link address"),
                                   "data-ui-label": "Link address",
                                 }),
@@ -1219,22 +1250,23 @@ function ReviewToolsPanel(e) {
                                     }),
                                     i.jsx("select", {
                                       "aria-label": text("Link worksheet"),
-                                      value: B,
-                                      disabled: $,
-                                      onChange: (se) => _(se.target.value),
+                                      value: sheetId,
+                                      disabled: disabled,
+                                      onChange: (event) =>
+                                        _(event.target.value),
                                       lang: language("Link worksheet"),
                                       "data-ui-label": "Link worksheet",
-                                      children: e.workbook.sheets.map((se) =>
+                                      children: e.workbook.sheets.map((sheet) =>
                                         i.jsxs(
                                           "option",
                                           {
-                                            value: se.id,
+                                            value: sheet.id,
                                             children: [
-                                              se.name,
-                                              se.hidden ? " (hidden)" : "",
+                                              sheet.name,
+                                              sheet.hidden ? " (hidden)" : "",
                                             ],
                                           },
-                                          se.id,
+                                          sheet.id,
                                         ),
                                       ),
                                     }),
@@ -1247,10 +1279,11 @@ function ReviewToolsPanel(e) {
                                     }),
                                     i.jsx("input", {
                                       "aria-label": text("Link cell address"),
-                                      value: C,
+                                      value: address,
                                       maxLength: 12,
-                                      disabled: $,
-                                      onChange: (se) => T(se.target.value),
+                                      disabled: disabled,
+                                      onChange: (event) =>
+                                        T(event.target.value),
                                       lang: language("Link cell address"),
                                       "data-ui-label": "Link cell address",
                                     }),
@@ -1266,9 +1299,9 @@ function ReviewToolsPanel(e) {
                             i.jsx("input", {
                               "aria-label": text("Link display text"),
                               value: N,
-                              disabled: $,
+                              disabled: disabled,
                               maxLength: reviewThreadLimits.labelLength,
-                              onChange: (se) => R(se.target.value),
+                              onChange: (event) => R(event.target.value),
                               lang: language("Link display text"),
                               "data-ui-label": "Link display text",
                             }),
@@ -1287,7 +1320,7 @@ function ReviewToolsPanel(e) {
                                   K.label ||
                                   (K.kind === "external"
                                     ? K.url
-                                    : `${e.workbook.sheets.find((se) => se.id === K.sheetId)?.name ?? "Missing worksheet"}!${K.address}`),
+                                    : `${e.workbook.sheets.find((sheet) => sheet.id === K.sheetId)?.name ?? "Missing worksheet"}!${K.address}`),
                               }),
                               K.kind === "external"
                                 ? i.jsxs("a", {
@@ -1326,14 +1359,14 @@ function ReviewToolsPanel(e) {
                           children: [
                             i.jsx("button", {
                               type: "button",
-                              disabled: $ || !l,
+                              disabled: disabled || !l,
                               onClick: () =>
                                 q(
                                   () =>
                                     setCellHyperlink(
                                       e.workbook,
                                       e.sheetId,
-                                      u,
+                                      selectionAnchorAddress,
                                       null,
                                       {
                                         readOnly: e.readOnly,
@@ -1348,7 +1381,10 @@ function ReviewToolsPanel(e) {
                             i.jsx("button", {
                               className: "rv-primary",
                               disabled:
-                                $ || !(j === "external" ? V.trim() : C.trim()),
+                                disabled ||
+                                !(j === "external"
+                                  ? url.trim()
+                                  : address.trim()),
                               children: i.jsx(LocalizedText, {
                                 children: "Save link",
                               }),

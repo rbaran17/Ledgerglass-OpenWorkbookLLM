@@ -9,6 +9,8 @@ import {
 } from "../04-cell-input-paste-and-fill.js";
 
 function createCellEditActions({
+  viewAndSelectionActions,
+  persistenceActions,
   persistenceState,
   formulaEntryState,
   selectionState,
@@ -21,34 +23,34 @@ function createCellEditActions({
   getEditableCellText,
   setActiveSheetId,
   activeSheet,
-  selectSingleRange,
   workbookCalculator,
   latestEditStateRef,
-  getSelectedCellAddresses,
-  commitWorkbookChange,
-  runGuardedAction,
-  focusGridSurface,
 }) {
   function clearSelectedCellContents() {
     applyCellPatches(
-      getSelectedCellAddresses().map((fe) => ({
+      viewAndSelectionActions.getSelectedCellAddresses().map((address) => ({
         sheetId: activeSheet.id,
-        address: fe,
-        cell: { ...activeSheet.cells[fe], raw: null, literal: false },
+        address: address,
+        cell: { ...activeSheet.cells[address], raw: null, literal: false },
       })),
       "Clear contents",
     );
   }
-  function applyCellPatches(fe, Oe = "Edit cells", Be, Ue) {
+  function applyCellPatches(
+    patches,
+    action = "Edit cells",
+    selectionGuard,
+    Ue,
+  ) {
     try {
-      if (Ue && fe.some((Xe) => Xe.sheetId !== Ue))
+      if (Ue && patches.some((patch) => patch.sheetId !== Ue))
         throw Error("The formula destination changed.");
-      commitWorkbookChange(
+      persistenceActions.commitWorkbookChange(
         applyCellPatchTransaction(
           latestEditStateRef.current.book,
-          fe,
+          patches,
           actor,
-          Oe,
+          action,
         ),
         true,
         false,
@@ -56,17 +58,17 @@ function createCellEditActions({
         true,
         Ue,
       );
-    } catch (Xe) {
+    } catch (error) {
       throw (
-        Xe instanceof DataValidationError &&
+        error instanceof DataValidationError &&
           formulaEntryState.setValidationReviewState({
-            error: Xe,
-            patches: structuredClone(fe),
-            action: Oe,
+            error: error,
+            patches: structuredClone(patches),
+            action: action,
             snapshot: JSON.stringify(latestEditStateRef.current.book),
-            selectionGuard: Be,
+            selectionGuard: selectionGuard,
           }),
-        Xe
+        error
       );
     }
   }
@@ -112,20 +114,20 @@ function createCellEditActions({
       }));
   }
   function isFormulaEditingLocked() {
-    const fe = latestEditStateRef.current.book.sheets.find(
-      (Be) =>
-        Be.id ===
+    const sheet = latestEditStateRef.current.book.sheets.find(
+      (sheet) =>
+        sheet.id ===
         (formulaEntryState.activeCellEditRef.current?.sheetId ??
           activeSheet.id),
     );
-    return readOnly || !fe || !!fe.protection?.enabled;
+    return readOnly || !sheet || !!sheet.protection?.enabled;
   }
   function switchToEditSheet(fe) {
     fe.sheetId !== activeSheet.id &&
       (setActiveSheetId(fe.sheetId),
       selectionState.setActiveCellAddress(fe.address),
       selectionState.setSelectionAnchorAddress(fe.address),
-      selectSingleRange(fe.address),
+      viewAndSelectionActions.selectSingleRange(fe.address),
       filterSortState.setActiveColumnSort(null),
       filterSortState.setFilterValueSearch(""),
       navigationState.setPendingScrollAddress(fe.address));
@@ -176,15 +178,15 @@ function createCellEditActions({
             activeSheet.cells[selectionState.activeCellAddress],
           ),
       ),
-      focusGridSurface());
+      viewAndSelectionActions.focusGridSurface());
   }
   function commitCellEdit(fe) {
     const Oe = formulaEntryState.activeCellEditRef.current;
     if (!Oe) return true;
     try {
       const Xe = autoCloseFormulaParens(Oe.value),
-        gt = latestEditStateRef.current.book.sheets.find(
-          (Nt) => Nt.id === Oe.sheetId,
+        cell = latestEditStateRef.current.book.sheets.find(
+          (sheet) => sheet.id === Oe.sheetId,
         )?.cells[Oe.address];
       return (
         Xe !== Oe.originalText &&
@@ -195,7 +197,7 @@ function createCellEditActions({
                 address: Oe.address,
                 cell: parseLocalizedCellEntry(
                   Xe,
-                  gt,
+                  cell,
                   latestEditStateRef.current.book.datePolicy?.dateSystem,
                   Oe.locale,
                 ),
@@ -216,18 +218,20 @@ function createCellEditActions({
         formulaEntryState.setCellEditText(Xe),
         true
       );
-    } catch (Xe) {
+    } catch (error) {
       return (
         operationStatusState.setErrorNotice(
-          Xe instanceof Error ? Xe.message : "The cell could not be saved.",
+          error instanceof Error
+            ? error.message
+            : "The cell could not be saved.",
         ),
         false
       );
     }
   }
   function applyCellFormatPatch(fe) {
-    runGuardedAction(() => {
-      const Oe = getSelectedCellAddresses();
+    viewAndSelectionActions.runGuardedAction(() => {
+      const Oe = viewAndSelectionActions.getSelectedCellAddresses();
       if (
         fe.style &&
         (Object.hasOwn(fe.style, "border") ||
@@ -236,17 +240,17 @@ function createCellEditActions({
       )
         throw Error("Unmerge selected cells before changing border edges.");
       applyCellPatches(
-        Oe.map((Be) => ({
+        Oe.map((address) => ({
           sheetId: activeSheet.id,
-          address: Be,
+          address: address,
           cell: {
-            ...activeSheet.cells[Be],
-            raw: activeSheet.cells[Be]?.raw ?? null,
+            ...activeSheet.cells[address],
+            raw: activeSheet.cells[address]?.raw ?? null,
             ...fe,
             ...(fe.style
               ? {
                   style: {
-                    ...activeSheet.cells[Be]?.style,
+                    ...activeSheet.cells[address]?.style,
                     ...fe.style,
                   },
                 }

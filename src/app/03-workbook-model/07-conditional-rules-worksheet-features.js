@@ -101,22 +101,27 @@ import {
   shiftFormulaReferences,
 } from "./06-data-model-and-analysis.js";
 
-function resolveFilteredRowContext(e, r = {}) {
+function resolveFilteredRowContext(workbook, r = {}) {
   if (
     !isPlainObjectValue(r) ||
     Object.keys(r).some((u) => u !== "filteredRowsBySheet")
   )
     throw Error("Calculation options support only filteredRowsBySheet.");
-  const t = r.filteredRowsBySheet;
-  if (t !== undefined && !isPlainObjectValue(t))
+  const filteredRowsBySheet = r.filteredRowsBySheet;
+  if (
+    filteredRowsBySheet !== undefined &&
+    !isPlainObjectValue(filteredRowsBySheet)
+  )
     throw Error(
       "Filtered rows must be a worksheet-ID map of inclusive row intervals.",
     );
-  const n = new Map(e.sheets.map((u) => [u.id, u])),
-    o = new Map(e.sheets.map((u) => [u.name.toLowerCase(), u])),
+  const n = new Map(workbook.sheets.map((sheet) => [sheet.id, sheet])),
+    o = new Map(
+      workbook.sheets.map((sheet) => [sheet.name.toLowerCase(), sheet]),
+    ),
     a = new Map();
   let s = 0;
-  for (const [u, l] of Object.entries(t ?? {})) {
+  for (const [u, l] of Object.entries(filteredRowsBySheet ?? {})) {
     const c = n.get(u);
     if (!c) throw Error("Filter context refers to an unknown worksheet ID.");
     if (!Array.isArray(l) || (s += l.length) > 1e4)
@@ -132,8 +137,11 @@ function resolveFilteredRowContext(e, r = {}) {
     );
   }
   const d = new Map();
-  for (const u of e.sheets)
-    d.set(u.id, createAxisVisibilityIndex(u.rowCount, cn(u, "row")));
+  for (const sheet of workbook.sheets)
+    d.set(
+      sheet.id,
+      createAxisVisibilityIndex(sheet.rowCount, cn(sheet, "row")),
+    );
   return (u, l, c) => {
     if (!referenceSensitiveFunctionNames.includes(u))
       return notReferenceFunctionMarker;
@@ -142,33 +150,33 @@ function resolveFilteredRowContext(e, r = {}) {
         if (isIssue(J)) throw J;
         if (!isPlainObjectValue(J) || !isPlainObjectValue(J.ref))
           throw issue("#VALUE!");
-        const q = J.ref;
-        if (q.sheet !== undefined && typeof q.sheet != "string")
+        const ref = J.ref;
+        if (ref.sheet !== undefined && typeof ref.sheet != "string")
           throw issue("#REF!");
-        const W = o.get(
-          String(q.sheet ?? c.currentSheetName ?? "").toLowerCase(),
+        const sheet = o.get(
+          String(ref.sheet ?? c.currentSheetName ?? "").toLowerCase(),
         );
-        if (!W) throw issue("#REF!");
-        const K = isPlainObjectValue(q.from) ? q.from : q,
-          te = isPlainObjectValue(q.to) ? q.to : q,
+        if (!sheet) throw issue("#REF!");
+        const K = isPlainObjectValue(ref.from) ? ref.from : ref,
+          te = isPlainObjectValue(ref.to) ? ref.to : ref,
           ae = [K.row, K.col, te.row, te.col];
         if (ae.some((le) => !Number.isInteger(le))) throw issue("#REF!");
-        const [oe, de, he, Se] = ae;
+        const [firstRow, firstCol, lastRow, lastCol] = ae;
         if (
-          oe < 1 ||
-          de < 1 ||
-          he < oe ||
-          Se < de ||
-          he > W.rowCount ||
-          Se > W.colCount
+          firstRow < 1 ||
+          firstCol < 1 ||
+          lastRow < firstRow ||
+          lastCol < firstCol ||
+          lastRow > sheet.rowCount ||
+          lastCol > sheet.colCount
         )
           throw issue("#REF!");
         return {
-          sheet: W,
-          firstRow: oe,
-          lastRow: he,
-          firstCol: de,
-          lastCol: Se,
+          sheet: sheet,
+          firstRow: firstRow,
+          lastRow: lastRow,
+          firstCol: firstCol,
+          lastCol: lastCol,
         };
       };
     if (u === "FORMULATEXT" || u === "ISFORMULA") {
@@ -179,9 +187,9 @@ function resolveFilteredRowContext(e, r = {}) {
           return (c.readMetadata?.(J.sheet.id, ae), J.sheet.cells[ae]);
         };
       if (u === "FORMULATEXT") {
-        const K = q(J.firstRow, J.firstCol);
-        return isFormulaCellValue(K) && K.raw.length <= 8192
-          ? K.raw
+        const cell = q(J.firstRow, J.firstCol);
+        return isFormulaCellValue(cell) && cell.raw.length <= 8192
+          ? cell.raw
           : issue("#N/A");
       }
       const W = (J.lastRow - J.firstRow + 1) * (J.lastCol - J.firstCol + 1);
@@ -232,9 +240,14 @@ function resolveFilteredRowContext(e, r = {}) {
       if (((D += q), q > 2e4 || D > 1e5)) return issue("#LIMIT!");
     }
     for (const J of V)
-      for (let q = J.firstRow; q <= J.lastRow; q++)
-        for (let W = J.firstCol; W <= J.lastCol; W++)
-          if (c.isActive(J.sheet.id, `${columnIndexToLetters(W - 1)}${q}`))
+      for (let firstRow = J.firstRow; firstRow <= J.lastRow; firstRow++)
+        for (let firstCol = J.firstCol; firstCol <= J.lastCol; firstCol++)
+          if (
+            c.isActive(
+              J.sheet.id,
+              `${columnIndexToLetters(firstCol - 1)}${firstRow}`,
+            )
+          )
             return issue("#CYCLE!");
     let B = 0,
       _ = 0,
@@ -279,13 +292,13 @@ function resolveFilteredRowContext(e, r = {}) {
         }
     }
     for (const J of V)
-      for (let q = J.firstRow; q <= J.lastRow; q++)
+      for (let firstRow = J.firstRow; firstRow <= J.lastRow; firstRow++)
         if (!(
-          a.get(J.sheet.id)?.isHidden(q - 1) ||
-          (E && d.get(J.sheet.id).isHidden(q - 1))
+          a.get(J.sheet.id)?.isHidden(firstRow - 1) ||
+          (E && d.get(J.sheet.id).isHidden(firstRow - 1))
         ))
-          for (let W = J.firstCol; W <= J.lastCol; W++) {
-            const K = `${columnIndexToLetters(W - 1)}${q}`;
+          for (let firstCol = J.firstCol; firstCol <= J.lastCol; firstCol++) {
+            const K = `${columnIndexToLetters(firstCol - 1)}${firstRow}`;
             c.readMetadata?.(J.sheet.id, K);
             const te = J.sheet.cells[K];
             if (
@@ -355,45 +368,50 @@ function _t(e) {
   if (!r) return throwWithMessage(`Invalid cell address: ${e}`);
   let t = 0;
   for (const o of r[1].toUpperCase()) t = t * 26 + o.charCodeAt(0) - 64;
-  const n = Number(r[2]) - 1;
-  return n >= workbookLimits.maxRows || t > workbookLimits.maxCols
+  const row = Number(r[2]) - 1;
+  return row >= workbookLimits.maxRows || t > workbookLimits.maxCols
     ? throwWithMessage(`Cell ${e} exceeds the supported workbook bounds.`)
-    : { row: n, col: t - 1 };
+    : { row: row, col: t - 1 };
 }
 function buildBorderPresetStyles(
-  e,
-  r,
-  t,
-  n = { style: "thin", color: "#000000" },
+  address,
+  sampleGridAddresses,
+  preset,
+  line = { style: "thin", color: "#000000" },
 ) {
-  const o = _t(e),
-    a = validateCellBorder(n),
+  const o = _t(address),
+    a = validateCellBorder(line),
     s = {};
-  ["all", "outline", "inside", "clear"].includes(t) ||
+  ["all", "outline", "inside", "clear"].includes(preset) ||
     failWithMessage("Choose a supported border preset.");
-  for (const d of cellBorderEdges) {
-    const u = o.row + (d === "top" ? -1 : d === "bottom" ? 1 : 0),
-      l = o.col + (d === "left" ? -1 : d === "right" ? 1 : 0),
+  for (const cellBorderEdge of cellBorderEdges) {
+    const u =
+        o.row +
+        (cellBorderEdge === "top" ? -1 : cellBorderEdge === "bottom" ? 1 : 0),
+      l =
+        o.col +
+        (cellBorderEdge === "left" ? -1 : cellBorderEdge === "right" ? 1 : 0),
       c =
         u >= 0 &&
         u < 1048576 &&
         l >= 0 &&
         l < 16384 &&
-        r.has(`${columnIndexToLetters(l)}${u + 1}`);
-    t === "clear"
-      ? (s[d] = { style: "none" })
-      : (t === "all" || (t === "outline" ? !c : c)) && (s[d] = { ...a });
+        sampleGridAddresses.has(`${columnIndexToLetters(l)}${u + 1}`);
+    preset === "clear"
+      ? (s[cellBorderEdge] = { style: "none" })
+      : (preset === "all" || (preset === "outline" ? !c : c)) &&
+        (s[cellBorderEdge] = { ...a });
   }
   return s;
 }
-function normalizeCellAddress(e) {
-  if (typeof e != "string")
+function normalizeCellAddress(address) {
+  if (typeof address != "string")
     return throwWithMessage("Choose a valid worksheet cell address.");
-  const r = _t(e.trim());
+  const r = _t(address.trim());
   return `${columnIndexToLetters(r.col)}${r.row + 1}`;
 }
-function validateHyperlinkRecord(e) {
-  const r = assertPlainReviewRecord(e, "Hyperlink"),
+function validateHyperlinkRecord(hyperlink) {
+  const r = assertPlainReviewRecord(hyperlink, "Hyperlink"),
     t =
       r.label === undefined || r.label === ""
         ? undefined
@@ -411,12 +429,12 @@ function validateHyperlinkRecord(e) {
     };
   if (r.kind !== "external")
     return throwWithMessage("Choose a web, email or worksheet link.");
-  const n = normalizeBoundedText(
+  const boundedText = normalizeBoundedText(
     r.url,
     "Link address",
     reviewThreadLimits.urlLength,
   );
-  let o = n;
+  let o = boundedText;
   for (let s = 0; s < 4; s++) {
     (unsafeControlCharPattern.test(o) || /\\/.test(o)) &&
       throwWithMessage(
@@ -438,7 +456,7 @@ function validateHyperlinkRecord(e) {
     );
   let a;
   try {
-    a = new URL(n);
+    a = new URL(boundedText);
   } catch {
     return throwWithMessage(
       "Enter a complete https://, http:// or mailto: address.",
@@ -467,7 +485,7 @@ function validateHyperlinkRecord(e) {
     { kind: "external", url: a.href, ...(t ? { label: t } : {}) }
   );
 }
-function normalizeReviewMetadata(e, r) {
+function normalizeReviewMetadata(e, workbook) {
   const t = assertPlainReviewRecord(e, "Workbook review metadata");
   if (t.reviewThreads !== undefined) {
     (!Array.isArray(t.reviewThreads) ||
@@ -478,16 +496,18 @@ function normalizeReviewMetadata(e, r) {
     const n = new Set(),
       o = new Set();
     let a = 0;
-    const s = t.reviewThreads.map((d) => {
-      const u = assertPlainReviewRecord(d, "Review thread"),
+    const s = t.reviewThreads.map((reviewThread) => {
+      const u = assertPlainReviewRecord(reviewThread, "Review thread"),
         l = assertPlainReviewRecord(u.anchor, "Review target"),
-        c = normalizeBoundedText(u.id, "Review thread ID", 100);
-      (n.has(c) && throwWithMessage("Review thread IDs must be unique."),
-        n.add(c));
-      const h = normalizeReviewTimestamp(u.createdAt),
+        boundedText = normalizeBoundedText(u.id, "Review thread ID", 100);
+      (n.has(boundedText) &&
+        throwWithMessage("Review thread IDs must be unique."),
+        n.add(boundedText));
+      const reviewTimestamp = normalizeReviewTimestamp(u.createdAt),
         f = normalizeReviewTimestamp(u.updatedAt);
-      f < h && throwWithMessage("Review update time cannot precede creation.");
-      const p = {
+      f < reviewTimestamp &&
+        throwWithMessage("Review update time cannot precede creation.");
+      const anchor = {
         sheetId: normalizeBoundedText(l.sheetId, "Review worksheet ID", 100),
         sheetName: normalizeBoundedText(
           l.sheetName,
@@ -503,24 +523,24 @@ function normalizeReviewMetadata(e, r) {
         throwWithMessage(
           "Review discussions exceed the per-thread or workbook message limit.",
         );
-      let m = h;
-      const v = u.messages.map((b, y) => {
-          const w = assertPlainReviewRecord(b, "Review message"),
-            E = normalizeBoundedText(w.id, "Review message ID", 100);
-          (o.has(E) &&
+      let m = reviewTimestamp;
+      const messages = u.messages.map((message, y) => {
+          const w = assertPlainReviewRecord(message, "Review message"),
+            boundedText = normalizeBoundedText(w.id, "Review message ID", 100);
+          (o.has(boundedText) &&
             throwWithMessage(
               "Review message IDs must be unique within the workbook.",
             ),
-            o.add(E));
+            o.add(boundedText));
           const A = normalizeReviewTimestamp(w.createdAt);
           return (
-            (A < m || A > f || (y === 0 && A !== h)) &&
+            (A < m || A > f || (y === 0 && A !== reviewTimestamp)) &&
               throwWithMessage(
                 "Review message times must follow their discussion in order.",
               ),
             (m = A),
             {
-              id: E,
+              id: boundedText,
               author: normalizeReviewAuthor(
                 normalizeBoundedText(w.author, "Reviewer name", 100),
               ),
@@ -534,67 +554,73 @@ function normalizeReviewMetadata(e, r) {
             }
           );
         }),
-        g = { id: c, anchor: p, messages: v, createdAt: h, updatedAt: f };
+        g = {
+          id: boundedText,
+          anchor: anchor,
+          messages: messages,
+          createdAt: reviewTimestamp,
+          updatedAt: f,
+        };
       if (u.resolved !== undefined) {
         const b = assertPlainReviewRecord(u.resolved, "Review resolution"),
-          y = normalizeReviewTimestamp(b.createdAt);
-        ((y < v.at(-1).createdAt || y > f) &&
+          reviewTimestamp = normalizeReviewTimestamp(b.createdAt);
+        ((reviewTimestamp < messages.at(-1).createdAt || reviewTimestamp > f) &&
           throwWithMessage("Invalid review resolution time."),
           (g.resolved = {
             author: normalizeReviewAuthor(
               normalizeBoundedText(b.author, "Reviewer name", 100),
             ),
-            createdAt: y,
+            createdAt: reviewTimestamp,
           }));
       }
       if (u.orphaned !== undefined) {
         const b = assertPlainReviewRecord(u.orphaned, "Orphaned review target"),
           y = normalizeReviewTimestamp(b.createdAt);
         ((!["worksheet-deleted", "cell-deleted"].includes(String(b.reason)) ||
-          y < h ||
+          y < reviewTimestamp ||
           y > f) &&
           throwWithMessage("Invalid orphaned review target."),
           (g.orphaned = { reason: b.reason, createdAt: y }));
       }
       return (
         !g.orphaned &&
-          !r.sheets.some((b) => b.id === p.sheetId) &&
+          !workbook.sheets.some((sheet) => sheet.id === anchor.sheetId) &&
           throwWithMessage(
             "A review thread with a missing worksheet must be retained as orphaned.",
           ),
         g
       );
     });
-    s.length ? (r.reviewThreads = s) : delete r.reviewThreads;
+    s.length ? (workbook.reviewThreads = s) : delete workbook.reviewThreads;
   }
-  for (const n of r.sheets)
-    for (const o of hasLinkedOrBoundCells(n.cells)
-      ? Object.values(n.cells)
+  for (const sheet of workbook.sheets)
+    for (const o of hasLinkedOrBoundCells(sheet.cells)
+      ? Object.values(sheet.cells)
       : []) {
       if (o.hyperlink === undefined) continue;
       const a = validateHyperlinkRecord(o.hyperlink);
       (a.kind === "internal" &&
-        !r.sheets.some((s) => s.id === a.sheetId) &&
+        !workbook.sheets.some((sheet) => sheet.id === a.sheetId) &&
         throwWithMessage(
           "An internal hyperlink must target an existing worksheet.",
         ),
         (o.hyperlink = a));
     }
 }
-function attachReviewThreadsToWorkbook(e, r) {
-  const t = { ...e, reviewThreads: r },
+function attachReviewThreadsToWorkbook(e, reviewThreads) {
+  const workbook = { ...e, reviewThreads: reviewThreads },
     n = {
-      ...t,
-      sheets: t.sheets.map((o) => ({
-        ...o,
+      ...workbook,
+      sheets: workbook.sheets.map((sheet) => ({
+        ...sheet,
         cells: Object.fromEntries(
-          Object.entries(o.cells).map(([a, s]) => [a, { ...s }]),
+          Object.entries(sheet.cells).map(([a, s]) => [a, { ...s }]),
         ),
       })),
     };
-  return (normalizeReviewMetadata(t, n), n);
+  return (normalizeReviewMetadata(workbook, n), n);
 }
-function shiftReviewTargetsOnAxisEdit(e, r, t, n) {
+function shiftReviewTargetsOnAxisEdit(workbook, sheetId, t, timestamp) {
   const o = t.axis === "row" ? workbookLimits.maxRows : workbookLimits.maxCols;
   (!["row", "column"].includes(t.axis) ||
     !Number.isInteger(t.index) ||
@@ -624,41 +650,59 @@ function shiftReviewTargetsOnAxisEdit(e, r, t, n) {
     );
   };
   let s = false;
-  const d = e.reviewThreads?.map((c) => {
-      if (c.orphaned || c.anchor.sheetId !== r) return c;
-      const h = a(c.anchor.address);
-      if (h === c.anchor.address) return c;
-      if (((s = true), h)) return { ...c, anchor: { ...c.anchor, address: h } };
-      const f = resolveReviewTimestamp({ timestamp: n }, c.updatedAt);
+  const reviewThreads = workbook.reviewThreads?.map((reviewThread) => {
+      if (reviewThread.orphaned || reviewThread.anchor.sheetId !== sheetId)
+        return reviewThread;
+      const address = a(reviewThread.anchor.address);
+      if (address === reviewThread.anchor.address) return reviewThread;
+      if (((s = true), address))
+        return {
+          ...reviewThread,
+          anchor: { ...reviewThread.anchor, address: address },
+        };
+      const reviewTimestamp = resolveReviewTimestamp(
+        { timestamp: timestamp },
+        reviewThread.updatedAt,
+      );
       return {
-        ...c,
-        updatedAt: f,
-        orphaned: { reason: "cell-deleted", createdAt: f },
+        ...reviewThread,
+        updatedAt: reviewTimestamp,
+        orphaned: { reason: "cell-deleted", createdAt: reviewTimestamp },
       };
     }),
-    u = e.sheets.map((c) => {
-      let h;
-      for (const [f, p] of Object.entries(c.cells)) {
-        const m = p.hyperlink;
-        if (m?.kind !== "internal" || m.sheetId !== r) continue;
-        const v = a(m.address);
-        v !== m.address &&
-          ((h ??= { ...c.cells }),
-          (h[f] = { ...p }),
+    sheets = workbook.sheets.map((sheet) => {
+      let cells;
+      for (const [f, p] of Object.entries(sheet.cells)) {
+        const hyperlink = p.hyperlink;
+        if (hyperlink?.kind !== "internal" || hyperlink.sheetId !== sheetId)
+          continue;
+        const address = a(hyperlink.address);
+        address !== hyperlink.address &&
+          ((cells ??= { ...sheet.cells }),
+          (cells[f] = { ...p }),
           (s = true),
-          v ? (h[f].hyperlink = { ...m, address: v }) : delete h[f].hyperlink);
+          address
+            ? (cells[f].hyperlink = { ...hyperlink, address: address })
+            : delete cells[f].hyperlink);
       }
-      return h ? { ...c, cells: h } : c;
+      return cells ? { ...sheet, cells: cells } : sheet;
     });
-  return s ? { ...e, sheets: u, ...(d ? { reviewThreads: d } : {}) } : e;
+  return s
+    ? {
+        ...workbook,
+        sheets: sheets,
+        ...(reviewThreads ? { reviewThreads: reviewThreads } : {}),
+      }
+    : workbook;
 }
-function shiftFormulaWatchesOnAxisEdit(e, r, t) {
+function shiftFormulaWatchesOnAxisEdit(e, sheetId, t) {
   return e.formulaWatches?.length
     ? {
         ...e,
-        formulaWatches: e.formulaWatches.map((o) => {
-          if (o.orphaned || o.anchor.sheetId !== r) return o;
-          const a = _t(o.anchor.address),
+        formulaWatches: e.formulaWatches.map((formulaWatch) => {
+          if (formulaWatch.orphaned || formulaWatch.anchor.sheetId !== sheetId)
+            return formulaWatch;
+          const a = _t(formulaWatch.anchor.address),
             s = t.axis === "row" ? a.row : a.col;
           if (
             t.moveBefore === undefined &&
@@ -666,7 +710,7 @@ function shiftFormulaWatchesOnAxisEdit(e, r, t) {
             s >= t.index &&
             s < t.index + t.count
           )
-            return { ...o, orphaned: "deleted-cells" };
+            return { ...formulaWatch, orphaned: "deleted-cells" };
           const d =
             t.moveBefore !== undefined
               ? mapIndexAfterMove(s, t)
@@ -680,20 +724,23 @@ function shiftFormulaWatchesOnAxisEdit(e, r, t) {
                 ? workbookLimits.maxRows
                 : workbookLimits.maxCols)
           )
-            return { ...o, orphaned: "out-of-bounds" };
-          const u =
+            return { ...formulaWatch, orphaned: "out-of-bounds" };
+          const address =
             t.axis === "row"
               ? `${columnIndexToLetters(a.col)}${d + 1}`
               : `${columnIndexToLetters(d)}${a.row + 1}`;
-          return u === o.anchor.address
-            ? o
-            : { ...o, anchor: { ...o.anchor, address: u } };
+          return address === formulaWatch.anchor.address
+            ? formulaWatch
+            : {
+                ...formulaWatch,
+                anchor: { ...formulaWatch.anchor, address: address },
+              };
         }),
       }
     : e;
 }
-function createAnchoredDrawingObject(e, r) {
-  const t = _t(r.split(":")[0]);
+function createAnchoredDrawingObject(e, range) {
+  const t = _t(range.split(":")[0]);
   return {
     id: crypto.randomUUID(),
     kind: e,
@@ -708,9 +755,9 @@ function createAnchoredDrawingObject(e, r) {
     ...(e === "shape" ? { shape: "rectangle" } : {}),
   };
 }
-function buildDrawingExportNotes(e, r, t) {
+function buildDrawingExportNotes(e, r, sheet) {
   const n = [];
-  for (const s of t.objects ?? []) {
+  for (const s of sheet.objects ?? []) {
     if (s.kind !== "picture") {
       n.push(
         `${s.label || s.kind}: native chart/shape export is not supported; retain the JSON workbook.`,
@@ -726,8 +773,8 @@ function buildDrawingExportNotes(e, r, t) {
       l = e.addImage({ base64: s.dataURL, extension });
     r.addImage(l, {
       tl: {
-        col: u.col + s.offsetX / (t.columnWidths?.[u.col] ?? 84),
-        row: u.row + s.offsetY / (t.rowHeights?.[u.row] ?? 21),
+        col: u.col + s.offsetX / (sheet.columnWidths?.[u.col] ?? 84),
+        row: u.row + s.offsetY / (sheet.rowHeights?.[u.row] ?? 21),
       },
       ext: { width: s.width, height: s.height },
       editAs: "oneCell",
@@ -735,65 +782,74 @@ function buildDrawingExportNotes(e, r, t) {
   }
   return n;
 }
-function normalizeFormulaWatchAddress(e) {
-  if (typeof e != "string" || !/^\$?[A-Za-z]{1,3}\$?[1-9]\d{0,6}$/.test(e))
+function normalizeFormulaWatchAddress(address) {
+  if (
+    typeof address != "string" ||
+    !/^\$?[A-Za-z]{1,3}\$?[1-9]\d{0,6}$/.test(address)
+  )
     throw Error("A formula watch must identify one valid Excel cell address.");
-  const r = _t(e.replace(/\$/g, "").toUpperCase());
+  const r = _t(address.replace(/\$/g, "").toUpperCase());
   if (r.row >= workbookLimits.maxRows || r.col >= workbookLimits.maxCols)
     throw Error("A formula watch address is outside Excel's cell bounds.");
   return `${columnIndexToLetters(r.col)}${r.row + 1}`;
 }
-function validateFormulaWatches(e, r) {
-  if (e === undefined) return [];
-  if (!Array.isArray(e) || e.length > B2)
+function validateFormulaWatches(formulaWatches, workbook) {
+  if (formulaWatches === undefined) return [];
+  if (!Array.isArray(formulaWatches) || formulaWatches.length > B2)
     throw Error("A workbook may contain at most 100 formula watches.");
   const t = new Set(),
     n = new Set();
-  return e.map((o) => {
+  return formulaWatches.map((formulaWatch) => {
     if (
-      !isPlainObjectValue(o) ||
-      !HO(o, ["id", "anchor", "orphaned"]) ||
-      !isBoundedPlainText(o.id, 100) ||
-      !isPlainObjectValue(o.anchor) ||
-      !HO(o.anchor, ["sheetId", "sheetName", "address"]) ||
-      !isBoundedPlainText(o.anchor.sheetId, 100) ||
-      !isBoundedPlainText(o.anchor.sheetName, 31)
+      !isPlainObjectValue(formulaWatch) ||
+      !HO(formulaWatch, ["id", "anchor", "orphaned"]) ||
+      !isBoundedPlainText(formulaWatch.id, 100) ||
+      !isPlainObjectValue(formulaWatch.anchor) ||
+      !HO(formulaWatch.anchor, ["sheetId", "sheetName", "address"]) ||
+      !isBoundedPlainText(formulaWatch.anchor.sheetId, 100) ||
+      !isBoundedPlainText(formulaWatch.anchor.sheetName, 31)
     )
       throw Error("Invalid formula watch metadata.");
-    if (t.has(o.id)) throw Error("Formula watch IDs must be unique.");
+    if (t.has(formulaWatch.id))
+      throw Error("Formula watch IDs must be unique.");
     if (
-      (t.add(o.id),
-      o.orphaned !== undefined && !referenceImpactKinds.includes(o.orphaned))
+      (t.add(formulaWatch.id),
+      formulaWatch.orphaned !== undefined &&
+        !referenceImpactKinds.includes(formulaWatch.orphaned))
     )
       throw Error("Invalid formula watch orphan reason.");
-    const a = o.anchor,
-      s = normalizeFormulaWatchAddress(a.address),
-      d = r.sheets.find((c) => c.id === a.sheetId),
-      u = o.orphaned ?? (d ? undefined : "missing-sheet"),
-      l = JSON.stringify([o.anchor.sheetId, s]);
-    if (!u && n.has(l))
+    const anchor = formulaWatch.anchor,
+      formulaWatchAddress = normalizeFormulaWatchAddress(anchor.address),
+      sheet = workbook.sheets.find((sheet) => sheet.id === anchor.sheetId),
+      orphaned = formulaWatch.orphaned ?? (sheet ? undefined : "missing-sheet"),
+      l = JSON.stringify([formulaWatch.anchor.sheetId, formulaWatchAddress]);
+    if (!orphaned && n.has(l))
       throw Error("Active formula watches must not repeat the same cell.");
     return (
-      u || n.add(l),
+      orphaned || n.add(l),
       {
-        id: o.id,
+        id: formulaWatch.id,
         anchor: {
-          sheetId: o.anchor.sheetId,
-          sheetName: !u && d ? d.name : o.anchor.sheetName,
-          address: s,
+          sheetId: formulaWatch.anchor.sheetId,
+          sheetName:
+            !orphaned && sheet ? sheet.name : formulaWatch.anchor.sheetName,
+          address: formulaWatchAddress,
         },
-        ...(u ? { orphaned: u } : {}),
+        ...(orphaned ? { orphaned: orphaned } : {}),
       }
     );
   });
 }
 function normalizeWhatIfCell(e) {
   const r = validateWhatIfFields(e, ["sheetId", "address"]),
-    t = requireWhatIfName(r.sheetId);
+    sheetId = requireWhatIfName(r.sheetId);
   if (typeof r.address != "string")
     throw Error("A what-if cell needs an Excel address.");
   const n = _t(r.address);
-  return { sheetId: t, address: `${columnIndexToLetters(n.col)}${n.row + 1}` };
+  return {
+    sheetId: sheetId,
+    address: `${columnIndexToLetters(n.col)}${n.row + 1}`,
+  };
 }
 function normalizeWhatIfCellReferences(e, r) {
   const t = requireWhatIfList(e, r).map(normalizeWhatIfCell);
@@ -801,8 +857,8 @@ function normalizeWhatIfCellReferences(e, r) {
     throw Error("What-if cell references must not repeat.");
   return t;
 }
-function validateWhatIfDefinition(e) {
-  const r = validateWhatIfFields(e, [
+function validateWhatIfDefinition(request) {
+  const r = validateWhatIfFields(request, [
       "name",
       "kind",
       "inputs",
@@ -819,28 +875,34 @@ function validateWhatIfDefinition(e) {
       outputs: normalizeWhatIfCellReferences(r.outputs, whatIfLimits.outputs),
     };
   if (
-    t.inputs.some((o) =>
-      t.outputs.some((a) => cellAddressKey(o) === cellAddressKey(a)),
+    t.inputs.some((input) =>
+      t.outputs.some(
+        (output) => cellAddressKey(input) === cellAddressKey(output),
+      ),
     )
   )
     throw Error("Changing inputs and formula results must be different cells.");
   const n = ["name", "kind", "inputs", "outputs"];
   if (r.kind === "scenarios") {
     validateWhatIfFields(r, [...n, "scenarios"]);
-    const o = requireWhatIfList(r.scenarios, whatIfLimits.scenarios).map(
-      (a) => {
-        const s = validateWhatIfFields(a, ["name", "values"]),
-          d = validateWhatIfValues(s.values, whatIfLimits.inputs);
-        if (d.length !== t.inputs.length)
-          throw Error(
-            "Each scenario needs exactly one value per changing input.",
-          );
-        return { name: requireWhatIfName(s.name), values: d };
-      },
-    );
-    if (new Set(o.map((a) => a.name.toLowerCase())).size !== o.length)
+    const scenarios = requireWhatIfList(
+      r.scenarios,
+      whatIfLimits.scenarios,
+    ).map((a) => {
+      const s = validateWhatIfFields(a, ["name", "values"]),
+        values = validateWhatIfValues(s.values, whatIfLimits.inputs);
+      if (values.length !== t.inputs.length)
+        throw Error(
+          "Each scenario needs exactly one value per changing input.",
+        );
+      return { name: requireWhatIfName(s.name), values: values };
+    });
+    if (
+      new Set(scenarios.map((scenario) => scenario.name.toLowerCase())).size !==
+      scenarios.length
+    )
       throw Error("Scenario names must be unique, ignoring case.");
-    return { ...t, kind: r.kind, scenarios: o };
+    return { ...t, kind: r.kind, scenarios: scenarios };
   }
   if (r.kind === "one-variable") {
     if (
@@ -865,157 +927,180 @@ function validateWhatIfDefinition(e) {
       throw Error(
         "A two-variable table needs two different inputs and exactly one formula result.",
       );
-    const o = validateWhatIfValues(r.rowValues, whatIfLimits.axisValues),
-      a = validateWhatIfValues(r.columnValues, whatIfLimits.axisValues);
-    if (o.length * a.length > whatIfLimits.trials)
+    const rowValues = validateWhatIfValues(
+        r.rowValues,
+        whatIfLimits.axisValues,
+      ),
+      columnValues = validateWhatIfValues(
+        r.columnValues,
+        whatIfLimits.axisValues,
+      );
+    if (rowValues.length * columnValues.length > whatIfLimits.trials)
       throw Error("A sensitivity table supports at most 400 combinations.");
-    return { ...t, kind: r.kind, rowValues: o, columnValues: a };
+    return {
+      ...t,
+      kind: r.kind,
+      rowValues: rowValues,
+      columnValues: columnValues,
+    };
   }
   throw Error(
     "Choose scenarios, a one-variable table or a two-variable table.",
   );
 }
-function validateSavedWhatIfAnalyses(e) {
+function validateSavedWhatIfAnalyses(whatIfAnalyses) {
   const r = new Set();
-  return requireWhatIfList(e, whatIfLimits.savedAnalyses, 0).map((t) => {
-    const n = validateWhatIfFields(t, [
-        "id",
-        "reportSheetId",
-        "request",
-        "baseline",
-        "trials",
-        "assumptions",
-        "sourceRevision",
-        "dependencyCells",
-        "workUnits",
-      ]),
-      o = requireWhatIfName(n.id),
-      a = requireWhatIfName(n.reportSheetId),
-      s = validateWhatIfDefinition(n.request);
-    if (r.has(o)) throw Error("Saved what-if IDs must be unique.");
-    r.add(o);
-    const d = (p) => {
-        const m = validateWhatIfFields(p, [
-            "name",
-            "inputs",
-            "outputs",
-            "error",
-          ]),
-          v = requireWhatIfName(m.name, 200),
-          g = validateWhatIfValues(m.inputs, whatIfLimits.inputs),
-          b =
-            m.outputs === null
-              ? null
-              : validateWhatIfValues(m.outputs, whatIfLimits.outputs),
-          y = m.error === null ? null : requireWhatIfName(m.error, 2e3);
-        if (
-          g.length !== s.inputs.length ||
-          (b && b.length !== s.outputs.length) ||
-          !!b == !!y
-        )
-          throw Error("Invalid saved what-if result dimensions or outcome.");
-        return { name: v, inputs: g, outputs: b, error: y };
-      },
-      u = d(n.baseline),
-      l = requireWhatIfList(n.trials, whatIfLimits.trials).map(d),
-      c = expandWhatIfScenarios(s);
-    if (
-      l.length !== c.length ||
-      l.some(
-        (p, m) =>
-          p.name !== c[m].name ||
-          JSON.stringify(p.inputs) !== JSON.stringify(c[m].inputs),
-      )
-    )
-      throw Error("Saved what-if results must match their named assumptions.");
-    if (u.name !== "Baseline")
-      throw Error("Saved what-if baseline is missing.");
-    const h = new Set(),
-      f = requireWhatIfList(n.assumptions, whatIfLimits.dependencyCells).map(
-        (p) => {
+  return requireWhatIfList(whatIfAnalyses, whatIfLimits.savedAnalyses, 0).map(
+    (t) => {
+      const n = validateWhatIfFields(t, [
+          "id",
+          "reportSheetId",
+          "request",
+          "baseline",
+          "trials",
+          "assumptions",
+          "sourceRevision",
+          "dependencyCells",
+          "workUnits",
+        ]),
+        o = requireWhatIfName(n.id),
+        reportSheetId = requireWhatIfName(n.reportSheetId),
+        request = validateWhatIfDefinition(n.request);
+      if (r.has(o)) throw Error("Saved what-if IDs must be unique.");
+      r.add(o);
+      const d = (p) => {
           const m = validateWhatIfFields(p, [
+              "name",
+              "inputs",
+              "outputs",
+              "error",
+            ]),
+            v = requireWhatIfName(m.name, 200),
+            inputs = validateWhatIfValues(m.inputs, whatIfLimits.inputs),
+            outputs =
+              m.outputs === null
+                ? null
+                : validateWhatIfValues(m.outputs, whatIfLimits.outputs),
+            y = m.error === null ? null : requireWhatIfName(m.error, 2e3);
+          if (
+            inputs.length !== request.inputs.length ||
+            (outputs && outputs.length !== request.outputs.length) ||
+            !!outputs == !!y
+          )
+            throw Error("Invalid saved what-if result dimensions or outcome.");
+          return { name: v, inputs: inputs, outputs: outputs, error: y };
+        },
+        baseline = d(n.baseline),
+        trials = requireWhatIfList(n.trials, whatIfLimits.trials).map(d),
+        c = expandWhatIfScenarios(request);
+      if (
+        trials.length !== c.length ||
+        trials.some(
+          (trial, m) =>
+            trial.name !== c[m].name ||
+            JSON.stringify(trial.inputs) !== JSON.stringify(c[m].inputs),
+        )
+      )
+        throw Error(
+          "Saved what-if results must match their named assumptions.",
+        );
+      if (baseline.name !== "Baseline")
+        throw Error("Saved what-if baseline is missing.");
+      const h = new Set(),
+        assumptions = requireWhatIfList(
+          n.assumptions,
+          whatIfLimits.dependencyCells,
+        ).map((p) => {
+          const cell = validateWhatIfFields(p, [
               "sheetId",
               "sheetName",
               "address",
               "raw",
               "literal",
             ]),
-            v = normalizeWhatIfCell({ sheetId: m.sheetId, address: m.address });
-          if (h.has(cellAddressKey(v)))
+            whatIfCell = normalizeWhatIfCell({
+              sheetId: cell.sheetId,
+              address: cell.address,
+            });
+          if (h.has(cellAddressKey(whatIfCell)))
             throw Error("Saved assumptions must not repeat a source cell.");
           if (
-            (h.add(cellAddressKey(v)),
+            (h.add(cellAddressKey(whatIfCell)),
             !(
-              m.raw === null ||
-              typeof m.raw == "boolean" ||
-              isFiniteNumber(m.raw) ||
-              (typeof m.raw == "string" && m.raw.length <= 32767)
+              cell.raw === null ||
+              typeof cell.raw == "boolean" ||
+              isFiniteNumber(cell.raw) ||
+              (typeof cell.raw == "string" && cell.raw.length <= 32767)
             ) ||
-              (m.literal !== undefined && typeof m.literal != "boolean"))
+              (cell.literal !== undefined && typeof cell.literal != "boolean"))
           )
             throw Error("Invalid saved what-if assumption.");
           return {
-            ...v,
-            sheetName: requireWhatIfName(m.sheetName, 31),
-            raw: m.raw,
-            ...(m.literal === undefined ? {} : { literal: m.literal }),
+            ...whatIfCell,
+            sheetName: requireWhatIfName(cell.sheetName, 31),
+            raw: cell.raw,
+            ...(cell.literal === undefined ? {} : { literal: cell.literal }),
           };
-        },
-      );
-    if (
-      [...s.inputs, ...s.outputs].some((p) => !h.has(cellAddressKey(p))) ||
-      s.inputs.some(
-        (p, m) =>
-          f.find((g) => cellAddressKey(g) === cellAddressKey(p))?.raw !==
-          u.inputs[m],
+        });
+      if (
+        [...request.inputs, ...request.outputs].some(
+          (p) => !h.has(cellAddressKey(p)),
+        ) ||
+        request.inputs.some(
+          (input, m) =>
+            assumptions.find(
+              (assumption) =>
+                cellAddressKey(assumption) === cellAddressKey(input),
+            )?.raw !== baseline.inputs[m],
+        )
       )
-    )
-      throw Error(
-        "Saved baseline inputs and dependency assumptions do not reconcile.",
-      );
-    for (const [p, m] of [
-      ["sourceRevision", Number.MAX_SAFE_INTEGER - 1],
-      ["dependencyCells", whatIfLimits.dependencyCells],
-      ["workUnits", whatIfLimits.workUnits],
-    ])
-      if (!Number.isSafeInteger(n[p]) || n[p] < 0 || n[p] > m)
-        throw Error("Invalid what-if evidence counts.");
-    if (
-      n.dependencyCells !== f.length ||
-      n.workUnits !== f.length * (l.length + 1)
-    )
-      throw Error("What-if work counts do not reconcile.");
-    return {
-      id: o,
-      reportSheetId: a,
-      request: s,
-      baseline: u,
-      trials: l,
-      assumptions: f,
-      sourceRevision: n.sourceRevision,
-      dependencyCells: f.length,
-      workUnits: n.workUnits,
-    };
-  });
+        throw Error(
+          "Saved baseline inputs and dependency assumptions do not reconcile.",
+        );
+      for (const [p, m] of [
+        ["sourceRevision", Number.MAX_SAFE_INTEGER - 1],
+        ["dependencyCells", whatIfLimits.dependencyCells],
+        ["workUnits", whatIfLimits.workUnits],
+      ])
+        if (!Number.isSafeInteger(n[p]) || n[p] < 0 || n[p] > m)
+          throw Error("Invalid what-if evidence counts.");
+      if (
+        n.dependencyCells !== assumptions.length ||
+        n.workUnits !== assumptions.length * (trials.length + 1)
+      )
+        throw Error("What-if work counts do not reconcile.");
+      return {
+        id: o,
+        reportSheetId: reportSheetId,
+        request: request,
+        baseline: baseline,
+        trials: trials,
+        assumptions: assumptions,
+        sourceRevision: n.sourceRevision,
+        dependencyCells: assumptions.length,
+        workUnits: n.workUnits,
+      };
+    },
+  );
 }
-function applyChartDrawingLayout(e, r) {
-  if (r.kind === "chart" && r.chart === "sparkline") {
-    const t = _t(r.anchor);
+function applyChartDrawingLayout(sheet, object) {
+  if (object.kind === "chart" && object.chart === "sparkline") {
+    const t = _t(object.anchor);
     return {
       offsetX: 2,
       offsetY: 2,
-      width: columnWidthAt(e, t.col) - 4,
-      height: rowHeightAt(e, t.row) - 4,
+      width: columnWidthAt(sheet, t.col) - 4,
+      height: rowHeightAt(sheet, t.row) - 4,
     };
   }
   return {
-    offsetX: r.offsetX,
-    offsetY: r.offsetY,
-    width: r.width,
-    height: r.height,
+    offsetX: object.offsetX,
+    offsetY: object.offsetY,
+    width: object.width,
+    height: object.height,
   };
 }
-function parsePrintTitles(e, r, t) {
+function parsePrintTitles(e, r, sheet) {
   if (e === undefined || e === "") return;
   if (typeof e != "string")
     throw Error("Print titles must be a single row or column interval.");
@@ -1030,40 +1115,47 @@ function parsePrintTitles(e, r, t) {
         ? "Repeat rows must use a range such as 1:2."
         : "Repeat columns must use a range such as A:B.",
     );
-  const o = r === "row" ? Number(n[1]) - 1 : _t(n[1] + "1").col,
-    a = r === "row" ? Number(n[2]) - 1 : _t(n[2] + "1").col,
-    s = r === "row" ? t.rowCount : t.colCount,
+  const start = r === "row" ? Number(n[1]) - 1 : _t(n[1] + "1").col,
+    end = r === "row" ? Number(n[2]) - 1 : _t(n[2] + "1").col,
+    s = r === "row" ? sheet.rowCount : sheet.colCount,
     d =
       r === "row"
         ? printRenderLimits.titleRows
         : printRenderLimits.titleColumns;
   if (
-    !Number.isSafeInteger(o) ||
-    !Number.isSafeInteger(a) ||
-    o < 0 ||
-    a < o ||
-    a >= s ||
-    a - o + 1 > d
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 0 ||
+    end < start ||
+    end >= s ||
+    end - start + 1 > d
   )
     throw Error(
       `Print titles support at most ${d} ${r === "row" ? "rows" : "columns"} within the worksheet.`,
     );
-  return { start: o, end: a };
+  return { start: start, end: end };
 }
-function shiftPrintSettingsOnAxisEdit(e, r, t, n, o, a) {
-  const s = t === "row" ? "repeatRows" : "repeatColumns",
-    d = t === "row" ? "rowBreaks" : "columnBreaks",
-    u = { ...e },
-    l = parsePrintTitles(e[s], t, r);
-  if (l) {
-    let { start, end } = l;
-    if (!a) (n <= start && (start += o), n <= end && (end += o));
+function shiftPrintSettingsOnAxisEdit(
+  pageLayout,
+  sheet,
+  axis,
+  n,
+  count,
+  remove,
+) {
+  const s = axis === "row" ? "repeatRows" : "repeatColumns",
+    d = axis === "row" ? "rowBreaks" : "columnBreaks",
+    u = { ...pageLayout },
+    printTitles = parsePrintTitles(pageLayout[s], axis, sheet);
+  if (printTitles) {
+    let { start, end } = printTitles;
+    if (!remove) (n <= start && (start += count), n <= end && (end += count));
     else {
-      const m = n + o - 1,
+      const m = n + count - 1,
         v = [
           start < n ? { start, end: Math.min(end, n - 1) } : undefined,
           end > m
-            ? { start: Math.max(start, m + 1) - o, end: end - o }
+            ? { start: Math.max(start, m + 1) - count, end: end - count }
             : undefined,
         ].filter(Boolean);
       if (!v.length)
@@ -1072,13 +1164,21 @@ function shiftPrintSettingsOnAxisEdit(e, r, t, n, o, a) {
         );
       ((start = v[0].start), (end = v.at(-1).end));
     }
-    ((u[s] = formatAxisIntervalRef({ start, end }, t)),
-      parsePrintTitles(u[s], t, r));
+    ((u[s] = formatAxisIntervalRef({ start, end }, axis)),
+      parsePrintTitles(u[s], axis, sheet));
   }
-  const c = t === "row" ? r.rowCount : r.colCount,
-    h = (e[d] ?? [])
+  const c = axis === "row" ? sheet.rowCount : sheet.colCount,
+    h = (pageLayout[d] ?? [])
       .map((f) =>
-        a ? (f < n ? f : f >= n + o ? f - o : n) : f >= n ? f + o : f,
+        remove
+          ? f < n
+            ? f
+            : f >= n + count
+              ? f - count
+              : n
+          : f >= n
+            ? f + count
+            : f,
       )
       .filter((f) => f > 0);
   if (h.some((f) => f >= c))
@@ -1169,27 +1269,29 @@ function parseSelectionAreas(e) {
   if (!r.length || r.length > maxSelectionAreas)
     throw Error(`Select between 1 and ${maxSelectionAreas} rectangular areas.`);
   const t = r.map((n) => {
-    const o = parseRangeAddress(n.trim().toUpperCase().replace(/\$/g, "")),
-      a = `${columnIndexToLetters(o.firstCol)}${o.firstRow + 1}`,
-      s = `${columnIndexToLetters(o.lastCol)}${o.lastRow + 1}`;
+    const rangeAddress = parseRangeAddress(
+        n.trim().toUpperCase().replace(/\$/g, ""),
+      ),
+      a = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
+      s = `${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`;
     return a === s ? a : `${a}:${s}`;
   });
   return [...new Set(t)];
 }
-function isCellAddressInRanges(e, r) {
-  const t = _t(r);
-  return e.some((n) => {
-    const o = parseRangeAddress(n);
+function isCellAddressInRanges(selectionAreas, active) {
+  const t = _t(active);
+  return selectionAreas.some((selectionArea) => {
+    const rangeAddress = parseRangeAddress(selectionArea);
     return (
-      t.row >= o.firstRow &&
-      t.row <= o.lastRow &&
-      t.col >= o.firstCol &&
-      t.col <= o.lastCol
+      t.row >= rangeAddress.firstRow &&
+      t.row <= rangeAddress.lastRow &&
+      t.col >= rangeAddress.firstCol &&
+      t.col <= rangeAddress.lastCol
     );
   });
 }
-function countSelectionCells(e) {
-  const r = parseSelectionAreas(e).map(parseRangeAddress),
+function countSelectionCells(selectionAreas) {
+  const r = parseSelectionAreas(selectionAreas).map(parseRangeAddress),
     t = [...new Set(r.flatMap((o) => [o.firstRow, o.lastRow + 1]))].sort(
       (o, a) => o - a,
     );
@@ -1207,26 +1309,38 @@ function countSelectionCells(e) {
   }
   return n;
 }
-function enumerateSelectionCells(e, r = workbookLimits.maxPatches) {
-  if (!Number.isSafeInteger(r) || r < 1 || r > workbookLimits.maxCells)
+function enumerateSelectionCells(e, maxBlankScan = workbookLimits.maxPatches) {
+  if (
+    !Number.isSafeInteger(maxBlankScan) ||
+    maxBlankScan < 1 ||
+    maxBlankScan > workbookLimits.maxCells
+  )
     throw Error("Invalid selection enumeration limit.");
-  const t = parseSelectionAreas(e),
-    n = countSelectionCells(t);
-  if (n > r)
+  const selectionAreas = parseSelectionAreas(e),
+    n = countSelectionCells(selectionAreas);
+  if (n > maxBlankScan)
     throw Error(
-      `Select at most ${r.toLocaleString()} cells for this operation. The current selection contains ${n.toLocaleString()} cells.`,
+      `Select at most ${maxBlankScan.toLocaleString()} cells for this operation. The current selection contains ${n.toLocaleString()} cells.`,
     );
   const o = new Set();
-  for (const a of t) {
-    const s = parseRangeAddress(a);
-    for (let d = s.firstRow; d <= s.lastRow; d++)
-      for (let u = s.firstCol; u <= s.lastCol; u++)
-        o.add(`${columnIndexToLetters(u)}${d + 1}`);
+  for (const selectionArea of selectionAreas) {
+    const rangeAddress = parseRangeAddress(selectionArea);
+    for (
+      let firstRow = rangeAddress.firstRow;
+      firstRow <= rangeAddress.lastRow;
+      firstRow++
+    )
+      for (
+        let firstCol = rangeAddress.firstCol;
+        firstCol <= rangeAddress.lastCol;
+        firstCol++
+      )
+        o.add(`${columnIndexToLetters(firstCol)}${firstRow + 1}`);
   }
   return [...o];
 }
-function pQ(e, r, t, n, o) {
-  const a = parseRangeAddress(t),
+function pQ(workbook, sourceSheetId, sortRangeAddress, sheetId, o) {
+  const rangeAddress = parseRangeAddress(sortRangeAddress),
     s = parseRangeAddress(o),
     d = (f, p) => {
       const m = _t(p);
@@ -1237,40 +1351,48 @@ function pQ(e, r, t, n, o) {
         m.col <= f.lastCol
       );
     },
-    u = [],
-    l = e.sheets.find((f) => f.id === n);
+    changes = [],
+    sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   return {
-    watches: e.formulaWatches?.map((f) => {
-      if (f.orphaned) return f;
-      const p = `${f.anchor.sheetName}!${f.anchor.address}`;
-      if (f.anchor.sheetId === r && d(a, f.anchor.address)) {
-        const m = _t(f.anchor.address),
-          v = `${columnIndexToLetters(m.col + s.firstCol - a.firstCol)}${m.row + s.firstRow - a.firstRow + 1}`,
-          g = `${l.name}!${v}`;
-        return p === g && r === n
-          ? f
-          : (u.push({
+    watches: workbook.formulaWatches?.map((formulaWatch) => {
+      if (formulaWatch.orphaned) return formulaWatch;
+      const before = `${formulaWatch.anchor.sheetName}!${formulaWatch.anchor.address}`;
+      if (
+        formulaWatch.anchor.sheetId === sourceSheetId &&
+        d(rangeAddress, formulaWatch.anchor.address)
+      ) {
+        const m = _t(formulaWatch.anchor.address),
+          address = `${columnIndexToLetters(m.col + s.firstCol - rangeAddress.firstCol)}${m.row + s.firstRow - rangeAddress.firstRow + 1}`,
+          after = `${sheet.name}!${address}`;
+        return before === after && sourceSheetId === sheetId
+          ? formulaWatch
+          : (changes.push({
               kind: "formula-watch",
-              label: f.id,
-              before: p,
-              after: g,
+              label: formulaWatch.id,
+              before: before,
+              after: after,
             }),
             {
-              ...f,
-              anchor: { sheetId: n, sheetName: l.name, address: v },
+              ...formulaWatch,
+              anchor: {
+                sheetId: sheetId,
+                sheetName: sheet.name,
+                address: address,
+              },
             });
       }
-      return f.anchor.sheetId === n && d(s, f.anchor.address)
-        ? (u.push({
+      return formulaWatch.anchor.sheetId === sheetId &&
+        d(s, formulaWatch.anchor.address)
+        ? (changes.push({
             kind: "formula-watch",
-            label: f.id,
-            before: p,
-            after: `${p} — watched source overwritten`,
+            label: formulaWatch.id,
+            before: before,
+            after: `${before} — watched source overwritten`,
           }),
-          { ...f, orphaned: "overwritten" })
-        : f;
+          { ...formulaWatch, orphaned: "overwritten" })
+        : formulaWatch;
     }),
-    changes: u,
+    changes: changes,
   };
 }
 function validateFreezePanes(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
@@ -1279,12 +1401,12 @@ function validateFreezePanes(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
   if (n && (e.frozenRows || e.frozenCols))
     throw Error("Split panes and frozen panes cannot be enabled together.");
   n && (r.splitPanes = n);
-  const o = normalizeHiddenIntervals(e.hiddenRows, t.rows),
+  const hiddenIntervals = normalizeHiddenIntervals(e.hiddenRows, t.rows),
     a = normalizeHiddenIntervals(e.hiddenCols, t.cols),
-    s = { ...r, hiddenRows: o, hiddenCols: a },
-    d = createAxisVisibilityIndex(r.rowCount, cn(s, "row")),
+    s = { ...r, hiddenRows: hiddenIntervals, hiddenCols: a },
+    axisVisibilityIndex = createAxisVisibilityIndex(r.rowCount, cn(s, "row")),
     u = createAxisVisibilityIndex(r.colCount, cn(s, "column"));
-  if (!d.count || !u.count)
+  if (!axisVisibilityIndex.count || !u.count)
     throw Error("At least one row and one column must remain visible.");
   const l = e.frozenRows === undefined ? 0 : e.frozenRows,
     c = e.frozenCols === undefined ? 0 : e.frozenCols;
@@ -1299,7 +1421,7 @@ function validateFreezePanes(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
     throw Error(
       "Frozen boundaries must be valid leading row and column counts.",
     );
-  const h = d.countBefore(l),
+  const h = axisVisibilityIndex.countBefore(l),
     f = u.countBefore(c);
   if (
     h > worksheetCapacityLimits.maxFrozenVisibleRows ||
@@ -1308,84 +1430,101 @@ function validateFreezePanes(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
     throw Error(
       "Freeze panes supports at most 100 visible rows and 50 visible columns.",
     );
-  if (h === d.count || f === u.count)
+  if (h === axisVisibilityIndex.count || f === u.count)
     throw Error("Freeze panes must leave an unfrozen visible row and column.");
   for (const p of r.merges ?? []) {
-    const m = parseRangeAddress(p);
+    const rangeAddress = parseRangeAddress(p);
     if (
-      (m.firstRow < l && m.lastRow >= l) ||
-      (m.firstCol < c && m.lastCol >= c)
+      (rangeAddress.firstRow < l && rangeAddress.lastRow >= l) ||
+      (rangeAddress.firstCol < c && rangeAddress.lastCol >= c)
     )
       throw Error(
         "Freeze panes cannot cross a merged range. Unmerge those cells first.",
       );
   }
-  (e.hiddenRows !== undefined && (r.hiddenRows = o),
+  (e.hiddenRows !== undefined && (r.hiddenRows = hiddenIntervals),
     e.hiddenCols !== undefined && (r.hiddenCols = a),
     e.frozenRows !== undefined && (r.frozenRows = l),
     e.frozenCols !== undefined && (r.frozenCols = c));
 }
-function updateWorksheetById(e, r, t) {
-  const n = e.sheets.find((a) => a.id === r);
-  if (!n) throw Error("Worksheet not found.");
-  assertSheetUnprotected(n);
-  const o = t(structuredClone(n));
+function updateWorksheetById(workbook, sheetId, t) {
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Worksheet not found.");
+  assertSheetUnprotected(sheet);
+  const o = t(structuredClone(sheet));
   return (
     validateFreezePanes(o, o),
-    { ...e, sheets: e.sheets.map((a) => (a.id === r ? o : a)) }
+    {
+      ...workbook,
+      sheets: workbook.sheets.map((sheet) =>
+        sheet.id === sheetId ? o : sheet,
+      ),
+    }
   );
 }
-function setHiddenAxisRange(e, r, t, n, o, a) {
+function setHiddenAxisRange(workbook, sheetId, t, start, end, a) {
   if ((assertWorksheetAxis(t), typeof a != "boolean"))
     throw Error("Hidden state must be boolean.");
-  return updateWorksheetById(e, r, (s) => {
+  return updateWorksheetById(workbook, sheetId, (s) => {
     const d = axisCountOf(s, t);
-    normalizeHiddenIntervals([{ start: n, end: o }], d);
-    const u = readHiddenAxisIntervals(s, t),
-      l = { start: n, end: o },
+    normalizeHiddenIntervals([{ start: start, end: end }], d);
+    const hiddenAxisIntervals = readHiddenAxisIntervals(s, t),
+      l = { start: start, end: end },
       c = a
-        ? u.filter((f) =>
-            f.end < l.start - 1 || f.start > l.end + 1
+        ? hiddenAxisIntervals.filter((hiddenAxisInterval) =>
+            hiddenAxisInterval.end < l.start - 1 ||
+            hiddenAxisInterval.start > l.end + 1
               ? true
-              : ((l.start = Math.min(l.start, f.start)),
-                (l.end = Math.max(l.end, f.end)),
+              : ((l.start = Math.min(l.start, hiddenAxisInterval.start)),
+                (l.end = Math.max(l.end, hiddenAxisInterval.end)),
                 false),
           )
-        : u,
+        : hiddenAxisIntervals,
       h = a
         ? [...c, l]
-        : u.flatMap((f) =>
-            f.end < n || f.start > o
-              ? [f]
+        : hiddenAxisIntervals.flatMap((hiddenAxisInterval) =>
+            hiddenAxisInterval.end < start || hiddenAxisInterval.start > end
+              ? [hiddenAxisInterval]
               : [
-                  ...(f.start < n ? [{ start: f.start, end: n - 1 }] : []),
-                  ...(f.end > o ? [{ start: o + 1, end: f.end }] : []),
+                  ...(hiddenAxisInterval.start < start
+                    ? [{ start: hiddenAxisInterval.start, end: start - 1 }]
+                    : []),
+                  ...(hiddenAxisInterval.end > end
+                    ? [{ start: end + 1, end: hiddenAxisInterval.end }]
+                    : []),
                 ],
           );
     return ((s[hiddenKeyForAxis(t)] = normalizeHiddenIntervals(h, d)), s);
   });
 }
-function yQ(e, r, t) {
+function yQ(workbook, sheetId, t) {
   return (
     assertWorksheetAxis(t),
-    updateWorksheetById(e, r, (n) => (delete n[hiddenKeyForAxis(t)], n))
+    updateWorksheetById(
+      workbook,
+      sheetId,
+      (n) => (delete n[hiddenKeyForAxis(t)], n),
+    )
   );
 }
-function setFreezePanes(e, r, t, n) {
+function setFreezePanes(workbook, sheetId, frozenRows, frozenCols) {
   return updateWorksheetById(
-    e,
-    r,
-    (o) => (delete o.splitPanes, { ...o, frozenRows: t, frozenCols: n }),
+    workbook,
+    sheetId,
+    (o) => (
+      delete o.splitPanes,
+      { ...o, frozenRows: frozenRows, frozenCols: frozenCols }
+    ),
   );
 }
-function setSplitPanes(e, r, t) {
+function setSplitPanes(workbook, sheetId, splitPanes) {
   return updateWorksheetById(
-    e,
-    r,
+    workbook,
+    sheetId,
     (n) => (
-      t === undefined
+      splitPanes === undefined
         ? delete n.splitPanes
-        : ((n.splitPanes = validateSplitPaneState(t, {
+        : ((n.splitPanes = validateSplitPaneState(splitPanes, {
             rows: n.rowCount,
             cols: n.colCount,
           })),
@@ -1395,54 +1534,67 @@ function setSplitPanes(e, r, t) {
     ),
   );
 }
-function setFreezePanesAtCell(e, r, t) {
+function setFreezePanesAtCell(workbook, sheetId, t) {
   const n = _t(t);
-  return setFreezePanes(e, r, n.row, n.col);
+  return setFreezePanes(workbook, sheetId, n.row, n.col);
 }
-function applyAxisStructureEdit(e, r, t, n, o) {
-  assertWorksheetAxis(r);
-  const a = axisCountOf(e, r);
+function applyAxisStructureEdit(e, axis, start, count, remove) {
+  assertWorksheetAxis(axis);
+  const a = axisCountOf(e, axis);
   if (
-    !Number.isInteger(t) ||
-    t < 0 ||
-    !Number.isInteger(n) ||
-    n < 1 ||
-    n > 1e4 ||
-    t + n > a ||
-    typeof o != "boolean"
+    !Number.isInteger(start) ||
+    start < 0 ||
+    !Number.isInteger(count) ||
+    count < 1 ||
+    count > 1e4 ||
+    start + count > a ||
+    typeof remove != "boolean"
   )
     throw Error("Choose a valid structural edit of 1–10,000 rows or columns.");
-  const s = readHiddenAxisIntervals(e, r).flatMap((f) => {
-      if (!o) {
-        if (f.end < t) return [f];
-        if (f.end + n >= a)
+  const s = readHiddenAxisIntervals(e, axis).flatMap((f) => {
+      if (!remove) {
+        if (f.end < start) return [f];
+        if (f.end + count >= a)
           throw Error(
             "Insertion would discard hidden-axis metadata at the worksheet boundary.",
           );
         return [
-          { start: f.start >= t ? f.start + n : f.start, end: f.end + n },
+          {
+            start: f.start >= start ? f.start + count : f.start,
+            end: f.end + count,
+          },
         ];
       }
-      const p = t + n - 1;
-      return f.end < t
+      const p = start + count - 1;
+      return f.end < start
         ? [f]
         : f.start > p
-          ? [{ start: f.start - n, end: f.end - n }]
+          ? [{ start: f.start - count, end: f.end - count }]
           : [
-              ...(f.start < t ? [{ start: f.start, end: t - 1 }] : []),
-              ...(f.end > p ? [{ start: t, end: f.end - n }] : []),
+              ...(f.start < start ? [{ start: f.start, end: start - 1 }] : []),
+              ...(f.end > p ? [{ start: start, end: f.end - count }] : []),
             ];
     }),
-    d = hiddenKeyForAxis(r),
-    u = r === "row" ? "frozenRows" : "frozenCols",
+    d = hiddenKeyForAxis(axis),
+    u = axis === "row" ? "frozenRows" : "frozenCols",
     l = e[u] ?? 0,
-    c = o ? l - Math.max(0, Math.min(n, l - t)) : l + (t < l ? n : 0),
+    c = remove
+      ? l - Math.max(0, Math.min(count, l - start))
+      : l + (start < l ? count : 0),
     h = {
       ...e,
       [d]: normalizeHiddenIntervals(s, a),
       [u]: c,
       ...(e.outlineGroups
-        ? { outlineGroups: remapOutlineGroupsForEdit(e, r, t, n, o) }
+        ? {
+            outlineGroups: remapOutlineGroupsForEdit(
+              e,
+              axis,
+              start,
+              count,
+              remove,
+            ),
+          }
         : {}),
     };
   return (
@@ -1454,37 +1606,42 @@ function applyAxisStructureEdit(e, r, t, n, o) {
     }
   );
 }
-function setWorksheetReadOnly(e, r, t, n = {}) {
+function setWorksheetReadOnly(workbook, sheetId, t, n = {}) {
   if (n.readOnly !== undefined && typeof n.readOnly != "boolean")
     throw Error("Read-only state must be boolean.");
   if (n.readOnly) throw Error("This workbook is read-only.");
-  const o = e.sheets.find((s) => s.id === r);
-  if (!o) throw Error("Worksheet not found.");
-  assertSheetUnprotected(o);
-  const a = structuredClone(o);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Worksheet not found.");
+  assertSheetUnprotected(sheet);
+  const a = structuredClone(sheet);
   return (
     t(a),
     validateOutlineGroups(a, a),
     validateFreezePanes(a, a),
-    JSON.stringify(a) === JSON.stringify(o)
-      ? e
-      : { ...e, sheets: e.sheets.map((s) => (s.id === r ? a : s)) }
+    JSON.stringify(a) === JSON.stringify(sheet)
+      ? workbook
+      : {
+          ...workbook,
+          sheets: workbook.sheets.map((sheet) =>
+            sheet.id === sheetId ? a : sheet,
+          ),
+        }
   );
 }
-function EQ(e, r, t, n, o, a) {
+function EQ(workbook, sheetId, axis, start, end, a) {
   return (
-    assertWorksheetAxis(t),
+    assertWorksheetAxis(axis),
     setWorksheetReadOnly(
-      e,
-      r,
+      workbook,
+      sheetId,
       (s) => {
         s.outlineGroups = [
           ...(s.outlineGroups ?? []),
           {
             id: crypto.randomUUID(),
-            axis: t,
-            start: n,
-            end: o,
+            axis: axis,
+            start: start,
+            end: end,
             collapsed: false,
           },
         ];
@@ -1493,71 +1650,80 @@ function EQ(e, r, t, n, o, a) {
     )
   );
 }
-function removeOutlineGroup(e, r, t, n) {
+function removeOutlineGroup(workbook, sheetId, t, n) {
   return setWorksheetReadOnly(
-    e,
-    r,
+    workbook,
+    sheetId,
     (o) => {
-      if (!o.outlineGroups?.some((s) => s.id === t))
+      if (!o.outlineGroups?.some((outlineGroup) => outlineGroup.id === t))
         throw Error("Outline group not found.");
-      o.outlineGroups = o.outlineGroups.filter((s) => s.id !== t);
+      o.outlineGroups = o.outlineGroups.filter(
+        (outlineGroup) => outlineGroup.id !== t,
+      );
     },
     n,
   );
 }
-function setOutlineGroupCollapsed(e, r, t, n, o) {
+function setOutlineGroupCollapsed(workbook, sheetId, t, n, o) {
   if (typeof n != "boolean") throw Error("Collapsed state must be boolean.");
   return setWorksheetReadOnly(
-    e,
-    r,
+    workbook,
+    sheetId,
     (a) => {
-      const s = a.outlineGroups?.find((u) => u.id === t);
+      const s = a.outlineGroups?.find((outlineGroup) => outlineGroup.id === t);
       if (!s) throw Error("Outline group not found.");
       s.collapsed = n;
     },
     o,
   );
 }
-function setOutlineGroupLevel(e, r, t, n, o) {
+function setOutlineGroupLevel(workbook, sheetId, t, n, o) {
   return (
     assertWorksheetAxis(t),
     setWorksheetReadOnly(
-      e,
-      r,
-      (a) => {
-        const s = addOutlineGroup(a, t),
+      workbook,
+      sheetId,
+      (sheet) => {
+        const s = addOutlineGroup(sheet, t),
           d = Math.max(0, ...s.map((c) => c.depth)) + 1;
         if (!Number.isInteger(n) || n < 1 || n > d)
           throw Error("Choose an available outline level.");
         const u = new Map(s.map((c) => [c.id, c.depth]));
-        a.outlineGroups = a.outlineGroups?.map((c) =>
-          c.axis === t ? { ...c, collapsed: u.get(c.id) >= n } : c,
+        sheet.outlineGroups = sheet.outlineGroups?.map((outlineGroup) =>
+          outlineGroup.axis === t
+            ? { ...outlineGroup, collapsed: u.get(outlineGroup.id) >= n }
+            : outlineGroup,
         );
       },
       o,
     )
   );
 }
-function clearAxisOutlineGroups(e, r, t, n) {
+function clearAxisOutlineGroups(workbook, sheetId, t, n) {
   return (
     assertWorksheetAxis(t),
     setWorksheetReadOnly(
-      e,
-      r,
+      workbook,
+      sheetId,
       (o) => {
-        o.outlineGroups = o.outlineGroups?.filter((s) => s.axis !== t);
+        o.outlineGroups = o.outlineGroups?.filter(
+          (outlineGroup) => outlineGroup.axis !== t,
+        );
       },
       n,
     )
   );
 }
-function normalizeDataValidationRules(e) {
-  if (!Array.isArray(e) || e.length > validationLimits.rulesPerSheet)
+function normalizeDataValidationRules(validations) {
+  if (
+    !Array.isArray(validations) ||
+    validations.length > validationLimits.rulesPerSheet
+  )
     throw Error("At most 100 validation rules are supported.");
   const r = new Set();
-  return e.map((t) => {
+  return validations.map((validation) => {
     if (
-      !isNonArrayObject(t) ||
+      !isNonArrayObject(validation) ||
       ![
         "list",
         "number",
@@ -1566,7 +1732,7 @@ function normalizeDataValidationRules(e) {
         "date",
         "time",
         "custom",
-      ].includes(String(t.kind)) ||
+      ].includes(String(validation.kind)) ||
       ![
         "between",
         "notBetween",
@@ -1576,35 +1742,39 @@ function normalizeDataValidationRules(e) {
         "lessEqual",
         "equal",
         "notEqual",
-      ].includes(String(t.operator)) ||
-      typeof t.allowBlank != "boolean" ||
-      !Array.isArray(t.list) ||
-      t.list.length > validationLimits.listItems ||
-      typeof t.min != "number" ||
-      !Number.isFinite(t.min) ||
-      typeof t.max != "number" ||
-      !Number.isFinite(t.max)
+      ].includes(String(validation.operator)) ||
+      typeof validation.allowBlank != "boolean" ||
+      !Array.isArray(validation.list) ||
+      validation.list.length > validationLimits.listItems ||
+      typeof validation.min != "number" ||
+      !Number.isFinite(validation.min) ||
+      typeof validation.max != "number" ||
+      !Number.isFinite(validation.max)
     )
       throw Error("Invalid data validation rule.");
-    const n = assertBoundedValidationText(t.id, 100, "ID");
+    const n = assertBoundedValidationText(validation.id, 100, "ID");
     if (!n.trim() || r.has(n))
       throw Error("Validation rule IDs must be nonempty and unique.");
     r.add(n);
-    const o = parseRangeAddress(
-        assertBoundedValidationText(t.range, 40, "range"),
+    const rangeAddress = parseRangeAddress(
+        assertBoundedValidationText(validation.range, 40, "range"),
       ),
       a = {
         id: n,
-        range: `${columnIndexToLetters(o.firstCol)}${o.firstRow + 1}:${columnIndexToLetters(o.lastCol)}${o.lastRow + 1}`,
-        kind: t.kind,
-        operator: t.operator,
-        min: t.min,
-        max: t.max,
-        list: t.list.map((s) =>
+        range: `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`,
+        kind: validation.kind,
+        operator: validation.operator,
+        min: validation.min,
+        max: validation.max,
+        list: validation.list.map((s) =>
           assertBoundedValidationText(s, 1e3, "list item"),
         ),
-        allowBlank: t.allowBlank,
-        message: assertBoundedValidationText(t.message, 500, "error message"),
+        allowBlank: validation.allowBlank,
+        message: assertBoundedValidationText(
+          validation.message,
+          500,
+          "error message",
+        ),
       };
     if (a.kind === "list" && (!a.list.length || a.list.some((s) => !s.length)))
       throw Error("A list rule needs nonempty values.");
@@ -1622,8 +1792,12 @@ function normalizeDataValidationRules(e) {
         "Time bounds must be fractions from 0 up to, but excluding, 1.",
       );
     if (
-      t.formula !== undefined &&
-      ((a.formula = assertBoundedValidationText(t.formula, 8192, "formula")),
+      validation.formula !== undefined &&
+      ((a.formula = assertBoundedValidationText(
+        validation.formula,
+        8192,
+        "formula",
+      )),
       !a.formula.startsWith("=") || a.formula.length < 2)
     )
       throw Error("Start the custom validation formula with =.");
@@ -1631,35 +1805,43 @@ function normalizeDataValidationRules(e) {
       throw Error(
         "A custom rule requires a formula relative to the range's top-left cell.",
       );
-    if (t.errorStyle !== undefined) {
-      if (!["stop", "warning", "information"].includes(String(t.errorStyle)))
+    if (validation.errorStyle !== undefined) {
+      if (
+        !["stop", "warning", "information"].includes(
+          String(validation.errorStyle),
+        )
+      )
         throw Error("Invalid validation error style.");
-      a.errorStyle = t.errorStyle;
+      a.errorStyle = validation.errorStyle;
     }
     for (const s of ["showInputMessage", "showDropdown"])
-      if (t[s] !== undefined) {
-        if (typeof t[s] != "boolean")
+      if (validation[s] !== undefined) {
+        if (typeof validation[s] != "boolean")
           throw Error("Invalid validation display setting.");
-        a[s] = t[s];
+        a[s] = validation[s];
       }
     for (const [s, d] of [
       ["inputTitle", 100],
       ["inputMessage", 500],
       ["errorTitle", 100],
     ])
-      t[s] !== undefined && (a[s] = assertBoundedValidationText(t[s], d, s));
+      validation[s] !== undefined &&
+        (a[s] = assertBoundedValidationText(validation[s], d, s));
     return a;
   });
 }
-function findDataValidationsInRange(e, r, t) {
+function findDataValidationsInRange(activeWorkbook, sheetId, t) {
   const n = _t(t);
-  return (e.sheets.find((a) => a.id === r)?.validations ?? []).filter((a) => {
-    const s = parseRangeAddress(a.range);
+  return (
+    activeWorkbook.sheets.find((sheet) => sheet.id === sheetId)?.validations ??
+    []
+  ).filter((a) => {
+    const rangeAddress = parseRangeAddress(a.range);
     return (
-      n.row >= s.firstRow &&
-      n.row <= s.lastRow &&
-      n.col >= s.firstCol &&
-      n.col <= s.lastCol
+      n.row >= rangeAddress.firstRow &&
+      n.row <= rangeAddress.lastRow &&
+      n.col >= rangeAddress.firstCol &&
+      n.col <= rangeAddress.lastCol
     );
   });
 }
@@ -1675,12 +1857,12 @@ function normalizeConditionalRules(e) {
     if (!o.trim() || r.has(o))
       throw Error("Conditional rule IDs must be nonempty and unique.");
     r.add(o);
-    const a = parseRangeAddress(
+    const rangeAddress = parseRangeAddress(
         assertBoundedString(n.range, 40, "conditional range"),
       ),
       s = {
         id: o,
-        range: `${columnIndexToLetters(a.firstCol)}${a.firstRow + 1}:${columnIndexToLetters(a.lastCol)}${a.lastRow + 1}`,
+        range: `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`,
         kind: n.kind,
         value: assertBoundedString(n.value, 1e3, "conditional value"),
         second: assertBoundedString(n.second, 1e3, "conditional second value"),
@@ -1731,7 +1913,8 @@ function normalizeConditionalRules(e) {
         !Array.isArray(n.iconThresholds) ||
         n.iconThresholds.length !== 2 ||
         n.iconThresholds.some(
-          (u) => typeof u != "number" || !Number.isFinite(u),
+          (iconThreshold) =>
+            typeof iconThreshold != "number" || !Number.isFinite(iconThreshold),
         ) ||
         n.iconThresholds[0] >= n.iconThresholds[1] ||
         ((s.thresholdType ?? "percent") === "percent" &&
@@ -1745,18 +1928,18 @@ function normalizeConditionalRules(e) {
     return s;
   });
 }
-function evaluateConditionalFormatRules(e, r, t) {
+function evaluateConditionalFormatRules(e, r, cells) {
   const n = new Map(),
     o = new Map();
   let a = 0,
     s = 0;
-  const d = (f, p, m) => {
-    const v = { ruleId: f, address: p, message: m };
-    return (n.set(`${f}:${m}`, v), v);
+  const d = (ruleId, address, m) => {
+    const v = { ruleId: ruleId, address: address, message: m };
+    return (n.set(`${ruleId}:${m}`, v), v);
   };
   let u = "";
   if (
-    !t &&
+    !cells &&
     (e.conditionalFormats ?? []).some((f) =>
       ["duplicate", "unique", "colorScale", "dataBar", "iconSet"].includes(
         f.kind,
@@ -1764,62 +1947,71 @@ function evaluateConditionalFormatRules(e, r, t) {
     )
   )
     try {
-      t = vx(e, r);
-    } catch (f) {
+      cells = vx(e, r);
+    } catch (error) {
       u =
-        f instanceof Error
-          ? f.message
+        error instanceof Error
+          ? error.message
           : "Array values could not be discovered for conditional statistics.";
     }
-  const l = Object.keys(t ?? e.cells).map((f) => ({
-      address: f,
-      point: _t(f),
+  const l = Object.keys(cells ?? e.cells).map((address) => ({
+      address: address,
+      point: _t(address),
     })),
-    c = sortConditionalRulesByPriority(e.conditionalFormats ?? []).map((f) => {
-      const p = parseRangeAddress(f.range),
-        m = new Map();
-      let v = 1 / 0,
-        g = -1 / 0,
-        b = "";
-      if (
-        (["greater", "less", "between"].includes(f.kind) &&
-          (!f.value.trim() ||
-            !Number.isFinite(Number(f.value)) ||
-            (f.kind === "between" &&
-              (!f.second.trim() ||
-                !Number.isFinite(Number(f.second)) ||
-                Number(f.value) > Number(f.second)))) &&
-          (b =
-            "Numeric rule operands must be finite and minimum cannot exceed maximum."),
-        ["duplicate", "unique", "colorScale", "dataBar", "iconSet"].includes(
-          f.kind,
-        ))
-      ) {
-        u && (b = u);
-        for (const { address, point } of l) {
-          if (++a > 1e6) {
-            b =
-              "Conditional statistics exceed 1,000,000 inspected cells; narrow the rule ranges or remove rules.";
-            break;
-          }
-          if (!isCellInsideRange(p, point)) continue;
-          const E = r(e.id, address);
-          if (
-            (typeof E == "number" &&
-              Number.isFinite(E) &&
-              ((v = Math.min(v, E)), (g = Math.max(g, E))),
-            E !== null && E !== "")
-          ) {
-            const A = String(E).toLowerCase();
-            m.set(A, (m.get(A) ?? 0) + 1);
+    c = sortConditionalRulesByPriority(e.conditionalFormats ?? []).map(
+      (rule) => {
+        const rangeAddress = parseRangeAddress(rule.range),
+          counts = new Map();
+        let min = 1 / 0,
+          max = -1 / 0,
+          failure = "";
+        if (
+          (["greater", "less", "between"].includes(rule.kind) &&
+            (!rule.value.trim() ||
+              !Number.isFinite(Number(rule.value)) ||
+              (rule.kind === "between" &&
+                (!rule.second.trim() ||
+                  !Number.isFinite(Number(rule.second)) ||
+                  Number(rule.value) > Number(rule.second)))) &&
+            (failure =
+              "Numeric rule operands must be finite and minimum cannot exceed maximum."),
+          ["duplicate", "unique", "colorScale", "dataBar", "iconSet"].includes(
+            rule.kind,
+          ))
+        ) {
+          u && (failure = u);
+          for (const { address, point } of l) {
+            if (++a > 1e6) {
+              failure =
+                "Conditional statistics exceed 1,000,000 inspected cells; narrow the rule ranges or remove rules.";
+              break;
+            }
+            if (!isCellInsideRange(rangeAddress, point)) continue;
+            const E = r(e.id, address);
+            if (
+              (typeof E == "number" &&
+                Number.isFinite(E) &&
+                ((min = Math.min(min, E)), (max = Math.max(max, E))),
+              E !== null && E !== "")
+            ) {
+              const A = String(E).toLowerCase();
+              counts.set(A, (counts.get(A) ?? 0) + 1);
+            }
           }
         }
-      }
-      return (
-        b && d(f.id, "", b),
-        { rule: f, bounds: p, counts: m, min: v, max: g, failure: b }
-      );
-    }),
+        return (
+          failure && d(rule.id, "", failure),
+          {
+            rule: rule,
+            bounds: rangeAddress,
+            counts: counts,
+            min: min,
+            max: max,
+            failure: failure,
+          }
+        );
+      },
+    ),
     h = (f) => {
       if (o.has(f)) return structuredClone(o.get(f));
       const p = _t(f),
@@ -1854,12 +2046,14 @@ function evaluateConditionalFormatRules(e, r, t) {
             if (typeof I != "number" && typeof I != "boolean")
               throw Error("Formula must return a scalar boolean or number.");
             k = !!I;
-          } catch (O) {
+          } catch (error) {
             m.errors.push(
               d(
                 rule.id,
                 f,
-                O instanceof Error ? O.message : "Formula evaluation failed.",
+                error instanceof Error
+                  ? error.message
+                  : "Formula evaluation failed.",
               ),
             );
             continue;
@@ -1880,13 +2074,13 @@ function evaluateConditionalFormatRules(e, r, t) {
             if (typeof I != "boolean")
               throw Error("Error rule could not evaluate: " + String(I) + ".");
             k = I === (rule.kind === "error");
-          } catch (I) {
+          } catch (error) {
             m.errors.push(
               d(
                 rule.id,
                 f,
-                I instanceof Error
-                  ? I.message
+                error instanceof Error
+                  ? error.message
                   : "Error rule evaluation failed.",
               ),
             );
@@ -1936,12 +2130,12 @@ function evaluateConditionalFormatRules(e, r, t) {
               const O = Math.min(0, min),
                 j = Math.max(0, max),
                 z = j - O || 1,
-                V = (-O / z) * 100,
+                axis = (-O / z) * 100,
                 D = ((v - O) / z) * 100;
               ((m.dataBar = {
-                start: Math.min(V, D),
-                width: Math.abs(D - V),
-                axis: V,
+                start: Math.min(axis, D),
+                width: Math.abs(D - axis),
+                axis: axis,
                 color: v < 0 ? "#d13438" : rule.fill,
                 negative: v < 0,
               }),
@@ -1978,40 +2172,41 @@ const normalizeWorksheetToolText = (e, r = 200) =>
       ? e
       : failWithMessage("Invalid worksheet tool text."),
   CE = (e) => {
-    const r = parseRangeAddress(e);
-    return `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}:${columnIndexToLetters(r.lastCol)}${r.lastRow + 1}`;
+    const rangeAddress = parseRangeAddress(e);
+    return `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`;
   },
   doesRangeOverlap = (e, r) => {
-    const t = parseRangeAddress(e),
+    const rangeAddress = parseRangeAddress(e),
       n = parseRangeAddress(r);
     return (
-      t.firstRow <= n.lastRow &&
-      t.lastRow >= n.firstRow &&
-      t.firstCol <= n.lastCol &&
-      t.lastCol >= n.firstCol
+      rangeAddress.firstRow <= n.lastRow &&
+      rangeAddress.lastRow >= n.firstRow &&
+      rangeAddress.firstCol <= n.lastCol &&
+      rangeAddress.lastCol >= n.firstCol
     );
   },
   lD = (e, r) => {
-    const t = parseRangeAddress(e),
+    const rangeAddress = parseRangeAddress(e),
       n = _t(r);
     return (
-      n.row >= t.firstRow &&
-      n.row <= t.lastRow &&
-      n.col >= t.firstCol &&
-      n.col <= t.lastCol
+      n.row >= rangeAddress.firstRow &&
+      n.row <= rangeAddress.lastRow &&
+      n.col >= rangeAddress.firstCol &&
+      n.col <= rangeAddress.lastCol
     );
   };
-function validateWorksheetFeatures(e, r) {
-  if (isNonArrayObject(e)) {
-    if (e.merges !== undefined) {
-      (!Array.isArray(e.merges) || e.merges.length > 1e3) &&
+function validateWorksheetFeatures(sheet, r) {
+  if (isNonArrayObject(sheet)) {
+    if (sheet.merges !== undefined) {
+      (!Array.isArray(sheet.merges) || sheet.merges.length > 1e3) &&
         failWithMessage("At most1,000 merged ranges are supported.");
       const t = [];
-      for (const n of e.merges) {
-        const o = CE(normalizeWorksheetToolText(n, 40)),
-          a = parseRangeAddress(o);
-        ((a.lastRow - a.firstRow + 1) * (a.lastCol - a.firstCol + 1) > 500 &&
-          failWithMessage("A merged area supports at most 500 cells."),
+      for (const merge of sheet.merges) {
+        const o = CE(normalizeWorksheetToolText(merge, 40)),
+          rangeAddress = parseRangeAddress(o);
+        ((rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+          (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
+          500 && failWithMessage("A merged area supports at most 500 cells."),
           t.some((s) => doesRangeOverlap(s, o)) &&
             failWithMessage("Merged ranges cannot overlap."),
           t.push(o));
@@ -2019,74 +2214,79 @@ function validateWorksheetFeatures(e, r) {
       r.merges = t;
     }
     if (
-      (e.validations !== undefined &&
-        (r.validations = normalizeDataValidationRules(e.validations)),
-      e.conditionalFormats !== undefined &&
+      (sheet.validations !== undefined &&
+        (r.validations = normalizeDataValidationRules(sheet.validations)),
+      sheet.conditionalFormats !== undefined &&
         (r.conditionalFormats = normalizeConditionalRules(
-          e.conditionalFormats,
+          sheet.conditionalFormats,
         )),
-      e.protection !== undefined)
+      sheet.protection !== undefined)
     ) {
-      const t = e.protection;
-      ((!isNonArrayObject(t) ||
-        typeof t.enabled != "boolean" ||
-        (t.hash !== undefined &&
-          (!/^[a-f\d]{64}$/i.test(String(t.hash)) ||
-            typeof t.salt != "string" ||
-            t.salt.length > 100))) &&
+      const protection = sheet.protection;
+      ((!isNonArrayObject(protection) ||
+        typeof protection.enabled != "boolean" ||
+        (protection.hash !== undefined &&
+          (!/^[a-f\d]{64}$/i.test(String(protection.hash)) ||
+            typeof protection.salt != "string" ||
+            protection.salt.length > 100))) &&
         failWithMessage("Invalid sheet protection."),
         (r.protection = {
-          enabled: t.enabled,
-          ...(t.hash ? { hash: String(t.hash), salt: String(t.salt) } : {}),
+          enabled: protection.enabled,
+          ...(protection.hash
+            ? { hash: String(protection.hash), salt: String(protection.salt) }
+            : {}),
         }));
     }
   }
 }
-function mergeWorksheetCells(e, r, t, n = false) {
-  const o = e.sheets.find((h) => h.id === r);
-  assertSheetUnprotected(o);
+function mergeWorksheetCells(workbook, sheetId, t, unmerge = false) {
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  assertSheetUnprotected(sheet);
   const a = CE(t),
-    s = parseRangeAddress(a);
-  (s.lastRow - s.firstRow + 1) * (s.lastCol - s.firstCol + 1) > 500 &&
-    failWithMessage("Merge at most 500 cells.");
-  const d = (o.merges ?? []).filter((h) => doesRangeOverlap(h, a));
-  !n && d.length && failWithMessage("Unmerge overlapping areas first.");
-  const u = { ...o.cells };
-  if (!n) {
-    const h = `${columnIndexToLetters(s.firstCol)}${s.firstRow + 1}`;
-    u[h] = {
-      ...u[h],
-      raw: u[h]?.raw ?? null,
-      style: { ...u[h]?.style, align: "center" },
+    rangeAddress = parseRangeAddress(a);
+  (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+    (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
+    500 && failWithMessage("Merge at most 500 cells.");
+  const d = (sheet.merges ?? []).filter((h) => doesRangeOverlap(h, a));
+  !unmerge && d.length && failWithMessage("Unmerge overlapping areas first.");
+  const cells = { ...sheet.cells };
+  if (!unmerge) {
+    const h = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`;
+    cells[h] = {
+      ...cells[h],
+      raw: cells[h]?.raw ?? null,
+      style: { ...cells[h]?.style, align: "center" },
     };
   }
   return {
-    ...e,
-    sheets: e.sheets.map((h) =>
-      h.id === r
+    ...workbook,
+    sheets: workbook.sheets.map((sheet) =>
+      sheet.id === sheetId
         ? {
-            ...h,
-            cells: u,
-            merges: n
-              ? (h.merges ?? []).filter((f) => !d.includes(f))
-              : [...(h.merges ?? []), a],
+            ...sheet,
+            cells: cells,
+            merges: unmerge
+              ? (sheet.merges ?? []).filter((f) => !d.includes(f))
+              : [...(sheet.merges ?? []), a],
           }
-        : h,
+        : sheet,
     ),
   };
 }
-function oP(e) {
+function oP(names) {
   let r = 0;
-  for (const { refersTo } of e) {
+  for (const { refersTo } of names) {
     const n = stripFormulaStringLiterals(
       refersTo.replace(/"(?:[^"]|"")*"/g, '""').replace(/'(?:[^']|'')+'!/g, ""),
     );
     for (const o of n.matchAll(
       /(?:^|[^A-Za-z0-9_.])((?:\$?[A-Za-z]{1,3}\$?[1-9]\d*)(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?)(?![A-Za-z0-9_.])/g,
     )) {
-      const a = parseRangeAddress(o[1]);
+      const rangeAddress = parseRangeAddress(o[1]);
       if (
-        ((r += (a.lastRow - a.firstRow + 1) * (a.lastCol - a.firstCol + 1)),
+        ((r +=
+          (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+          (rangeAddress.lastCol - rangeAddress.firstCol + 1)),
         r > workbookLimits.maxCells)
       )
         throw Error(
@@ -2096,64 +2296,73 @@ function oP(e) {
   }
 }
 function aP(e) {
-  const r = parseDefinedNamesXml(e),
+  const definedNamesXml = parseDefinedNamesXml(e),
     t = { names: [], warnings: [], builtinXml: "" };
-  if (!r) return t;
-  let n = r.body,
+  if (!definedNamesXml) return t;
+  let body = definedNamesXml.body,
     o = 0;
   const a = new Set(),
     s = [...e.matchAll(/<(?:[A-Za-z_][\w.-]*:)?sheet\b[^>]*>/g)].length;
-  for (; n.trim();) {
+  for (; body.trim();) {
     const d =
       /^\s*<((?:[A-Za-z_][\w.-]*:)?definedName)\b((?:[^"'<>]|"[^"]*"|'[^']*')*?)(?:\/>|>([^<]*)<\/\1\s*>)/.exec(
-        n,
+        body,
       );
     if (!d)
       return throwXlsxDefinedNameError(
         "Malformed definedName content; only text definitions are supported.",
       );
-    const u = parseDefinedNameXmlAttributes(d[2]),
-      l = u.name ?? "",
-      c = u.localSheetId,
+    const definedNameXmlAttributes = parseDefinedNameXmlAttributes(d[2]),
+      l = definedNameXmlAttributes.name ?? "",
+      localSheetId = definedNameXmlAttributes.localSheetId,
       h = d[1].slice(0, -11);
     if (
-      { ...r.namespaces, ...u }[h ? `xmlns:${h.slice(0, -1)}` : "xmlns"] !==
-      spreadsheetMlNamespace
+      { ...definedNamesXml.namespaces, ...definedNameXmlAttributes }[
+        h ? `xmlns:${h.slice(0, -1)}` : "xmlns"
+      ] !== spreadsheetMlNamespace
     )
       return throwXlsxDefinedNameError(
         "Unsupported or undeclared definedName namespace.",
       );
-    for (const v of Object.keys(u))
-      if (v.startsWith("xmlns") && u[v] !== spreadsheetMlNamespace)
+    for (const definedNameXmlAttribute of Object.keys(definedNameXmlAttributes))
+      if (
+        definedNameXmlAttribute.startsWith("xmlns") &&
+        definedNameXmlAttributes[definedNameXmlAttribute] !==
+          spreadsheetMlNamespace
+      )
         return throwXlsxDefinedNameError("Unsupported definedName namespace.");
     if (
-      c !== undefined &&
-      (!/^\d+$/.test(c) || !Number.isSafeInteger(Number(c)))
+      localSheetId !== undefined &&
+      (!/^\d+$/.test(localSheetId) ||
+        !Number.isSafeInteger(Number(localSheetId)))
     )
       return throwXlsxDefinedNameError(
         `Name "${l}" has an invalid localSheetId.`,
       );
-    const p = `=${nP(
+    const refersTo = `=${nP(
       (d[3] ?? "").replace(
         /\r\n?/g,
         `
 `,
       ),
     ).replace(/^=/, "")}`;
-    if ((validateNameFormulaText(p), c !== undefined && Number(c) >= s))
+    if (
+      (validateNameFormulaText(refersTo),
+      localSheetId !== undefined && Number(localSheetId) >= s)
+    )
       return throwXlsxDefinedNameError(
         `Name "${l}" has an out-of-range localSheetId.`,
       );
-    const m = `${c === undefined ? "workbook" : Number(c)}:${l.toLowerCase()}`;
+    const m = `${localSheetId === undefined ? "workbook" : Number(localSheetId)}:${l.toLowerCase()}`;
     if (a.has(m))
       return throwXlsxDefinedNameError(
         `Duplicate name "${l}" in the same scope.`,
       );
     if ((a.add(m), reservedDefinedNames.has(l.toLowerCase())))
-      t.builtinXml += `<definedName${Object.entries(u)
+      t.builtinXml += `<definedName${Object.entries(definedNameXmlAttributes)
         .filter(([v]) => !v.startsWith("xmlns"))
         .map(([v, g]) => ` ${v}="${validateXmlSafeName(g, true)}"`)
-        .join("")}>${validateXmlSafeName(p.slice(1))}</definedName>`;
+        .join("")}>${validateXmlSafeName(refersTo.slice(1))}</definedName>`;
     else if (l.toLowerCase().startsWith("_xlnm.")) {
       if (++o > 1e3)
         return throwXlsxDefinedNameError(
@@ -2168,14 +2377,18 @@ function aP(e) {
           "The workbook exceeds the 1,000-defined-name limit.",
         );
       for (const g of ["function", "vbProcedure", "xlm"])
-        if (u[g] !== undefined && !["0", "false"].includes(u[g]))
+        if (
+          definedNameXmlAttributes[g] !== undefined &&
+          !["0", "false"].includes(definedNameXmlAttributes[g])
+        )
           return throwXlsxDefinedNameError(
             `Name "${l}" has an executable ${g} attribute.`,
           );
-      const v = Object.keys(u).filter(
-        (g) =>
-          !["name", "localSheetId", "comment"].includes(g) &&
-          !g.startsWith("xmlns"),
+      const v = Object.keys(definedNameXmlAttributes).filter(
+        (definedNameXmlAttribute) =>
+          !["name", "localSheetId", "comment"].includes(
+            definedNameXmlAttribute,
+          ) && !definedNameXmlAttribute.startsWith("xmlns"),
       );
       (v.length &&
         t.warnings.push(
@@ -2183,12 +2396,16 @@ function aP(e) {
         ),
         t.names.push({
           name: l,
-          refersTo: p,
-          ...(c !== undefined ? { localSheetId: Number(c) } : {}),
-          ...(u.comment !== undefined ? { comment: u.comment } : {}),
+          refersTo: refersTo,
+          ...(localSheetId !== undefined
+            ? { localSheetId: Number(localSheetId) }
+            : {}),
+          ...(definedNameXmlAttributes.comment !== undefined
+            ? { comment: definedNameXmlAttributes.comment }
+            : {}),
         }));
     }
-    n = n.slice(d[0].length);
+    body = body.slice(d[0].length);
   }
   oP(t.names);
   try {
@@ -2211,8 +2428,8 @@ function aP(e) {
         ].map((d) => ({ id: String(d) })),
       },
     );
-  } catch (d) {
-    return throwXlsxDefinedNameError(d.message);
+  } catch (error) {
+    return throwXlsxDefinedNameError(error.message);
   }
   return t;
 }

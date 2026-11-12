@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "baseUrl": "..",
+    "paths": {
+      "@ledgerglass/workbook": ["types/index.d.ts"],
+      "@ledgerglass/workbook/mcp": ["types/mcp.d.ts"]
+    }
+  },
+  "include": ["index.d.ts", "mcp.d.ts", "tests/consumer.tsx"]
+}

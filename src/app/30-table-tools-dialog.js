@@ -42,7 +42,7 @@ function TableToolsDialog({
   const { text, language } = useWorkbookMessages(),
     l = ne.useRef(null);
   ne.useEffect(() => {
-    const rt = document.activeElement,
+    const activeElement = document.activeElement,
       Le = l.current,
       et = Le?.querySelector(
         "input:not(:disabled), select:not(:disabled), button:not(:disabled)",
@@ -50,7 +50,7 @@ function TableToolsDialog({
     return (
       et?.focus(),
       () => {
-        rt?.isConnected && rt.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
@@ -64,7 +64,7 @@ function TableToolsDialog({
     h = ne.useMemo(() => tryComputePivotRows(workbook, sheetId, c), []),
     [f, p] = ne.useState(sheetId),
     [m, v] = ne.useState(c),
-    [g, b] = ne.useState(h),
+    [fields, b] = ne.useState(h),
     [y, w] = ne.useState(
       mode === "table"
         ? nextDefaultTableName(workbook)
@@ -72,26 +72,28 @@ function TableToolsDialog({
           ? "Pivot summary"
           : "Extracted data",
     ),
-    [E, A] = ne.useState(""),
+    [tableId, A] = ne.useState(""),
     [k, F] = ne.useState("blue"),
     [I, O] = ne.useState(false),
-    [j, z] = ne.useState({}),
-    [V, D] = ne.useState(h.slice(0, 1)),
-    [B, _] = ne.useState([]),
-    [C, T] = ne.useState(
+    [totals, z] = ne.useState({}),
+    [rowFields, D] = ne.useState(h.slice(0, 1)),
+    [columnFields, _] = ne.useState([]),
+    [values, T] = ne.useState(
       h.length ? [{ field: h.at(-1), operation: "sum" }] : [],
     ),
     [N, R] = ne.useState(true),
     [L, $] = ne.useState(false),
-    [U, G] = ne.useState([]),
-    [H, Q] = ne.useState([]);
-  function X(rt) {
+    [dateGroups, setDateGroups] = ne.useState([]),
+    [calculatedFields, Q] = ne.useState([]);
+  function setCalculatedFields(rt) {
     (T((Le) =>
       Le.flatMap((et) => {
-        const st = H.findIndex((kt) => kt.name === et.field);
+        const st = calculatedFields.findIndex(
+          (calculatedField) => calculatedField.name === et.field,
+        );
         return st < 0
           ? [et]
-          : rt.length === H.length
+          : rt.length === calculatedFields.length
             ? [{ ...et, field: rt[st].name }]
             : rt.some((kt) => kt.name === et.field)
               ? [et]
@@ -102,78 +104,84 @@ function TableToolsDialog({
   }
   const [J, q] = ne.useState([]),
     [W, K] = ne.useState(h),
-    [te, ae] = ne.useState({}),
-    [oe, de] = ne.useState(""),
-    [he, Se] = ne.useState("ascending"),
-    [le, ce] = ne.useState([]),
-    [ge, se] = ne.useState(false),
+    [rename, ae] = ne.useState({}),
+    [field, de] = ne.useState(""),
+    [direction, Se] = ne.useState("ascending"),
+    [derived, ce] = ne.useState([]),
+    [checked, se] = ne.useState(false),
     [we, Ee] = ne.useState(sheetId),
-    [Ae, ye] = ne.useState("A1"),
-    [Te, Pe] = ne.useState(""),
-    [qe, ht] = ne.useState(""),
+    [address, ye] = ne.useState("A1"),
+    [pivotId, Pe] = ne.useState(""),
+    [columnId, ht] = ne.useState(""),
     [Re, Me] = ne.useState(""),
-    [ke, je] = ne.useState("1"),
+    [appendCount, je] = ne.useState("1"),
     [$e, Je] = ne.useState(null),
     [ze, at] = ne.useState(0),
-    _e = JSON.stringify({
+    context = JSON.stringify({
       sheetId,
       range,
-      tableId: E,
+      tableId: tableId,
       name: y,
       sourceRange: m,
       style: k,
       showTotals: I,
-      totals: j,
-      columnId: qe,
+      totals: totals,
+      columnId: columnId,
       columnFormula: Re,
-      appendCount: ke,
+      appendCount: appendCount,
     }),
-    Ze =
+    disabled =
       !!$e &&
-      ($e.plan.snapshot !== JSON.stringify(workbook) || $e.context !== _e),
+      ($e.plan.snapshot !== JSON.stringify(workbook) || $e.context !== context),
     [lt, be] = ne.useState(""),
     [ft, pt] = ne.useState(""),
     [Fe, nt] = ne.useState(null),
-    mt = workbook.sheets.find((rt) => rt.id === sheetId)?.tables ?? [],
-    Wt = workbook.sheets.flatMap((rt) =>
-      (mode === "pivot" ? (rt.pivots ?? []) : (rt.queries ?? [])).map((Le) => ({
-        sheetName: rt.name,
-        definition: Le,
-      })),
+    mt = workbook.sheets.find((sheet) => sheet.id === sheetId)?.tables ?? [],
+    Wt = workbook.sheets.flatMap((sheet) =>
+      (mode === "pivot" ? (sheet.pivots ?? []) : (sheet.queries ?? [])).map(
+        (definition) => ({
+          sheetName: sheet.name,
+          definition: definition,
+        }),
+      ),
     ),
-    Zt = () => (ge ? { sheetId: we, address: Ae } : undefined);
+    Zt = () => (checked ? { sheetId: we, address: address } : undefined);
   function xt(rt, Le) {
     if (!readOnly) {
       (be(""), pt(""));
       try {
         const et = rt();
         (onWorkbookChange(et, Le), pt(`${Le} completed.`));
-      } catch (et) {
+      } catch (error) {
         be(
-          et instanceof Error
-            ? et.message
+          error instanceof Error
+            ? error.message
             : "The operation could not be completed.",
         );
       }
     }
   }
-  function or() {
+  function onClick() {
     be("");
     try {
-      const rt = getPivotSourceFields(workbook, f, m);
-      (b(rt),
-        K(rt),
-        D(rt.slice(0, 1)),
+      const pivotSourceFields = getPivotSourceFields(workbook, f, m);
+      (b(pivotSourceFields),
+        K(pivotSourceFields),
+        D(pivotSourceFields.slice(0, 1)),
         _([]),
-        T(rt.length ? [{ field: rt.at(-1), operation: "sum" }] : []),
+        T(
+          pivotSourceFields.length
+            ? [{ field: pivotSourceFields.at(-1), operation: "sum" }]
+            : [],
+        ),
         q([]),
         ae({}),
         ce([]),
         de(""),
-        G([]),
+        setDateGroups([]),
         Q([]));
-    } catch (rt) {
-      be(rt.message);
+    } catch (error) {
+      be(error.message);
     }
   }
   function Wr(rt) {
@@ -187,7 +195,7 @@ function TableToolsDialog({
       ht(Le.columns[0]?.id ?? ""),
       Me(Le.columns[0]?.calculatedFormula ?? ""),
       v(Le.range),
-      b(Le.columns.map((kt) => kt.name)),
+      b(Le.columns.map((column) => column.name)),
       F(Le.style),
       O(Le.showTotals),
       z(Le.totals));
@@ -200,22 +208,24 @@ function TableToolsDialog({
         : rt.value,
     }));
   }
-  function qt(rt) {
+  function qt(request) {
     (be(""), pt(""), Je(null), at(0));
     try {
       Je({
-        plan: applyTableOperation(workbook, sheetId, E, rt, { readOnly }),
-        context: _e,
+        plan: applyTableOperation(workbook, sheetId, tableId, request, {
+          readOnly,
+        }),
+        context: context,
       });
-    } catch (Le) {
-      be(Le.message);
+    } catch (error) {
+      be(error.message);
     }
   }
   function Ye() {
     if ($e) {
       be("");
       try {
-        if (Ze)
+        if (disabled)
           throw Error(
             "Table settings or the current selection changed. Preview again.",
           );
@@ -229,17 +239,23 @@ function TableToolsDialog({
               ? "No table changes were needed."
               : "Reviewed table operation completed.",
           ));
-      } catch (rt) {
-        be(rt.message);
+      } catch (error) {
+        be(error.message);
       }
     }
   }
   function bt() {
     mode === "table"
-      ? E
+      ? tableId
         ? qt({
             kind: "updateTable",
-            options: { name: y, range: m, style: k, showTotals: I, totals: j },
+            options: {
+              name: y,
+              range: m,
+              style: k,
+              showTotals: I,
+              totals: totals,
+            },
           })
         : xt(
             () =>
@@ -248,7 +264,7 @@ function TableToolsDialog({
                 range: m,
                 style: k,
                 showTotals: I,
-                totals: j,
+                totals: totals,
                 ...(Fe
                   ? {
                       headers: (() => {
@@ -259,7 +275,7 @@ function TableToolsDialog({
                           throw Error(
                             "The workbook or source range changed. Review headers again.",
                           );
-                        return Fe.headers.map((rt) => rt.suggested);
+                        return Fe.headers.map((header) => header.suggested);
                       })(),
                     }
                   : {}),
@@ -272,14 +288,14 @@ function TableToolsDialog({
               buildPivotTableOutput(workbook, {
                 name: y,
                 source: { sheetId: f, range: m },
-                rowFields: V,
-                columnFields: B,
-                values: C,
+                rowFields: rowFields,
+                columnFields: columnFields,
+                values: values,
                 filters: Rr(),
                 grandTotals: N,
                 subtotals: L,
-                dateGroups: U,
-                calculatedFields: H,
+                dateGroups: dateGroups,
+                calculatedFields: calculatedFields,
                 destination: Zt(),
               }),
             "Create pivot summary",
@@ -290,10 +306,12 @@ function TableToolsDialog({
                 name: y,
                 source: { sheetId: f, range: m },
                 fields: W,
-                rename: te,
+                rename: rename,
                 filters: Rr(),
-                ...(oe ? { sort: { field: oe, direction: he } } : {}),
-                derived: le,
+                ...(field
+                  ? { sort: { field: field, direction: direction } }
+                  : {}),
+                derived: derived,
                 destination: Zt(),
               }),
             "Extract data",
@@ -303,7 +321,9 @@ function TableToolsDialog({
       i.jsxs(i.Fragment, {
         children: [
           rt !== undefined && i.jsx("option", { value: "", children: rt }),
-          g.map((Le) => i.jsx("option", { value: Le, children: Le }, Le)),
+          fields.map((field) =>
+            i.jsx("option", { value: field, children: field }, field),
+          ),
         ],
       }),
     cr = (rt, Le, et) =>
@@ -311,21 +331,21 @@ function TableToolsDialog({
         className: "lg-table-fields",
         children: [
           i.jsx("legend", { children: rt }),
-          g.length
-            ? g.map((st) =>
+          fields.length
+            ? fields.map((field) =>
                 i.jsxs(
                   "label",
                   {
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
-                        checked: Le.includes(st),
-                        onChange: () => et(toggleListValue(Le, st)),
+                        checked: Le.includes(field),
+                        onChange: () => et(toggleListValue(Le, field)),
                       }),
-                      st,
+                      field,
                     ],
                   },
-                  st,
+                  field,
                 ),
               )
             : i.jsx("p", {
@@ -347,11 +367,11 @@ function TableToolsDialog({
     role: "dialog",
     "aria-modal": "true",
     "aria-label": dr,
-    onKeyDown: (rt) => {
+    onKeyDown: (event) => {
       if (
-        (rt.key === "Escape" &&
-          (rt.preventDefault(), rt.stopPropagation(), onClose()),
-        rt.key === "Tab")
+        (event.key === "Escape" &&
+          (event.preventDefault(), event.stopPropagation(), onClose()),
+        event.key === "Tab")
       ) {
         const et = Array.from(
             l.current?.querySelectorAll(
@@ -365,12 +385,12 @@ function TableToolsDialog({
           ),
           st = et[0],
           kt = et.at(-1);
-        rt.shiftKey && document.activeElement === st && kt
-          ? (rt.preventDefault(), kt.focus())
-          : !rt.shiftKey &&
+        event.shiftKey && document.activeElement === st && kt
+          ? (event.preventDefault(), kt.focus())
+          : !event.shiftKey &&
             document.activeElement === kt &&
             st &&
-            (rt.preventDefault(), st.focus());
+            (event.preventDefault(), st.focus());
       }
     },
     children: [
@@ -421,8 +441,8 @@ function TableToolsDialog({
                 i.jsx(LocalizedText, { children: "Existing table" }),
                 i.jsxs("select", {
                   "aria-label": text("Existing table"),
-                  value: E,
-                  onChange: (rt) => Wr(rt.target.value),
+                  value: tableId,
+                  onChange: (event) => Wr(event.target.value),
                   lang: language("Existing table"),
                   "data-ui-label": "Existing table",
                   children: [
@@ -447,7 +467,7 @@ function TableToolsDialog({
               i.jsx("input", {
                 "aria-label": mode === "table" ? "Table name" : "Result name",
                 value: y,
-                onChange: (rt) => w(rt.target.value),
+                onChange: (event) => w(event.target.value),
               }),
             ],
           }),
@@ -457,9 +477,13 @@ function TableToolsDialog({
                 i.jsx(LocalizedText, { children: "Source sheet" }),
                 i.jsx("select", {
                   value: f,
-                  onChange: (rt) => p(rt.target.value),
-                  children: workbook.sheets.map((rt) =>
-                    i.jsx("option", { value: rt.id, children: rt.name }, rt.id),
+                  onChange: (event) => p(event.target.value),
+                  children: workbook.sheets.map((sheet) =>
+                    i.jsx(
+                      "option",
+                      { value: sheet.id, children: sheet.name },
+                      sheet.id,
+                    ),
                   ),
                 }),
               ],
@@ -474,13 +498,13 @@ function TableToolsDialog({
                     "aria-label":
                       mode === "table" ? "Table range" : "Source range",
                     value: m,
-                    onChange: (rt) => v(rt.target.value),
+                    onChange: (event) => v(event.target.value),
                   }),
                 ],
               }),
               i.jsx("button", {
                 type: "button",
-                onClick: or,
+                onClick: onClick,
                 children: i.jsx(LocalizedText, { children: "Read fields" }),
               }),
             ],
@@ -488,7 +512,7 @@ function TableToolsDialog({
           mode === "table"
             ? i.jsxs(i.Fragment, {
                 children: [
-                  !E &&
+                  !tableId &&
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("button", {
@@ -496,7 +520,7 @@ function TableToolsDialog({
                           onClick: () => {
                             be("");
                             try {
-                              const rt = suggestTableHeaderName(
+                              const headers = suggestTableHeaderName(
                                 workbook,
                                 sheetId,
                                 m,
@@ -504,11 +528,11 @@ function TableToolsDialog({
                               (nt({
                                 snapshot: JSON.stringify(workbook),
                                 range: m,
-                                headers: rt,
+                                headers: headers,
                               }),
-                                b(rt.map((Le) => Le.suggested)));
-                            } catch (rt) {
-                              be(rt.message);
+                                b(headers.map((header) => header.suggested)));
+                            } catch (error) {
+                              be(error.message);
                             }
                           },
                           children: i.jsx(LocalizedText, {
@@ -533,36 +557,42 @@ function TableToolsDialog({
                                     "Review each source value and replacement. Create table applies these names and retains changed originals in native source evidence.",
                                 }),
                               }),
-                              Fe.headers.map((rt, Le) =>
+                              Fe.headers.map((header, Le) =>
                                 i.jsxs(
                                   "label",
                                   {
                                     children: [
-                                      rt.address,
+                                      header.address,
                                       " ",
                                       i.jsx(LocalizedText, {
                                         children: "original: ",
                                       }),
-                                      JSON.stringify(rt.original),
+                                      JSON.stringify(header.original),
                                       i.jsx("input", {
                                         "aria-label": `Reviewed header ${Le + 1}`,
-                                        value: rt.suggested,
-                                        onChange: (et) => {
-                                          const st = Fe.headers.map((kt, gr) =>
-                                            gr === Le
-                                              ? {
-                                                  ...kt,
-                                                  suggested: et.target.value,
-                                                }
-                                              : kt,
+                                        value: header.suggested,
+                                        onChange: (event) => {
+                                          const headers = Fe.headers.map(
+                                            (header, gr) =>
+                                              gr === Le
+                                                ? {
+                                                    ...header,
+                                                    suggested:
+                                                      event.target.value,
+                                                  }
+                                                : header,
                                           );
-                                          (nt({ ...Fe, headers: st }),
-                                            b(st.map((kt) => kt.suggested)));
+                                          (nt({ ...Fe, headers: headers }),
+                                            b(
+                                              headers.map(
+                                                (header) => header.suggested,
+                                              ),
+                                            ));
                                         },
                                       }),
                                     ],
                                   },
-                                  rt.address,
+                                  header.address,
                                 ),
                               ),
                             ],
@@ -574,7 +604,7 @@ function TableToolsDialog({
                       i.jsx(LocalizedText, { children: "Table style" }),
                       i.jsxs("select", {
                         value: k,
-                        onChange: (rt) => F(rt.target.value),
+                        onChange: (event) => F(event.target.value),
                         children: [
                           i.jsx("option", { value: "blue", children: "Blue" }),
                           i.jsx("option", {
@@ -592,7 +622,7 @@ function TableToolsDialog({
                       i.jsx("input", {
                         type: "checkbox",
                         checked: I,
-                        onChange: (rt) => O(rt.target.checked),
+                        onChange: (event) => O(event.target.checked),
                       }),
                       i.jsx(LocalizedText, { children: "Show totals row" }),
                     ],
@@ -600,29 +630,31 @@ function TableToolsDialog({
                   I &&
                     i.jsx("div", {
                       className: "lg-table-list",
-                      children: g.map((rt) =>
+                      children: fields.map((field) =>
                         i.jsxs(
                           "label",
                           {
                             children: [
-                              rt,
+                              field,
                               " ",
                               i.jsx(LocalizedText, { children: "total" }),
                               i.jsxs("select", {
-                                "aria-label": `${rt} total`,
-                                value: Object.hasOwn(j, rt) ? j[rt] : "",
-                                onChange: (Le) =>
+                                "aria-label": `${field} total`,
+                                value: Object.hasOwn(totals, field)
+                                  ? totals[field]
+                                  : "",
+                                onChange: (event) =>
                                   z((et) => {
                                     const st = { ...et };
                                     return (
-                                      Le.target.value
-                                        ? Object.defineProperty(st, rt, {
-                                            value: Le.target.value,
+                                      event.target.value
+                                        ? Object.defineProperty(st, field, {
+                                            value: event.target.value,
                                             enumerable: true,
                                             writable: true,
                                             configurable: true,
                                           })
-                                        : delete st[rt],
+                                        : delete st[field],
                                       st
                                     );
                                   }),
@@ -631,38 +663,41 @@ function TableToolsDialog({
                                     value: "",
                                     children: "None",
                                   }),
-                                  basicAggregateOperations.map((Le) =>
-                                    i.jsx(
-                                      "option",
-                                      {
-                                        value: Le,
-                                        children: formatAggregationLabel(Le),
-                                      },
-                                      Le,
-                                    ),
+                                  basicAggregateOperations.map(
+                                    (basicAggregateOperation) =>
+                                      i.jsx(
+                                        "option",
+                                        {
+                                          value: basicAggregateOperation,
+                                          children: formatAggregationLabel(
+                                            basicAggregateOperation,
+                                          ),
+                                        },
+                                        basicAggregateOperation,
+                                      ),
                                   ),
                                 ],
                               }),
                             ],
                           },
-                          rt,
+                          field,
                         ),
                       ),
                     }),
-                  E &&
+                  tableId &&
                     i.jsx(
                       TableColumnTypesPanel,
                       {
                         workbook,
                         sheetId,
-                        tableId: E,
-                        context: _e,
+                        tableId: tableId,
+                        context: context,
                         readOnly,
                         onWorkbookChange,
                       },
-                      E,
+                      tableId,
                     ),
-                  E &&
+                  tableId &&
                     i.jsxs("fieldset", {
                       className: "lg-table-list",
                       children: [
@@ -678,14 +713,15 @@ function TableToolsDialog({
                             }),
                             i.jsx("select", {
                               "aria-label": text("Calculated column"),
-                              value: qe,
-                              onChange: (rt) => {
-                                (ht(rt.target.value),
+                              value: columnId,
+                              onChange: (event) => {
+                                (ht(event.target.value),
                                   Me(
                                     mt
-                                      .find((st) => st.id === E)
+                                      .find((st) => st.id === tableId)
                                       ?.columns.find(
-                                        (st) => st.id === rt.target.value,
+                                        (column) =>
+                                          column.id === event.target.value,
                                       )?.calculatedFormula ?? "",
                                   ),
                                   Je(null));
@@ -693,20 +729,20 @@ function TableToolsDialog({
                               lang: language("Calculated column"),
                               "data-ui-label": "Calculated column",
                               children: mt
-                                .find((rt) => rt.id === E)
-                                ?.columns.map((rt) =>
+                                .find((rt) => rt.id === tableId)
+                                ?.columns.map((column) =>
                                   i.jsxs(
                                     "option",
                                     {
-                                      value: rt.id,
+                                      value: column.id,
                                       children: [
-                                        rt.name,
-                                        rt.calculatedFormula
+                                        column.name,
+                                        column.calculatedFormula
                                           ? " · calculated"
                                           : "",
                                       ],
                                     },
-                                    rt.id,
+                                    column.id,
                                   ),
                                 ),
                             }),
@@ -720,7 +756,7 @@ function TableToolsDialog({
                             i.jsx("input", {
                               "aria-label": text("First data-row formula"),
                               value: Re,
-                              onChange: (rt) => Me(rt.target.value),
+                              onChange: (event) => Me(event.target.value),
                               placeholder: text("=[@Quantity]*[@Rate]"),
                               lang: language("First data-row formula"),
                               "data-ui-label": "First data-row formula",
@@ -742,7 +778,7 @@ function TableToolsDialog({
                               onClick: () =>
                                 qt({
                                   kind: "setColumnFormula",
-                                  columnId: qe,
+                                  columnId: columnId,
                                   formula: Re,
                                 }),
                               children: i.jsx(LocalizedText, {
@@ -752,13 +788,14 @@ function TableToolsDialog({
                             i.jsx("button", {
                               type: "button",
                               disabled: !mt
-                                .find((rt) => rt.id === E)
-                                ?.columns.find((rt) => rt.id === qe)
-                                ?.calculatedFormula,
+                                .find((rt) => rt.id === tableId)
+                                ?.columns.find(
+                                  (column) => column.id === columnId,
+                                )?.calculatedFormula,
                               onClick: () =>
                                 qt({
                                   kind: "clearColumnFormula",
-                                  columnId: qe,
+                                  columnId: columnId,
                                 }),
                               children: i.jsx(LocalizedText, {
                                 children: "Preview clear rule",
@@ -775,7 +812,7 @@ function TableToolsDialog({
                               "aria-label": text("Rows to append"),
                               min: "1",
                               max: "100",
-                              value: ke,
+                              value: appendCount,
                               onValueChange: (rt) => je(rt),
                               lang: language("Rows to append"),
                               "data-ui-label": "Rows to append",
@@ -785,7 +822,10 @@ function TableToolsDialog({
                         i.jsx("button", {
                           type: "button",
                           onClick: () =>
-                            qt({ kind: "appendRows", count: Number(ke) }),
+                            qt({
+                              kind: "appendRows",
+                              count: Number(appendCount),
+                            }),
                           children: i.jsx(LocalizedText, {
                             children: "Preview append rows",
                           }),
@@ -811,7 +851,7 @@ function TableToolsDialog({
                             children: "Review table changes",
                           }),
                         }),
-                        Ze
+                        disabled
                           ? i.jsx("p", {
                               role: "alert",
                               children: i.jsx(LocalizedText, {
@@ -844,30 +884,33 @@ function TableToolsDialog({
                                           "Saved column rules before and after",
                                       }),
                                     }),
-                                    $e.plan.afterColumns.map((rt, Le) =>
-                                      i.jsxs(
-                                        "p",
-                                        {
-                                          children: [
-                                            i.jsx("strong", {
-                                              children: rt.name,
-                                            }),
-                                            i.jsx("br", {}),
-                                            i.jsx(LocalizedText, {
-                                              children: "Before:",
-                                            }),
-                                            " ",
-                                            $e.plan.beforeColumns[Le]
-                                              ?.calculatedFormula ?? "No rule",
-                                            i.jsx("br", {}),
-                                            i.jsx(LocalizedText, {
-                                              children: "After: ",
-                                            }),
-                                            rt.calculatedFormula ?? "No rule",
-                                          ],
-                                        },
-                                        rt.id,
-                                      ),
+                                    $e.plan.afterColumns.map(
+                                      (afterColumn, Le) =>
+                                        i.jsxs(
+                                          "p",
+                                          {
+                                            children: [
+                                              i.jsx("strong", {
+                                                children: afterColumn.name,
+                                              }),
+                                              i.jsx("br", {}),
+                                              i.jsx(LocalizedText, {
+                                                children: "Before:",
+                                              }),
+                                              " ",
+                                              $e.plan.beforeColumns[Le]
+                                                ?.calculatedFormula ??
+                                                "No rule",
+                                              i.jsx("br", {}),
+                                              i.jsx(LocalizedText, {
+                                                children: "After: ",
+                                              }),
+                                              afterColumn.calculatedFormula ??
+                                                "No rule",
+                                            ],
+                                          },
+                                          afterColumn.id,
+                                        ),
                                     ),
                                   ],
                                 }),
@@ -883,7 +926,8 @@ function TableToolsDialog({
                                             i.jsxs("strong", {
                                               children: [
                                                 workbook.sheets.find(
-                                                  (kt) => kt.id === rt.sheetId,
+                                                  (sheet) =>
+                                                    sheet.id === rt.sheetId,
                                                 )?.name,
                                                 "!",
                                                 rt.address,
@@ -972,22 +1016,22 @@ function TableToolsDialog({
                                       }),
                                     ],
                                   }),
-                                $e.plan.anchorChanges.map((rt) =>
+                                $e.plan.anchorChanges.map((anchorChange) =>
                                   i.jsxs(
                                     "p",
                                     {
                                       children: [
-                                        rt.kind,
+                                        anchorChange.kind,
                                         " ",
-                                        rt.id,
+                                        anchorChange.id,
                                         ": ",
-                                        rt.before,
+                                        anchorChange.before,
                                         " →",
                                         " ",
-                                        rt.after,
+                                        anchorChange.after,
                                       ],
                                     },
-                                    rt.kind + rt.id,
+                                    anchorChange.kind + anchorChange.id,
                                   ),
                                 ),
                               ],
@@ -998,7 +1042,7 @@ function TableToolsDialog({
                             i.jsx("button", {
                               type: "button",
                               className: "lg-table-primary",
-                              disabled: Ze,
+                              disabled: disabled,
                               onClick: Ye,
                               children: i.jsx(LocalizedText, {
                                 children: "Apply table changes",
@@ -1029,8 +1073,8 @@ function TableToolsDialog({
                   mode === "pivot"
                     ? i.jsxs(i.Fragment, {
                         children: [
-                          cr("Row groups", V, D),
-                          cr("Column groups", B, _),
+                          cr("Row groups", rowFields, D),
+                          cr("Column groups", columnFields, _),
                           i.jsxs("fieldset", {
                             className: "lg-table-list",
                             children: [
@@ -1039,7 +1083,7 @@ function TableToolsDialog({
                                   children: "Value fields",
                                 }),
                               }),
-                              C.map((rt, Le) =>
+                              values.map((value, Le) =>
                                 i.jsxs(
                                   "div",
                                   {
@@ -1052,20 +1096,26 @@ function TableToolsDialog({
                                           }),
                                           Le + 1,
                                           i.jsx("select", {
-                                            value: rt.field,
-                                            onChange: (et) =>
+                                            value: value.field,
+                                            onChange: (event) =>
                                               T((st) =>
                                                 st.map((kt, gr) =>
                                                   gr === Le
                                                     ? {
                                                         ...kt,
-                                                        field: et.target.value,
+                                                        field:
+                                                          event.target.value,
                                                       }
                                                     : kt,
                                                 ),
                                               ),
-                                            children: g
-                                              .concat(H.map((et) => et.name))
+                                            children: fields
+                                              .concat(
+                                                calculatedFields.map(
+                                                  (calculatedField) =>
+                                                    calculatedField.name,
+                                                ),
+                                              )
                                               .map((et) =>
                                                 i.jsx(
                                                   "option",
@@ -1083,32 +1133,33 @@ function TableToolsDialog({
                                           }),
                                           i.jsx("select", {
                                             "aria-label": `Aggregation ${Le + 1}`,
-                                            value: rt.operation,
-                                            onChange: (et) =>
+                                            value: value.operation,
+                                            onChange: (event) =>
                                               T((st) =>
                                                 st.map((kt, gr) =>
                                                   gr === Le
                                                     ? {
                                                         ...kt,
                                                         operation:
-                                                          et.target.value,
+                                                          event.target.value,
                                                       }
                                                     : kt,
                                                 ),
                                               ),
                                             children:
                                               pivotAggregateOperations.map(
-                                                (et) =>
+                                                (pivotAggregateOperation) =>
                                                   i.jsx(
                                                     "option",
                                                     {
-                                                      value: et,
+                                                      value:
+                                                        pivotAggregateOperation,
                                                       children:
                                                         formatAggregationLabel(
-                                                          et,
+                                                          pivotAggregateOperation,
                                                         ),
                                                     },
-                                                    et,
+                                                    pivotAggregateOperation,
                                                   ),
                                               ),
                                           }),
@@ -1132,11 +1183,12 @@ function TableToolsDialog({
                               ),
                               i.jsx("button", {
                                 type: "button",
-                                disabled: !g.length || C.length >= 100,
+                                disabled:
+                                  !fields.length || values.length >= 100,
                                 onClick: () =>
                                   T((rt) => [
                                     ...rt,
-                                    { field: g.at(-1), operation: "sum" },
+                                    { field: fields.at(-1), operation: "sum" },
                                   ]),
                                 children: i.jsx(LocalizedText, {
                                   children: "Add value field",
@@ -1150,7 +1202,7 @@ function TableToolsDialog({
                               i.jsx("input", {
                                 type: "checkbox",
                                 checked: N,
-                                onChange: (rt) => R(rt.target.checked),
+                                onChange: (event) => R(event.target.checked),
                               }),
                               i.jsx(LocalizedText, {
                                 children: "Grand totals",
@@ -1163,7 +1215,7 @@ function TableToolsDialog({
                               i.jsx("input", {
                                 type: "checkbox",
                                 checked: L,
-                                onChange: (rt) => $(rt.target.checked),
+                                onChange: (event) => $(event.target.checked),
                               }),
                               i.jsx(LocalizedText, {
                                 children: "Row and column subtotals",
@@ -1171,16 +1223,16 @@ function TableToolsDialog({
                             ],
                           }),
                           i.jsx(PivotFieldOptionsPanel, {
-                            fields: g,
-                            groups: [...V, ...B],
-                            dateGroups: U,
-                            setDateGroups: G,
-                            calculatedFields: H,
-                            setCalculatedFields: X,
-                            onAdd: (rt) =>
+                            fields: fields,
+                            groups: [...rowFields, ...columnFields],
+                            dateGroups: dateGroups,
+                            setDateGroups: setDateGroups,
+                            calculatedFields: calculatedFields,
+                            setCalculatedFields: setCalculatedFields,
+                            onAdd: (field) =>
                               T((Le) => [
                                 ...Le,
-                                { field: rt, operation: "sum" },
+                                { field: field, operation: "sum" },
                               ]),
                           }),
                         ],
@@ -1214,16 +1266,16 @@ function TableToolsDialog({
                                         rt,
                                         i.jsx("input", {
                                           "aria-label": `Rename ${rt}`,
-                                          value: Object.hasOwn(te, rt)
-                                            ? te[rt]
+                                          value: Object.hasOwn(rename, rt)
+                                            ? rename[rt]
                                             : rt,
-                                          onChange: (Le) =>
+                                          onChange: (event) =>
                                             ae((et) =>
                                               Object.defineProperty(
                                                 { ...et },
                                                 rt,
                                                 {
-                                                  value: Le.target.value,
+                                                  value: event.target.value,
                                                   enumerable: true,
                                                   writable: true,
                                                   configurable: true,
@@ -1246,8 +1298,8 @@ function TableToolsDialog({
                                 children: [
                                   i.jsx(LocalizedText, { children: "Sort by" }),
                                   i.jsx("select", {
-                                    value: oe,
-                                    onChange: (rt) => de(rt.target.value),
+                                    value: field,
+                                    onChange: (event) => de(event.target.value),
                                     children: St("Source order"),
                                   }),
                                 ],
@@ -1256,8 +1308,8 @@ function TableToolsDialog({
                                 children: [
                                   i.jsx(LocalizedText, { children: "Order" }),
                                   i.jsxs("select", {
-                                    value: he,
-                                    onChange: (rt) => Se(rt.target.value),
+                                    value: direction,
+                                    onChange: (event) => Se(event.target.value),
                                     children: [
                                       i.jsx("option", {
                                         value: "ascending",
@@ -1281,7 +1333,7 @@ function TableToolsDialog({
                                   children: "Derived fields",
                                 }),
                               }),
-                              le.map((rt, Le) =>
+                              derived.map((rt, Le) =>
                                 i.jsxs(
                                   "div",
                                   {
@@ -1294,13 +1346,14 @@ function TableToolsDialog({
                                           }),
                                           i.jsx("input", {
                                             value: rt.name,
-                                            onChange: (et) =>
+                                            onChange: (event) =>
                                               ce((st) =>
                                                 st.map((kt, gr) =>
                                                   gr === Le
                                                     ? {
                                                         ...kt,
-                                                        name: et.target.value,
+                                                        name: event.target
+                                                          .value,
                                                       }
                                                     : kt,
                                                 ),
@@ -1315,13 +1368,14 @@ function TableToolsDialog({
                                           }),
                                           i.jsx("select", {
                                             value: rt.field,
-                                            onChange: (et) =>
+                                            onChange: (event) =>
                                               ce((st) =>
                                                 st.map((kt, gr) =>
                                                   gr === Le
                                                     ? {
                                                         ...kt,
-                                                        field: et.target.value,
+                                                        field:
+                                                          event.target.value,
                                                       }
                                                     : kt,
                                                 ),
@@ -1337,14 +1391,14 @@ function TableToolsDialog({
                                           }),
                                           i.jsx("select", {
                                             value: rt.operation,
-                                            onChange: (et) =>
+                                            onChange: (event) =>
                                               ce((st) =>
                                                 st.map((kt, gr) =>
                                                   gr === Le
                                                     ? {
                                                         ...kt,
                                                         operation:
-                                                          et.target.value,
+                                                          event.target.value,
                                                       }
                                                     : kt,
                                                 ),
@@ -1384,14 +1438,14 @@ function TableToolsDialog({
                                                 }),
                                                 i.jsx("select", {
                                                   value: rt.otherField ?? "",
-                                                  onChange: (et) =>
+                                                  onChange: (event) =>
                                                     ce((st) =>
                                                       st.map((kt, gr) =>
                                                         gr === Le
                                                           ? {
                                                               ...kt,
                                                               otherField:
-                                                                et.target
+                                                                event.target
                                                                   .value ||
                                                                 undefined,
                                                             }
@@ -1413,14 +1467,15 @@ function TableToolsDialog({
                                                     ? i.jsx("input", {
                                                         value:
                                                           rt.constant ?? "",
-                                                        onChange: (et) =>
+                                                        onChange: (event) =>
                                                           ce((st) =>
                                                             st.map((kt, gr) =>
                                                               gr === Le
                                                                 ? {
                                                                     ...kt,
                                                                     constant:
-                                                                      et.target
+                                                                      event
+                                                                        .target
                                                                         .value,
                                                                   }
                                                                 : kt,
@@ -1472,13 +1527,14 @@ function TableToolsDialog({
                               ),
                               i.jsx("button", {
                                 type: "button",
-                                disabled: !g.length || le.length >= 100,
+                                disabled:
+                                  !fields.length || derived.length >= 100,
                                 onClick: () =>
                                   ce((rt) => [
                                     ...rt,
                                     {
                                       name: `Calculated${rt.length + 1}`,
-                                      field: g.at(-1),
+                                      field: fields.at(-1),
                                       operation: "multiply",
                                       constant: 1,
                                     },
@@ -1513,11 +1569,14 @@ function TableToolsDialog({
                                   Le + 1,
                                   i.jsx("select", {
                                     value: rt.field,
-                                    onChange: (et) =>
+                                    onChange: (event) =>
                                       q((st) =>
                                         st.map((kt, gr) =>
                                           gr === Le
-                                            ? { ...kt, field: et.target.value }
+                                            ? {
+                                                ...kt,
+                                                field: event.target.value,
+                                              }
                                             : kt,
                                         ),
                                       ),
@@ -1532,13 +1591,13 @@ function TableToolsDialog({
                                   }),
                                   i.jsx("select", {
                                     value: rt.operator,
-                                    onChange: (et) =>
+                                    onChange: (event) =>
                                       q((st) =>
                                         st.map((kt, gr) =>
                                           gr === Le
                                             ? {
                                                 ...kt,
-                                                operator: et.target.value,
+                                                operator: event.target.value,
                                               }
                                             : kt,
                                         ),
@@ -1571,13 +1630,13 @@ function TableToolsDialog({
                                     }),
                                     i.jsx("input", {
                                       value: String(rt.value ?? ""),
-                                      onChange: (et) =>
+                                      onChange: (event) =>
                                         q((st) =>
                                           st.map((kt, gr) =>
                                             gr === Le
                                               ? {
                                                   ...kt,
-                                                  value: et.target.value,
+                                                  value: event.target.value,
                                                 }
                                               : kt,
                                           ),
@@ -1601,11 +1660,11 @@ function TableToolsDialog({
                       ),
                       i.jsx("button", {
                         type: "button",
-                        disabled: !g.length || J.length >= 100,
+                        disabled: !fields.length || J.length >= 100,
                         onClick: () =>
                           q((rt) => [
                             ...rt,
-                            { field: g[0], operator: "equals", value: "" },
+                            { field: fields[0], operator: "equals", value: "" },
                           ]),
                         children: i.jsx(LocalizedText, {
                           children: "Add source filter",
@@ -1618,15 +1677,15 @@ function TableToolsDialog({
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
-                        checked: ge,
-                        onChange: (rt) => se(rt.target.checked),
+                        checked: checked,
+                        onChange: (event) => se(event.target.checked),
                       }),
                       i.jsx(LocalizedText, {
                         children: "Use an empty area in an existing sheet",
                       }),
                     ],
                   }),
-                  ge &&
+                  checked &&
                     i.jsxs("div", {
                       className: "lg-table-inline",
                       children: [
@@ -1637,12 +1696,12 @@ function TableToolsDialog({
                             }),
                             i.jsx("select", {
                               value: we,
-                              onChange: (rt) => Ee(rt.target.value),
-                              children: workbook.sheets.map((rt) =>
+                              onChange: (event) => Ee(event.target.value),
+                              children: workbook.sheets.map((sheet) =>
                                 i.jsx(
                                   "option",
-                                  { value: rt.id, children: rt.name },
-                                  rt.id,
+                                  { value: sheet.id, children: sheet.name },
+                                  sheet.id,
                                 ),
                               ),
                             }),
@@ -1654,8 +1713,8 @@ function TableToolsDialog({
                               children: "Destination cell",
                             }),
                             i.jsx("input", {
-                              value: Ae,
-                              onChange: (rt) => ye(rt.target.value),
+                              value: address,
+                              onChange: (event) => ye(event.target.value),
                             }),
                           ],
                         }),
@@ -1681,8 +1740,8 @@ function TableToolsDialog({
                           children: [
                             i.jsx(LocalizedText, { children: "Saved result" }),
                             i.jsxs("select", {
-                              value: Te,
-                              onChange: (rt) => Pe(rt.target.value),
+                              value: pivotId,
+                              onChange: (event) => Pe(event.target.value),
                               children: [
                                 i.jsx("option", {
                                   value: "",
@@ -1708,13 +1767,17 @@ function TableToolsDialog({
                         }),
                         i.jsx("button", {
                           type: "button",
-                          disabled: !Te,
+                          disabled: !pivotId,
                           onClick: () =>
                             xt(
                               () =>
                                 mode === "pivot"
-                                  ? refreshPivotTable(workbook, Te, Zt())
-                                  : refreshQueryDefinition(workbook, Te, Zt()),
+                                  ? refreshPivotTable(workbook, pivotId, Zt())
+                                  : refreshQueryDefinition(
+                                      workbook,
+                                      pivotId,
+                                      Zt(),
+                                    ),
                               mode === "pivot"
                                 ? "Refresh pivot summary"
                                 : "Refresh extracted data",
@@ -1724,8 +1787,11 @@ function TableToolsDialog({
                           }),
                         }),
                         mode === "pivot" &&
-                          Te &&
-                          i.jsx(PivotStatusBadge, { workbook, pivotId: Te }),
+                          pivotId &&
+                          i.jsx(PivotStatusBadge, {
+                            workbook,
+                            pivotId: pivotId,
+                          }),
                       ],
                     }),
                 ],
@@ -1737,7 +1803,7 @@ function TableToolsDialog({
               onClick: bt,
               children:
                 mode === "table"
-                  ? E
+                  ? tableId
                     ? "Update table"
                     : "Create table"
                   : mode === "pivot"
@@ -1762,15 +1828,15 @@ const pivotShowAsLabels = {
       : e === ""
         ? "(empty text)"
         : `${typeof e}: ${String(e)}`;
-function PivotChartFigure({ book, id }) {
+function PivotChartFigure({ book, id: pivotId }) {
   const { text, language } = useWorkbookMessages();
   let o;
   try {
-    o = buildPivotChartModel(book, id);
-  } catch (m) {
-    return i.jsx("p", { role: "alert", children: m.message });
+    o = buildPivotChartModel(book, pivotId);
+  } catch (error) {
+    return i.jsx("p", { role: "alert", children: error.message });
   }
-  const a = o.points.map((m) => m.value),
+  const a = o.points.map((point) => point.value),
     s = a.filter((m) => m !== null),
     d = a
       .reduce(
@@ -1915,19 +1981,19 @@ function PivotChartFigure({ book, id }) {
                 }),
               }),
               i.jsx("tbody", {
-                children: o.points.map((m, v) =>
+                children: o.points.map((point, v) =>
                   i.jsxs(
                     "tr",
                     {
                       children: [
-                        i.jsx("td", { children: m.label }),
+                        i.jsx("td", { children: point.label }),
                         i.jsx("td", {
                           children:
-                            m.value === null
+                            point.value === null
                               ? "Blank"
                               : p
-                                ? `${(Number(m.value) * 100).toFixed(2)}%`
-                                : String(m.value),
+                                ? `${(Number(point.value) * 100).toFixed(2)}%`
+                                : String(point.value),
                         }),
                       ],
                     },

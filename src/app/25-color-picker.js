@@ -18,8 +18,8 @@ function ColorPickerButton({
   return (
     ne.useEffect(() => {
       if (!s) return;
-      const c = (h) => {
-        u.current?.contains(h.target) || d(false);
+      const c = (event) => {
+        u.current?.contains(event.target) || d(false);
       };
       return (
         document.addEventListener("pointerdown", c),
@@ -61,10 +61,10 @@ function ColorPickerButton({
             className: "xl-color-palette",
             role: "dialog",
             "aria-label": l,
-            onKeyDown: (c) => {
-              c.key === "Escape" &&
-                (c.preventDefault(),
-                c.stopPropagation(),
+            onKeyDown: (event) => {
+              event.key === "Escape" &&
+                (event.preventDefault(),
+                event.stopPropagation(),
                 d(false),
                 u.current?.querySelector("button")?.focus());
             },
@@ -74,19 +74,19 @@ function ColorPickerButton({
               }),
               i.jsx("div", {
                 className: "xl-color-grid",
-                children: Wde.map((c, h) =>
+                children: Wde.map((background, h) =>
                   i.jsx(
                     "button",
                     {
                       type: "button",
-                      "aria-label": `${l} ${c}`,
-                      title: c,
-                      style: { background: c },
+                      "aria-label": `${l} ${background}`,
+                      title: background,
+                      style: { background: background },
                       onClick: () => {
-                        (onChange(c), d(false));
+                        (onChange(background), d(false));
                       },
                     },
-                    `${c}-${h}`,
+                    `${background}-${h}`,
                   ),
                 ),
               }),
@@ -98,7 +98,7 @@ function ColorPickerButton({
                     type: "color",
                     "aria-label": `Custom ${l}`,
                     value,
-                    onChange: (c) => onChange(c.target.value),
+                    onChange: (event) => onChange(event.target.value),
                   }),
                 ],
               }),

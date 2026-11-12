@@ -52,48 +52,56 @@ import {
   validateDrawingText,
 } from "./03-defined-names.js";
 
-function inspectPictureDataUrl(e) {
+function inspectPictureDataUrl(dataURL) {
   if (
-    typeof e != "string" ||
-    e.length > Math.ceil(maxPictureHashBytes / 3) * 4 + 30
+    typeof dataURL != "string" ||
+    dataURL.length > Math.ceil(maxPictureHashBytes / 3) * 4 + 30
   )
     throw Error("Pictures must be local PNG/JPEG data of at most 2 MB.");
-  const r = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/.exec(e);
+  const r = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/.exec(
+    dataURL,
+  );
   if (!r || r[2].length % 4 !== 0)
     throw Error("Pictures require canonical local PNG/JPEG base64 data.");
-  let t;
+  let bytes;
   try {
     const d = atob(r[2]);
     if (btoa(d) !== r[2]) throw Error();
-    t = Uint8Array.from(d, (u) => u.charCodeAt(0));
+    bytes = Uint8Array.from(d, (u) => u.charCodeAt(0));
   } catch {
     throw Error("The picture data is invalid.");
   }
-  if (t.length > maxPictureHashBytes)
+  if (bytes.length > maxPictureHashBytes)
     throw Error("Pictures must be at most 2 MB.");
-  let n = 0,
-    o = 0;
+  let width = 0,
+    height = 0;
   const a = () => {
-    if (!n || !o || n > 1e4 || o > 1e4 || n * o > 4e7)
+    if (
+      !width ||
+      !height ||
+      width > 1e4 ||
+      height > 1e4 ||
+      width * height > 4e7
+    )
       throw Error(
         "Picture dimensions are invalid or exceed 40 megapixels / 10,000 pixels per side.",
       );
   };
   if (r[1] === "png") {
     if (
-      t.length < 45 ||
-      ![137, 80, 78, 71, 13, 10, 26, 10].every((p, m) => t[m] === p)
+      bytes.length < 45 ||
+      ![137, 80, 78, 71, 13, 10, 26, 10].every((p, m) => bytes[m] === p)
     )
       throw Error("The file contents do not match a PNG picture.");
-    const d = new DataView(t.buffer, t.byteOffset, t.byteLength);
+    const d = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (
       d.getUint32(8) !== 13 ||
-      String.fromCharCode(...t.subarray(12, 16)) !== "IHDR"
+      String.fromCharCode(...bytes.subarray(12, 16)) !== "IHDR"
     )
       throw Error("PNG requires an intact first IHDR chunk.");
     if (
-      ((n = d.getUint32(16)),
-      (o = d.getUint32(20)),
+      ((width = d.getUint32(16)),
+      (height = d.getUint32(20)),
       a(),
       !{
         0: [1, 2, 4, 8, 16],
@@ -101,26 +109,26 @@ function inspectPictureDataUrl(e) {
         3: [1, 2, 4, 8],
         4: [8, 16],
         6: [8, 16],
-      }[t[25]]?.includes(t[24]) ||
-        t[26] !== 0 ||
-        t[27] !== 0 ||
-        t[28] > 1)
+      }[bytes[25]]?.includes(bytes[24]) ||
+        bytes[26] !== 0 ||
+        bytes[27] !== 0 ||
+        bytes[28] > 1)
     )
       throw Error("Unsupported PNG pixel encoding.");
     let l = 8,
       c = 0,
       h = false,
       f = false;
-    for (; l < t.length;) {
-      if (++c > 4096 || l + 12 > t.length)
+    for (; l < bytes.length;) {
+      if (++c > 4096 || l + 12 > bytes.length)
         throw Error("PNG chunk structure is invalid or excessive.");
       const p = d.getUint32(l),
-        m = String.fromCharCode(...t.subarray(l + 4, l + 8));
-      if (p > t.length - l - 12 || !/^[A-Za-z]{4}$/.test(m))
+        m = String.fromCharCode(...bytes.subarray(l + 4, l + 8));
+      if (p > bytes.length - l - 12 || !/^[A-Za-z]{4}$/.test(m))
         throw Error("PNG chunk length or type is invalid.");
       if (m === "IHDR" && l !== 8) throw Error("PNG has duplicate dimensions.");
       if ((m === "IDAT" && p > 0 && (h = true), m === "IEND")) {
-        if (p !== 0 || l + 12 !== t.length)
+        if (p !== 0 || l + 12 !== bytes.length)
           throw Error("PNG has invalid trailing data.");
         f = true;
       }
@@ -128,43 +136,44 @@ function inspectPictureDataUrl(e) {
     }
     if (!h || !f) throw Error("PNG data or end marker is missing.");
   } else {
-    if (t.length < 12 || t[0] !== 255 || t[1] !== 216)
+    if (bytes.length < 12 || bytes[0] !== 255 || bytes[1] !== 216)
       throw Error("The file contents do not match a JPEG picture.");
     let d = 2,
       u = 0,
       l = false,
       c = false;
-    for (; d < t.length;) {
+    for (; d < bytes.length;) {
       if (++u > 65536) throw Error("JPEG has too many segments.");
-      if (l) for (; d < t.length && t[d] !== 255;) d++;
-      if (d >= t.length || t[d++] !== 255)
+      if (l) for (; d < bytes.length && bytes[d] !== 255;) d++;
+      if (d >= bytes.length || bytes[d++] !== 255)
         throw Error("JPEG marker structure is invalid.");
-      for (; t[d] === 255;) d++;
-      const h = t[d++];
+      for (; bytes[d] === 255;) d++;
+      const h = bytes[d++];
       if (l && (h === 0 || (h >= 208 && h <= 215))) continue;
       if (h === 217) {
-        if (d !== t.length) throw Error("JPEG has trailing data.");
+        if (d !== bytes.length) throw Error("JPEG has trailing data.");
         c = true;
         break;
       }
       if (h === 1) continue;
-      if (d + 2 > t.length) throw Error("JPEG segment is truncated.");
-      const f = t[d] * 256 + t[d + 1];
-      if (f < 2 || d + f > t.length)
+      if (d + 2 > bytes.length) throw Error("JPEG segment is truncated.");
+      const f = bytes[d] * 256 + bytes[d + 1];
+      if (f < 2 || d + f > bytes.length)
         throw Error("JPEG segment length is invalid.");
       if (h >= 192 && h <= 207 && ![196, 200, 204].includes(h)) {
-        if (![192, 193, 194].includes(h) || f < 8 || t[d + 2] !== 8)
+        if (![192, 193, 194].includes(h) || f < 8 || bytes[d + 2] !== 8)
           throw Error("Unsupported JPEG pixel encoding.");
-        const p = t[d + 7];
+        const p = bytes[d + 7];
         if (p < 1 || p > 4 || f !== 8 + p * 3)
           throw Error("JPEG frame components are invalid.");
-        const m = t[d + 3] * 256 + t[d + 4],
-          v = t[d + 5] * 256 + t[d + 6];
-        if (n && (n !== v || o !== m)) throw Error("JPEG dimensions conflict.");
-        ((n = v), (o = m), a());
+        const m = bytes[d + 3] * 256 + bytes[d + 4],
+          v = bytes[d + 5] * 256 + bytes[d + 6];
+        if (width && (width !== v || height !== m))
+          throw Error("JPEG dimensions conflict.");
+        ((width = v), (height = m), a());
       }
       if (h === 218) {
-        if (!n || f < 6 || f !== 6 + t[d + 2] * 2)
+        if (!width || f < 6 || f !== 6 + bytes[d + 2] * 2)
           throw Error("JPEG scan is invalid.");
         l = true;
       }
@@ -173,7 +182,7 @@ function inspectPictureDataUrl(e) {
     if (!l || !c) throw Error("JPEG scan or end marker is missing.");
     a();
   }
-  return { bytes: t, extension: r[1], width: n, height: o };
+  return { bytes: bytes, extension: r[1], width: width, height: height };
 }
 function assertPlainTextLabel(e, r, t) {
   const n = validateDrawingText(e, r, t);
@@ -183,11 +192,11 @@ function assertPlainTextLabel(e, r, t) {
     );
   return n;
 }
-function validatePictureEvidence(e, r) {
+function validatePictureEvidence(evidence, bytes) {
   if (
-    !isNonArrayObject(e) ||
-    ![Object.prototype, null].includes(Object.getPrototypeOf(e)) ||
-    Reflect.ownKeys(e).some(
+    !isNonArrayObject(evidence) ||
+    ![Object.prototype, null].includes(Object.getPrototypeOf(evidence)) ||
+    Reflect.ownKeys(evidence).some(
       (o) =>
         typeof o != "string" ||
         ![
@@ -205,28 +214,28 @@ function validatePictureEvidence(e, r) {
   )
     throw Error("Invalid picture evidence metadata.");
   if (
-    e.version !== 1 ||
-    typeof e.origin != "string" ||
-    !["local-file", "xlsx-media", "legacy-native"].includes(e.origin)
+    evidence.version !== 1 ||
+    typeof evidence.origin != "string" ||
+    !["local-file", "xlsx-media", "legacy-native"].includes(evidence.origin)
   )
     throw Error("Invalid picture evidence origin.");
-  const t = hashPictureBytes(r);
+  const sha256 = hashPictureBytes(bytes);
   if (
-    typeof e.sha256 != "string" ||
-    !/^[a-f0-9]{64}$/.test(e.sha256) ||
-    e.sha256 !== t ||
-    e.sourceReference !== `sha256:${t}` ||
-    e.byteLength !== r.length
+    typeof evidence.sha256 != "string" ||
+    !/^[a-f0-9]{64}$/.test(evidence.sha256) ||
+    evidence.sha256 !== sha256 ||
+    evidence.sourceReference !== `sha256:${sha256}` ||
+    evidence.byteLength !== bytes.length
   )
     throw Error(
       "Picture evidence digest or byte length does not match the embedded image.",
     );
   const n = {
     version: 1,
-    origin: e.origin,
-    sourceReference: `sha256:${t}`,
-    sha256: t,
-    byteLength: r.length,
+    origin: evidence.origin,
+    sourceReference: `sha256:${sha256}`,
+    sha256: sha256,
+    byteLength: bytes.length,
   };
   for (const o of [
     "filename",
@@ -234,8 +243,12 @@ function validatePictureEvidence(e, r) {
     "containerFilename",
     "mediaReference",
   ])
-    e[o] !== undefined &&
-      (n[o] = assertPlainTextLabel(e[o], o === "sourceLocator" ? 2e3 : 512, o));
+    evidence[o] !== undefined &&
+      (n[o] = assertPlainTextLabel(
+        evidence[o],
+        o === "sourceLocator" ? 2e3 : 512,
+        o,
+      ));
   if (n.origin === "local-file" && !n.filename)
     throw Error("A local evidence picture requires its original filename.");
   if (n.origin !== "xlsx-media" && (n.containerFilename || n.mediaReference))
@@ -246,44 +259,44 @@ function validatePictureEvidence(e, r) {
     );
   return n;
 }
-function createPictureEvidence(e, r) {
-  const { bytes } = inspectPictureDataUrl(e),
-    n = hashPictureBytes(bytes);
+function createPictureEvidence(dataURL, r) {
+  const { bytes } = inspectPictureDataUrl(dataURL),
+    sha256 = hashPictureBytes(bytes);
   return validatePictureEvidence(
     {
       ...r,
       version: 1,
-      sourceReference: `sha256:${n}`,
-      sha256: n,
+      sourceReference: `sha256:${sha256}`,
+      sha256: sha256,
       byteLength: bytes.length,
     },
     bytes,
   );
 }
-function F2(e, r, t) {
-  if (!e.sheets.some((n) => n.id === r))
+function F2(workbook, sheetId, selection) {
+  if (!workbook.sheets.some((sheet) => sheet.id === sheetId))
     throw Error("The worksheet no longer exists.");
   return {
-    workbookId: e.id,
-    revision: e.revision,
-    sheetId: r,
-    ...(t !== undefined ? { selection: t } : {}),
-    guard: JSON.stringify(e),
+    workbookId: workbook.id,
+    revision: workbook.revision,
+    sheetId: sheetId,
+    ...(selection !== undefined ? { selection: selection } : {}),
+    guard: JSON.stringify(workbook),
   };
 }
-function assertDrawingPreviewCurrent(e, r, t = {}) {
+function assertDrawingPreviewCurrent(workbook, sheetId, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  const n = e.sheets.find((a) => a.id === r);
-  if (!n) throw Error("The worksheet no longer exists.");
-  assertSheetUnprotected(n);
-  const o = t.snapshot;
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("The worksheet no longer exists.");
+  assertSheetUnprotected(sheet);
+  const snapshot = t.snapshot;
   if (
-    o &&
-    (o.workbookId !== e.id ||
-      o.revision !== e.revision ||
-      o.sheetId !== r ||
-      o.guard !== JSON.stringify(e) ||
-      o.selection !== t.selection)
+    snapshot &&
+    (snapshot.workbookId !== workbook.id ||
+      snapshot.revision !== workbook.revision ||
+      snapshot.sheetId !== sheetId ||
+      snapshot.guard !== JSON.stringify(workbook) ||
+      snapshot.selection !== t.selection)
   )
     throw Error(
       "The drawing preview is stale. Reopen it or select the object again.",
@@ -293,9 +306,10 @@ const throwErrorMessage = (e) => {
     throw Error(e);
   },
   isFiniteNumber = (e) => typeof e == "number" && Number.isFinite(e);
-function validatePivotRefreshEvidence(e) {
-  isNonArrayObject(e) || throwErrorMessage("Invalid pivot refresh evidence.");
-  const r = e;
+function validatePivotRefreshEvidence(refresh) {
+  isNonArrayObject(refresh) ||
+    throwErrorMessage("Invalid pivot refresh evidence.");
+  const r = refresh;
   (typeof r.at != "string" ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(r.at) ||
     !Number.isFinite(Date.parse(r.at)) ||
@@ -317,25 +331,25 @@ function validatePivotRefreshEvidence(e) {
     !r.measures.length ||
     r.measures.length > 100) &&
     throwErrorMessage("Pivot population evidence does not reconcile.");
-  const t = r.measures.map((n) => {
-    (!isNonArrayObject(n) ||
-      typeof n.name != "string" ||
-      !n.name ||
-      n.name.length > 512 ||
-      typeof n.field != "string" ||
-      !n.field ||
-      n.field.length > 255 ||
+  const measures = r.measures.map((measure) => {
+    (!isNonArrayObject(measure) ||
+      typeof measure.name != "string" ||
+      !measure.name ||
+      measure.name.length > 512 ||
+      typeof measure.field != "string" ||
+      !measure.field ||
+      measure.field.length > 255 ||
       !["sum", "count", "average", "min", "max", "distinctCount"].includes(
-        String(n.operation),
+        String(measure.operation),
       ) ||
       !(
-        n.result === null ||
-        typeof n.result == "boolean" ||
-        isFiniteNumber(n.result) ||
-        (typeof n.result == "string" && n.result.length <= 32767)
+        measure.result === null ||
+        typeof measure.result == "boolean" ||
+        isFiniteNumber(measure.result) ||
+        (typeof measure.result == "string" && measure.result.length <= 32767)
       )) &&
       throwErrorMessage("Invalid pivot measure evidence.");
-    const o = n;
+    const o = measure;
     for (const a of ["numericCount", "nonblankCount"])
       (!Number.isSafeInteger(o[a]) ||
         Number(o[a]) < 0 ||
@@ -363,7 +377,7 @@ function validatePivotRefreshEvidence(e) {
     sourceRows: r.sourceRows,
     includedRows: r.includedRows,
     excludedRows: r.excludedRows,
-    measures: t,
+    measures: measures,
   };
 }
 function bucketPivotDateValue(e, r, t) {
@@ -419,74 +433,78 @@ const createAggregateAccumulator = (e = false) => ({
   max: -1 / 0,
   ...(e ? { distinct: new Set() } : {}),
 });
-function SO(e, r) {
+function SO(right, r) {
   (isNullOrEmptyValue(r) ||
-    (e.count++,
-    e.distinct?.add(
+    (right.count++,
+    right.distinct?.add(
       JSON.stringify([
         typeof r,
         typeof r == "string" ? r.toLocaleLowerCase("en-US") : r,
       ]),
     )),
     isFiniteNumber(r) &&
-      (e.numeric++,
-      (e.sum += r),
-      (e.min = Math.min(e.min, r)),
-      (e.max = Math.max(e.max, r)),
-      Number.isFinite(e.sum) ||
+      (right.numeric++,
+      (right.sum += r),
+      (right.min = Math.min(right.min, r)),
+      (right.max = Math.max(right.max, r)),
+      Number.isFinite(right.sum) ||
         throwErrorMessage("Aggregation exceeds finite numeric bounds.")));
 }
-function finalizeAggregateState(e, r) {
-  return r === "count"
+function finalizeAggregateState(e, operation) {
+  return operation === "count"
     ? e.count
-    : r === "distinctCount"
+    : operation === "distinctCount"
       ? (e.distinct?.size ?? 0)
-      : r === "sum"
+      : operation === "sum"
         ? e.sum
         : e.numeric
-          ? r === "average"
+          ? operation === "average"
             ? e.sum / e.numeric
-            : r === "min"
+            : operation === "min"
               ? e.min
               : e.max
           : null;
 }
-function computePivotTable(e, r, t) {
+function computePivotTable(pivotDefinition, fields, rows) {
   const n = (C) => {
-      const T = r.indexOf(C);
+      const T = fields.indexOf(C);
       return T < 0
         ? throwErrorMessage(
             `Source field “${C}” was not found. Refresh the field selection.`,
           )
         : T;
     },
-    o = e.rowFields.map(n),
-    a = e.columnFields.map(n);
-  for (const C of e.dateGroups ?? [])
-    [...e.rowFields, ...e.columnFields].includes(C.field) ||
+    o = pivotDefinition.rowFields.map(n),
+    a = pivotDefinition.columnFields.map(n);
+  for (const C of pivotDefinition.dateGroups ?? [])
+    [...pivotDefinition.rowFields, ...pivotDefinition.columnFields].includes(
+      C.field,
+    ) ||
       throwErrorMessage(
         `Date group “${C.field}” must be selected as a row or column field.`,
       );
-  for (const C of e.calculatedFields ?? [])
-    (r.some((T) => T.toLowerCase() === C.name.toLowerCase()) &&
+  for (const C of pivotDefinition.calculatedFields ?? [])
+    (fields.some((field) => field.toLowerCase() === C.name.toLowerCase()) &&
       throwErrorMessage(
         `Calculated field “${C.name}” duplicates a source header.`,
       ),
       n(C.field),
       C.otherField && n(C.otherField));
-  const s = e.values.map((C) => {
-      const T = e.calculatedFields?.find((R) => R.name === C.field);
+  const s = pivotDefinition.values.map((value) => {
+      const calculated = pivotDefinition.calculatedFields?.find(
+        (calculatedField) => calculatedField.name === value.field,
+      );
       return (
-        T &&
-          C.operation !== "sum" &&
+        calculated &&
+          value.operation !== "sum" &&
           throwErrorMessage(
-            `Calculated field “${C.field}” requires sum aggregation; its arithmetic is applied to source-field sums.`,
+            `Calculated field “${value.field}” requires sum aggregation; its arithmetic is applied to source-field sums.`,
           ),
         {
-          ...C,
-          index: n(T?.field ?? C.field),
-          calculated: T,
-          other: T?.otherField ? n(T.otherField) : undefined,
+          ...value,
+          index: n(calculated?.field ?? value.field),
+          calculated: calculated,
+          other: calculated?.otherField ? n(calculated.otherField) : undefined,
         }
       );
     }),
@@ -497,10 +515,10 @@ function computePivotTable(e, r, t) {
           ? { right: createAggregateAccumulator() }
           : {}),
       }));
-  t.length *
+  rows.length *
     s.length *
-    Math.max(1, e.subtotals ? o.length : 1) *
-    Math.max(1, e.subtotals ? a.length : 1) >
+    Math.max(1, pivotDefinition.subtotals ? o.length : 1) *
+    Math.max(1, pivotDefinition.subtotals ? a.length : 1) >
     2e6 &&
     throwErrorMessage(
       "Pivot aggregation exceeds the 2,000,000 contribution budget. Reduce value fields, hierarchy depth or source rows.",
@@ -526,7 +544,7 @@ function computePivotTable(e, r, t) {
           N.operation,
         );
       if (!R) return null;
-      const L = R.sum,
+      const sum = R.sum,
         $ = N.other !== undefined ? R.right.sum : N.calculated.constant;
       N.calculated.operation === "divide" &&
         $ === 0 &&
@@ -535,12 +553,12 @@ function computePivotTable(e, r, t) {
         );
       const U =
         N.calculated.operation === "add"
-          ? L + $
+          ? sum + $
           : N.calculated.operation === "subtract"
-            ? L - $
+            ? sum - $
             : N.calculated.operation === "multiply"
-              ? L * $
-              : L / $;
+              ? sum * $
+              : sum / $;
       return Number.isFinite(U)
         ? U
         : throwErrorMessage(
@@ -549,7 +567,9 @@ function computePivotTable(e, r, t) {
     },
     h = (C, T) =>
       C.map((N) => {
-        const R = e.dateGroups?.find((U) => U.field === r[N]),
+        const R = pivotDefinition.dateGroups?.find(
+            (dateGroup) => dateGroup.field === fields[N],
+          ),
           L = T.values[N];
         return R
           ? bucketPivotDateValue(L, R, T.index)
@@ -560,15 +580,15 @@ function computePivotTable(e, r, t) {
     f = (C) =>
       [
         C,
-        ...(e.subtotals
+        ...(pivotDefinition.subtotals
           ? Array.from({ length: Math.max(0, C.length - 1) }, (T, N) =>
               C.slice(0, N + 1),
             )
           : []),
-      ].map((T) => ({
-        key: JSON.stringify(T),
-        parts: T,
-        subtotal: T.length < C.length,
+      ].map((parts) => ({
+        key: JSON.stringify(parts),
+        parts: parts,
+        subtotal: parts.length < C.length,
       })),
     p = new Map(),
     m = new Map(),
@@ -579,30 +599,32 @@ function computePivotTable(e, r, t) {
     w = (C, T, N) => {
       (C.has(T) || C.set(T, d()), l(C.get(T), N));
     };
-  for (const C of t) {
-    const T = f(h(o, C)),
-      N = f(h(a, C));
-    (T.forEach((L) => p.set(L.key, L)), N.forEach((L) => m.set(L.key, L)));
+  for (const row of rows) {
+    const T = f(h(o, row)),
+      N = f(h(a, row));
+    (T.forEach((event) => p.set(event.key, event)),
+      N.forEach((event) => m.set(event.key, event)));
     const R =
       Math.max(1, o.length) +
-      (m.size + +(!!e.grandTotals && !!a.length)) * s.length;
+      (m.size + +(!!pivotDefinition.grandTotals && !!a.length)) * s.length;
     (p.size + 2) * R > 1e5 &&
       throwErrorMessage(
         "The pivot grouping would exceed the 100,000-cell output budget. Reduce group fields or filter the source.",
       );
     for (const L of T) {
-      w(g, L.key, C.values);
-      for (const $ of N) w(v, JSON.stringify([L.key, $.key]), C.values);
+      w(g, L.key, row.values);
+      for (const $ of N) w(v, JSON.stringify([L.key, $.key]), row.values);
     }
-    for (const L of N) w(b, L.key, C.values);
-    l(y, C.values);
+    for (const L of N) w(b, L.key, row.values);
+    l(y, row.values);
   }
   (m.size || m.set("[]", { key: "[]", parts: [], subtotal: false }),
     !p.size &&
       !o.length &&
       p.set("[]", { key: "[]", parts: [], subtotal: false }));
   function E(C, T) {
-    if (!e.subtotals && !e.sorts?.length) return [...C.values()];
+    if (!pivotDefinition.subtotals && !pivotDefinition.sorts?.length)
+      return [...C.values()];
     if (!T.length) return [...C.values()];
     const N = new Map();
     for (const U of C.values())
@@ -615,7 +637,9 @@ function computePivotTable(e, r, t) {
         }
     const R = [],
       L = (U) => {
-        const G = e.sorts?.find((q) => q.field === T[U.length]),
+        const G = pivotDefinition.sorts?.find(
+            (sort) => sort.field === T[U.length],
+          ),
           H = [...(N.get(JSON.stringify(U))?.values() ?? [])];
         G &&
           H.sort((q, W) => {
@@ -641,18 +665,20 @@ function computePivotTable(e, r, t) {
       };
     return (L([]), R);
   }
-  const A = E(m, e.columnFields),
-    k = E(p, e.rowFields),
+  const A = E(m, pivotDefinition.columnFields),
+    k = E(p, pivotDefinition.rowFields),
     F = (C) =>
       C.name ??
       (C.calculated
         ? `Calculated ${C.field}`
         : `${C.operation === "distinctCount" ? "Distinct count" : C.operation[0].toUpperCase() + C.operation.slice(1)} of ${C.field}`),
     I = (C) => (isNullOrEmptyValue(C) ? "(blank)" : String(C)),
-    O = e.rowFields.length
-      ? e.rowFields.map((C) => {
-          const T = e.dateGroups?.find((R) => R.field === C);
-          return T ? `${C} (${T.unit})` : C;
+    O = pivotDefinition.rowFields.length
+      ? pivotDefinition.rowFields.map((rowField) => {
+          const T = pivotDefinition.dateGroups?.find(
+            (dateGroup) => dateGroup.field === rowField,
+          );
+          return T ? `${rowField} (${T.unit})` : rowField;
         })
       : ["Row labels"];
   for (const C of A)
@@ -662,7 +688,7 @@ function computePivotTable(e, r, t) {
           " / ",
         ),
       );
-  if (e.grandTotals && a.length)
+  if (pivotDefinition.grandTotals && a.length)
     for (const C of s) O.push(`Grand Total / ${F(C)}`);
   s.forEach((C, T) => {
     if (C.showAs && C.showAs !== "value")
@@ -671,19 +697,25 @@ function computePivotTable(e, r, t) {
           (O[N] =
             `${O[N]} (% of ${C.showAs === "percentGrand" ? "grand" : C.showAs === "percentRow" ? "row" : "column"} total)`);
   });
-  const j = [],
-    z = [...A, ...(e.grandTotals && a.length ? [null] : [])],
-    V = [O],
+  const rowAxes = [],
+    columnAxes = [
+      ...A,
+      ...(pivotDefinition.grandTotals && a.length ? [null] : []),
+    ],
+    baseMatrix = [O],
     D = (C, T, N, R) => {
-      const L = s[T].showAs;
-      if (!L || L === "value" || C === null) return C;
-      const $ = c(L === "percentGrand" ? y : L === "percentRow" ? N : R, T);
+      const showAs = s[T].showAs;
+      if (!showAs || showAs === "value" || C === null) return C;
+      const $ = c(
+        showAs === "percentGrand" ? y : showAs === "percentRow" ? N : R,
+        T,
+      );
       return typeof C == "number" && typeof $ == "number" && $ !== 0
         ? C / $
         : "#DIV/0!";
     },
-    B = [O],
-    _ = [];
+    matrix = [O],
+    subtotalRows = [];
   for (const C of k) {
     const T = C.subtotal
         ? [
@@ -695,38 +727,47 @@ function computePivotTable(e, r, t) {
           ? [...C.parts]
           : ["Total"],
       N = [...T];
-    for (const R of z)
+    for (const columnAx of columnAxes)
       s.forEach((L, $) => {
         const U = c(
-          R ? v.get(JSON.stringify([C.key, R.key])) : g.get(C.key),
+          columnAx
+            ? v.get(JSON.stringify([C.key, columnAx.key]))
+            : g.get(C.key),
           $,
         );
-        (N.push(U), T.push(D(U, $, g.get(C.key), R ? b.get(R.key) : y)));
+        (N.push(U),
+          T.push(D(U, $, g.get(C.key), columnAx ? b.get(columnAx.key) : y)));
       });
-    (C.subtotal && _.push(B.length), B.push(T), V.push(N), j.push(C));
+    (C.subtotal && subtotalRows.push(matrix.length),
+      matrix.push(T),
+      baseMatrix.push(N),
+      rowAxes.push(C));
   }
-  if (e.grandTotals && o.length) {
+  if (pivotDefinition.grandTotals && o.length) {
     const C = ["Grand Total", ...Array(o.length - 1).fill(null)],
       T = [...C];
-    for (const N of z)
+    for (const columnAx of columnAxes)
       s.forEach((R, L) => {
-        const $ = c(N ? b.get(N.key) : y, L);
-        (T.push($), C.push(D($, L, y, N ? b.get(N.key) : y)));
+        const $ = c(columnAx ? b.get(columnAx.key) : y, L);
+        (T.push($), C.push(D($, L, y, columnAx ? b.get(columnAx.key) : y)));
       });
-    (B.push(C), V.push(T), j.push(null), _.push(B.length - 1));
+    (matrix.push(C),
+      baseMatrix.push(T),
+      rowAxes.push(null),
+      subtotalRows.push(matrix.length - 1));
   }
   return {
-    matrix: B,
-    baseMatrix: V,
-    rowAxes: j,
-    columnAxes: z,
+    matrix: matrix,
+    baseMatrix: baseMatrix,
+    rowAxes: rowAxes,
+    columnAxes: columnAxes,
     chartRows: k
       .filter((C) => !C.subtotal)
       .map((C) => ({
         label: C.parts.map(I).join(" / ") || "Total",
         values: s.map((T, N) => D(c(g.get(C.key), N), N, g.get(C.key), y)),
       })),
-    subtotalRows: _,
+    subtotalRows: subtotalRows,
     measures: s.map((C, T) => ({
       name: F(C),
       field: C.field,
@@ -770,7 +811,7 @@ function normalizePivotControls(e) {
     (r.slicers = requireBoundedList(e.slicers, 20).map((n) => {
       if (!isNonArrayObject(n))
         return throwErrorMessage("Invalid pivot slicer.");
-      const o = requireBoundedList(n.selected, 500).map(
+      const selected = requireBoundedList(n.selected, 500).map(
         (a) => (
           a !== null &&
             typeof a != "boolean" &&
@@ -781,9 +822,9 @@ function normalizePivotControls(e) {
         ),
       );
       return (
-        new Set(o.map(buildSlicerItemKey)).size !== o.length &&
+        new Set(selected.map(buildSlicerItemKey)).size !== selected.length &&
           throwErrorMessage("Slicer selections must be unique."),
-        { field: requirePivotFieldName(n.field), selected: o }
+        { field: requirePivotFieldName(n.field), selected: selected }
       );
     })),
     e.timelines !== undefined &&
@@ -819,23 +860,25 @@ function normalizePivotControls(e) {
       new Set(n.map((o) => o.field)).size !== n.length &&
       throwErrorMessage("Choose only one control of each kind per field.");
   if (e.chart !== undefined) {
-    const n = e.chart;
+    const chart = e.chart;
     if (
-      !isNonArrayObject(n) ||
-      !["column", "bar", "line"].includes(String(n.kind)) ||
-      !Number.isInteger(n.valueIndex) ||
-      Number(n.valueIndex) < 0 ||
-      Number(n.valueIndex) >= Number(e.values?.length)
+      !isNonArrayObject(chart) ||
+      !["column", "bar", "line"].includes(String(chart.kind)) ||
+      !Number.isInteger(chart.valueIndex) ||
+      Number(chart.valueIndex) < 0 ||
+      Number(chart.valueIndex) >= Number(e.values?.length)
     )
       return throwErrorMessage(
         "PivotChart requires a supported chart and an existing value field.",
       );
-    r.chart = { kind: n.kind, valueIndex: n.valueIndex };
+    r.chart = { kind: chart.kind, valueIndex: chart.valueIndex };
   }
   return r;
 }
-function validatePivotFieldReferences(e, r) {
-  const t = new Set(e.calculatedFields?.map((a) => a.name)),
+function validatePivotFieldReferences(e, fields) {
+  const t = new Set(
+      e.calculatedFields?.map((calculatedField) => calculatedField.name),
+    ),
     n = [
       ...e.rowFields,
       ...e.columnFields,
@@ -844,14 +887,14 @@ function validatePivotFieldReferences(e, r) {
       ...(e.timelines ?? []).map((a) => a.field),
       ...(e.dateGroups ?? []).map((a) => a.field),
       ...(e.sorts ?? []).map((a) => a.field),
-      ...e.values.filter((a) => !t.has(a.field)).map((a) => a.field),
+      ...e.values.filter((value) => !t.has(value.field)).map((a) => a.field),
       ...(e.calculatedFields ?? []).flatMap((a) => [
         a.field,
         ...(a.otherField ? [a.otherField] : []),
       ]),
     ];
   for (const a of n)
-    r.includes(a) ||
+    fields.includes(a) ||
       throwErrorMessage(
         `Broken pivot field “${a}”: source field was not found. Restore the header or remove/reselect this field before refreshing. Historical totals are not current.`,
       );
@@ -861,40 +904,43 @@ function validatePivotFieldReferences(e, r) {
         `Sort field “${a.field}” must be a row or column group.`,
       );
 }
-function normalizeTimelineDate(e, r, t, n) {
+function normalizeTimelineDate(e, dateSystem, field, n) {
   if (e === null || e === "") return null;
-  if (r === "iso")
+  if (dateSystem === "iso")
     return isIsoDateString(e)
       ? e
       : throwErrorMessage(
-          `Timeline field “${t}” has an invalid ISO date on source row ${n + 1}.`,
+          `Timeline field “${field}” has an invalid ISO date on source row ${n + 1}.`,
         );
   if (
     typeof e != "number" ||
     !Number.isFinite(e) ||
-    e < (r === "1900" ? 1 : 0) ||
+    e < (dateSystem === "1900" ? 1 : 0) ||
     e > 2958465
   )
     return throwErrorMessage(
-      `Timeline field “${t}” requires ${r} date serials on source row ${n + 1}.`,
+      `Timeline field “${field}” requires ${dateSystem} date serials on source row ${n + 1}.`,
     );
   const o = Math.floor(e);
-  if (r === "1900" && o === 60) return "1900-02-29";
+  if (dateSystem === "1900" && o === 60) return "1900-02-29";
   const a = new Date(
-    (r === "1900" ? Date.UTC(1899, 11, 31) : Date.UTC(1904, 0, 1)) +
-      (o - (r === "1900" && o >= 60 ? 1 : 0)) * 864e5,
+    (dateSystem === "1900" ? Date.UTC(1899, 11, 31) : Date.UTC(1904, 0, 1)) +
+      (o - (dateSystem === "1900" && o >= 60 ? 1 : 0)) * 864e5,
   );
   return a.getUTCFullYear() > 9999
     ? throwErrorMessage("Timeline date exceeds year 9999.")
     : a.toISOString().slice(0, 10);
 }
-function filterPivotSourceRows(e, r, t) {
-  validatePivotFieldReferences(e, r);
-  const n = (e.slicers ?? []).map((a) => ({
-      index: r.indexOf(a.field),
+function filterPivotSourceRows(pivotDefinition, fields, t) {
+  validatePivotFieldReferences(pivotDefinition, fields);
+  const n = (pivotDefinition.slicers ?? []).map((a) => ({
+      index: fields.indexOf(a.field),
       keys: new Set(a.selected.map(buildSlicerItemKey)),
     })),
-    o = (e.timelines ?? []).map((a) => ({ ...a, index: r.indexOf(a.field) }));
+    o = (pivotDefinition.timelines ?? []).map((a) => ({
+      ...a,
+      index: fields.indexOf(a.field),
+    }));
   return t.filter((a) => {
     const s = o.map((d) =>
       normalizeTimelineDate(a.values[d.index], d.dateSystem, d.field, a.index),
@@ -908,10 +954,10 @@ function filterPivotSourceRows(e, r, t) {
 function buildTimelinePeriods(e, r) {
   const t = new Map();
   for (const n of e) {
-    const o = normalizeTimelineDate(n, r.dateSystem, r.field, 0);
-    if (!o) continue;
-    const a = Number(o.slice(0, 4)),
-      s = Number(o.slice(5, 7)),
+    const timelineDate = normalizeTimelineDate(n, r.dateSystem, r.field, 0);
+    if (!timelineDate) continue;
+    const a = Number(timelineDate.slice(0, 4)),
+      s = Number(timelineDate.slice(5, 7)),
       d =
         r.unit === "year"
           ? 1
@@ -945,58 +991,58 @@ const isPlainDataObject = (e) =>
       Object.getPrototypeOf(e) === null),
   isBoundedString = (e, r) =>
     typeof e == "string" && e.length > 0 && e.length <= r;
-function normalizeRowProvenance(e, r) {
-  const t = e.sheets;
+function normalizeRowProvenance(workbook, r) {
+  const sheets = workbook.sheets;
   if (
-    e.rowOrigins === undefined &&
-    !t.some((a) => a.rowOriginIds !== undefined)
+    workbook.rowOrigins === undefined &&
+    !sheets.some((sheet) => sheet.rowOriginIds !== undefined)
   )
     return;
   if (
-    !Array.isArray(e.rowOrigins) ||
-    e.rowOrigins.length > workbookLimits.maxCells
+    !Array.isArray(workbook.rowOrigins) ||
+    workbook.rowOrigins.length > workbookLimits.maxCells
   )
     throw Error(
       "Row provenance requires a registry of at most 100,000 source rows.",
     );
   const n = new Set();
-  r.rowOrigins = e.rowOrigins.map((a) => {
+  r.rowOrigins = workbook.rowOrigins.map((rowOrigin) => {
     if (
-      !isPlainDataObject(a) ||
-      !isBoundedString(a.id, 100) ||
-      n.has(a.id) ||
-      !isBoundedString(a.sourceId, 100) ||
-      !isBoundedString(a.sourceName, 255) ||
-      !isBoundedString(a.sourceSheet, 31) ||
-      !["file", "snapshot"].includes(String(a.kind)) ||
-      !Number.isInteger(a.originalRow) ||
-      Number(a.originalRow) < 1 ||
-      Number(a.originalRow) > workbookLimits.maxRows
+      !isPlainDataObject(rowOrigin) ||
+      !isBoundedString(rowOrigin.id, 100) ||
+      n.has(rowOrigin.id) ||
+      !isBoundedString(rowOrigin.sourceId, 100) ||
+      !isBoundedString(rowOrigin.sourceName, 255) ||
+      !isBoundedString(rowOrigin.sourceSheet, 31) ||
+      !["file", "snapshot"].includes(String(rowOrigin.kind)) ||
+      !Number.isInteger(rowOrigin.originalRow) ||
+      Number(rowOrigin.originalRow) < 1 ||
+      Number(rowOrigin.originalRow) > workbookLimits.maxRows
     )
       throw Error("Invalid, duplicated or out-of-bounds original source row.");
     return (
-      n.add(a.id),
+      n.add(rowOrigin.id),
       {
-        id: a.id,
-        sourceId: a.sourceId,
-        sourceName: a.sourceName,
-        sourceSheet: a.sourceSheet,
-        originalRow: a.originalRow,
-        kind: a.kind,
+        id: rowOrigin.id,
+        sourceId: rowOrigin.sourceId,
+        sourceName: rowOrigin.sourceName,
+        sourceSheet: rowOrigin.sourceSheet,
+        originalRow: rowOrigin.originalRow,
+        kind: rowOrigin.kind,
       }
     );
   });
   let o = 0;
-  for (let a = 0; a < t.length; a++) {
-    const s = t[a].rowOriginIds;
-    if (s === undefined) continue;
-    if (!isPlainDataObject(s))
+  for (let a = 0; a < sheets.length; a++) {
+    const rowOriginIds = sheets[a].rowOriginIds;
+    if (rowOriginIds === undefined) continue;
+    if (!isPlainDataObject(rowOriginIds))
       throw Error("Source row associations must be a plain index map.");
     const d = {};
-    for (const [u, l] of Object.entries(s)) {
+    for (const [u, l] of Object.entries(rowOriginIds)) {
       if (
         !/^(0|[1-9]\d*)$/.test(u) ||
-        Number(u) >= Number(t[a].rowCount) ||
+        Number(u) >= Number(sheets[a].rowCount) ||
         typeof l != "string" ||
         !n.has(l) ||
         ++o > workbookLimits.maxCells
@@ -1007,17 +1053,17 @@ function normalizeRowProvenance(e, r) {
     r.sheets[a].rowOriginIds = d;
   }
 }
-function findRowOrigin(e, r, t) {
-  const n = e.sheets.find((u) => u.id === r)?.rowOriginIds?.[t],
-    o = n && e.rowOrigins?.find((u) => u.id === n);
+function findRowOrigin(workbook, r, t) {
+  const n = workbook.sheets.find((sheet) => sheet.id === r)?.rowOriginIds?.[t],
+    o = n && workbook.rowOrigins?.find((rowOrigin) => rowOrigin.id === n);
   return o ? { ...o } : null;
 }
-function validateRowOrigins(e, r) {
-  if (!e.rowOrigins?.length) return;
+function validateRowOrigins(workbook, r) {
+  if (!workbook.rowOrigins?.length) return;
   const t = new Map((r.rowOrigins ?? []).map((o) => [o.id, o]));
-  for (const o of e.rowOrigins)
+  for (const rowOrigin of workbook.rowOrigins)
     if (
-      !t.has(o.id) ||
+      !t.has(rowOrigin.id) ||
       [
         "id",
         "sourceId",
@@ -1025,7 +1071,7 @@ function validateRowOrigins(e, r) {
         "sourceSheet",
         "originalRow",
         "kind",
-      ].some((a) => t.get(o.id)[a] !== o[a])
+      ].some((a) => t.get(rowOrigin.id)[a] !== rowOrigin[a])
     )
       throw Error(
         "Original source row identities cannot be changed or removed. Keep the source registry and change only current row associations.",
@@ -1034,11 +1080,11 @@ function validateRowOrigins(e, r) {
 const basicAggregateOperations = ["sum", "count", "average", "min", "max"],
   pivotAggregateOperations = [...basicAggregateOperations, "distinctCount"];
 
-function assertUniqueTableNames(e) {
+function assertUniqueTableNames(workbook) {
   const r = new Set(),
     t = new Set();
-  for (const n of e.sheets)
-    for (const o of n.tables ?? [])
+  for (const sheet of workbook.sheets)
+    for (const o of sheet.tables ?? [])
       ((r.has(o.name.toLowerCase()) || t.has(o.id)) &&
         throwWorkbookError(
           "Table names and IDs must be unique across the workbook.",
@@ -1046,25 +1092,25 @@ function assertUniqueTableNames(e) {
         r.add(o.name.toLowerCase()),
         t.add(o.id));
 }
-function assertWithinCellBudget(e) {
+function assertWithinCellBudget(workbook) {
   return (
-    e.sheets.reduce((r, t) => r + Object.keys(t.cells).length, 0) >
+    workbook.sheets.reduce((r, t) => r + Object.keys(t.cells).length, 0) >
       workbookLimits.maxCells &&
       throwWorkbookError(
         "The result would exceed the 100,000 populated-cell workbook budget.",
       ),
-    e
+    workbook
   );
 }
-function findSourceFieldIndex(e, r) {
-  const t = e.indexOf(r);
+function findSourceFieldIndex(fields, r) {
+  const t = fields.indexOf(r);
   return t >= 0
     ? t
     : throwWorkbookError(
         `Source field “${r}” was not found. Refresh the field selection.`,
       );
 }
-function buildUniqueSheetName(e, r) {
+function buildUniqueSheetName(workbook, r) {
   const t =
     r
       .replace(/[\\/\[\]*?:]/g, " ")
@@ -1072,7 +1118,12 @@ function buildUniqueSheetName(e, r) {
       .slice(0, 31) || "Analysis";
   let n = t,
     o = 2;
-  for (; e.sheets.some((a) => a.name.toLowerCase() === n.toLowerCase());)
+  for (
+    ;
+    workbook.sheets.some(
+      (sheet) => sheet.name.toLowerCase() === n.toLowerCase(),
+    );
+  )
     n = `${t.slice(0, 25)} (${o++})`;
   return n;
 }
@@ -1089,45 +1140,48 @@ const computePivotRefreshFingerprint = (e) => {
     new Uint8Array(strToU8(JSON.stringify([r.length, ...t]))),
   );
 };
-function findPivotDefinition(e, r) {
-  const t = e.sheets.find((a) => a.pivots?.some((d) => d.id === r)),
-    n = t?.pivots?.find((a) => a.id === r);
+function findPivotDefinition(workbook, pivotId) {
+  const sheet = workbook.sheets.find((sheet) =>
+      sheet.pivots?.some((pivot) => pivot.id === pivotId),
+    ),
+    definition = sheet?.pivots?.find((pivot) => pivot.id === pivotId);
   return (
-    (!t || !n) && throwWorkbookError("Pivot definition not found."),
-    { owner: t, definition: n }
+    (!sheet || !definition) &&
+      throwWorkbookError("Pivot definition not found."),
+    { owner: sheet, definition: definition }
   );
 }
-function buildPivotStatusRecord(e, r, t) {
+function buildPivotStatusRecord(workbook, definition, pivotRefreshState) {
   return {
-    workbookId: e.id,
-    revision: e.revision,
-    pivotId: r.id,
-    name: r.name,
-    source: structuredClone(r.source),
-    sourceRevision: r.sourceRevision,
-    refreshedAt: r.refresh?.at ?? null,
-    sourceFingerprint: r.refresh?.sourceFingerprint ?? null,
-    status: t.state,
-    diagnostic: t.reason,
-    outputRange: r.outputRange,
-    rowFields: [...r.rowFields],
-    columnFields: [...r.columnFields],
-    values: structuredClone(r.values),
-    filters: structuredClone(r.filters ?? []),
-    slicers: structuredClone(r.slicers ?? []),
-    timelines: structuredClone(r.timelines ?? []),
-    sorts: structuredClone(r.sorts ?? []),
-    dateGroups: structuredClone(r.dateGroups ?? []),
-    calculatedFields: structuredClone(r.calculatedFields ?? []),
-    chart: structuredClone(r.chart ?? null),
-    population: r.refresh
+    workbookId: workbook.id,
+    revision: workbook.revision,
+    pivotId: definition.id,
+    name: definition.name,
+    source: structuredClone(definition.source),
+    sourceRevision: definition.sourceRevision,
+    refreshedAt: definition.refresh?.at ?? null,
+    sourceFingerprint: definition.refresh?.sourceFingerprint ?? null,
+    status: pivotRefreshState.state,
+    diagnostic: pivotRefreshState.reason,
+    outputRange: definition.outputRange,
+    rowFields: [...definition.rowFields],
+    columnFields: [...definition.columnFields],
+    values: structuredClone(definition.values),
+    filters: structuredClone(definition.filters ?? []),
+    slicers: structuredClone(definition.slicers ?? []),
+    timelines: structuredClone(definition.timelines ?? []),
+    sorts: structuredClone(definition.sorts ?? []),
+    dateGroups: structuredClone(definition.dateGroups ?? []),
+    calculatedFields: structuredClone(definition.calculatedFields ?? []),
+    chart: structuredClone(definition.chart ?? null),
+    population: definition.refresh
       ? {
-          source: r.refresh.sourceRows,
-          included: r.refresh.includedRows,
-          excluded: r.refresh.excludedRows,
+          source: definition.refresh.sourceRows,
+          included: definition.refresh.includedRows,
+          excluded: definition.refresh.excludedRows,
         }
       : null,
-    measures: structuredClone(r.refresh?.measures ?? []),
+    measures: structuredClone(definition.refresh?.measures ?? []),
     semantics:
       "Controls intersect. Slicer items use type-sensitive, case-insensitive equality; an empty selection includes no records. Hidden source rows are included. Percentages use filtered aggregate totals. Drill-through returns numerator records, including blank/nonnumeric measure inputs; it does not expand denominator populations.",
   };
@@ -1137,30 +1191,30 @@ const tableMutationLimits = {
   appendedRows: 100,
   formulaLength: 4096,
 };
-function validateCalculatedColumnFormula(e, r = false) {
-  (typeof e != "string" ||
-    e.length > tableMutationLimits.formulaLength ||
-    e !== e.trim() ||
-    !e.startsWith("=")) &&
+function validateCalculatedColumnFormula(refersTo, r = false) {
+  (typeof refersTo != "string" ||
+    refersTo.length > tableMutationLimits.formulaLength ||
+    refersTo !== refersTo.trim() ||
+    !refersTo.startsWith("=")) &&
     throwWorkbookError(
       "Calculated column formulas must begin with = and contain at most 4,096 characters, without outer whitespace.",
     );
   try {
-    validateNameFormulaText(e);
-  } catch (t) {
+    validateNameFormulaText(refersTo);
+  } catch (error) {
     throwWorkbookError(
-      `Calculated column formula: ${t.message.replace(/^XLSX defined names: /, "").replace(/ Import\/export stopped.*$/, "")}`,
+      `Calculated column formula: ${error.message.replace(/^XLSX defined names: /, "").replace(/ Import\/export stopped.*$/, "")}`,
     );
   }
   return (
     !r &&
       /#REF!/.test(
-        stripFormulaStringLiterals(e.replace(/"(?:[^"]|"")*"/g, '""')),
+        stripFormulaStringLiterals(refersTo.replace(/"(?:[^"]|"")*"/g, '""')),
       ) &&
       throwWorkbookError(
         "Repair broken #REF! references before saving a calculated column rule.",
       ),
-    e
+    refersTo
   );
 }
 const a1CellPattern = "\\$?[A-Za-z]{1,3}\\$?[1-9]\\d{0,6}",
@@ -1172,12 +1226,12 @@ function parseExternalLinkRange(e, r = 5e3) {
       const m = /^\$?([A-Za-z]{1,3})\$?([1-9]\d{0,6})$/.exec(p);
       if (!m)
         throw Error("External links require bounded A1 cells or rectangles.");
-      let v = 0;
-      for (const b of m[1].toUpperCase()) v = v * 26 + b.charCodeAt(0) - 64;
-      const g = Number(m[2]);
-      if (v > 16384 || g > 1048576)
+      let col = 0;
+      for (const b of m[1].toUpperCase()) col = col * 26 + b.charCodeAt(0) - 64;
+      const row = Number(m[2]);
+      if (col > 16384 || row > 1048576)
         throw Error("External reference exceeds worksheet bounds.");
-      return { row: g, col: v };
+      return { row: row, col: col };
     },
     [n, o = n, a] = e.split(":");
   if (a) throw Error("Invalid external range.");
@@ -1203,19 +1257,19 @@ function parseExternalLinkRange(e, r = 5e3) {
     }
   return u;
 }
-function tokenizeExternalReferences(e) {
+function tokenizeExternalReferences(raw) {
   const r = [];
-  for (let t = 0; t < e.length;) {
-    if (e[t] === '"') {
-      for (t++; t < e.length;)
-        if (e[t++] === '"')
-          if (e[t] === '"') t++;
+  for (let end = 0; end < raw.length;) {
+    if (raw[end] === '"') {
+      for (end++; end < raw.length;)
+        if (raw[end++] === '"')
+          if (raw[end] === '"') end++;
           else break;
       continue;
     }
-    const n = t,
-      o = /^'((?:[^']|'')*)'\s*!/.exec(e.slice(t)),
-      a = /^\[([^\[\]\r\n]+)\]([A-Za-z_][A-Za-z0-9_.]*)!/.exec(e.slice(t));
+    const start = end,
+      o = /^'((?:[^']|'')*)'\s*!/.exec(raw.slice(end)),
+      a = /^\[([^\[\]\r\n]+)\]([A-Za-z_][A-Za-z0-9_.]*)!/.exec(raw.slice(end));
     let s,
       d = 0;
     if (
@@ -1225,44 +1279,44 @@ function tokenizeExternalReferences(e) {
       s)
     ) {
       const u = /^(.*\[[^\[\]\r\n]+\])([^\[\]:\r\n]+)$/.exec(s),
-        l = a1ReferenceAnchorPattern.exec(e.slice(t + d));
-      if (u && l && (!t || !/[A-Za-z0-9_.\]]/.test(e[t - 1])))
+        l = a1ReferenceAnchorPattern.exec(raw.slice(end + d));
+      if (u && l && (!end || !/[A-Za-z0-9_.\]]/.test(raw[end - 1])))
         try {
           (parseExternalLinkRange(l[1]),
-            (t += d + l[0].length),
+            (end += d + l[0].length),
             r.push({
-              start: n,
-              end: t,
-              token: e.slice(n, t),
+              start: start,
+              end: end,
+              token: raw.slice(start, end),
               target: u[1],
               sheet: u[2],
               range: l[1].toUpperCase(),
             }));
           continue;
         } catch {}
-      t += d;
+      end += d;
       continue;
     }
-    if (e[t] === "[") {
+    if (raw[end] === "[") {
       let u = 0;
-      do (e[t] === "[" && u++, e[t] === "]" && u--, t++);
-      while (t < e.length && u > 0);
-    } else if (e[t] === "'") {
-      for (t++; t < e.length;)
-        if (e[t++] === "'")
-          if (e[t] === "'") t++;
+      do (raw[end] === "[" && u++, raw[end] === "]" && u--, end++);
+      while (end < raw.length && u > 0);
+    } else if (raw[end] === "'") {
+      for (end++; end < raw.length;)
+        if (raw[end++] === "'")
+          if (raw[end] === "'") end++;
           else break;
-    } else t++;
+    } else end++;
   }
   return r;
 }
-function rewriteExternalReferences(e, r) {
-  const t = tokenizeExternalReferences(e);
+function rewriteExternalReferences(raw, r) {
+  const t = tokenizeExternalReferences(raw);
   for (const n of t.reverse()) {
     const o = r(n);
-    o !== undefined && (e = e.slice(0, n.start) + o + e.slice(n.end));
+    o !== undefined && (raw = raw.slice(0, n.start) + o + raw.slice(n.end));
   }
-  return e;
+  return raw;
 }
 const formatExternalSheetReference = (e, r, t) =>
     `'${(e + r).replace(/'/g, "''")}'!${t}`,
@@ -1325,40 +1379,43 @@ const formatExternalSheetReference = (e, r, t) =>
       .optional(),
   }),
   validatedWorkbookLinkRegistry = new WeakSet();
-function attachWorkbookLinkMetadata(e, r) {
-  if (e.workbookLinks === undefined) return;
+function attachWorkbookLinkMetadata(workbook, r) {
+  if (workbook.workbookLinks === undefined) return;
   if (
-    e.workbookLinks &&
-    typeof e.workbookLinks == "object" &&
-    validatedWorkbookLinkRegistry.has(e.workbookLinks)
+    workbook.workbookLinks &&
+    typeof workbook.workbookLinks == "object" &&
+    validatedWorkbookLinkRegistry.has(workbook.workbookLinks)
   ) {
-    r.workbookLinks = e.workbookLinks;
+    r.workbookLinks = workbook.workbookLinks;
     return;
   }
   if (
-    JSON.stringify(e.workbookLinks).length >
+    JSON.stringify(workbook.workbookLinks).length >
     workbookLinkLimits.metadataCharacters
   )
     throw Error("Workbook link metadata exceeds 2 million characters.");
-  const t = workbookLinkPackageSchema.parse(e.workbookLinks);
-  if (new Set(t.sources.map((d) => d.target)).size !== t.sources.length)
+  const t = workbookLinkPackageSchema.parse(workbook.workbookLinks);
+  if (
+    new Set(t.sources.map((source) => source.target)).size !== t.sources.length
+  )
     throw Error("Workbook link targets must be unique.");
   if (
-    new Set(t.packageTargets?.map((d) => d.key)).size !==
-    (t.packageTargets?.length ?? 0)
+    new Set(t.packageTargets?.map((packageTarget) => packageTarget.key))
+      .size !== (t.packageTargets?.length ?? 0)
   )
     throw Error("Package link identities must be unique.");
   let n = 0,
     o = 0;
-  for (const d of t.sources) {
+  for (const source of t.sources) {
     if (
-      new Set(d.sheets.map((u) => u.name.toLowerCase())).size !==
-      d.sheets.length
+      new Set(source.sheets.map((sheet) => sheet.name.toLowerCase())).size !==
+      source.sheets.length
     )
       throw Error("Linked worksheet names must be unique.");
-    for (const u of d.sheets) {
+    for (const sheet of source.sheets) {
       o++;
-      for (const l of Object.keys(u.cells)) (parseExternalLinkRange(l), n++);
+      for (const cell of Object.keys(sheet.cells))
+        (parseExternalLinkRange(cell), n++);
     }
   }
   if (n > workbookLinkLimits.cells || o > workbookLinkLimits.sheets)
@@ -1366,60 +1423,75 @@ function attachWorkbookLinkMetadata(e, r) {
   ((r.workbookLinks = deepFreezeValue(t)),
     validatedWorkbookLinkRegistry.add(r.workbookLinks));
 }
-function encodeWorkbookFingerprint(e) {
+function encodeWorkbookFingerprint(workbook) {
   const r = new TextEncoder().encode(
     JSON.stringify([
-      e.id,
-      e.name,
-      e.revision,
-      e.calculation,
-      e.datePolicy,
-      e.definedNames,
-      e.workbookLinks,
-      e.sheets.map((t) => [
-        t.id,
-        t.name,
-        t.rowCount,
-        t.colCount,
-        t.hidden,
-        t.veryHidden,
-        t.hiddenRows,
-        t.hiddenCols,
-        t.tables,
-        t.merges,
-        t.outlineGroups,
-        Object.entries(t.cells).map(([n, o]) => [n, o.raw, !!o.literal]),
+      workbook.id,
+      workbook.name,
+      workbook.revision,
+      workbook.calculation,
+      workbook.datePolicy,
+      workbook.definedNames,
+      workbook.workbookLinks,
+      workbook.sheets.map((sheet) => [
+        sheet.id,
+        sheet.name,
+        sheet.rowCount,
+        sheet.colCount,
+        sheet.hidden,
+        sheet.veryHidden,
+        sheet.hiddenRows,
+        sheet.hiddenCols,
+        sheet.tables,
+        sheet.merges,
+        sheet.outlineGroups,
+        Object.entries(sheet.cells).map(([n, cell]) => [
+          n,
+          cell.raw,
+          !!cell.literal,
+        ]),
       ]),
     ]),
   );
   return sha256HexDigest(r);
 }
-function buildExternalLinkAliases(e) {
-  const r = [],
-    t = new Map(),
+function buildExternalLinkAliases(workbookInput) {
+  const sheets = [],
+    values = new Map(),
     n = new Map(),
-    o = new Set(e.sheets.map((d) => d.name.toLowerCase()));
-  for (const [d, u] of (e.workbookLinks?.sources ?? []).entries())
-    for (const [l, c] of u.sheets.entries()) {
+    o = new Set(workbookInput.sheets.map((sheet) => sheet.name.toLowerCase()));
+  for (const [d, workbook] of (
+    workbookInput.workbookLinks?.sources ?? []
+  ).entries())
+    for (const [l, c] of workbook.sheets.entries()) {
       let h = `_LG_LINK_${d}_${l}`;
       for (; o.has(h.toLowerCase());) h += "_";
       o.add(h.toLowerCase());
       let f = `linked:${d}:${l}`;
-      for (; e.sheets.some((m) => m.id === f);) f += "_";
-      const p = {};
+      for (; workbookInput.sheets.some((sheet) => sheet.id === f);) f += "_";
+      const cells = {};
       for (const [m, v] of Object.entries(c.cells))
-        ((p[m] = { raw: v.value, literal: true }), t.set(`${f}:${m}`, v));
-      (r.push({ id: f, name: h, rowCount: 1048576, colCount: 16384, cells: p }),
-        n.set(JSON.stringify([u.target, c.name.toLowerCase()]), h));
+        ((cells[m] = { raw: v.value, literal: true }),
+          values.set(`${f}:${m}`, v));
+      (sheets.push({
+        id: f,
+        name: h,
+        rowCount: 1048576,
+        colCount: 16384,
+        cells: cells,
+      }),
+        n.set(JSON.stringify([workbook.target, c.name.toLowerCase()]), h));
     }
   return {
-    sheets: r,
-    values: t,
-    rewrite: (d) =>
-      rewriteExternalReferences(d, (u) => {
-        const l = e.workbookLinks?.sources.find((f) => f.target === u.target),
-          c = l?.sheets.find(
-            (f) => f.name.toLowerCase() === u.sheet.toLowerCase(),
+    sheets: sheets,
+    values: values,
+    rewrite: (raw) =>
+      rewriteExternalReferences(raw, (u) => {
+        const workbook = workbookInput.workbookLinks?.sources.find(
+            (source) => source.target === u.target,
+          ),
+          c = workbook?.sheets.find(
+            (sheet) => sheet.name.toLowerCase() === u.sheet.toLowerCase(),
           );
         if (!(
           !c ||
@@ -1579,18 +1651,18 @@ function evaluateDatabaseFunction(e, r, t) {
         U = [];
       let G = false;
       for (let Q = 0; Q < $.length; Q++) {
-        const X = $[Q];
-        if (X === "~") {
+        const char = $[Q];
+        if (char === "~") {
           const J = $[Q + 1];
           J && ["*", "?", "~"].includes(J)
             ? (U.push({ kind: "literal", char: J }), Q++, (G = true))
-            : U.push({ kind: "literal", char: X });
+            : U.push({ kind: "literal", char: char });
         } else
-          X === "*" || X === "?"
+          char === "*" || char === "?"
             ? ((G = true),
-              (X === "?" || U.at(-1)?.kind !== "many") &&
-                U.push({ kind: X === "*" ? "many" : "one" }))
-            : U.push({ kind: "literal", char: X });
+              (char === "?" || U.at(-1)?.kind !== "many") &&
+                U.push({ kind: char === "*" ? "many" : "one" }))
+            : U.push({ kind: "literal", char: char });
       }
       return ["<", ">", "<=", ">="].includes(R)
         ? G
@@ -1710,8 +1782,8 @@ const referenceSensitiveFunctionNames = [
     "FORMULATEXT",
   ],
   notReferenceFunctionMarker = Symbol("not-reference-function"),
-  isFormulaCellValue = (e) =>
-    typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal;
+  isFormulaCellValue = (cell) =>
+    typeof cell?.raw == "string" && cell.raw.startsWith("=") && !cell.literal;
 function containsSubtotalCall(e) {
   return /(?:^|[^A-Za-z0-9_.])(?:_xlfn\.(?:_xlws\.)?)?SUBTOTAL\s*\(/i.test(
     e.replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, ""),
@@ -1822,7 +1894,7 @@ const aggregateFunctionNames = [
   isFormulaError = (e) => e instanceof FormulaErrorClass,
   findFormulaErrorArg = (e) =>
     e.flatMap(flattenNestedValues).find(isFormulaError);
-function findScopedDefinedName(e, r, t) {
+function findScopedDefinedName(e, workbook, t) {
   if (
     e.cell ||
     (e.call &&
@@ -1831,50 +1903,61 @@ function findScopedDefinedName(e, r, t) {
   )
     return;
   const n = e.qualifier
-    ? r.sheets.find((d) => d.name.toLowerCase() === e.qualifier.toLowerCase())
-        ?.id
+    ? workbook.sheets.find(
+        (sheet) => sheet.name.toLowerCase() === e.qualifier.toLowerCase(),
+      )?.id
     : t;
   if (n)
     return (
-      r.definedNames?.find(
-        (d) =>
-          d.scopeSheetId === n && d.name.toLowerCase() === e.name.toLowerCase(),
+      workbook.definedNames?.find(
+        (definedName) =>
+          definedName.scopeSheetId === n &&
+          definedName.name.toLowerCase() === e.name.toLowerCase(),
       ) ??
-      r.definedNames?.find(
-        (d) => !d.scopeSheetId && d.name.toLowerCase() === e.name.toLowerCase(),
+      workbook.definedNames?.find(
+        (definedName) =>
+          !definedName.scopeSheetId &&
+          definedName.name.toLowerCase() === e.name.toLowerCase(),
       )
     );
 }
-function resolveDefinedNameValue(e, r, t, n = [], o) {
+function resolveDefinedNameValue(e, workbook, t, n = [], o) {
   if (n.length > 32) throw new Error("#LIMIT!");
   const a = replaceTextSpans(e, m5(e), (s) => {
     if (s.call) return s.text;
-    const d = findScopedDefinedName(s, r, t);
-    if (!d || parseFormulaTree(d.refersTo)) return s.text;
-    const u = definedNameScopeKey(d);
+    const scopedDefinedName = findScopedDefinedName(s, workbook, t);
+    if (!scopedDefinedName || parseFormulaTree(scopedDefinedName.refersTo))
+      return s.text;
+    const u = definedNameScopeKey(scopedDefinedName);
     if (n.includes(u)) throw new Error("#CYCLE!");
     const l =
-      d.scopeSheetId ??
+      scopedDefinedName.scopeSheetId ??
       (s.qualifier
-        ? r.sheets.find(
-            (h) => h.name.toLowerCase() === s.qualifier.toLowerCase(),
+        ? workbook.sheets.find(
+            (sheet) => sheet.name.toLowerCase() === s.qualifier.toLowerCase(),
           ).id
         : t);
     if (o && !o(l)) throw new Error("#BLOCKED!");
-    let c = resolveDefinedNameValue(d.refersTo.slice(1), r, l, [...n, u], o);
+    let definedNameValue = resolveDefinedNameValue(
+      scopedDefinedName.refersTo.slice(1),
+      workbook,
+      l,
+      [...n, u],
+      o,
+    );
     if (l !== t) {
-      const h = r.sheets.find((p) => p.id === l),
-        f = m5(c);
-      c = replaceTextSpans(c, f, (p) => {
+      const sheet = workbook.sheets.find((sheet) => sheet.id === l),
+        f = m5(definedNameValue);
+      definedNameValue = replaceTextSpans(definedNameValue, f, (p) => {
         const m = f.indexOf(p),
           v = f[m - 1],
-          g = v?.cell && c.slice(v.end, p.start).trim() === ":";
+          g = v?.cell && definedNameValue.slice(v.end, p.start).trim() === ":";
         return p.cell && !p.qualifier && !g
-          ? formatQuotedSheetPrefix(h.name) + p.text
+          ? formatQuotedSheetPrefix(sheet.name) + p.text
           : p.text;
       });
     }
-    return `(${c})`;
+    return `(${definedNameValue})`;
   });
   if (a.length > 16384) throw new Error("#LIMIT!");
   return a;

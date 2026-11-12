@@ -33,9 +33,9 @@ import {
   validateAnalysisSource,
 } from "./36-watch-window-and-goal-seek.js";
 
-function linearizeSolverFormula(e, r, t) {
-  assertAutomaticCalculation(e);
-  const n = r.variables.length,
+function linearizeSolverFormula(workbook, analysisRequest, t) {
+  assertAutomaticCalculation(workbook);
+  const n = analysisRequest.variables.length,
     o = new Map(),
     a = new Set();
   let s = 0;
@@ -45,12 +45,14 @@ function linearizeSolverFormula(e, r, t) {
     }),
     u = (y, w) => ({
       constant: assertSolverMagnitude(y.constant * w),
-      coefficients: y.coefficients.map((E) => assertSolverMagnitude(E * w)),
+      coefficients: y.coefficients.map((coefficient) =>
+        assertSolverMagnitude(coefficient * w),
+      ),
     }),
     l = (y, w) => ({
       constant: assertSolverMagnitude(y.constant + w.constant),
-      coefficients: y.coefficients.map((E, A) =>
-        assertSolverMagnitude(E + w.coefficients[A]),
+      coefficients: y.coefficients.map((coefficient, A) =>
+        assertSolverMagnitude(coefficient + w.coefficients[A]),
       ),
     }),
     c = (y, w) => {
@@ -60,46 +62,54 @@ function linearizeSolverFormula(e, r, t) {
         );
       return y.coefficients.some(Boolean) ? u(y, w.constant) : u(w, y.constant);
     },
-    h = (y, w, E = 0) => {
-      const A = buildCompositeKey(y, w);
-      if (a.has(A)) throw Error("Solver formulas contain a cycle.");
-      if (o.has(A)) return o.get(A);
+    h = (sheetId, address, E = 0) => {
+      const compositeKey = buildCompositeKey(sheetId, address);
+      if (a.has(compositeKey)) throw Error("Solver formulas contain a cycle.");
+      if (o.has(compositeKey)) return o.get(compositeKey);
       if (
         o.size + a.size >= analysisLimits.dependencyCells ||
         E > analysisLimits.depth
       )
         throw Error("Solver dependency budget exceeded.");
-      const k = validateAnalysisSource(e, { sheetId: y, address: w }, t),
-        F = k.cells[w],
-        I = r.variables.findIndex(
-          (j) => j.cell.sheetId === y && j.cell.address === w,
+      const k = validateAnalysisSource(
+          workbook,
+          { sheetId: sheetId, address: address },
+          t,
+        ),
+        cell = k.cells[address],
+        I = analysisRequest.variables.findIndex(
+          (variable) =>
+            variable.cell.sheetId === sheetId &&
+            variable.cell.address === address,
         );
       if (I >= 0) {
         const j = d(0);
-        return ((j.coefficients[I] = 1), o.set(A, j), j);
+        return ((j.coefficients[I] = 1), o.set(compositeKey, j), j);
       }
-      if (!F || F.raw === null)
+      if (!cell || cell.raw === null)
         throw Error(
           "Solver dependencies must be populated numeric cells; blanks and spill children are excluded.",
         );
       let O;
-      if (typeof F.raw == "number") O = d(F.raw);
+      if (typeof cell.raw == "number") O = d(cell.raw);
       else if (
-        typeof F.raw == "string" &&
-        F.raw.startsWith("=") &&
-        !F.literal
+        typeof cell.raw == "string" &&
+        cell.raw.startsWith("=") &&
+        !cell.literal
       ) {
-        if (F.raw.length > analysisLimits.expressionCharacters)
+        if (cell.raw.length > analysisLimits.expressionCharacters)
           throw Error("Solver expression budget exceeded.");
-        const j = resolveDefinedNameValue(F.raw, e, y).slice(1);
+        const j = resolveDefinedNameValue(cell.raw, workbook, sheetId).slice(1);
         if (j.length > 4096)
           throw Error("Expanded Solver expression budget exceeded.");
-        (a.add(A), (O = rejectRangeAsScalar(f(j, y, E + 1))), a.delete(A));
+        (a.add(compositeKey),
+          (O = rejectRangeAsScalar(f(j, sheetId, E + 1))),
+          a.delete(compositeKey));
       } else
         throw Error(
           "Solver dependencies must contain numbers or supported linear formulas.",
         );
-      return (o.set(A, O), O);
+      return (o.set(compositeKey, O), O);
     },
     f = (y, w, E) => {
       const A =
@@ -145,9 +155,9 @@ function linearizeSolverFormula(e, r, t) {
               H =
                 U === null
                   ? w
-                  : e.sheets.find(
-                      (Q) =>
-                        Q.name.toLowerCase() ===
+                  : workbook.sheets.find(
+                      (sheet) =>
+                        sheet.name.toLowerCase() ===
                         (U.startsWith("'")
                           ? U.slice(1, -1).replace(/''/g, "'")
                           : U
@@ -155,19 +165,30 @@ function linearizeSolverFormula(e, r, t) {
                     )?.id;
             if (!H) throw Error("A Solver worksheet reference is missing.");
             if (G.includes(":")) {
-              const Q = parseRangeAddress(G);
+              const rangeAddress = parseRangeAddress(G);
               if (
-                (Q.lastRow - Q.firstRow + 1) * (Q.lastCol - Q.firstCol + 1) >
+                (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+                  (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
                 500
               )
                 throw Error("Solver range exceeds 500 cells.");
               const J = [];
-              for (let q = Q.firstRow; q <= Q.lastRow; q++)
-                for (let W = Q.firstCol; W <= Q.lastCol; W++)
-                  J.push(h(H, `${columnIndexToLetters(W)}${q + 1}`, E));
+              for (
+                let firstRow = rangeAddress.firstRow;
+                firstRow <= rangeAddress.lastRow;
+                firstRow++
+              )
+                for (
+                  let firstCol = rangeAddress.firstCol;
+                  firstCol <= rangeAddress.lastCol;
+                  firstCol++
+                )
+                  J.push(
+                    h(H, `${columnIndexToLetters(firstCol)}${firstRow + 1}`, E),
+                  );
               _ = Object.assign(J, {
-                height: Q.lastRow - Q.firstRow + 1,
-                width: Q.lastCol - Q.firstCol + 1,
+                height: rangeAddress.lastRow - rangeAddress.firstRow + 1,
+                width: rangeAddress.lastCol - rangeAddress.firstCol + 1,
               });
             } else _ = h(H, G, E);
           } else if (C.text === "(") {
@@ -215,9 +236,9 @@ function linearizeSolverFormula(e, r, t) {
         V = () => {
           let _ = z();
           for (; j() === "*" || j() === "/";) {
-            const C = k[I++].text,
+            const text = k[I++].text,
               T = rejectRangeAsScalar(z());
-            if (C === "*") _ = c(rejectRangeAsScalar(_), T);
+            if (text === "*") _ = c(rejectRangeAsScalar(_), T);
             else {
               if (T.coefficients.some(Boolean) || T.constant === 0)
                 throw Error(
@@ -231,9 +252,9 @@ function linearizeSolverFormula(e, r, t) {
         D = () => {
           let _ = V();
           for (; j() === "+" || j() === "-";) {
-            const C = k[I++].text,
+            const text = k[I++].text,
               T = rejectRangeAsScalar(V());
-            _ = l(rejectRangeAsScalar(_), u(T, C === "-" ? -1 : 1));
+            _ = l(rejectRangeAsScalar(_), u(T, text === "-" ? -1 : 1));
           }
           return _;
         },
@@ -242,11 +263,11 @@ function linearizeSolverFormula(e, r, t) {
         throw Error("Unsupported or trailing Solver formula syntax.");
       return B;
     },
-    p = r.variables.map((y) => {
-      const w = validateAnalysisSource(e, y.cell, t),
-        E = w.cells[y.cell.address],
-        A = _t(y.cell.address);
-      if (!E || typeof E.raw != "number" || !Number.isFinite(E.raw))
+    baseline = analysisRequest.variables.map((variable) => {
+      const w = validateAnalysisSource(workbook, variable.cell, t),
+        cell = w.cells[variable.cell.address],
+        A = _t(variable.cell.address);
+      if (!cell || typeof cell.raw != "number" || !Number.isFinite(cell.raw))
         throw Error(
           "Changing cells must contain finite numeric inputs, not formulas or text.",
         );
@@ -254,26 +275,26 @@ function linearizeSolverFormula(e, r, t) {
         throw Error("A changing worksheet is protected.");
       if (
         [...(w.pivots ?? []), ...(w.queries ?? [])].some((I) =>
-          parseRangeBounds(I.outputRange, y.cell.address),
+          parseRangeBounds(I.outputRange, variable.cell.address),
         )
       )
         throw Error("Generated results cannot be changing cells.");
       for (const I of w.tables ?? []) {
-        if (!parseRangeBounds(I.range, y.cell.address)) continue;
-        const O = parseRangeAddress(I.range);
+        if (!parseRangeBounds(I.range, variable.cell.address)) continue;
+        const rangeAddress = parseRangeAddress(I.range);
         if (
-          A.row === O.firstRow ||
-          (I.showTotals && A.row === O.lastRow) ||
-          I.columns[A.col - O.firstCol]?.calculatedFormula ||
-          Object.entries(w.cells).some(([j, z]) => {
+          A.row === rangeAddress.firstRow ||
+          (I.showTotals && A.row === rangeAddress.lastRow) ||
+          I.columns[A.col - rangeAddress.firstCol]?.calculatedFormula ||
+          Object.entries(w.cells).some(([j, cell]) => {
             const V = _t(j);
             return (
               V.col === A.col &&
-              V.row > O.firstRow &&
-              V.row <= O.lastRow - +!!I.showTotals &&
-              !z.literal &&
-              typeof z.raw == "string" &&
-              z.raw.startsWith("=")
+              V.row > rangeAddress.firstRow &&
+              V.row <= rangeAddress.lastRow - +!!I.showTotals &&
+              !cell.literal &&
+              typeof cell.raw == "string" &&
+              cell.raw.startsWith("=")
             );
           })
         )
@@ -283,35 +304,51 @@ function linearizeSolverFormula(e, r, t) {
       }
       if (
         (w.validations ?? []).some((I) =>
-          parseRangeBounds(I.range, y.cell.address),
+          parseRangeBounds(I.range, variable.cell.address),
         )
       )
         throw Error(
           "Changing cells with validation rules are excluded. Use explicit Solver bounds and constraints on a reviewed input copy.",
         );
-      return E.raw;
+      return cell.raw;
     }),
-    m = validateAnalysisSource(e, r.objective, t),
-    v = m.cells[r.objective.address];
-  if (!v || typeof v.raw != "string" || !v.raw.startsWith("=") || v.literal)
+    m = validateAnalysisSource(workbook, analysisRequest.objective, t),
+    cell = m.cells[analysisRequest.objective.address];
+  if (
+    !cell ||
+    typeof cell.raw != "string" ||
+    !cell.raw.startsWith("=") ||
+    cell.literal
+  )
     throw Error("The objective must be a linear formula cell.");
-  const g = h(r.objective.sheetId, r.objective.address),
-    b = r.constraints.map((y) => ({
+  const objective = h(
+      analysisRequest.objective.sheetId,
+      analysisRequest.objective.address,
+    ),
+    constraints = analysisRequest.constraints.map((constraint) => ({
       form: l(
-        h(y.left.sheetId, y.left.address),
+        h(constraint.left.sheetId, constraint.left.address),
         u(
-          typeof y.right == "number"
-            ? d(y.right)
-            : h(y.right.sheetId, y.right.address),
+          typeof constraint.right == "number"
+            ? d(constraint.right)
+            : h(constraint.right.sheetId, constraint.right.address),
           -1,
         ),
       ),
-      operator: y.operator,
+      operator: constraint.operator,
     }));
   return (
-    r.direction === "target" &&
-      b.push({ form: l(g, d(-r.target)), operator: "=" }),
-    { objective: g, constraints: b, baseline: p, dependencies: o.size }
+    analysisRequest.direction === "target" &&
+      constraints.push({
+        form: l(objective, d(-analysisRequest.target)),
+        operator: "=",
+      }),
+    {
+      objective: objective,
+      constraints: constraints,
+      baseline: baseline,
+      dependencies: o.size,
+    }
   );
 }
 const evaluateLinearExpression = (e, r) =>
@@ -342,10 +379,12 @@ function solveLinearSystem(e, r) {
   }
   return n.map((o) => o[t]);
 }
-function solveBoundedLinearModel(e, r, t = {}) {
-  const n = linearizeSolverFormula(e, r, t),
-    o = r.variables.length,
-    a = r.variables.every((g) => g.domain !== "continuous"),
+function solveBoundedLinearModel(workbook, analysisRequest, t = {}) {
+  const n = linearizeSolverFormula(workbook, analysisRequest, t),
+    o = analysisRequest.variables.length,
+    a = analysisRequest.variables.every(
+      (variable) => variable.domain !== "continuous",
+    ),
     s = {
       status: "infeasible",
       success: false,
@@ -357,7 +396,7 @@ function solveBoundedLinearModel(e, r, t = {}) {
       assumptions: [
         "Symbolically proven linear formulas; explicit finite bounds on every changing cell.",
         "No nonlinear, evolutionary, mixed integer, unrestricted or proprietary Solver engine is used.",
-        `Feasibility uses relative tolerance ${r.tolerance}; all candidates must be exhausted before an optimal label.`,
+        `Feasibility uses relative tolerance ${analysisRequest.tolerance}; all candidates must be exhausted before an optimal label.`,
         `Dependency cells: ${n.dependencies}. No sample exclusions; all declared constraints participate.`,
         "Independent references: analytic linear fixtures and Python Fraction vertex checks; see ANALYSIS-VERIFICATION.json.",
       ],
@@ -369,15 +408,19 @@ function solveBoundedLinearModel(e, r, t = {}) {
       baseline: n.baseline,
     },
     d = [];
-  for (const g of n.constraints) {
-    const b = { a: g.form.coefficients, b: -g.form.constant };
-    (g.operator !== ">=" && d.push(b),
-      g.operator !== "<=" && d.push({ a: b.a.map((y) => -y), b: -b.b }));
+  for (const constraint of n.constraints) {
+    const b = { a: constraint.form.coefficients, b: -constraint.form.constant };
+    (constraint.operator !== ">=" && d.push(b),
+      constraint.operator !== "<=" &&
+        d.push({ a: b.a.map((y) => -y), b: -b.b }));
   }
-  r.variables.forEach((g, b) => {
+  analysisRequest.variables.forEach((variable, b) => {
     const y = Array(o).fill(0);
     ((y[b] = 1),
-      d.push({ a: y, b: g.upper }, { a: y.map((w) => -w), b: -g.lower }));
+      d.push(
+        { a: y, b: variable.upper },
+        { a: y.map((w) => -w), b: -variable.lower },
+      ));
   });
   const u = (g) =>
     g.every(Number.isFinite) &&
@@ -388,29 +431,34 @@ function solveBoundedLinearModel(e, r, t = {}) {
           Math.abs(b.b),
           b.a.reduce((E, A, k) => E + Math.abs(A * g[k]), 0),
         );
-      return y - b.b <= r.tolerance * w;
+      return y - b.b <= analysisRequest.tolerance * w;
     });
   let l,
-    c = 0,
+    objective = 0,
     h = false,
     f = false;
   const p = (g) => {
       if (!u(g)) return;
       const b = evaluateLinearExpression(n.objective, g);
       (!l ||
-        (r.direction === "maximize" && b > c) ||
-        (r.direction === "minimize" && b < c)) &&
-        ((l = [...g]), (c = b));
+        (analysisRequest.direction === "maximize" && b > objective) ||
+        (analysisRequest.direction === "minimize" && b < objective)) &&
+        ((l = [...g]), (objective = b));
     },
     m = () =>
-      s.iterations >= r.maxCandidates
+      s.iterations >= analysisRequest.maxCandidates
         ? ((f = true), false)
         : (s.iterations++, true);
   if (a)
     if (
-      r.variables
-        .map((b) => Math.max(0, Math.floor(b.upper) - Math.ceil(b.lower) + 1))
-        .reduce((b, y) => b * y, 1) > r.maxCandidates
+      analysisRequest.variables
+        .map((variable) =>
+          Math.max(
+            0,
+            Math.floor(variable.upper) - Math.ceil(variable.lower) + 1,
+          ),
+        )
+        .reduce((b, y) => b * y, 1) > analysisRequest.maxCandidates
     )
       f = true;
     else {
@@ -419,7 +467,7 @@ function solveBoundedLinearModel(e, r, t = {}) {
           m() && p(y);
           return;
         }
-        const w = r.variables[y.length];
+        const w = analysisRequest.variables[y.length];
         for (let E = Math.ceil(w.lower); E <= Math.floor(w.upper); E++)
           b([...y, E]);
       };
@@ -428,7 +476,7 @@ function solveBoundedLinearModel(e, r, t = {}) {
   else {
     let g = 1;
     for (let b = 1; b <= o; b++) g = (g * (d.length - o + b)) / b;
-    if (g > r.maxCandidates) f = true;
+    if (g > analysisRequest.maxCandidates) f = true;
     else {
       const b = (y, w) => {
         if (y.length === o) {
@@ -462,17 +510,17 @@ function solveBoundedLinearModel(e, r, t = {}) {
         "Near-dependent constraints prevent a reliable optimum certificate. Rescale or simplify the constraints. Baseline unchanged.",
     };
   if (!l) return s;
-  const v = l.map((g) => (Object.is(g, -0) ? 0 : g));
+  const solution = l.map((g) => (Object.is(g, -0) ? 0 : g));
   return (
-    v.forEach((g, b) => {
-      const y = r.variables[b].cell;
+    solution.forEach((g, b) => {
+      const cell = analysisRequest.variables[b].cell;
       if (
-        e.sheets
-          .find((A) => A.id === y.sheetId)
+        workbook.sheets
+          .find((sheet) => sheet.id === cell.sheetId)
           .validations?.some(
-            (A) =>
-              parseRangeBounds(A.range, y.address) &&
-              !validateDataValidationRule(A, g),
+            (validation) =>
+              parseRangeBounds(validation.range, cell.address) &&
+              !validateDataValidationRule(validation, g),
           )
       )
         throw Error("The solution violates a changing-cell validation rule.");
@@ -482,24 +530,28 @@ function solveBoundedLinearModel(e, r, t = {}) {
       status: "optimal",
       success: true,
       message:
-        r.direction === "target"
+        analysisRequest.direction === "target"
           ? "A feasible solution reaches the target within tolerance."
           : "All bounded candidates were examined; the best feasible objective is reported within tolerance.",
-      solution: v,
-      objective: c,
+      solution: solution,
+      objective: objective,
       rows: [
         ["Changing cell", "Baseline", "Solution"],
-        ...r.variables.map((g, b) => [
-          `${e.sheets.find((y) => y.id === g.cell.sheetId).name}!${g.cell.address}`,
+        ...analysisRequest.variables.map((variable, b) => [
+          `${workbook.sheets.find((sheet) => sheet.id === variable.cell.sheetId).name}!${variable.cell.address}`,
           n.baseline[b],
-          v[b],
+          solution[b],
         ]),
-        ["Objective", evaluateLinearExpression(n.objective, n.baseline), c],
+        [
+          "Objective",
+          evaluateLinearExpression(n.objective, n.baseline),
+          objective,
+        ],
         ["Constraint", "Operator", "Residual (left − right)"],
-        ...n.constraints.map((g, b) => [
+        ...n.constraints.map((constraint, b) => [
           `Constraint ${b + 1}`,
-          g.operator,
-          evaluateLinearExpression(g.form, v),
+          constraint.operator,
+          evaluateLinearExpression(constraint.form, solution),
         ]),
       ],
     }
@@ -555,33 +607,39 @@ function fitLinearRegression(e, r) {
     throw Error(
       "Regression predictors are rank deficient or numerically dependent.",
     );
-  const a = [...n[0]].reverse(),
-    s = [...n[1]].reverse(),
-    d = evaluateRegressionFunction("TREND", [e.map((l) => [l]), r, r, true], {
-      retrieve: (l) => l,
-      issue: (l) => new Error(l),
-      isIssue: (l) => l instanceof Error,
-    }).map((l) => l[0]),
-    u = e.map((l, c) => assertFiniteStatistic(l - d[c]));
+  const coefficient = [...n[0]].reverse(),
+    standardErrors = [...n[1]].reverse(),
+    fitted = evaluateRegressionFunction(
+      "TREND",
+      [e.map((l) => [l]), r, r, true],
+      {
+        retrieve: (l) => l,
+        issue: (l) => new Error(l),
+        isIssue: (l) => l instanceof Error,
+      },
+    ).map((l) => l[0]),
+    residuals = e.map((l, c) => assertFiniteStatistic(l - fitted[c]));
   return {
-    coefficient: a,
-    standardErrors: s,
+    coefficient: coefficient,
+    standardErrors: standardErrors,
     df: o,
     r2: n[2][0],
     standardError: n[2][1],
     f: n[3][0],
     ssRegression: n[4][0],
     ssError: n[4][1],
-    fitted: d,
-    residuals: u,
+    fitted: fitted,
+    residuals: residuals,
   };
 }
-function computeDescriptiveStatistics(e, r, t = {}) {
-  const n = parseRangeAddress(r.range),
-    o = n.lastCol - n.firstCol + 1,
-    a = n.lastRow - n.firstRow;
+function computeDescriptiveStatistics(workbook, analysisRequest, t = {}) {
+  const rangeAddress = parseRangeAddress(analysisRequest.range),
+    o = rangeAddress.lastCol - rangeAddress.firstCol + 1,
+    a = rangeAddress.lastRow - rangeAddress.firstRow;
   if (
-    !/^[A-Z]{1,3}[1-9]\d{0,6}:[A-Z]{1,3}[1-9]\d{0,6}$/.test(r.range) ||
+    !/^[A-Z]{1,3}[1-9]\d{0,6}:[A-Z]{1,3}[1-9]\d{0,6}$/.test(
+      analysisRequest.range,
+    ) ||
     a < 1 ||
     a > 500 ||
     o > 6 ||
@@ -591,50 +649,71 @@ function computeDescriptiveStatistics(e, r, t = {}) {
       "Select a headed rectangle with 1–500 data rows, 1–6 columns and at most 2,000 cells.",
     );
   (validateAnalysisSource(
-    e,
-    { sheetId: r.sheetId, address: r.range.split(":")[0] },
+    workbook,
+    {
+      sheetId: analysisRequest.sheetId,
+      address: analysisRequest.range.split(":")[0],
+    },
     t,
   ),
-    assertAutomaticCalculation(e));
-  const s = readSourceHeaders(e, [{ sheetId: r.sheetId, range: r.range }], t),
-    d = s.snapshots[0];
-  for (const b of s.dependencyCells)
-    validateAnalysisSource(e, { sheetId: b.sheetId, address: b.address }, t);
-  const u = [],
+    assertAutomaticCalculation(workbook));
+  const sourceHeaders = readSourceHeaders(
+      workbook,
+      [{ sheetId: analysisRequest.sheetId, range: analysisRequest.range }],
+      t,
+    ),
+    d = sourceHeaders.snapshots[0];
+  for (const dependencyCell of sourceHeaders.dependencyCells)
+    validateAnalysisSource(
+      workbook,
+      { sheetId: dependencyCell.sheetId, address: dependencyCell.address },
+      t,
+    );
+  const exclusions = [],
     l = [];
-  for (const b of d.records)
-    if (b.values.some((y) => typeof y != "number" || !Number.isFinite(y))) {
-      if (r.missing === "reject")
+  for (const record of d.records)
+    if (
+      record.values.some(
+        (value) => typeof value != "number" || !Number.isFinite(value),
+      )
+    ) {
+      if (analysisRequest.missing === "reject")
         throw Error(
-          `Row ${b.row} includes blank or nonnumeric values. Correct it or explicitly exclude incomplete rows.`,
+          `Row ${record.row} includes blank or nonnumeric values. Correct it or explicitly exclude incomplete rows.`,
         );
-      u.push({
-        row: b.row,
-        locator: b.locator,
+      exclusions.push({
+        row: record.row,
+        locator: record.locator,
         reason:
           "Complete-case exclusion: at least one blank, text or boolean value.",
       });
-    } else l.push({ ...b, values: b.values });
-  const c = l.length,
+    } else l.push({ ...record, values: record.values });
+  const included = l.length,
     h = l.map((b) => b.values),
-    f = d.headers,
+    headers = d.headers,
     p = () => {
       if (o !== 1)
         throw Error("This analysis requires exactly one numeric column.");
       return h.map((b) => b[0]);
     };
-  if (c < (r.method === "histogram" || r.method === "distribution" ? 1 : 2))
+  if (
+    included <
+    (analysisRequest.method === "histogram" ||
+    analysisRequest.method === "distribution"
+      ? 1
+      : 2)
+  )
     throw Error("Insufficient numeric observations after exclusions.");
-  const m = [
+  const assumptions = [
     "Headed numeric inputs; no text-to-number or date conversion. Complete-case exclusions apply to every selected column.",
     "Hidden cells require explicit authorization; calculation errors, dynamic/volatile formulas and generated report inputs are refused.",
     "Binary64 arithmetic; local MIT implementation and the existing pinned MIT fast-formula-parser distribution primitives. No proprietary engine or new license dependency.",
   ];
-  let v = "",
-    g = [];
-  if (r.method === "descriptive") {
-    ((v = "Two-pass sample moments and sorted inclusive quartiles"),
-      m.push(
+  let algorithm = "",
+    rows = [];
+  if (analysisRequest.method === "descriptive") {
+    ((algorithm = "Two-pass sample moments and sorted inclusive quartiles"),
+      assumptions.push(
         "Sample variance and standard deviation use n − 1. Median and quartiles use linear inclusive interpolation.",
         "Independent reference: Python statistics and analytic fixtures in ANALYSIS-VERIFICATION.json.",
       ));
@@ -652,60 +731,68 @@ function computeDescriptiveStatistics(e, r, t = {}) {
         "Maximum",
         "Range",
       ],
-      y = f.map((w, E) => {
+      y = headers.map((header, E) => {
         const A = h.map((O) => O[E]),
           k = [...A].sort((O, j) => O - j),
-          F = computeSampleVariance(A),
+          sampleVariance = computeSampleVariance(A),
           I = (O) => {
-            const j = (c - 1) * O,
+            const j = (included - 1) * O,
               z = Math.floor(j);
             return k[z] + (k[Math.ceil(j)] - k[z]) * (j - z);
           };
         return [
-          c,
+          included,
           assertFiniteStatistic(sumDecimalPartsToNumber(A)),
           assertFiniteStatistic(exactAverageOfNumbers(A)),
-          assertFiniteStatistic(Math.sqrt(F / c)),
+          assertFiniteStatistic(Math.sqrt(sampleVariance / included)),
           I(0.5),
-          assertFiniteStatistic(Math.sqrt(F)),
-          F,
+          assertFiniteStatistic(Math.sqrt(sampleVariance)),
+          sampleVariance,
           k[0],
           I(0.25),
           I(0.75),
-          k[c - 1],
-          assertFiniteStatistic(k[c - 1] - k[0]),
+          k[included - 1],
+          assertFiniteStatistic(k[included - 1] - k[0]),
         ];
       });
-    g = [["Statistic", ...f], ...b.map((w, E) => [w, ...y.map((A) => A[E])])];
-  } else if (r.method === "correlation" || r.method === "covariance") {
+    rows = [
+      ["Statistic", ...headers],
+      ...b.map((w, E) => [w, ...y.map((A) => A[E])]),
+    ];
+  } else if (
+    analysisRequest.method === "correlation" ||
+    analysisRequest.method === "covariance"
+  ) {
     if (o < 2) throw Error("Select at least two columns for a matrix.");
-    ((v =
-      r.method === "correlation"
+    ((algorithm =
+      analysisRequest.method === "correlation"
         ? "Pearson product-moment correlation"
         : "Two-pass sample covariance"),
-      m.push(
+      assumptions.push(
         "Every matrix entry uses the same complete-case observations; covariance uses n − 1.",
         "Independent reference: analytic matrices and Python statistics in ANALYSIS-VERIFICATION.json.",
       ));
-    const b = f.map((w, E) => exactAverageOfNumbers(h.map((A) => A[E]))),
-      y = f.map((w, E) =>
+    const b = headers.map((header, E) =>
+        exactAverageOfNumbers(h.map((A) => A[E])),
+      ),
+      y = headers.map((header, E) =>
         assertFiniteStatistic(
           sumDecimalPartsToNumber(h.map((A) => (A[E] - b[E]) ** 2)),
         ),
       );
-    if (r.method === "correlation" && y.some((w) => w === 0))
+    if (analysisRequest.method === "correlation" && y.some((w) => w === 0))
       throw Error("Correlation is undefined for a constant column.");
-    g = [
-      [r.method, ...f],
-      ...f.map((w, E) => [
-        w,
-        ...f.map((A, k) => {
+    rows = [
+      [analysisRequest.method, ...headers],
+      ...headers.map((header, E) => [
+        header,
+        ...headers.map((header, k) => {
           const F = assertFiniteStatistic(
             sumDecimalPartsToNumber(
               h.map((I) => (I[E] - b[E]) * (I[k] - b[k])),
             ),
           );
-          return r.method === "correlation"
+          return analysisRequest.method === "correlation"
             ? Math.max(
                 -1,
                 Math.min(
@@ -713,11 +800,11 @@ function computeDescriptiveStatistics(e, r, t = {}) {
                   assertFiniteStatistic(F / Math.sqrt(y[E]) / Math.sqrt(y[k])),
                 ),
               )
-            : assertFiniteStatistic(F / (c - 1));
+            : assertFiniteStatistic(F / (included - 1));
         }),
       ]),
     ];
-  } else if (r.method === "regression") {
+  } else if (analysisRequest.method === "regression") {
     if (o < 2)
       throw Error(
         "Regression requires Y in the first column and one or more X columns.",
@@ -727,13 +814,14 @@ function computeDescriptiveStatistics(e, r, t = {}) {
         h.map((A) => A.slice(1)),
       ),
       y = evaluateDistributionPrimitive("T.INV.2T", [0.05, b.df]);
-    ((v = "Ordinary least squares with intercept; centered, scaled pivoted QR"),
-      m.push(
+    ((algorithm =
+      "Ordinary least squares with intercept; centered, scaled pivoted QR"),
+      assumptions.push(
         "First column is Y; remaining columns are X. Independent errors, linear mean and constant error variance; t/F inference additionally assumes normal errors.",
         "No automatic causal interpretation. Rank deficient and insufficient samples are refused. Perfect fits have undefined t/F values shown explicitly.",
         "Independent certified reference: NIST StRD Norris, 36 observations; see ANALYSIS-VERIFICATION.json.",
       ));
-    const w = ["Intercept", ...f.slice(1)].map((A, k) => {
+    const w = ["Intercept", ...headers.slice(1)].map((A, k) => {
         const F = b.standardErrors[k],
           I = b.coefficient[k],
           O = F === 0 ? null : assertFiniteStatistic(I / F);
@@ -755,9 +843,9 @@ function computeDescriptiveStatistics(e, r, t = {}) {
         ];
       }),
       E = typeof b.f == "number" ? b.f : null;
-    g = [
+    rows = [
       ["Metric", "Value"],
-      ["Observations", c],
+      ["Observations", included],
       ["R squared", b.r2],
       ["Residual standard error", b.standardError],
       ["Residual df", b.df],
@@ -788,25 +876,25 @@ function computeDescriptiveStatistics(e, r, t = {}) {
       ["Source row", "Observed Y", "Fitted Y", "Residual"],
       ...l.map((A, k) => [A.row, A.values[0], b.fitted[k], b.residuals[k]]),
     ];
-  } else if (r.method === "histogram") {
+  } else if (analysisRequest.method === "histogram") {
     const b = p(),
-      y = r.bins;
-    if (!y?.length || y.some((A, k) => k > 0 && A <= y[k - 1]))
+      bins = analysisRequest.bins;
+    if (!bins?.length || bins.some((bin, k) => k > 0 && bin <= bins[k - 1]))
       throw Error(
         "Histogram bin upper bounds must be finite and strictly increasing.",
       );
-    ((v = "Explicit right-closed histogram bins"),
-      m.push(
+    ((algorithm = "Explicit right-closed histogram bins"),
+      assumptions.push(
         "First bin includes all values at or below its upper bound; later bins are (previous, upper]; last bin is overflow.",
         "Independent reference: exact integer counting fixtures in ANALYSIS-VERIFICATION.json.",
       ));
-    const w = Array(y.length + 1).fill(0);
+    const w = Array(bins.length + 1).fill(0);
     b.forEach((A) => {
-      const k = y.findIndex((F) => A <= F);
-      w[k < 0 ? y.length : k]++;
+      const k = bins.findIndex((bin) => A <= bin);
+      w[k < 0 ? bins.length : k]++;
     });
     let E = 0;
-    g = [
+    rows = [
       [
         "Upper bound",
         "Frequency",
@@ -816,59 +904,79 @@ function computeDescriptiveStatistics(e, r, t = {}) {
       ...w.map(
         (A, k) => (
           (E += A),
-          [k === y.length ? "Overflow" : y[k], A, A / c, E / c]
+          [
+            k === bins.length ? "Overflow" : bins[k],
+            A,
+            A / included,
+            E / included,
+          ]
         ),
       ),
     ];
-  } else if (r.method === "distribution") {
+  } else if (analysisRequest.method === "distribution") {
     const b = p();
-    ((v =
+    ((algorithm =
       "Pinned analytic probability density/mass and cumulative distribution"),
-      m.push(
+      assumptions.push(
         "Selected cells are evaluation points, not a fitted sample. Distribution parameters are supplied explicitly.",
         "Independent reference: Python NormalDist, math.comb and factorial probability sums in ANALYSIS-VERIFICATION.json.",
       ));
-    const y = r.distribution ?? "normal";
+    const y = analysisRequest.distribution ?? "normal";
     let w, E;
     if (y === "normal") {
-      if (r.mean === undefined || r.standardDeviation === undefined)
+      if (
+        analysisRequest.mean === undefined ||
+        analysisRequest.standardDeviation === undefined
+      )
         throw Error(
           "Normal distribution needs a finite mean and positive standard deviation.",
         );
       ((E = "NORM.DIST"),
-        (w = (A, k) => [A, r.mean, r.standardDeviation, k]),
-        m.push(
-          `Normal mean ${r.mean}; standard deviation ${r.standardDeviation}.`,
+        (w = (A, k) => [
+          A,
+          analysisRequest.mean,
+          analysisRequest.standardDeviation,
+          k,
+        ]),
+        assumptions.push(
+          `Normal mean ${analysisRequest.mean}; standard deviation ${analysisRequest.standardDeviation}.`,
         ));
     } else if (y === "binomial") {
       if (
-        r.trials === undefined ||
-        r.probability === undefined ||
-        b.some((A) => !Number.isInteger(A) || A < 0 || A > r.trials)
+        analysisRequest.trials === undefined ||
+        analysisRequest.probability === undefined ||
+        b.some(
+          (A) => !Number.isInteger(A) || A < 0 || A > analysisRequest.trials,
+        )
       )
         throw Error(
           "Binomial points must be integers from zero through the explicit trial count; provide p in [0,1].",
         );
       ((E = "BINOM.DIST"),
-        (w = (A, k) => [A, r.trials, r.probability, k]),
-        m.push(
-          `Independent trials ${r.trials}; success probability ${r.probability}.`,
+        (w = (A, k) => [
+          A,
+          analysisRequest.trials,
+          analysisRequest.probability,
+          k,
+        ]),
+        assumptions.push(
+          `Independent trials ${analysisRequest.trials}; success probability ${analysisRequest.probability}.`,
         ));
     } else {
       if (
-        r.lambda === undefined ||
+        analysisRequest.lambda === undefined ||
         b.some((A) => !Number.isInteger(A) || A < 0 || A > 1e3)
       )
         throw Error(
           "Poisson points must be integers from zero through 1,000; provide a positive rate.",
         );
       ((E = "POISSON.DIST"),
-        (w = (A, k) => [A, r.lambda, k]),
-        m.push(
-          `Poisson rate ${r.lambda}; independent arrivals and constant rate.`,
+        (w = (A, k) => [A, analysisRequest.lambda, k]),
+        assumptions.push(
+          `Poisson rate ${analysisRequest.lambda}; independent arrivals and constant rate.`,
         ));
     }
-    g = [
+    rows = [
       [
         "Point",
         y === "normal" ? "Density" : "Probability mass",
@@ -898,10 +1006,10 @@ function computeDescriptiveStatistics(e, r, t = {}) {
       throw Error(
         "Forecast periods must be strictly increasing and equally spaced without gaps.",
       );
-    const E = r.horizon ?? 6,
-      A = r.forecast ?? "linear",
+    const E = analysisRequest.horizon ?? 6,
+      A = analysisRequest.forecast ?? "linear",
       k = Array.from({ length: E }, (j, z) =>
-        assertFiniteStatistic(b[c - 1] + w * (z + 1)),
+        assertFiniteStatistic(b[included - 1] + w * (z + 1)),
       ),
       F = [],
       I = [];
@@ -910,7 +1018,7 @@ function computeDescriptiveStatistics(e, r, t = {}) {
         y,
         b.map((V) => [V]),
       );
-      v = "Linear trend forecast using centered QR least squares";
+      algorithm = "Linear trend forecast using centered QR least squares";
       const z = evaluateRegressionFunction(
         "TREND",
         [y.map((V) => [V]), b.map((V) => [V]), k.map((V) => [V]), true],
@@ -923,11 +1031,11 @@ function computeDescriptiveStatistics(e, r, t = {}) {
       (F.push(...z.map((V) => V[0])),
         j.fitted.forEach((V, D) => I.push({ index: D, value: V })));
     } else if (A === "moving-average") {
-      const j = r.window ?? 3;
-      if (j >= c)
+      const j = analysisRequest.window ?? 3;
+      if (j >= included)
         throw Error("Moving average needs more observations than its window.");
-      v = `Trailing ${j}-period moving average with recursive forecasts`;
-      for (let V = j; V < c; V++)
+      algorithm = `Trailing ${j}-period moving average with recursive forecasts`;
+      for (let V = j; V < included; V++)
         I.push({ index: V, value: exactAverageOfNumbers(y.slice(V - j, V)) });
       const z = [...y];
       for (let V = 0; V < E; V++) {
@@ -935,25 +1043,25 @@ function computeDescriptiveStatistics(e, r, t = {}) {
         (F.push(D), z.push(D));
       }
     } else {
-      if (c < 3)
+      if (included < 3)
         throw Error("Exponential smoothing needs at least three observations.");
-      const j = r.alpha ?? 0.3;
-      v =
+      const j = analysisRequest.alpha ?? 0.3;
+      algorithm =
         "Simple exponential smoothing with fixed alpha and first-observation initialization";
       let z = y[0];
-      for (let V = 1; V < c; V++)
+      for (let V = 1; V < included; V++)
         (I.push({ index: V, value: z }),
           (z = assertFiniteStatistic(j * y[V] + (1 - j) * z)));
       (F.push(...k.map(() => z)),
-        m.push(`Alpha ${j}; no trend or seasonal component.`));
+        assumptions.push(`Alpha ${j}; no trend or seasonal component.`));
     }
     const O = I.map((j) => assertFiniteStatistic(y[j.index] - j.value));
-    (m.push(
+    (assumptions.push(
       "Numeric equally spaced periods; no seasonality, automatic tuning, ETS intervals or causal claims. Extrapolation can be unreliable.",
       "Error metrics use fitted/in-sample observations, not an independent holdout. No uncertainty interval is claimed.",
       "Independent reference: analytic forecasts and Python calculations in ANALYSIS-VERIFICATION.json.",
     ),
-      (g = [
+      (rows = [
         ["Metric", "Value"],
         ["Fitted observations", I.length],
         ["In-sample MAE", exactAverageOfNumbers(O.map(Math.abs))],
@@ -975,94 +1083,116 @@ function computeDescriptiveStatistics(e, r, t = {}) {
         ]),
       ]));
   }
-  for (const b of g)
-    for (const y of b) typeof y == "number" && assertFiniteStatistic(y);
+  for (const row of rows)
+    for (const y of row) typeof y == "number" && assertFiniteStatistic(y);
   return {
     status: "complete",
     success: true,
     message:
       "Calculation completed for the declared method and included observations. Review the assumptions and exclusions before saving.",
-    algorithm: v,
-    assumptions: m,
-    exclusions: u,
-    included: c,
+    algorithm: algorithm,
+    assumptions: assumptions,
+    exclusions: exclusions,
+    included: included,
     inspected: d.records.length,
     iterations: 0,
-    rows: g,
+    rows: rows,
   };
 }
 const analysisResultCache = new WeakMap();
-function runAnalysisRequest(e, r, t = {}) {
-  const n = parseAnalysisRequest(r),
-    o = normalizeAnalysisPermissions(e, t),
+function runAnalysisRequest(workbook, request, t = {}) {
+  const analysisRequest = parseAnalysisRequest(request),
+    analysisPermissions = normalizeAnalysisPermissions(workbook, t),
     a =
-      n.kind === "solver"
-        ? solveBoundedLinearModel(e, n, t)
-        : computeDescriptiveStatistics(e, n, t),
+      analysisRequest.kind === "solver"
+        ? solveBoundedLinearModel(workbook, analysisRequest, t)
+        : computeDescriptiveStatistics(workbook, analysisRequest, t),
     s = {
-      request: n,
+      request: analysisRequest,
       result: a,
-      workbookHash: fingerprintCanonicalValue(e),
-      contextHash: fingerprintCanonicalValue(o),
-      sourceHash: p_(e),
+      workbookHash: fingerprintCanonicalValue(workbook),
+      contextHash: fingerprintCanonicalValue(analysisPermissions),
+      sourceHash: p_(workbook),
     };
   return (analysisResultCache.set(s, fingerprintCanonicalValue(s)), s);
 }
 function buildAnalysisReport(e) {
-  const r = e.result;
+  const result = e.result;
   return [
     [
       e.request.kind === "solver"
         ? "Solver report"
         : "Statistical analysis report",
     ],
-    ["Outcome", r.status],
-    ["Message", r.message],
-    ["Algorithm", r.algorithm],
+    ["Outcome", result.status],
+    ["Message", result.message],
+    ["Algorithm", result.algorithm],
     ["Engine", analysisFormatVersion],
     [
       "License",
       "MIT; existing MIT distribution dependency; no proprietary engine",
     ],
-    ["Inspected", r.inspected],
-    ["Included", r.included],
-    ["Excluded", r.exclusions.length],
-    ["Candidates examined", r.iterations],
-    ...r.assumptions.map((t, n) => [`Assumption ${n + 1}`, t]),
+    ["Inspected", result.inspected],
+    ["Included", result.included],
+    ["Excluded", result.exclusions.length],
+    ["Candidates examined", result.iterations],
+    ...result.assumptions.map((assumption, n) => [
+      `Assumption ${n + 1}`,
+      assumption,
+    ]),
     [],
-    ...r.rows,
+    ...result.rows,
     [],
     ["Excluded source row", "Reason", "Locator"],
-    ...r.exclusions.map((t) => [t.row, t.reason, t.locator]),
+    ...result.exclusions.map((exclusion) => [
+      exclusion.row,
+      exclusion.reason,
+      exclusion.locator,
+    ]),
   ];
 }
-function buildAnalysisReportCells(e, r) {
-  const t = parseRangeAddress(r);
-  if ((t.lastRow - t.firstRow + 1) * (t.lastCol - t.firstCol + 1) > 2e4)
+function buildAnalysisReportCells(worksheetRecord, outputRange) {
+  const rangeAddress = parseRangeAddress(outputRange);
+  if (
+    (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+      (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
+    2e4
+  )
     throw Error("Analysis output exceeds 20,000 cells.");
   const n = [];
-  for (let o = t.firstRow; o <= t.lastRow; o++)
-    for (let a = t.firstCol; a <= t.lastCol; a++) {
-      const s = e.cells[`${columnIndexToLetters(a)}${o + 1}`];
+  for (
+    let firstRow = rangeAddress.firstRow;
+    firstRow <= rangeAddress.lastRow;
+    firstRow++
+  )
+    for (
+      let firstCol = rangeAddress.firstCol;
+      firstCol <= rangeAddress.lastCol;
+      firstCol++
+    ) {
+      const cell =
+        worksheetRecord.cells[
+          `${columnIndexToLetters(firstCol)}${firstRow + 1}`
+        ];
       n.push({
-        raw: s?.raw ?? null,
-        literal: !!s?.literal,
+        raw: cell?.raw ?? null,
+        literal: !!cell?.literal,
       });
     }
   return fingerprintCanonicalValue(n);
 }
-function commitAnalysisResult(e, r, t, n = {}) {
-  const o = normalizeAnalysisPermissions(e, n);
-  if (o.readOnly) throw Error("This workbook is read-only.");
+function commitAnalysisResult(workbook, r, t, n = {}) {
+  const analysisPermissions = normalizeAnalysisPermissions(workbook, n);
+  if (analysisPermissions.readOnly) throw Error("This workbook is read-only.");
   if (
-    (assertWorkbookStructureEditable(e),
+    (assertWorkbookStructureEditable(workbook),
     !["report", "apply-solution"].includes(t))
   )
     throw Error("Choose Save report or Apply solution and report.");
   if (
     analysisResultCache.get(r) !== fingerprintCanonicalValue(r) ||
-    r.workbookHash !== fingerprintCanonicalValue(e) ||
-    r.contextHash !== fingerprintCanonicalValue(o)
+    r.workbookHash !== fingerprintCanonicalValue(workbook) ||
+    r.contextHash !== fingerprintCanonicalValue(analysisPermissions)
   )
     throw Error(
       "The preview, workbook or host permissions changed. Preview again.",
@@ -1075,39 +1205,42 @@ function commitAnalysisResult(e, r, t, n = {}) {
   )
     throw Error("Only Solver can apply changing-cell values.");
   if (
-    e.sheets.some(
-      (h) => h.name.toLowerCase() === r.request.outputName.toLowerCase(),
+    workbook.sheets.some(
+      (sheet) =>
+        sheet.name.toLowerCase() === r.request.outputName.toLowerCase(),
     )
   )
     throw Error("The output worksheet name is already in use.");
-  inspectOutputNameSafety(e, r.request.outputName);
-  const a = normalizeWorkbookInput(e);
+  inspectOutputNameSafety(workbook, r.request.outputName);
+  const workbookInput = normalizeWorkbookInput(workbook);
   t === "apply-solution" &&
     r.request.kind === "solver" &&
-    r.request.variables.forEach((h, f) => {
-      const p = a.sheets.find((m) => m.id === h.cell.sheetId);
-      p.cells[h.cell.address] = {
-        ...p.cells[h.cell.address],
+    r.request.variables.forEach((variable, f) => {
+      const sheet = workbookInput.sheets.find(
+        (sheet) => sheet.id === variable.cell.sheetId,
+      );
+      sheet.cells[variable.cell.address] = {
+        ...sheet.cells[variable.cell.address],
         raw: r.result.solution[f],
       };
     });
-  const s = createWorksheetRecord(r.request.outputName),
-    d = buildAnalysisReport(r),
-    u = Math.max(...d.map((h) => h.length));
-  if (d.length * u > 2e4)
+  const worksheetRecord = createWorksheetRecord(r.request.outputName),
+    analysisReport = buildAnalysisReport(r),
+    u = Math.max(...analysisReport.map((h) => h.length));
+  if (analysisReport.length * u > 2e4)
     throw Error("Analysis report exceeds the output budget.");
-  (d.forEach((h, f) =>
-    h.forEach((p, m) => {
-      s.cells[`${columnIndexToLetters(m)}${f + 1}`] = {
-        raw: p,
-        ...(typeof p == "string" ? { literal: true } : {}),
+  (analysisReport.forEach((h, f) =>
+    h.forEach((raw, m) => {
+      worksheetRecord.cells[`${columnIndexToLetters(m)}${f + 1}`] = {
+        raw: raw,
+        ...(typeof raw == "string" ? { literal: true } : {}),
         ...(f === 0
           ? { style: { bold: true, fill: "#362C63", color: "#FFFFFF" } }
           : {}),
       };
     }),
   ),
-    (s.columnWidths = {
+    (worksheetRecord.columnWidths = {
       0: 210,
       1: 260,
       2: 180,
@@ -1116,42 +1249,42 @@ function commitAnalysisResult(e, r, t, n = {}) {
       5: 140,
       6: 140,
     }),
-    (s.frozenRows = 1));
-  const l = `A1:${columnIndexToLetters(u - 1)}${d.length}`;
-  ((s.analysisReport = {
+    (worksheetRecord.frozenRows = 1));
+  const outputRange = `A1:${columnIndexToLetters(u - 1)}${analysisReport.length}`;
+  ((worksheetRecord.analysisReport = {
     engine: analysisFormatVersion,
     request: structuredClone(r.request),
     result: structuredClone(r.result),
     definitionHash: fingerprintCanonicalValue(r.request),
-    sourceHash: p_(a),
-    outputHash: buildAnalysisReportCells(s, l),
-    outputRange: l,
+    sourceHash: p_(workbookInput),
+    outputHash: buildAnalysisReportCells(worksheetRecord, outputRange),
+    outputRange: outputRange,
     createdAt: new Date().toISOString(),
-    sourceRevision: e.revision,
+    sourceRevision: workbook.revision,
     includeHidden: !!n.includeHidden,
     applied: t === "apply-solution",
   }),
-    a.sheets.push(s));
-  const c = normalizeWorkbookInput(a);
+    workbookInput.sheets.push(worksheetRecord));
+  const c = normalizeWorkbookInput(workbookInput);
   return (analysisResultCache.delete(r), c);
 }
-function readSavedAnalysisReport(e, r, t = {}) {
-  const n = e.sheets.find((d) => d.id === r),
-    o = n?.analysisReport;
-  if (!n || !o)
+function readSavedAnalysisReport(workbook, sheetId, t = {}) {
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
+    o = sheet?.analysisReport;
+  if (!sheet || !o)
     return { status: "unavailable", message: "No saved analysis report." };
-  const a = normalizeAnalysisPermissions(e, t);
+  const analysisPermissions = normalizeAnalysisPermissions(workbook, t);
   if (
-    !a.allowedSheetIds.includes(r) ||
-    (!a.includeHidden && (n.hidden || n.veryHidden))
+    !analysisPermissions.allowedSheetIds.includes(sheetId) ||
+    (!analysisPermissions.includeHidden && (sheet.hidden || sheet.veryHidden))
   )
     return {
       status: "unavailable",
       message: "The report is outside the authorized context.",
     };
   if (
-    (o.includeHidden && !a.includeHidden) ||
-    a.allowedSheetIds.length < e.sheets.length
+    (o.includeHidden && !analysisPermissions.includeHidden) ||
+    analysisPermissions.allowedSheetIds.length < workbook.sheets.length
   )
     return {
       status: "unavailable",
@@ -1160,26 +1293,26 @@ function readSavedAnalysisReport(e, r, t = {}) {
     };
   if (
     o.definitionHash !== fingerprintCanonicalValue(o.request) ||
-    o.sourceHash !== p_(e) ||
-    o.outputHash !== buildAnalysisReportCells(n, o.outputRange)
+    o.sourceHash !== p_(workbook) ||
+    o.outputHash !== buildAnalysisReportCells(sheet, o.outputRange)
   )
     return {
       status: "stale",
       message:
         "Source data, calculation settings or report cells changed. Preview the analysis again; saved values are historical.",
     };
-  const s = createWorksheetRecord("Expected");
+  const worksheetRecord = createWorksheetRecord("Expected");
   return (
     buildAnalysisReport(o).forEach((d, u) =>
       d.forEach(
-        (l, c) =>
-          (s.cells[`${columnIndexToLetters(c)}${u + 1}`] = {
-            raw: l,
-            ...(typeof l == "string" ? { literal: true } : {}),
+        (raw, c) =>
+          (worksheetRecord.cells[`${columnIndexToLetters(c)}${u + 1}`] = {
+            raw: raw,
+            ...(typeof raw == "string" ? { literal: true } : {}),
           }),
       ),
     ),
-    buildAnalysisReportCells(s, o.outputRange) !== o.outputHash
+    buildAnalysisReportCells(worksheetRecord, o.outputRange) !== o.outputHash
       ? {
           status: "stale",
           message: "The saved result and report cells disagree. Preview again.",

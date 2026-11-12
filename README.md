@@ -139,7 +139,7 @@ export function Workbook() {
 }
 ```
 
-The library was rebuilt after the original SDK source was lost: its export names were chosen for the rebuild, it has no TypeScript declarations, and it is not published to a registry. `npm run test:lib` mounts the built library in a host page and drives it in a browser. See [Using Ledgerglass as a library](docs/LIBRARY.md) for the props, the assistant adapter contract and the model functions.
+The library was rebuilt after the original SDK source was lost: its export names were chosen for the rebuild, its TypeScript declarations (`types/`) are hand-written for the public surface, and it is not published to a registry. `npm run test:lib` mounts the built library in a host page and drives it in a browser. See [Using Ledgerglass as a library](docs/LIBRARY.md) for the props, the assistant adapter contract and the model functions.
 
 **As an iframe.** The served application can be embedded if the host page's Content-Security-Policy and the `FRAME_ANCESTORS` setting allow it (see [Docker and scaling](#docker-and-scaling)). It is a visual embed; no general-purpose `postMessage` workbook API is supplied.
 

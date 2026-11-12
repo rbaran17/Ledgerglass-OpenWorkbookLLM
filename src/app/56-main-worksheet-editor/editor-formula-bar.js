@@ -8,6 +8,10 @@ import {
 } from "../53-find-replace-go-to.js";
 
 function EditorFormulaBar({
+  cellEditActions,
+  formulaEntryActions,
+  viewAndSelectionActions,
+  navigationActions,
   formulaEntryState,
   navigationState,
   selectionState,
@@ -17,15 +21,6 @@ function EditorFormulaBar({
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  syncFormulaEditorSelection,
-  isFormulaEditingLocked,
-  handleFormulaKeyDown,
-  beginCellEdit,
-  focusGridSurface,
-  cancelCellEdit,
-  commitCellEdit,
-  commitNameBoxReference,
-  moveSelectionAfterCommit,
 }) {
   // The suggestion list belongs to the formula bar alone, so its ref lives here.
   const formulaSuggestionListRef = ne.useRef(null);
@@ -36,11 +31,12 @@ function EditorFormulaBar({
         className: "lg-name-box",
         "aria-label": text("Selected range"),
         value: navigationState.goToReferenceText,
-        onChange: (fe) => navigationState.setGoToReferenceText(fe.target.value),
-        onBlur: commitNameBoxReference,
-        onKeyDown: (fe) => {
-          fe.key === "Enter" &&
-            (commitNameBoxReference(),
+        onChange: (event) =>
+          navigationState.setGoToReferenceText(event.target.value),
+        onBlur: navigationActions.commitNameBoxReference,
+        onKeyDown: (event) => {
+          event.key === "Enter" &&
+            (navigationActions.commitNameBoxReference(),
             selectionState.gridContainerRef.current?.focus());
         },
         lang: language("Selected range"),
@@ -49,20 +45,21 @@ function EditorFormulaBar({
       i.jsx("button", {
         className: "lg-formula-cancel",
         "aria-label": text("Cancel cell edit"),
-        onPointerDown: (fe) => fe.preventDefault(),
-        onMouseDown: (fe) => fe.preventDefault(),
-        onClick: cancelCellEdit,
+        onPointerDown: (event) => event.preventDefault(),
+        onMouseDown: (event) => event.preventDefault(),
+        onClick: cellEditActions.cancelCellEdit,
         lang: language("Cancel cell edit"),
         "data-ui-label": "Cancel cell edit",
         children: i.jsx(X, { size: 15 }),
       }),
       i.jsx("button", {
         "aria-label": text("Apply cell value"),
-        disabled: isFormulaEditingLocked(),
-        onPointerDown: (fe) => fe.preventDefault(),
-        onMouseDown: (fe) => fe.preventDefault(),
+        disabled: cellEditActions.isFormulaEditingLocked(),
+        onPointerDown: (event) => event.preventDefault(),
+        onMouseDown: (event) => event.preventDefault(),
         onClick: () => {
-          commitCellEdit() && focusGridSurface();
+          cellEditActions.commitCellEdit() &&
+            viewAndSelectionActions.focusGridSurface();
         },
         lang: language("Apply cell value"),
         "data-ui-label": "Apply cell value",
@@ -75,56 +72,66 @@ function EditorFormulaBar({
       i.jsx("input", {
         ref: formulaEntryState.formulaInputRef,
         "aria-label": text("Formula bar"),
-        readOnly: isFormulaEditingLocked(),
+        readOnly: cellEditActions.isFormulaEditingLocked(),
         value: formulaEntryState.cellEditText,
         "aria-describedby":
           formulaEntryState.activeCellEditRef.current?.value.startsWith("=")
             ? `${editorIdPrefix}-formula-help`
             : undefined,
-        onFocus: (fe) => {
+        onFocus: (event) => {
           (!formulaEntryState.activeCellEditRef.current &&
             formulaEntryState.cellEditText.startsWith("=") &&
             !isEditingLocked &&
-            beginCellEdit(formulaEntryState.cellEditText),
+            cellEditActions.beginCellEdit(formulaEntryState.cellEditText),
             formulaEntryState.setIsFormulaBarFocused(true),
-            syncFormulaEditorSelection(fe.currentTarget));
+            cellEditActions.syncFormulaEditorSelection(event.currentTarget));
         },
-        onSelect: (fe) => {
-          (syncFormulaEditorSelection(fe.currentTarget),
+        onSelect: (event) => {
+          (cellEditActions.syncFormulaEditorSelection(event.currentTarget),
             formulaEntryState.setFormulaCaretPosition(
-              fe.currentTarget.selectionStart ??
+              event.currentTarget.selectionStart ??
                 formulaEntryState.cellEditText.length,
             ));
         },
-        onChange: (fe) => {
-          (beginCellEdit(fe.target.value),
-            syncFormulaEditorSelection(fe.currentTarget, true),
+        onChange: (event) => {
+          (cellEditActions.beginCellEdit(event.target.value),
+            cellEditActions.syncFormulaEditorSelection(
+              event.currentTarget,
+              true,
+            ),
             formulaEntryState.setFormulaCaretPosition(
-              fe.target.selectionStart ?? fe.target.value.length,
+              event.target.selectionStart ?? event.target.value.length,
             ));
         },
-        onBlur: (fe) => {
-          isWithinFormulaSuggestions(fe.currentTarget, fe.relatedTarget) ||
-            (formulaEntryState.setIsFormulaBarFocused(false), commitCellEdit());
+        onBlur: (event) => {
+          isWithinFormulaSuggestions(
+            event.currentTarget,
+            event.relatedTarget,
+          ) ||
+            (formulaEntryState.setIsFormulaBarFocused(false),
+            cellEditActions.commitCellEdit());
         },
-        onKeyDown: (fe) => {
-          if (!fe.nativeEvent.isComposing) {
-            if (fe.key === "Escape") {
+        onKeyDown: (event) => {
+          if (!event.nativeEvent.isComposing) {
+            if (event.key === "Escape") {
               if (
                 !formulaEntryState.formulaPointerStateRef.current.span &&
                 formulaEntryState.cellEditText.length > 1 &&
-                formulaSuggestionListRef.current?.handleKeyDown(fe)
+                formulaSuggestionListRef.current?.handleKeyDown(event)
               )
                 return;
-              (fe.preventDefault(), cancelCellEdit());
+              (event.preventDefault(), cellEditActions.cancelCellEdit());
               return;
             }
-            handleFormulaKeyDown(fe) ||
-              formulaSuggestionListRef.current?.handleKeyDown(fe) ||
-              ((fe.key === "Enter" || fe.key === "Tab") &&
-                (fe.preventDefault(),
-                commitCellEdit() &&
-                  moveSelectionAfterCommit(fe.key, fe.shiftKey)));
+            formulaEntryActions.handleFormulaKeyDown(event) ||
+              formulaSuggestionListRef.current?.handleKeyDown(event) ||
+              ((event.key === "Enter" || event.key === "Tab") &&
+                (event.preventDefault(),
+                cellEditActions.commitCellEdit() &&
+                  navigationActions.moveSelectionAfterCommit(
+                    event.key,
+                    event.shiftKey,
+                  )));
           }
         },
         lang: language("Formula bar"),
@@ -133,7 +140,8 @@ function EditorFormulaBar({
       i.jsx(FormulaSuggestionList, {
         ref: formulaSuggestionListRef,
         onExit: () => {
-          (formulaEntryState.setIsFormulaBarFocused(false), commitCellEdit());
+          (formulaEntryState.setIsFormulaBarFocused(false),
+            cellEditActions.commitCellEdit());
         },
         value: formulaEntryState.cellEditText,
         caret: formulaEntryState.formulaCaretPosition,
@@ -141,9 +149,10 @@ function EditorFormulaBar({
         sheetId: activeSheet.id,
         inputRef: formulaEntryState.formulaInputRef,
         disabled:
-          isFormulaEditingLocked() || !formulaEntryState.isFormulaBarFocused,
+          cellEditActions.isFormulaEditingLocked() ||
+          !formulaEntryState.isFormulaBarFocused,
         onAccept: (fe, Oe) => {
-          (beginCellEdit(fe),
+          (cellEditActions.beginCellEdit(fe),
             formulaEntryState.setFormulaCaretPosition(Oe),
             requestAnimationFrame(() => {
               (formulaEntryState.formulaInputRef.current?.focus(),

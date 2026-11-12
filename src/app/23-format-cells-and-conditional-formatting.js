@@ -48,13 +48,13 @@ function FormatCellsDialog(e) {
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
   a.current = e.onClose;
-  const s = e.workbook.sheets.find((H) => H.id === e.sheetId),
-    d = parseSelectionAreas(e.ranges ?? [e.range]),
-    u = parseRangeAddress(e.range),
+  const sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    selectionAreas = parseSelectionAreas(e.ranges ?? [e.range]),
+    rangeAddress = parseRangeAddress(e.range),
     l =
-      e.active && isCellAddressInRanges(d, e.active)
+      e.active && isCellAddressInRanges(selectionAreas, e.active)
         ? e.active
-        : `${columnIndexToLetters(u.firstCol)}${u.firstRow + 1}`,
+        : `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
     c = ne.useRef({
       book: e.workbook.id,
       revision: e.workbook.revision,
@@ -64,7 +64,7 @@ function FormatCellsDialog(e) {
       active: e.active,
     }),
     [h] = ne.useState(() =>
-      validateCellStyle(resolveEffectiveCellStyle(s?.cells[l]?.style)),
+      validateCellStyle(resolveEffectiveCellStyle(sheet?.cells[l]?.style)),
     ),
     [f, p] = ne.useState(
       e.mode === "alignment"
@@ -75,16 +75,16 @@ function FormatCellsDialog(e) {
     ),
     [m, v] = ne.useState({}),
     [g, b] = ne.useState(""),
-    [y, w] = ne.useState(),
-    [E, A] = ne.useState({ style: "thin", color: "#000000" }),
+    [preset, w] = ne.useState(),
+    [line, A] = ne.useState({ style: "thin", color: "#000000" }),
     [k, F] = ne.useState(h.fontSize === undefined ? "" : String(h.fontSize)),
     [I, O] = ne.useState(String(h.indent ?? 0)),
-    j = countSelectionCells(d),
+    j = countSelectionCells(selectionAreas),
     z = ne.useMemo(
       () => calculateWorkbookWithSettings(e.workbook),
       [e.workbook],
     ),
-    V = s ? z(s.id, l) : null,
+    V = sheet ? z(sheet.id, l) : null,
     D =
       c.current.book !== e.workbook.id ||
       c.current.revision !== e.workbook.revision ||
@@ -92,7 +92,7 @@ function FormatCellsDialog(e) {
       c.current.sheet !== e.sheetId ||
       c.current.selection !== JSON.stringify(e.ranges ?? [e.range]) ||
       c.current.active !== e.active,
-    B = e.readOnly || D || !!s?.protection?.enabled || !s || j > 500;
+    B = e.readOnly || D || !!sheet?.protection?.enabled || !sheet || j > 500;
   let _ = h,
     C = "";
   try {
@@ -101,8 +101,9 @@ function FormatCellsDialog(e) {
       ...m,
       ...(m.borders ? { borders: { ...h.borders, ...m.borders } } : {}),
     });
-  } catch (H) {
-    C = H instanceof Error ? H.message : "Choose supported cell styles.";
+  } catch (error) {
+    C =
+      error instanceof Error ? error.message : "Choose supported cell styles.";
   }
   function T(H) {
     (v((Q) => ({ ...Q, ...H })), b(""));
@@ -110,7 +111,7 @@ function FormatCellsDialog(e) {
   function N(H, Q = false) {
     (v((X) => ({
       ...X,
-      borders: { ...X.borders, [H]: Q ? { style: "none" } : { ...E } },
+      borders: { ...X.borders, [H]: Q ? { style: "none" } : { ...line } },
     })),
       b(""));
   }
@@ -122,21 +123,23 @@ function FormatCellsDialog(e) {
       }),
       b(""));
   }
-  const L = (H) => ({
+  const L = (address) => ({
     ..._,
     borders: {
       ...h.borders,
-      ...(y ? buildBorderPresetStyles(H, sampleGridAddresses, y, E) : {}),
+      ...(preset
+        ? buildBorderPresetStyles(address, sampleGridAddresses, preset, line)
+        : {}),
       ...m.borders,
     },
   });
   return (
     ne.useEffect(() => {
-      const H = document.activeElement;
+      const activeElement = document.activeElement;
       return (
         o.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus(),
         () => {
-          H?.isConnected && H.focus();
+          activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []),
@@ -148,11 +151,11 @@ function FormatCellsDialog(e) {
         role: "dialog",
         "aria-modal": "true",
         "aria-labelledby": `${n}-title`,
-        onKeyDown: (H) => {
+        onKeyDown: (event) => {
           if (
-            (H.stopPropagation(),
-            H.key === "Escape" && (H.preventDefault(), a.current()),
-            H.key === "Tab")
+            (event.stopPropagation(),
+            event.key === "Escape" && (event.preventDefault(), a.current()),
+            event.key === "Tab")
           ) {
             const X = [
                 ...(o.current?.querySelectorAll(
@@ -161,11 +164,11 @@ function FormatCellsDialog(e) {
               ],
               J = X[0],
               q = X.at(-1);
-            H.shiftKey && document.activeElement === J
-              ? (H.preventDefault(), q == null || q.focus())
-              : !H.shiftKey &&
+            event.shiftKey && document.activeElement === J
+              ? (event.preventDefault(), q == null || q.focus())
+              : !event.shiftKey &&
                 document.activeElement === q &&
-                (H.preventDefault(), J == null || J.focus());
+                (event.preventDefault(), J == null || J.focus());
           }
         },
         children: [
@@ -191,44 +194,48 @@ function FormatCellsDialog(e) {
             "aria-label": text("Cell style settings"),
             lang: language("Cell style settings"),
             "data-ui-label": "Cell style settings",
-            children: cellFormatTabs.map((H, Q) =>
+            children: cellFormatTabs.map((cellFormatTab, Q) =>
               i.jsx(
                 "button",
                 {
                   role: "tab",
-                  id: `${n}-${H}`,
+                  id: `${n}-${cellFormatTab}`,
                   "aria-controls": `${n}-panel`,
-                  "aria-selected": f === H,
-                  tabIndex: f === H ? 0 : -1,
-                  onClick: () => p(H),
-                  onKeyDown: (X) => {
+                  "aria-selected": f === cellFormatTab,
+                  tabIndex: f === cellFormatTab ? 0 : -1,
+                  onClick: () => p(cellFormatTab),
+                  onKeyDown: (event) => {
                     if (
-                      ["ArrowLeft", "ArrowRight", "Home", "End"].includes(X.key)
+                      ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                        event.key,
+                      )
                     ) {
-                      X.preventDefault();
+                      event.preventDefault();
                       const W =
-                        X.key === "Home"
+                        event.key === "Home"
                           ? 0
-                          : X.key === "End"
+                          : event.key === "End"
                             ? cellFormatTabs.length - 1
                             : (Q +
-                                (X.key === "ArrowRight"
+                                (event.key === "ArrowRight"
                                   ? 1
                                   : cellFormatTabs.length - 1)) %
                               cellFormatTabs.length;
                       (p(cellFormatTabs[W]),
-                        X.currentTarget.parentElement?.children[W]?.focus());
+                        event.currentTarget.parentElement?.children[
+                          W
+                        ]?.focus());
                     }
                   },
-                  children: H,
+                  children: cellFormatTab,
                 },
-                H,
+                cellFormatTab,
               ),
             ),
           }),
           i.jsxs("form", {
-            onSubmit: (H) => {
-              (H.preventDefault(), b(""));
+            onSubmit: (event) => {
+              (event.preventDefault(), b(""));
               try {
                 if (e.readOnly) throw Error("This workbook is read-only.");
                 if (D)
@@ -239,20 +246,22 @@ function FormatCellsDialog(e) {
                 const Q = applyBorderEditTransaction(
                   e.workbook,
                   e.sheetId,
-                  d,
+                  selectionAreas,
                   m,
                   {
                     readOnly: e.readOnly,
-                    ...(y ? { borders: { preset: y, line: E } } : {}),
+                    ...(preset
+                      ? { borders: { preset: preset, line: line } }
+                      : {}),
                   },
                 );
                 (Q !== e.workbook &&
                   e.onWorkbookChange(Q, "Format cell styles"),
                   e.onClose());
-              } catch (Q) {
+              } catch (error) {
                 b(
-                  Q instanceof Error
-                    ? Q.message
+                  error instanceof Error
+                    ? error.message
                     : "The cell styles could not be applied.",
                 );
               }
@@ -267,9 +276,9 @@ function FormatCellsDialog(e) {
                       j.toLocaleString(),
                       " ",
                       i.jsx(LocalizedText, { children: "selected cells · " }),
-                      d.length,
+                      selectionAreas.length,
                       " ",
-                      d.length === 1 ? "area" : "areas",
+                      selectionAreas.length === 1 ? "area" : "areas",
                       i.jsx(LocalizedText, {
                         children:
                           ". Only changed controls apply; existing differences are preserved.",
@@ -284,7 +293,7 @@ function FormatCellsDialog(e) {
                           "This workbook is read-only. You can inspect style previews.",
                       }),
                     }),
-                  s?.protection?.enabled &&
+                  sheet?.protection?.enabled &&
                     i.jsx("p", {
                       className: "cs-notice",
                       children: i.jsx(LocalizedText, {
@@ -328,10 +337,10 @@ function FormatCellsDialog(e) {
                                     i.jsxs("select", {
                                       "aria-label": text("Font family"),
                                       value: _.fontFamily ?? "",
-                                      onChange: (H) =>
+                                      onChange: (event) =>
                                         T({
                                           fontFamily:
-                                            H.target.value || undefined,
+                                            event.target.value || undefined,
                                         }),
                                       lang: language("Font family"),
                                       "data-ui-label": "Font family",
@@ -340,8 +349,13 @@ function FormatCellsDialog(e) {
                                           value: "",
                                           children: "Default (Calibri)",
                                         }),
-                                        supportedFontFamilies.map((H) =>
-                                          i.jsx("option", { children: H }, H),
+                                        supportedFontFamilies.map(
+                                          (supportedFontFamily) =>
+                                            i.jsx(
+                                              "option",
+                                              { children: supportedFontFamily },
+                                              supportedFontFamily,
+                                            ),
                                         ),
                                       ],
                                     }),
@@ -394,8 +408,8 @@ function FormatCellsDialog(e) {
                                           type: "checkbox",
                                           "aria-label": Q,
                                           checked: _[H] ?? false,
-                                          onChange: (X) =>
-                                            T({ [H]: X.target.checked }),
+                                          onChange: (event) =>
+                                            T({ [H]: event.target.checked }),
                                         }),
                                         Q,
                                       ],
@@ -423,8 +437,8 @@ function FormatCellsDialog(e) {
                                             _.color,
                                             "#000000",
                                           ),
-                                          onChange: (H) =>
-                                            T({ color: H.target.value }),
+                                          onChange: (event) =>
+                                            T({ color: event.target.value }),
                                           lang: language("Font color"),
                                           "data-ui-label": "Font color",
                                         }),
@@ -455,8 +469,8 @@ function FormatCellsDialog(e) {
                                             _.fill,
                                             "#ffffff",
                                           ),
-                                          onChange: (H) =>
-                                            T({ fill: H.target.value }),
+                                          onChange: (event) =>
+                                            T({ fill: event.target.value }),
                                           lang: language("Fill color"),
                                           "data-ui-label": "Fill color",
                                         }),
@@ -491,9 +505,10 @@ function FormatCellsDialog(e) {
                                         "Horizontal alignment",
                                       ),
                                       value: _.align ?? "",
-                                      onChange: (H) =>
+                                      onChange: (event) =>
                                         T({
-                                          align: H.target.value || undefined,
+                                          align:
+                                            event.target.value || undefined,
                                         }),
                                       lang: language("Horizontal alignment"),
                                       "data-ui-label": "Horizontal alignment",
@@ -526,10 +541,10 @@ function FormatCellsDialog(e) {
                                     i.jsxs("select", {
                                       "aria-label": text("Vertical alignment"),
                                       value: _.verticalAlign ?? "",
-                                      onChange: (H) =>
+                                      onChange: (event) =>
                                         T({
                                           verticalAlign:
-                                            H.target.value || undefined,
+                                            event.target.value || undefined,
                                         }),
                                       lang: language("Vertical alignment"),
                                       "data-ui-label": "Vertical alignment",
@@ -585,8 +600,8 @@ function FormatCellsDialog(e) {
                                   type: "checkbox",
                                   "aria-label": text("Wrap text"),
                                   checked: _.wrap ?? false,
-                                  onChange: (H) =>
-                                    T({ wrap: H.target.checked }),
+                                  onChange: (event) =>
+                                    T({ wrap: event.target.checked }),
                                   lang: language("Wrap text"),
                                   "data-ui-label": "Wrap text",
                                 }),
@@ -613,22 +628,28 @@ function FormatCellsDialog(e) {
                                     i.jsx(LocalizedText, { children: "Line" }),
                                     i.jsx("select", {
                                       "aria-label": text("Border line style"),
-                                      value: E.style,
-                                      onChange: (H) =>
-                                        A({ ...E, style: H.target.value }),
+                                      value: line.style,
+                                      onChange: (event) =>
+                                        A({
+                                          ...line,
+                                          style: event.target.value,
+                                        }),
                                       lang: language("Border line style"),
                                       "data-ui-label": "Border line style",
-                                      children: borderLineStyles.map((H) =>
-                                        i.jsx(
-                                          "option",
-                                          {
-                                            value: H,
-                                            children:
-                                              H.charAt(0).toUpperCase() +
-                                              H.slice(1),
-                                          },
-                                          H,
-                                        ),
+                                      children: borderLineStyles.map(
+                                        (borderLineStyle) =>
+                                          i.jsx(
+                                            "option",
+                                            {
+                                              value: borderLineStyle,
+                                              children:
+                                                borderLineStyle
+                                                  .charAt(0)
+                                                  .toUpperCase() +
+                                                borderLineStyle.slice(1),
+                                            },
+                                            borderLineStyle,
+                                          ),
                                       ),
                                     }),
                                   ],
@@ -640,11 +661,14 @@ function FormatCellsDialog(e) {
                                       type: "color",
                                       "aria-label": text("Border color"),
                                       value: expandShortHexColor(
-                                        E.color,
+                                        line.color,
                                         "#000000",
                                       ),
-                                      onChange: (H) =>
-                                        A({ ...E, color: H.target.value }),
+                                      onChange: (event) =>
+                                        A({
+                                          ...line,
+                                          color: event.target.value,
+                                        }),
                                       lang: language("Border color"),
                                       "data-ui-label": "Border color",
                                     }),
@@ -684,7 +708,7 @@ function FormatCellsDialog(e) {
                                     "button",
                                     {
                                       type: "button",
-                                      "aria-pressed": y === H,
+                                      "aria-pressed": preset === H,
                                       onClick: () => R(H),
                                       children: Q,
                                     },
@@ -701,29 +725,32 @@ function FormatCellsDialog(e) {
                                     children: "Individual edges",
                                   }),
                                 }),
-                                cellBorderEdges.map((H) =>
+                                cellBorderEdges.map((cellBorderEdge) =>
                                   i.jsxs(
                                     "span",
                                     {
                                       children: [
                                         i.jsx("button", {
                                           type: "button",
-                                          "aria-label": `Set ${H} border`,
-                                          onClick: () => N(H),
+                                          "aria-label": `Set ${cellBorderEdge} border`,
+                                          onClick: () => N(cellBorderEdge),
                                           children:
-                                            H.charAt(0).toUpperCase() +
-                                            H.slice(1),
+                                            cellBorderEdge
+                                              .charAt(0)
+                                              .toUpperCase() +
+                                            cellBorderEdge.slice(1),
                                         }),
                                         i.jsx("button", {
                                           type: "button",
                                           className: "cs-edge-clear",
-                                          "aria-label": `Clear ${H} border`,
-                                          onClick: () => N(H, true),
+                                          "aria-label": `Clear ${cellBorderEdge} border`,
+                                          onClick: () =>
+                                            N(cellBorderEdge, true),
                                           children: "×",
                                         }),
                                       ],
                                     },
-                                    H,
+                                    cellBorderEdge,
                                   ),
                                 ),
                               ],
@@ -748,7 +775,7 @@ function FormatCellsDialog(e) {
                       i.jsxs("h3", {
                         children: [
                           i.jsx(LocalizedText, { children: "Preview · " }),
-                          s?.name,
+                          sheet?.name,
                           "!",
                           l,
                         ],
@@ -806,7 +833,7 @@ function FormatCellsDialog(e) {
                                         e.workbook.datePolicy?.dateSystem,
                                       value: V === null ? "Audit evidence" : V,
                                       cell: {
-                                        ...(s?.cells[l] ?? { raw: null }),
+                                        ...(sheet?.cells[l] ?? { raw: null }),
                                         style: _,
                                       },
                                     }),
@@ -872,10 +899,10 @@ const conditionalRuleTypeLabels = {
   dataBar: "Data bars",
   iconSet: "Three-level icons",
 };
-function createConditionalRuleDraft(e) {
+function createConditionalRuleDraft(range) {
   return {
     id: "",
-    range: e,
+    range: range,
     kind: "greater",
     value: "0",
     second: "100",
@@ -892,7 +919,7 @@ function describeDataBarRule(e) {
       ? `Bar ${e.dataBar.width.toFixed(1)}% at ${e.dataBar.start.toFixed(1)}%${e.dataBar.negative ? " negative" : ""}`
       : "",
     e.icon ? `${e.icon.label} icon` : "",
-    ...e.errors.map((r) => r.message),
+    ...e.errors.map((error) => error.message),
   ]
     .filter(Boolean)
     .join("; ");
@@ -907,30 +934,30 @@ function ConditionalFormattingRulesManager(e) {
       range: e.range,
       guard: JSON.stringify(e.workbook),
     }),
-    [s, d] = ne.useState(() =>
+    [rules, d] = ne.useState(() =>
       structuredClone(
-        e.workbook.sheets.find((B) => B.id === e.sheetId)?.conditionalFormats ??
-          [],
+        e.workbook.sheets.find((sheet) => sheet.id === e.sheetId)
+          ?.conditionalFormats ?? [],
       ),
     ),
     [u, l] = ne.useState(() => createConditionalRuleDraft(e.range)),
     [c, h] = ne.useState(""),
     [f, p] = ne.useState(null),
     [m, v] = ne.useState(0),
-    g = e.workbook.sheets.find((D) => D.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     b =
       a.current.guard !== JSON.stringify(e.workbook) ||
       a.current.sheetId !== e.sheetId ||
       a.current.range !== e.range,
-    y = e.readOnly || b || !g || !!g.protection?.enabled,
-    w = sortConditionalRulesByPriority(s),
+    disabled = e.readOnly || b || !sheet || !!sheet.protection?.enabled,
+    w = sortConditionalRulesByPriority(rules),
     E = ["colorScale", "dataBar", "iconSet"].includes(u.kind);
   ne.useEffect(() => {
-    const D = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       o.current?.querySelector("button")?.focus(),
       () => {
-        D?.isConnected && D.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
@@ -942,33 +969,33 @@ function ConditionalFormattingRulesManager(e) {
     },
     F = () => {
       try {
-        if (y) throw Error("Rules cannot be changed in this view.");
+        if (disabled) throw Error("Rules cannot be changed in this view.");
         const D = {
             ...u,
             id: u.id || crypto.randomUUID(),
             ...(E ? { stopIfTrue: false } : {}),
           },
           B = u.id ? w.map((C) => (C.id === u.id ? D : C)) : [D, ...w],
-          _ = normalizeConditionalRules(
+          conditionalRules = normalizeConditionalRules(
             B.map((C, T) => ({ ...C, priority: T + 1 })),
           );
-        (A(_), l(createConditionalRuleDraft(e.range)));
-      } catch (D) {
-        h(D instanceof Error ? D.message : "Rule could not be staged.");
+        (A(conditionalRules), l(createConditionalRuleDraft(e.range)));
+      } catch (error) {
+        h(error instanceof Error ? error.message : "Rule could not be staged.");
       }
     },
-    I = () => {
+    onClick = () => {
       try {
-        if (y) throw Error("Rules cannot be changed in this view.");
+        if (disabled) throw Error("Rules cannot be changed in this view.");
         (p(
-          updateConditionalFormatRules(e.workbook, e.sheetId, s, {
+          updateConditionalFormatRules(e.workbook, e.sheetId, rules, {
             readOnly: e.readOnly,
           }),
         ),
           v(0),
           h(""));
-      } catch (D) {
-        h(D instanceof Error ? D.message : "Preview failed.");
+      } catch (error) {
+        h(error instanceof Error ? error.message : "Preview failed.");
       }
     };
   return i.jsx("div", {
@@ -979,11 +1006,11 @@ function ConditionalFormattingRulesManager(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
-      onKeyDown: (D) => {
+      onKeyDown: (event) => {
         if (
-          (D.stopPropagation(),
-          D.key === "Escape" && (D.preventDefault(), e.onClose()),
-          D.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Tab")
         ) {
           const _ = [
               ...(o.current?.querySelectorAll(
@@ -992,11 +1019,11 @@ function ConditionalFormattingRulesManager(e) {
             ],
             C = _[0],
             T = _.at(-1);
-          D.shiftKey && document.activeElement === C
-            ? (D.preventDefault(), T == null || T.focus())
-            : !D.shiftKey &&
+          event.shiftKey && document.activeElement === C
+            ? (event.preventDefault(), T == null || T.focus())
+            : !event.shiftKey &&
               document.activeElement === T &&
-              (D.preventDefault(), C == null || C.focus());
+              (event.preventDefault(), C == null || C.focus());
         }
       },
       children: [
@@ -1019,7 +1046,7 @@ function ConditionalFormattingRulesManager(e) {
         }),
         i.jsxs("p", {
           children: [
-            g?.name ?? "Worksheet removed",
+            sheet?.name ?? "Worksheet removed",
             " ",
             i.jsx(LocalizedText, {
               children:
@@ -1042,14 +1069,14 @@ function ConditionalFormattingRulesManager(e) {
               children: "This workbook is read-only.",
             }),
           }),
-        g?.protection?.enabled &&
+        sheet?.protection?.enabled &&
           i.jsx("p", {
             role: "alert",
             children: i.jsx(LocalizedText, {
               children: "Unprotect this worksheet before changing rules.",
             }),
           }),
-        s.some((D) => D.priority === undefined) &&
+        rules.some((rule) => rule.priority === undefined) &&
           i.jsx("p", {
             children: i.jsx(LocalizedText, {
               children:
@@ -1067,7 +1094,7 @@ function ConditionalFormattingRulesManager(e) {
                 i.jsxs("h3", {
                   children: [
                     i.jsx(LocalizedText, { children: "Rules (" }),
-                    s.length,
+                    rules.length,
                     "/100)",
                   ],
                 }),
@@ -1099,7 +1126,7 @@ function ConditionalFormattingRulesManager(e) {
                               i.jsxs("div", {
                                 children: [
                                   i.jsxs("button", {
-                                    disabled: y,
+                                    disabled: disabled,
                                     onClick: () => {
                                       (l(structuredClone(D)), h(""));
                                     },
@@ -1111,7 +1138,7 @@ function ConditionalFormattingRulesManager(e) {
                                     ],
                                   }),
                                   i.jsxs("button", {
-                                    disabled: y,
+                                    disabled: disabled,
                                     onClick: () => {
                                       (A(w.filter((_) => _.id !== D.id)),
                                         u.id === D.id &&
@@ -1128,7 +1155,7 @@ function ConditionalFormattingRulesManager(e) {
                                   }),
                                   i.jsx("button", {
                                     "aria-label": `Move rule ${B + 1} up`,
-                                    disabled: y || B === 0,
+                                    disabled: disabled || B === 0,
                                     onClick: () => {
                                       const _ = [...w];
                                       (([_[B - 1], _[B]] = [_[B], _[B - 1]]),
@@ -1138,7 +1165,7 @@ function ConditionalFormattingRulesManager(e) {
                                   }),
                                   i.jsx("button", {
                                     "aria-label": `Move rule ${B + 1} down`,
-                                    disabled: y || B === w.length - 1,
+                                    disabled: disabled || B === w.length - 1,
                                     onClick: () => {
                                       const _ = [...w];
                                       (([_[B + 1], _[B]] = [_[B], _[B + 1]]),
@@ -1158,42 +1185,46 @@ function ConditionalFormattingRulesManager(e) {
             }),
             i.jsxs("form", {
               className: "cf-editor",
-              onSubmit: (D) => {
-                (D.preventDefault(), F());
+              onSubmit: (event) => {
+                (event.preventDefault(), F());
               },
               children: [
                 i.jsx("h3", { children: u.id ? "Edit rule" : "New rule" }),
                 i.jsxs("fieldset", {
-                  disabled: y,
+                  disabled: disabled,
                   children: [
                     i.jsxs("label", {
                       children: [
                         i.jsx(LocalizedText, { children: "Rule type" }),
                         i.jsx("select", {
                           value: u.kind,
-                          onChange: (D) => {
-                            const B = D.target.value;
+                          onChange: (event) => {
+                            const value = event.target.value;
                             k({
-                              kind: B,
-                              ...(B === "formula"
+                              kind: value,
+                              ...(value === "formula"
                                 ? { formula: u.formula ?? "=A1>0" }
                                 : {}),
                               ...(["colorScale", "dataBar", "iconSet"].includes(
-                                B,
+                                value,
                               )
                                 ? { stopIfTrue: false }
                                 : {}),
                             });
                           },
-                          children: conditionalRuleKinds.map((D) =>
-                            i.jsx(
-                              "option",
-                              {
-                                value: D,
-                                children: conditionalRuleTypeLabels[D],
-                              },
-                              D,
-                            ),
+                          children: conditionalRuleKinds.map(
+                            (conditionalRuleKind) =>
+                              i.jsx(
+                                "option",
+                                {
+                                  value: conditionalRuleKind,
+                                  children:
+                                    conditionalRuleTypeLabels[
+                                      conditionalRuleKind
+                                    ],
+                                },
+                                conditionalRuleKind,
+                              ),
                           ),
                         }),
                       ],
@@ -1203,7 +1234,7 @@ function ConditionalFormattingRulesManager(e) {
                         i.jsx(LocalizedText, { children: "Applies to" }),
                         i.jsx("input", {
                           value: u.range,
-                          onChange: (D) => k({ range: D.target.value }),
+                          onChange: (event) => k({ range: event.target.value }),
                         }),
                       ],
                     }),
@@ -1217,8 +1248,8 @@ function ConditionalFormattingRulesManager(e) {
                                 }),
                                 i.jsx("input", {
                                   value: u.formula ?? "",
-                                  onChange: (D) =>
-                                    k({ formula: D.target.value }),
+                                  onChange: (event) =>
+                                    k({ formula: event.target.value }),
                                 }),
                               ],
                             }),
@@ -1244,7 +1275,8 @@ function ConditionalFormattingRulesManager(e) {
                               : "Rule value",
                             i.jsx("input", {
                               value: u.value,
-                              onChange: (D) => k({ value: D.target.value }),
+                              onChange: (event) =>
+                                k({ value: event.target.value }),
                             }),
                           ],
                         }),
@@ -1254,7 +1286,8 @@ function ConditionalFormattingRulesManager(e) {
                           i.jsx(LocalizedText, { children: "Second value" }),
                           i.jsx("input", {
                             value: u.second,
-                            onChange: (D) => k({ second: D.target.value }),
+                            onChange: (event) =>
+                              k({ second: event.target.value }),
                           }),
                         ],
                       }),
@@ -1269,7 +1302,8 @@ function ConditionalFormattingRulesManager(e) {
                             i.jsx("input", {
                               type: "color",
                               value: u.fill,
-                              onChange: (D) => k({ fill: D.target.value }),
+                              onChange: (event) =>
+                                k({ fill: event.target.value }),
                             }),
                           ],
                         }),
@@ -1279,7 +1313,8 @@ function ConditionalFormattingRulesManager(e) {
                             i.jsx("input", {
                               type: "color",
                               value: u.color,
-                              onChange: (D) => k({ color: D.target.value }),
+                              onChange: (event) =>
+                                k({ color: event.target.value }),
                             }),
                           ],
                         }),
@@ -1297,8 +1332,8 @@ function ConditionalFormattingRulesManager(e) {
                               i.jsx("input", {
                                 type: "color",
                                 value: u.minColor ?? "#f8e99b",
-                                onChange: (D) =>
-                                  k({ minColor: D.target.value }),
+                                onChange: (event) =>
+                                  k({ minColor: event.target.value }),
                               }),
                             ],
                           }),
@@ -1310,8 +1345,8 @@ function ConditionalFormattingRulesManager(e) {
                               i.jsx("input", {
                                 type: "color",
                                 value: u.maxColor ?? "#63be7b",
-                                onChange: (D) =>
-                                  k({ maxColor: D.target.value }),
+                                onChange: (event) =>
+                                  k({ maxColor: event.target.value }),
                               }),
                             ],
                           }),
@@ -1334,8 +1369,8 @@ function ConditionalFormattingRulesManager(e) {
                               }),
                               i.jsxs("select", {
                                 value: u.thresholdType ?? "percent",
-                                onChange: (D) =>
-                                  k({ thresholdType: D.target.value }),
+                                onChange: (event) =>
+                                  k({ thresholdType: event.target.value }),
                                 children: [
                                   i.jsx("option", {
                                     value: "percent",
@@ -1393,8 +1428,9 @@ function ConditionalFormattingRulesManager(e) {
                         i.jsx("input", {
                           type: "checkbox",
                           checked: u.stopIfTrue ?? false,
-                          disabled: E || y,
-                          onChange: (D) => k({ stopIfTrue: D.target.checked }),
+                          disabled: E || disabled,
+                          onChange: (event) =>
+                            k({ stopIfTrue: event.target.checked }),
                         }),
                         i.jsx(LocalizedText, { children: "Stop if true" }),
                       ],
@@ -1418,8 +1454,8 @@ function ConditionalFormattingRulesManager(e) {
         }),
         c && i.jsx("p", { role: "alert", children: c }),
         i.jsx("button", {
-          disabled: y,
-          onClick: I,
+          disabled: disabled,
+          onClick: onClick,
           children: i.jsx(LocalizedText, { children: "Preview rule changes" }),
         }),
         f &&
@@ -1457,23 +1493,25 @@ function ConditionalFormattingRulesManager(e) {
                   }),
                 ],
               }),
-              f.changes.map((D) =>
+              f.changes.map((change) =>
                 i.jsxs(
                   "details",
                   {
                     children: [
                       i.jsxs("summary", {
                         children: [
-                          D.before && D.after
+                          change.before && change.after
                             ? "Edit"
-                            : D.after
+                            : change.after
                               ? "Add"
                               : "Delete",
                           " ",
-                          conditionalRuleTypeLabels[(D.after ?? D.before).kind],
+                          conditionalRuleTypeLabels[
+                            (change.after ?? change.before).kind
+                          ],
                           " ·",
                           " ",
-                          (D.after ?? D.before).range,
+                          (change.after ?? change.before).range,
                         ],
                       }),
                       i.jsxs("div", {
@@ -1484,8 +1522,8 @@ function ConditionalFormattingRulesManager(e) {
                               i.jsx(LocalizedText, { children: "Before" }),
                               `
 `,
-                              D.before
-                                ? JSON.stringify(D.before, null, 2)
+                              change.before
+                                ? JSON.stringify(change.before, null, 2)
                                 : "None",
                             ],
                           }),
@@ -1494,8 +1532,8 @@ function ConditionalFormattingRulesManager(e) {
                               i.jsx(LocalizedText, { children: "After" }),
                               `
 `,
-                              D.after
-                                ? JSON.stringify(D.after, null, 2)
+                              change.after
+                                ? JSON.stringify(change.after, null, 2)
                                 : "None",
                             ],
                           }),
@@ -1503,7 +1541,7 @@ function ConditionalFormattingRulesManager(e) {
                       }),
                     ],
                   },
-                  D.id,
+                  change.id,
                 ),
               ),
               f.errors.length > 0 &&
@@ -1516,16 +1554,16 @@ function ConditionalFormattingRulesManager(e) {
                       }),
                     }),
                     i.jsx("ul", {
-                      children: f.errors.map((D, B) =>
+                      children: f.errors.map((error, B) =>
                         i.jsxs(
                           "li",
                           {
                             children: [
-                              D.address || "Range",
+                              error.address || "Range",
                               " · ",
-                              D.ruleId,
+                              error.ruleId,
                               ": ",
-                              D.message,
+                              error.message,
                             ],
                           },
                           B,
@@ -1635,10 +1673,10 @@ function ConditionalFormattingRulesManager(e) {
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
-              disabled: y || !f || f.changes.length === 0,
+              disabled: disabled || !f || f.changes.length === 0,
               onClick: () => {
                 try {
-                  if (!f || y) return;
+                  if (!f || disabled) return;
                   const D = assertConditionalFormatPreviewCurrent(
                     e.workbook,
                     f,
@@ -1650,10 +1688,10 @@ function ConditionalFormattingRulesManager(e) {
                       "Update conditional formatting rules",
                     ),
                     e.onClose());
-                } catch (D) {
+                } catch (error) {
                   h(
-                    D instanceof Error
-                      ? D.message
+                    error instanceof Error
+                      ? error.message
                       : "Rules could not be applied.",
                   );
                 }
@@ -1670,11 +1708,11 @@ function ConditionalFormatIndicator({ decoration, children }) {
   const { text, language } = useWorkbookMessages();
   if (!decoration?.dataBar && !decoration?.icon && !decoration?.errors.length)
     return i.jsx(i.Fragment, { children });
-  const o = decoration.dataBar;
+  const dataBar = decoration.dataBar;
   return i.jsxs("span", {
     style: { display: "block", position: "relative", minWidth: 0 },
     children: [
-      o &&
+      dataBar &&
         i.jsxs(i.Fragment, {
           children: [
             i.jsx("span", {
@@ -1683,11 +1721,11 @@ function ConditionalFormatIndicator({ decoration, children }) {
               style: {
                 position: "absolute",
                 pointerEvents: "none",
-                left: `${o.start}%`,
-                width: `${o.width}%`,
+                left: `${dataBar.start}%`,
+                width: `${dataBar.width}%`,
                 top: "12%",
                 bottom: "12%",
-                background: o.color,
+                background: dataBar.color,
                 opacity: 0.28,
               },
             }),
@@ -1695,7 +1733,7 @@ function ConditionalFormatIndicator({ decoration, children }) {
               "aria-hidden": "true",
               style: {
                 position: "absolute",
-                left: `${o.axis}%`,
+                left: `${dataBar.axis}%`,
                 top: 0,
                 bottom: 0,
                 borderLeft: "1px solid #777",
@@ -1720,8 +1758,9 @@ function ConditionalFormatIndicator({ decoration, children }) {
             i.jsx("span", {
               role: "img",
               "aria-label": text("Conditional formatting error"),
-              title: decoration.errors.map((a) => `${a.ruleId}: ${a.message}`)
-                .join(`
+              title: decoration.errors.map(
+                (error) => `${error.ruleId}: ${error.message}`,
+              ).join(`
 `),
               style: { color: "#a4262c", marginLeft: 3 },
               lang: language("Conditional formatting error"),
@@ -1734,123 +1773,143 @@ function ConditionalFormatIndicator({ decoration, children }) {
   });
 }
 const rangeToA1Address = (e) => {
-  const r = parseRangeAddress(e);
-  return `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}:${columnIndexToLetters(r.lastCol)}${r.lastRow + 1}`;
+  const rangeAddress = parseRangeAddress(e);
+  return `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`;
 };
-function previewMergeCells(e, r, t, n = false, o = {}) {
+function previewMergeCells(book, sheetId, range, unmerge = false, o = {}) {
   if (o.readOnly) throw Error("This workbook is read-only.");
-  const a = findSheetOrThrow(e, r);
-  assertSheetUnprotected(a);
-  const s = rangeToA1Address(t);
+  const sheetOrThrow = findSheetOrThrow(book, sheetId);
+  assertSheetUnprotected(sheetOrThrow);
+  const s = rangeToA1Address(range);
   if (countRangeCells(s) > 500)
     throw Error("Preview a merge or unmerge of at most 500 cells.");
-  if (!n && countRangeCells(s) < 2)
+  if (!unmerge && countRangeCells(s) < 2)
     throw Error("Select at least two cells to merge.");
-  const d = (a.merges ?? []).filter((p) => rangesOverlap(p, s));
-  if (!n && d.length) throw Error("Unmerge overlapping areas first.");
-  if (n && !d.length)
+  const d = (sheetOrThrow.merges ?? []).filter((p) => rangesOverlap(p, s));
+  if (!unmerge && d.length) throw Error("Unmerge overlapping areas first.");
+  if (unmerge && !d.length)
     throw Error("The selected range does not intersect a merged area.");
-  const u = n ? d : [s];
+  const u = unmerge ? d : [s];
   if (u.reduce((p, m) => p + countRangeCells(m), 0) > 500)
     throw Error(
       "Unmerge fewer areas; this preview supports at most 500 affected cells.",
     );
-  if (!n) {
-    if ((a.tables ?? []).some((p) => rangesOverlap(p.range, s)))
+  if (!unmerge) {
+    if ((sheetOrThrow.tables ?? []).some((p) => rangesOverlap(p.range, s)))
       throw Error(
         "Merging cells inside a table is unsupported. Convert the table first.",
       );
     if (
-      [...(a.pivots ?? []), ...(a.queries ?? [])].some((p) =>
-        rangesOverlap(p.outputRange, s),
+      [...(sheetOrThrow.pivots ?? []), ...(sheetOrThrow.queries ?? [])].some(
+        (p) => rangesOverlap(p.outputRange, s),
       )
     )
       throw Error("Merging generated analysis output is unsupported.");
   }
-  normalizeWorkbookInput(mergeWorksheetCells(e, r, s, n));
-  const l = calculateWorkbookWithSettings(e);
-  if (!n) {
+  normalizeWorkbookInput(mergeWorksheetCells(book, sheetId, s, unmerge));
+  const workbookWithSettings = calculateWorkbookWithSettings(book);
+  if (!unmerge) {
     let p = 0;
-    for (const [m, v] of Object.entries(a.cells))
-      if (typeof v.raw == "string" && v.raw.startsWith("=") && !v.literal) {
+    for (const [m, cell] of Object.entries(sheetOrThrow.cells))
+      if (
+        typeof cell.raw == "string" &&
+        cell.raw.startsWith("=") &&
+        !cell.literal
+      ) {
         if (++p > 1e4)
           throw Error(
             "Merge checking supports at most 10,000 active formulas per worksheet.",
           );
-        const g = l.getSpillRange(r, m);
+        const g = workbookWithSettings.getSpillRange(sheetId, m);
         if (g && rangesOverlap(g, s))
           throw Error(
             `Unmergeable array output at ${g}. Move or remove its formula first.`,
           );
       }
   }
-  const c = [];
+  const cells = [];
   for (const p of u) {
-    const m = parseRangeAddress(p),
-      v = `${columnIndexToLetters(m.firstCol)}${m.firstRow + 1}`;
-    for (let g = m.firstRow; g <= m.lastRow; g++)
-      for (let b = m.firstCol; b <= m.lastCol; b++) {
-        const y = `${columnIndexToLetters(b)}${g + 1}`,
-          w = a.cells[y],
-          E = (e.reviewThreads ?? []).filter(
+    const rangeAddress = parseRangeAddress(p),
+      v = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`;
+    for (
+      let firstRow = rangeAddress.firstRow;
+      firstRow <= rangeAddress.lastRow;
+      firstRow++
+    )
+      for (
+        let firstCol = rangeAddress.firstCol;
+        firstCol <= rangeAddress.lastCol;
+        firstCol++
+      ) {
+        const address = `${columnIndexToLetters(firstCol)}${firstRow + 1}`,
+          cell = sheetOrThrow.cells[address],
+          discussions = (book.reviewThreads ?? []).filter(
             (A) =>
-              !A.orphaned && A.anchor.sheetId === r && A.anchor.address === y,
+              !A.orphaned &&
+              A.anchor.sheetId === sheetId &&
+              A.anchor.address === address,
           ).length;
-        (w || E || y === v) &&
-          c.push({
-            address: y,
-            cell: structuredClone(w ?? { raw: null }),
+        (cell || discussions || address === v) &&
+          cells.push({
+            address: address,
+            cell: structuredClone(cell ?? { raw: null }),
             display: formatNumberWithPattern(
-              l(r, y),
-              w,
-              e.datePolicy?.dateSystem,
+              workbookWithSettings(sheetId, address),
+              cell,
+              book.datePolicy?.dateSystem,
             ),
-            discussions: E,
+            discussions: discussions,
             effect:
-              y === v
+              address === v
                 ? "Anchor remains visible"
-                : n
+                : unmerge
                   ? "Revealed by unmerge"
                   : "Hidden until unmerge",
           });
       }
   }
-  const h = c.filter(
-    (p) =>
-      p.effect === "Hidden until unmerge" &&
-      p.cell.raw !== null &&
-      p.cell.raw !== "",
+  const hiddenValues = cells.filter(
+    (cell) =>
+      cell.effect === "Hidden until unmerge" &&
+      cell.cell.raw !== null &&
+      cell.cell.raw !== "",
   ).length;
   return {
     version: 1,
-    snapshot: JSON.stringify(e),
-    sheetId: r,
-    sheetName: a.name,
+    snapshot: JSON.stringify(book),
+    sheetId: sheetId,
+    sheetName: sheetOrThrow.name,
     range: s,
-    unmerge: n,
+    unmerge: unmerge,
     affectedRanges: [...u],
-    cells: c,
-    hiddenValues: h,
-    xlsxBlocked: c.some(
-      (p) =>
-        p.effect === "Hidden until unmerge" &&
-        ((p.cell.raw !== null && p.cell.raw !== "") ||
-          p.cell.note ||
-          p.cell.tickmark ||
-          p.cell.hyperlink),
+    cells: cells,
+    hiddenValues: hiddenValues,
+    xlsxBlocked: cells.some(
+      (cell) =>
+        cell.effect === "Hidden until unmerge" &&
+        ((cell.cell.raw !== null && cell.cell.raw !== "") ||
+          cell.cell.note ||
+          cell.cell.tickmark ||
+          cell.cell.hyperlink),
     ),
   };
 }
-function assertMergePreviewCurrent(e, r, t = {}) {
-  if (r.snapshot !== JSON.stringify(e))
+function assertMergePreviewCurrent(workbook, plan, t = {}) {
+  if (plan.snapshot !== JSON.stringify(workbook))
     throw Error(
       "The workbook changed. Close this preview and review the current cells again.",
     );
-  const n = previewMergeCells(e, r.sheetId, r.range, r.unmerge, t),
+  const n = previewMergeCells(
+      workbook,
+      plan.sheetId,
+      plan.range,
+      plan.unmerge,
+      t,
+    ),
     o = (a) => ({ ...a, cells: a.cells.map(({ display, ...d }) => d) });
-  if (JSON.stringify(o(n)) !== JSON.stringify(o(r)))
+  if (JSON.stringify(o(n)) !== JSON.stringify(o(plan)))
     throw Error("The merge preview changed. Create a fresh preview.");
-  return mergeWorksheetCells(e, r.sheetId, r.range, r.unmerge);
+  return mergeWorksheetCells(workbook, plan.sheetId, plan.range, plan.unmerge);
 }
 
 export {

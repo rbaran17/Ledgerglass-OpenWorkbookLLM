@@ -39,13 +39,13 @@ function validateNumberFormatSettings(e) {
   const r = e;
   Uv.includes(r.category) ||
     throwWorkbookError("Choose a supported number format category.");
-  const t = r.category,
-    n = r.locale ?? "en-US";
-  supportedNumberLocales.includes(n) ||
+  const category = r.category,
+    locale = r.locale ?? "en-US";
+  supportedNumberLocales.includes(locale) ||
     throwWorkbookError("Choose one of the supported display locales.");
-  const o = { category: t, locale: n };
-  if (numericFormatKinds.has(t)) {
-    if (t === "currency" || t === "accounting") {
+  const o = { category: category, locale: locale };
+  if (numericFormatKinds.has(category)) {
+    if (category === "currency" || category === "accounting") {
       const u = r.currency ?? "USD";
       (supportedCurrencyCodes.includes(u) ||
         throwWorkbookError("Choose a supported currency."),
@@ -62,9 +62,9 @@ function validateNumberFormatSettings(e) {
       r.useGrouping !== undefined &&
         typeof r.useGrouping != "boolean" &&
         throwWorkbookError("The grouping option must be true or false."),
-      (o.useGrouping = r.useGrouping ?? t !== "percent"));
+      (o.useGrouping = r.useGrouping ?? category !== "percent"));
     const d = r.scale ?? 1;
-    ((![1, 1e3, 1e6].includes(d) || (t === "percent" && d !== 1)) &&
+    ((![1, 1e3, 1e6].includes(d) || (category === "percent" && d !== 1)) &&
       throwWorkbookError(
         "Choose units, thousands or millions; percentages use units.",
       ),
@@ -73,12 +73,12 @@ function validateNumberFormatSettings(e) {
         (typeof r.negative != "string" ||
           !["minus", "parentheses"].includes(r.negative)) &&
         throwWorkbookError("Choose minus signs or parentheses for negatives."),
-      t === "accounting" &&
+      category === "accounting" &&
         r.negative !== undefined &&
         r.negative !== "parentheses" &&
         throwWorkbookError("Accounting negatives use parentheses."),
       (o.negative =
-        t === "accounting" ? "parentheses" : (r.negative ?? "minus")),
+        category === "accounting" ? "parentheses" : (r.negative ?? "minus")),
       r.pattern !== undefined &&
         throwWorkbookError(
           "Use the Custom category to enter a format pattern.",
@@ -90,9 +90,10 @@ function validateNumberFormatSettings(e) {
       throwWorkbookError(
         "These numeric settings do not apply to the chosen category.",
       ),
-    dateTimeFormatKinds.has(t) || t === "custom")
+    dateTimeFormatKinds.has(category) || category === "custom")
   ) {
-    const a = t === "custom" ? "0.00" : builtInDateTimeFormats[t][0],
+    const a =
+        category === "custom" ? "0.00" : builtInDateTimeFormats[category][0],
       s = r.pattern ?? a;
     ((typeof s != "string" ||
       !s ||
@@ -103,13 +104,13 @@ function validateNumberFormatSettings(e) {
       ),
       (o.pattern = s));
     const d = validateNumberFormatCode(o.pattern);
-    if (t !== "custom") {
+    if (category !== "custom") {
       d.kind !== "temporal" &&
         throwWorkbookError(
           "Choose a date, time or elapsed-time pattern for this category.",
         );
       const u = d.category;
-      u !== t &&
+      u !== category &&
         throwWorkbookError(
           `This pattern is a ${u} format. Choose the matching category or Custom.`,
         );
@@ -119,8 +120,8 @@ function validateNumberFormatSettings(e) {
       throwWorkbookError("General does not accept a custom pattern.");
   return o;
 }
-function renderTextSectionPattern(e, r) {
-  return e.replace(
+function renderTextSectionPattern(textSection, r) {
+  return textSection.replace(
     /"([^"]*)"|\\(.)|@/g,
     (t, n, o) => n ?? o ?? (t === "@" ? r : t),
   );
@@ -128,14 +129,14 @@ function renderTextSectionPattern(e, r) {
 const getLocaleDecimalSeparator = (e) =>
   new Intl.NumberFormat(e).formatToParts(1.1).find((t) => t.type === "decimal")
     ?.value ?? ".";
-function formatNumericSection(e, r, t) {
+function formatNumericSection(e, r, locale) {
   const n = e < 0 && r.sections.length > 1,
     { parsed, divisor } =
       r.sections[e === 0 && r.sections.length > 2 ? 2 : n ? 1 : 0];
   if (!parsed.hasNumber) return parsed.prefix + parsed.suffix;
   const s = (Math.abs(e) / divisor) * (parsed.percent ? 100 : 1);
   if (!Number.isFinite(s)) return "#NUM!";
-  let d = new Intl.NumberFormat(t, {
+  let d = new Intl.NumberFormat(locale, {
     minimumFractionDigits: parsed.minDecimals,
     maximumFractionDigits: parsed.maxDecimals,
     minimumIntegerDigits: Math.max(1, parsed.minIntegerDigits),
@@ -145,19 +146,21 @@ function formatNumericSection(e, r, t) {
     parsed.minIntegerDigits ||
       (d === "0" && !parsed.minDecimals
         ? (d = "")
-        : d.startsWith(`0${getLocaleDecimalSeparator(t)}`) && (d = d.slice(1))),
+        : d.startsWith(`0${getLocaleDecimalSeparator(locale)}`) &&
+          (d = d.slice(1))),
     (e < 0 && !n ? "-" : "") + parsed.prefix + d + parsed.suffix
   );
 }
-function formatTemporalSerialValue(e, r, t, n) {
+function formatTemporalSerialValue(e, r, locale, n) {
   const o = r.category === "duration",
     a = 2958465 - (n === "1904" && !o ? 1462 : 0);
   if (Math.abs(e) >= a + 1 || (!o && e < 0)) return "#NUM!";
   const s = r.category !== "date",
     d = 10 ** r.fraction,
     u = r.tokens.some(
-      (j) =>
-        j.kind === "second" || (j.kind === "elapsed" && j.text.startsWith("s")),
+      (token) =>
+        token.kind === "second" ||
+        (token.kind === "elapsed" && token.text.startsWith("s")),
     ),
     l = s
       ? u
@@ -181,43 +184,50 @@ function formatTemporalSerialValue(e, r, t, n) {
     E = b ? 1900 : w.getUTCFullYear(),
     A = b ? 1 : w.getUTCMonth(),
     k = b ? 29 : w.getUTCDate(),
-    F = r.tokens.some((j) => j.kind === "ampm"),
+    F = r.tokens.some((token) => token.kind === "ampm"),
     I = (j, z) => String(j).padStart(z, "0"),
     O = r.tokens
-      .map((j) => {
-        switch (j.kind) {
+      .map((token) => {
+        switch (token.kind) {
           case "literal":
-            return j.text;
+            return token.text;
           case "year":
-            return j.text.length === 2 ? I(E % 100, 2) : I(E, 4);
+            return token.text.length === 2 ? I(E % 100, 2) : I(E, 4);
           case "month":
-            return j.text.length < 3
-              ? I(A + 1, j.text.length)
-              : new Intl.DateTimeFormat(t, {
-                  month: j.text.length === 3 ? "short" : "long",
+            return token.text.length < 3
+              ? I(A + 1, token.text.length)
+              : new Intl.DateTimeFormat(locale, {
+                  month: token.text.length === 3 ? "short" : "long",
                   timeZone: "UTC",
                 }).format(new Date(Date.UTC(2e3, A, 1)));
           case "day":
-            return I(k, j.text.length);
+            return I(k, token.text.length);
           case "hour":
-            return I(F ? p % 12 || 12 : p, j.text.length);
+            return I(F ? p % 12 || 12 : p, token.text.length);
           case "minute":
-            return I(m, j.text.length);
+            return I(m, token.text.length);
           case "second":
-            return I(v, j.text.length);
+            return I(v, token.text.length);
           case "fraction":
-            return getLocaleDecimalSeparator(t) + I(g, r.fraction);
+            return getLocaleDecimalSeparator(locale) + I(g, r.fraction);
           case "ampm": {
             const z = p < 12 ? "AM" : "PM",
-              V = j.text.length === 3 ? z[0] : z;
-            return j.text === j.text.toLowerCase() ? V.toLowerCase() : V;
+              V = token.text.length === 3 ? z[0] : z;
+            return token.text === token.text.toLowerCase()
+              ? V.toLowerCase()
+              : V;
           }
           case "elapsed":
             return I(
               Math.floor(
-                l / (j.text[0] === "h" ? 3600 : j.text[0] === "m" ? 60 : 1),
+                l /
+                  (token.text[0] === "h"
+                    ? 3600
+                    : token.text[0] === "m"
+                      ? 60
+                      : 1),
               ),
-              j.text.length,
+              token.text.length,
             );
         }
       })
@@ -268,17 +278,24 @@ function formatCellValueWithNumberFormat(e, r, t = "1900") {
         style: "currency",
         currency: n.currency,
       }).formatToParts(Math.abs(o)),
-      f = h.find((g) => g.type === "currency")?.value ?? n.currency,
-      p =
+      symbol = h.find((g) => g.type === "currency")?.value ?? n.currency,
+      symbolPosition =
         h.findIndex((g) => g.type === "currency") <
         h.findIndex((g) => g.type === "integer")
           ? "start"
           : "end",
       m = new Intl.NumberFormat(n.locale, s).format(Math.abs(o)),
-      v = (o === 0 ? "-" : o < 0 ? `(${m})` : m) + a;
+      amount = (o === 0 ? "-" : o < 0 ? `(${m})` : m) + a;
     return {
-      text: p === "start" ? `${f} ${v}` : `${v} ${f}`,
-      accounting: { symbol: f, amount: v, symbolPosition: p },
+      text:
+        symbolPosition === "start"
+          ? `${symbol} ${amount}`
+          : `${amount} ${symbol}`,
+      accounting: {
+        symbol: symbol,
+        amount: amount,
+        symbolPosition: symbolPosition,
+      },
     };
   }
   const d = o < 0 && n.negative === "parentheses",
@@ -292,34 +309,34 @@ function formatCellValueWithNumberFormat(e, r, t = "1900") {
     }).format(d ? Math.abs(o) : o);
   return { text: (d ? `(${u})` : u) + a };
 }
-function getImportedNumberFormatWarning(e) {
-  if (e) {
-    if (e.numberFormat)
+function getImportedNumberFormatWarning(cell) {
+  if (cell) {
+    if (cell.numberFormat)
       try {
-        validateNumberFormatSettings(e.numberFormat);
+        validateNumberFormatSettings(cell.numberFormat);
         return;
-      } catch (t) {
-        return t instanceof Error
-          ? t.message
+      } catch (error) {
+        return error instanceof Error
+          ? error.message
           : "Unsupported number format settings.";
       }
     if (
-      !(e.numFmt === "@" && typeof e.raw == "string") &&
-      !(e.format === "date" && e.numFmt?.toLowerCase() === "yyyy-mm-dd")
+      !(cell.numFmt === "@" && typeof cell.raw == "string") &&
+      !(cell.format === "date" && cell.numFmt?.toLowerCase() === "yyyy-mm-dd")
     ) {
       if (
-        e.numFmt &&
+        cell.numFmt &&
         /\[(?:Black|Blue|Cyan|Green|Magenta|Red|White|Yellow|Color\d+)\]/i.test(
-          e.numFmt,
+          cell.numFmt,
         )
       )
         return "The legacy format's color directive is retained but does not color the text. Use conditional formatting to apply color explicitly.";
       if (
-        e.numFmt &&
-        e.numFmt.toLowerCase() !== "general" &&
-        numberFormatToIntlOptions(1.25, e.numFmt) === undefined
+        cell.numFmt &&
+        cell.numFmt.toLowerCase() !== "general" &&
+        numberFormatToIntlOptions(1.25, cell.numFmt) === undefined
       )
-        return `The imported pattern “${e.numFmt}” is outside the legacy display subset. The basic ${e.format ?? "general"} display is used; the original pattern and raw values are retained. Choose a supported format to change its display explicitly.`;
+        return `The imported pattern “${cell.numFmt}” is outside the legacy display subset. The basic ${cell.format ?? "general"} display is used; the original pattern and raw values are retained. Choose a supported format to change its display explicitly.`;
     }
   }
 }
@@ -331,8 +348,8 @@ const lcidByLocale = {
   "ja-JP": "411",
   "en-IN": "4009",
 };
-function buildNumberFormatCode(e) {
-  const r = validateNumberFormatSettings(e),
+function buildNumberFormatCode(numberFormat) {
+  const r = validateNumberFormatSettings(numberFormat),
     t = r.locale === "en-US" ? "" : `[$-${lcidByLocale[r.locale]}]`;
   if (r.category === "general") return "General";
   if (r.pattern) return t + r.pattern;
@@ -342,19 +359,20 @@ function buildNumberFormatCode(e) {
     s = (r.useGrouping ? "#,##0" : "0") + n + o;
   if (r.category === "percent") return t + s + "%";
   if (r.category === "currency" || r.category === "accounting") {
-    const d = formatCellValueWithNumberFormat(1, {
+    const accounting = formatCellValueWithNumberFormat(1, {
         ...r,
         category: "accounting",
         negative: "parentheses",
       }).accounting,
-      u = `"${d.symbol.replace(/"/g, '""')}"`;
+      u = `"${accounting.symbol.replace(/"/g, '""')}"`;
     if (r.category === "accounting") {
       const c = "?".repeat(r.decimals);
-      return d.symbolPosition === "start"
+      return accounting.symbolPosition === "start"
         ? `${t}_(${u}* ${s}${a}_);_(${u}* (${s}${a});_(${u}* "-"${c}_);_(@_)`
         : `${t}_(${s}${a}* ${u}_);_((${s}${a})* ${u});_("-"${c}* ${u}_);_(@_)`;
     }
-    const l = d.symbolPosition === "start" ? u + s + a : s + a + '" "' + u;
+    const l =
+      accounting.symbolPosition === "start" ? u + s + a : s + a + '" "' + u;
     return t + l + (r.negative === "parentheses" ? `;(${l})` : "");
   }
   return t + s + a + (r.negative === "parentheses" ? `;(${s}${a})` : "");
@@ -389,10 +407,13 @@ function sumDecimalParts(e) {
   }
   const t = [...r].filter(([, a]) => a !== 0n);
   if (!t.length) return { coefficient: 0n, exponent: 0 };
-  const n = t.reduce((a, [s]) => Math.min(a, s), 1 / 0);
+  const exponent = t.reduce((a, [s]) => Math.min(a, s), 1 / 0);
   return {
-    coefficient: t.reduce((a, [s, d]) => a + d * 10n ** BigInt(s - n), 0n),
-    exponent: n,
+    coefficient: t.reduce(
+      (a, [s, d]) => a + d * 10n ** BigInt(s - exponent),
+      0n,
+    ),
+    exponent: exponent,
   };
 }
 function sumDecimalPartsToNumber(e) {
@@ -416,8 +437,12 @@ function exactProductOfNumbers(e) {
   let r = 1n,
     t = 0;
   for (const n of e) {
-    const o = toSignedDecimalParts(n);
-    if (((r *= o.coefficient), (t += o.exponent), e.length > 255)) {
+    const signedDecimalParts = toSignedDecimalParts(n);
+    if (
+      ((r *= signedDecimalParts.coefficient),
+      (t += signedDecimalParts.exponent),
+      e.length > 255)
+    ) {
       const a = r < 0n,
         s = (a ? -r : r).toString();
       s.length > 80 &&
@@ -442,9 +467,9 @@ function toUnsignedDecimalParts(e) {
     [n, o = ""] = r.split(".");
   return { coefficient: BigInt(n + o), exponent: Number(t) - o.length };
 }
-function roundQuotientWithMode(e, r, t) {
-  const n = e / r,
-    o = e % r;
+function roundQuotientWithMode(coefficient, r, t) {
+  const n = coefficient / r,
+    o = coefficient % r;
   return (
     n +
     (o !== 0n && (t === "away" || (t === "nearest" && o * 2n >= r)) ? 1n : 0n)
@@ -453,19 +478,25 @@ function roundQuotientWithMode(e, r, t) {
 function roundDecimalToDigits(e, r, t) {
   if (((r = Math.trunc(r)), e === 0 || r >= 324)) return e;
   if (r <= -309) return t === "away" ? 1 / 0 : 0;
-  const n = toUnsignedDecimalParts(e),
-    o = n.exponent + r;
+  const unsignedDecimalParts = toUnsignedDecimalParts(e),
+    o = unsignedDecimalParts.exponent + r;
   if (o >= 0) return e;
-  const a = roundQuotientWithMode(n.coefficient, 10n ** BigInt(-o), t);
+  const a = roundQuotientWithMode(
+    unsignedDecimalParts.coefficient,
+    10n ** BigInt(-o),
+    t,
+  );
   return Math.sign(e) * +`${a}e${-r}`;
 }
 function roundToNearestMultiple(e, r, t) {
-  const n = toUnsignedDecimalParts(e),
+  const unsignedDecimalParts = toUnsignedDecimalParts(e),
     o = toUnsignedDecimalParts(r),
-    a = Math.min(n.exponent, o.exponent),
-    s = n.coefficient * 10n ** BigInt(n.exponent - a),
+    a = Math.min(unsignedDecimalParts.exponent, o.exponent),
+    coefficient =
+      unsignedDecimalParts.coefficient *
+      10n ** BigInt(unsignedDecimalParts.exponent - a),
     d = o.coefficient * 10n ** BigInt(o.exponent - a),
-    u = roundQuotientWithMode(s, d, t);
+    u = roundQuotientWithMode(coefficient, d, t);
   return Math.sign(e) * +`${u * o.coefficient}e${o.exponent}`;
 }
 function evaluateArithmeticFunction(e, r, t) {
@@ -803,11 +834,12 @@ function evaluateSignificanceTestFunction(e, r, t) {
     l = (I) => I.filter((O) => typeof O == "number"),
     c = (I) => {
       if (I.length < 2) return n("#DIV/0!");
-      const O = exactAverageOfNumbers(I);
+      const mean = exactAverageOfNumbers(I);
       return {
-        mean: O,
+        mean: mean,
         variance: o(
-          sumDecimalPartsToNumber(I.map((j) => (j - O) ** 2)) / (I.length - 1),
+          sumDecimalPartsToNumber(I.map((j) => (j - mean) ** 2)) /
+            (I.length - 1),
         ),
       };
     },
@@ -879,15 +911,22 @@ function evaluateSignificanceTestFunction(e, r, t) {
 const specialistFunctionNames = ["CONVERT", "SLOPE", "RSQ", "STEYX", "PEARSON"],
   notSpecialistSentinel = Symbol("not-specialist"),
   conversionUnits = [],
-  addConversionUnitSymbols = (e, r, t, n = false, o = 0, a = 1) => {
-    for (const s of e.split("|"))
+  addConversionUnitSymbols = (
+    e,
+    dimension,
+    factor,
+    metric = false,
+    offset = 0,
+    power = 1,
+  ) => {
+    for (const symbol of e.split("|"))
       conversionUnits.push({
-        symbol: s,
-        dimension: r,
-        factor: t,
-        metric: n,
-        offset: o,
-        power: a,
+        symbol: symbol,
+        dimension: dimension,
+        factor: factor,
+        metric: metric,
+        offset: offset,
+        power: power,
       });
   };
 addConversionUnitSymbols("g", "mass", 0.001, true);
@@ -990,7 +1029,7 @@ addConversionUnitSymbols("m/h|m/hr", "speed", 1 / 3600, true);
 addConversionUnitSymbols("mph", "speed", 1609.344 / 3600);
 addConversionUnitSymbols("kn", "speed", 1852 / 3600);
 const frozenConversionUnits = Object.freeze(
-    conversionUnits.map((e) => Object.freeze(e)),
+    conversionUnits.map((conversionUnit) => Object.freeze(conversionUnit)),
   ),
   siPrefixPowersOfTen = {
     Y: 24,
@@ -1025,28 +1064,41 @@ const frozenConversionUnits = Object.freeze(
     Zi: 70,
     Yi: 80,
   };
-function findConversionUnit(e) {
-  const r = conversionUnits.find((t) => t.symbol === e);
-  if (r) return { ...r };
+function findConversionUnit(symbol) {
+  const conversionUnit = conversionUnits.find(
+    (conversionUnit) => conversionUnit.symbol === symbol,
+  );
+  if (conversionUnit) return { ...conversionUnit };
   for (const [t, n] of Object.entries(binaryPrefixExponents)) {
-    if (!e.startsWith(t)) continue;
-    const o = conversionUnits.find(
-      (a) => a.symbol === e.slice(t.length) && a.dimension === "information",
+    if (!symbol.startsWith(t)) continue;
+    const conversionUnit = conversionUnits.find(
+      (conversionUnit) =>
+        conversionUnit.symbol === symbol.slice(t.length) &&
+        conversionUnit.dimension === "information",
     );
-    if (o) return { ...o, symbol: e, factor: o.factor * 2 ** n };
+    if (conversionUnit)
+      return {
+        ...conversionUnit,
+        symbol: symbol,
+        factor: conversionUnit.factor * 2 ** n,
+      };
   }
   for (const t of Object.keys(siPrefixPowersOfTen).sort(
     (n, o) => o.length - n.length,
   )) {
-    if (!e.startsWith(t)) continue;
-    const n = conversionUnits.find(
-      (o) => o.symbol === e.slice(t.length) && o.metric,
+    if (!symbol.startsWith(t)) continue;
+    const conversionUnit = conversionUnits.find(
+      (conversionUnit) =>
+        conversionUnit.symbol === symbol.slice(t.length) &&
+        conversionUnit.metric,
     );
-    if (n)
+    if (conversionUnit)
       return {
-        ...n,
-        symbol: e,
-        factor: n.factor * 10 ** (siPrefixPowersOfTen[t] * n.power),
+        ...conversionUnit,
+        symbol: symbol,
+        factor:
+          conversionUnit.factor *
+          10 ** (siPrefixPowersOfTen[t] * conversionUnit.power),
       };
   }
 }
@@ -1069,8 +1121,8 @@ function evaluateSpecialistFunction(e, r, t) {
   o.forEach(s);
   const d = (j) => (Number.isFinite(j) ? j : n("#NUM!"));
   if (e === "CONVERT") {
-    const [j, z, V] = o;
-    (typeof z != "string" ||
+    const [j, symbol, V] = o;
+    (typeof symbol != "string" ||
       typeof V != "string" ||
       Array.isArray(j) ||
       j == null ||
@@ -1078,13 +1130,17 @@ function evaluateSpecialistFunction(e, r, t) {
       n();
     const D = Number(j);
     Number.isFinite(D) || n();
-    const B = findConversionUnit(z),
+    const conversionUnit = findConversionUnit(symbol),
       _ = findConversionUnit(V);
     return (
-      (!B || !_ || B.dimension !== _.dimension) && n("#N/A"),
-      B.offset === _.offset
-        ? d(D * (B.factor / _.factor))
-        : d((D * B.factor + B.offset - _.offset) / _.factor)
+      (!conversionUnit || !_ || conversionUnit.dimension !== _.dimension) &&
+        n("#N/A"),
+      conversionUnit.offset === _.offset
+        ? d(D * (conversionUnit.factor / _.factor))
+        : d(
+            (D * conversionUnit.factor + conversionUnit.offset - _.offset) /
+              _.factor,
+          )
     );
   }
   const u = (j) => (Array.isArray(j) ? j.flat(1 / 0) : [j]),

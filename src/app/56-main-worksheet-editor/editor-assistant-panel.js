@@ -15,6 +15,9 @@ import { Check } from "lucide-react";
 import { validateProposedCalculation } from "../20-calculation-options-and-assistant.js";
 
 function EditorAssistantPanel({
+  viewAndSelectionActions,
+  cellEditActions,
+  fileAndAnalysisActions,
   selectionState,
   formulaEntryState,
   dialogState,
@@ -33,10 +36,6 @@ function EditorAssistantPanel({
   selectedCellCount,
   assistantSelection,
   selectionReferenceLabel,
-  runGuardedAction,
-  applyCellPatches,
-  focusGridSurface,
-  askAssistantQuestion,
 }) {
   return (
     dialogState.sidePanelKind === "assistant" &&
@@ -62,7 +61,7 @@ function EditorAssistantPanel({
         selectedCount: selectedCellCount,
         busy: assistantState.isAssistantBusy,
         proposalId: assistantState.assistantProposal?.id,
-        onSend: askAssistantQuestion,
+        onSend: fileAndAnalysisActions.askAssistantQuestion,
         onCancel: () => {
           (assistantState.assistantRequestIdRef.current++,
             assistantState.assistantAbortControllerRef.current?.abort(),
@@ -156,60 +155,65 @@ function EditorAssistantPanel({
                                 )),
                                 selectionState.setActiveCellAddress(Oe),
                                 navigationState.setPendingScrollAddress(Oe),
-                                focusGridSurface());
+                                viewAndSelectionActions.focusGridSurface());
                             },
                           },
                           assistantState.assistantProposal.id,
                         ),
-                        assistantState.assistantProposal.patches.map((fe) =>
+                        assistantState.assistantProposal.patches.map((patch) =>
                           i.jsxs(
                             "div",
                             {
                               className: "lg-diff",
                               children: [
                                 i.jsx("b", {
-                                  children: fe.address,
+                                  children: patch.address,
                                 }),
                                 i.jsx("del", {
                                   children: String(
-                                    activeSheet.cells[fe.address]?.raw ??
+                                    activeSheet.cells[patch.address]?.raw ??
                                       "(blank)",
                                   ),
                                 }),
                                 i.jsxs("span", {
                                   children: [
-                                    String(fe.cell.raw ?? "(blank)"),
-                                    fe.cell.style?.fill ? " · highlight" : "",
+                                    String(patch.cell.raw ?? "(blank)"),
+                                    patch.cell.style?.fill
+                                      ? " · highlight"
+                                      : "",
                                   ],
                                 }),
                                 i.jsx("dl", {
                                   className: "lg-proposal-fields",
                                   "aria-label":
-                                    fe.address + " proposed field changes",
+                                    patch.address + " proposed field changes",
                                   children: [
                                     [
                                       "Value type",
-                                      activeSheet.cells[fe.address]?.raw == null
+                                      activeSheet.cells[patch.address]?.raw ==
+                                      null
                                         ? "blank"
-                                        : typeof activeSheet.cells[fe.address]
-                                            ?.raw,
-                                      fe.cell.raw === null
+                                        : typeof activeSheet.cells[
+                                            patch.address
+                                          ]?.raw,
+                                      patch.cell.raw === null
                                         ? "blank"
-                                        : typeof fe.cell.raw,
+                                        : typeof patch.cell.raw,
                                     ],
                                     ...Array.from(
                                       new Set([
                                         ...Object.keys(
-                                          activeSheet.cells[fe.address] ?? {},
+                                          activeSheet.cells[patch.address] ??
+                                            {},
                                         ),
-                                        ...Object.keys(fe.cell),
+                                        ...Object.keys(patch.cell),
                                       ]),
                                     )
                                       .filter((gt) => gt !== "raw")
                                       .map((gt) => [
                                         gt,
-                                        activeSheet.cells[fe.address]?.[gt],
-                                        fe.cell[gt],
+                                        activeSheet.cells[patch.address]?.[gt],
+                                        patch.cell[gt],
                                       ]),
                                   ]
                                     .filter(
@@ -249,7 +253,7 @@ function EditorAssistantPanel({
                                 }),
                               ],
                             },
-                            fe.address,
+                            patch.address,
                           ),
                         ),
                         assistantState.assistantProposal.patches.length > 0 &&
@@ -259,39 +263,41 @@ function EditorAssistantPanel({
                                 className: "lg-button dark full",
                                 disabled: isEditingLocked,
                                 onClick: () =>
-                                  runGuardedAction(() => {
-                                    const fe = latestEditStateRef.current,
-                                      Oe = {
-                                        sheetId: fe.sheetId,
-                                        range: fe.range,
-                                      };
-                                    if (
-                                      fe.readOnly ||
-                                      formulaEntryState.activeCellEditRef
-                                        .current ||
-                                      !evaluateAnswerEvidence(
+                                  viewAndSelectionActions.runGuardedAction(
+                                    () => {
+                                      const fe = latestEditStateRef.current,
+                                        assistantSelection = {
+                                          sheetId: fe.sheetId,
+                                          range: fe.range,
+                                        };
+                                      if (
+                                        fe.readOnly ||
+                                        formulaEntryState.activeCellEditRef
+                                          .current ||
+                                        !evaluateAnswerEvidence(
+                                          fe.book,
+                                          assistantSelection,
+                                          assistantState.answerCitations,
+                                        ).current
+                                      )
+                                        throw Error(
+                                          "The current approved source changed or editing is unavailable. Request a fresh answer before applying changes.",
+                                        );
+                                      const Be = validateProposedCalculation(
                                         fe.book,
-                                        Oe,
-                                        assistantState.answerCitations,
-                                      ).current
-                                    )
-                                      throw Error(
-                                        "The current approved source changed or editing is unavailable. Request a fresh answer before applying changes.",
+                                        assistantSelection,
+                                        assistantState.assistantProposal,
                                       );
-                                    const Be = validateProposedCalculation(
-                                      fe.book,
-                                      Oe,
-                                      assistantState.assistantProposal,
-                                    );
-                                    (applyCellPatches(
-                                      Be.patches,
-                                      `Accepted assistant proposal ${Be.id}`,
-                                      fe.selectionKey,
-                                    ),
-                                      operationStatusState.setStatusNotice(
-                                        "Reviewed proposal applied and recorded in activity.",
-                                      ));
-                                  }),
+                                      (cellEditActions.applyCellPatches(
+                                        Be.patches,
+                                        `Accepted assistant proposal ${Be.id}`,
+                                        fe.selectionKey,
+                                      ),
+                                        operationStatusState.setStatusNotice(
+                                          "Reviewed proposal applied and recorded in activity.",
+                                        ));
+                                    },
+                                  ),
                                 children: [
                                   i.jsx(Check, {
                                     size: 15,

@@ -13,6 +13,7 @@ import {
 } from "../03-workbook-model.js";
 
 function createPersistenceActions({
+  viewAndSelectionActions,
   persistenceState,
   formulaEntryState,
   operationStatusState,
@@ -34,9 +35,6 @@ function createPersistenceActions({
   setRedoStack,
   calculationRun,
   latestEditStateRef,
-  buildWorkbookViewState,
-  applyWorkbookView,
-  notifyHostCallback,
 }) {
   function runCalculationNow() {
     (calculationRun.run(),
@@ -48,7 +46,7 @@ function createPersistenceActions({
   }
   function reportSaveStatus(fe, Oe, Be) {
     try {
-      notifyHostCallback("save-state", () =>
+      viewAndSelectionActions.notifyHostCallback("save-state", () =>
         setSaveAbortControllerRef.current?.({
           status: fe,
           workbookId: Oe.id,
@@ -178,8 +176,8 @@ function createPersistenceActions({
         }),
         wt
       );
-    } catch (gt) {
-      return Xe(gt);
+    } catch (error) {
+      return Xe(error);
     }
   }
   function acknowledgeSavedWorkbook(fe, Oe) {
@@ -221,13 +219,16 @@ function createPersistenceActions({
       !isEditableRef.current
     ))
       try {
-        const fe = latestEditStateRef.current.book,
-          Oe = buildWorkbookViewState(fe),
-          Be = findRecoverableCheckpoint(workbookPersistence, fe);
-        if (Be) {
+        const book = latestEditStateRef.current.book,
+          Oe = viewAndSelectionActions.buildWorkbookViewState(book),
+          recoverableCheckpoint = findRecoverableCheckpoint(
+            workbookPersistence,
+            book,
+          );
+        if (recoverableCheckpoint) {
           ((persistenceState.isWorkbookLoadedRef.current = true),
             acknowledgeSavedWorkbook(
-              Be,
+              recoverableCheckpoint,
               persistenceState.persistenceSessionRef.current,
             ),
             activeReliabilityMonitor
@@ -245,13 +246,16 @@ function createPersistenceActions({
             );
           persistenceState.isWorkbookLoadedRef.current = true;
         }
-        const Ue = persistWorkbookSnapshot(fe, Oe);
+        const Ue = persistWorkbookSnapshot(book, Oe);
         isPromiseLike(Ue) && Ue.catch(() => {});
-      } catch (fe) {
-        reportSaveError(fe);
+      } catch (error) {
+        reportSaveError(error);
       }
   }
-  function persistWorkbookSnapshot(fe, Oe = buildWorkbookViewState(fe)) {
+  function persistWorkbookSnapshot(
+    fe,
+    Oe = viewAndSelectionActions.buildWorkbookViewState(fe),
+  ) {
     if (!persistenceState.isWorkbookLoadedRef.current) {
       const gt = new WorkbookRevisionConflictError(
         "corrupt",
@@ -264,7 +268,7 @@ function createPersistenceActions({
       Xe = persistenceState.persistenceSessionRef.current;
     return (
       reportSaveStatus("saving", Be),
-      enqueueSaveOperation((gt) =>
+      enqueueSaveOperation((signal) =>
         chainMaybePromise(
           workbookPersistence.save(
             Be,
@@ -276,7 +280,7 @@ function createPersistenceActions({
                 persistenceState.persistedWorkbookRecordRef.current.workbook
                   .id !== Be.id
               ),
-              signal: gt,
+              signal: signal,
             },
           ),
           (wt) => acknowledgeSavedWorkbook(wt, Xe),
@@ -301,7 +305,7 @@ function createPersistenceActions({
       );
     const Be = persistenceState.persistenceSessionRef.current;
     Be.active = false;
-    for (const Xe of Be.controllers) Xe.abort();
+    for (const controller of Be.controllers) controller.abort();
     ((persistenceState.persistenceSessionRef.current = {
       active: true,
       controllers: new Set(),
@@ -318,7 +322,7 @@ function createPersistenceActions({
       assistantState.setAssistantProposal(null),
       assistantState.setAnswerCitations(null),
       auditState.setAuditAnalysisResult(null),
-      applyWorkbookView(Oe.view),
+      viewAndSelectionActions.applyWorkbookView(Oe.view),
       persistenceState.setIsSaveConflictDialogOpen(false),
       persistenceState.setPersistenceError(null),
       operationStatusState.setErrorNotice(""),
@@ -326,7 +330,9 @@ function createPersistenceActions({
         "Loaded the saved workbook. The discarded local undo history has been cleared.",
       ));
     try {
-      notifyHostCallback("change", () => onChange?.(Oe.workbook));
+      viewAndSelectionActions.notifyHostCallback("change", () =>
+        onChange?.(Oe.workbook),
+      );
     } catch {
       operationStatusState.setErrorNotice(
         "The host could not acknowledge the reloaded workbook.",
@@ -343,7 +349,7 @@ function createPersistenceActions({
           Xe &&
           gt &&
           latestEditStateRef.current.book.sheets.some(
-            (wt) => wt.id === gt && !wt.protection?.enabled,
+            (sheet) => sheet.id === gt && !sheet.protection?.enabled,
           )
         ))
     )
@@ -363,8 +369,8 @@ function createPersistenceActions({
         onBeforeChange?.(fe, latestEditStateRef.current.book),
         Oe)
       ) {
-        const wt = latestEditStateRef.current.book;
-        (setUndoStack((jt) => [...jt.slice(-49), wt]), setRedoStack([]));
+        const book = latestEditStateRef.current.book;
+        (setUndoStack((jt) => [...jt.slice(-49), book]), setRedoStack([]));
       }
       if (
         (carryCalculatorRecordForward(latestEditStateRef.current.book, fe),
@@ -382,11 +388,13 @@ function createPersistenceActions({
         try {
           const wt = persistWorkbookSnapshot(fe);
           isPromiseLike(wt) && wt.catch(() => {});
-        } catch (wt) {
-          reportSaveError(wt);
+        } catch (error) {
+          reportSaveError(error);
         }
       try {
-        notifyHostCallback("change", () => onChange?.(fe));
+        viewAndSelectionActions.notifyHostCallback("change", () =>
+          onChange?.(fe),
+        );
       } catch {
         operationStatusState.setErrorNotice(
           "The host could not acknowledge the change. Export JSON to retain this revision.",
