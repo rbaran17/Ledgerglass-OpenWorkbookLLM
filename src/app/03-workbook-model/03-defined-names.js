@@ -27,53 +27,80 @@ import {
   matrixResultFunctionNames,
 } from "./02-formula-function-evaluators.js";
 
-function evaluateDefinedNameFunction(e, r, t) {
-  if (!modernFunctionNames.includes(e)) return notModernFunctionSentinel;
-  const n = (h = "#VALUE!") => {
-      throw t.issue(h);
+function evaluateDefinedNameFunction(functionName, argRefs, evaluationContext) {
+  if (!modernFunctionNames.includes(functionName))
+    return notModernFunctionSentinel;
+  const raiseIssue = (errorCode = "#VALUE!") => {
+      throw evaluationContext.issue(errorCode);
     },
-    o = (h, f) => {
-      if (t.isIssue(h)) throw h;
-      if (h === undefined && f !== undefined) return f;
-      if (Array.isArray(h) || (typeof h == "string" && !h.trim())) return n();
-      const p = Number(h);
-      return Number.isFinite(p) ? p : n();
+    coerceNumberArg = (argValue, defaultValue) => {
+      if (evaluationContext.isIssue(argValue)) throw argValue;
+      if (argValue === undefined && defaultValue !== undefined)
+        return defaultValue;
+      if (
+        Array.isArray(argValue) ||
+        (typeof argValue == "string" && !argValue.trim())
+      )
+        return raiseIssue();
+      const numericValue = Number(argValue);
+      return Number.isFinite(numericValue) ? numericValue : raiseIssue();
     },
-    a = (h, f) => Math.trunc(o(h, f)),
-    s = (h, f) => {
-      ((h < 1 || f < 1) && n("#CALC!"), h * f > 1e4 && n("#LIMIT!"));
+    coerceIntegerArg = (rawArg, defaultArg) =>
+      Math.trunc(coerceNumberArg(rawArg, defaultArg)),
+    validateArrayShape = (shapeRows, shapeColumns) => {
+      ((shapeRows < 1 || shapeColumns < 1) && raiseIssue("#CALC!"),
+        shapeRows * shapeColumns > 1e4 && raiseIssue("#LIMIT!"));
     },
-    d = (h) => {
-      if (t.isIssue(h)) throw h;
+    coerceBooleanArg = (flagValue) => {
+      if (evaluationContext.isIssue(flagValue)) throw flagValue;
       return (
-        Array.isArray(h) && n(),
-        typeof h == "string" && !/^(true|false)$/i.test(h) && n(),
-        typeof h == "string" ? h.toLowerCase() === "true" : !!h
+        Array.isArray(flagValue) && raiseIssue(),
+        typeof flagValue == "string" &&
+          !/^(true|false)$/i.test(flagValue) &&
+          raiseIssue(),
+        typeof flagValue == "string"
+          ? flagValue.toLowerCase() === "true"
+          : !!flagValue
       );
     };
-  if (e === "IFS") {
-    (r.length < 2 || r.length % 2) && n();
-    for (let h = 0; h < r.length; h += 2) {
-      const f = t.retrieve(r[h]);
-      if ((Array.isArray(f) && n(), d(f))) return t.retrieve(r[h + 1]) ?? 0;
+  if (functionName === "IFS") {
+    (argRefs.length < 2 || argRefs.length % 2) && raiseIssue();
+    for (
+      let conditionIndex = 0;
+      conditionIndex < argRefs.length;
+      conditionIndex += 2
+    ) {
+      const conditionValue = evaluationContext.retrieve(
+        argRefs[conditionIndex],
+      );
+      if (
+        (Array.isArray(conditionValue) && raiseIssue(),
+        coerceBooleanArg(conditionValue))
+      )
+        return evaluationContext.retrieve(argRefs[conditionIndex + 1]) ?? 0;
     }
-    return n("#N/A");
+    return raiseIssue("#N/A");
   }
-  if (e === "SWITCH") {
-    r.length < 3 && n();
-    const h = t.retrieve(r[0]);
-    if (t.isIssue(h)) return h;
-    Array.isArray(h) && n();
-    for (let f = 1; f + 1 < r.length; f += 2) {
-      const p = t.retrieve(r[f]);
-      if (t.isIssue(p)) return p;
-      if ((Array.isArray(p) && n(), valuesEqualIgnoringCase(h, p)))
-        return t.retrieve(r[f + 1]) ?? 0;
+  if (functionName === "SWITCH") {
+    argRefs.length < 3 && raiseIssue();
+    const switchValue = evaluationContext.retrieve(argRefs[0]);
+    if (evaluationContext.isIssue(switchValue)) return switchValue;
+    Array.isArray(switchValue) && raiseIssue();
+    for (let pairIndex = 1; pairIndex + 1 < argRefs.length; pairIndex += 2) {
+      const caseValue = evaluationContext.retrieve(argRefs[pairIndex]);
+      if (evaluationContext.isIssue(caseValue)) return caseValue;
+      if (
+        (Array.isArray(caseValue) && raiseIssue(),
+        valuesEqualIgnoringCase(switchValue, caseValue))
+      )
+        return evaluationContext.retrieve(argRefs[pairIndex + 1]) ?? 0;
     }
-    return r.length % 2 === 0 ? (t.retrieve(r.at(-1)) ?? 0) : n("#N/A");
+    return argRefs.length % 2 === 0
+      ? (evaluationContext.retrieve(argRefs.at(-1)) ?? 0)
+      : raiseIssue("#N/A");
   }
-  const u = r.map(t.retrieve),
-    c = {
+  const retrievedArgs = argRefs.map(evaluationContext.retrieve),
+    arityBounds = {
       SEQUENCE: [1, 4],
       FILTER: [2, 3],
       TRANSPOSE: [1, 1],
@@ -84,20 +111,29 @@ function evaluateDefinedNameFunction(e, r, t) {
       DROP: [2, 3],
       HSTACK: [1, 254],
       VSTACK: [1, 254],
-    }[e];
+    }[functionName];
   if (
-    (c && (r.length < c[0] || r.length > c[1]) && n(),
-    c && e !== "SEQUENCE" && u[0] === undefined && n(),
-    c && !["HSTACK", "VSTACK"].includes(e) && t.isIssue(u[0]))
+    (arityBounds &&
+      (argRefs.length < arityBounds[0] || argRefs.length > arityBounds[1]) &&
+      raiseIssue(),
+    arityBounds &&
+      functionName !== "SEQUENCE" &&
+      retrievedArgs[0] === undefined &&
+      raiseIssue(),
+    arityBounds &&
+      !["HSTACK", "VSTACK"].includes(functionName) &&
+      evaluationContext.isIssue(retrievedArgs[0]))
   )
-    throw u[0];
+    throw retrievedArgs[0];
   if (
-    !matrixResultFunctionNames.includes(e) &&
-    e !== "MAXIFS" &&
-    e !== "MINIFS"
+    !matrixResultFunctionNames.includes(functionName) &&
+    functionName !== "MAXIFS" &&
+    functionName !== "MINIFS"
   ) {
-    const h = u.flatMap(flattenNestedValues).find(t.isIssue);
-    if (h) return h;
+    const firstArgError = retrievedArgs
+      .flatMap(flattenNestedValues)
+      .find(evaluationContext.isIssue);
+    if (firstArgError) return firstArgError;
   }
   if (
     [
@@ -110,779 +146,1182 @@ function evaluateDefinedNameFunction(e, r, t) {
       "RANK.EQ",
       "RANK.AVG",
       "MODE.SNGL",
-    ].includes(e)
+    ].includes(functionName)
   ) {
-    const h = e.startsWith("RANK"),
-      f = (
-        e === "STDEV.P" || e === "VAR.P" || e === "MODE.SNGL"
-          ? u.flatMap(flattenNestedValues)
-          : flattenNestedValues(u[h ? 1 : 0])
+    const isRankFunction = functionName.startsWith("RANK"),
+      sortedNumbers = (
+        functionName === "STDEV.P" ||
+        functionName === "VAR.P" ||
+        functionName === "MODE.SNGL"
+          ? retrievedArgs.flatMap(flattenNestedValues)
+          : flattenNestedValues(retrievedArgs[isRankFunction ? 1 : 0])
       )
-        .filter((b) => typeof b == "number")
-        .sort((b, y) => b - y);
-    if ((f.length || n("#NUM!"), h)) {
-      const b = o(u[0]),
-        y = o(u[2], 0),
-        w = f.indexOf(b),
-        E = f.lastIndexOf(b);
+        .filter((entry) => typeof entry == "number")
+        .sort((leftValue, rightValue) => leftValue - rightValue);
+    if ((sortedNumbers.length || raiseIssue("#NUM!"), isRankFunction)) {
+      const rankValue = coerceNumberArg(retrievedArgs[0]),
+        rankOrder = coerceNumberArg(retrievedArgs[2], 0),
+        firstIndex = sortedNumbers.indexOf(rankValue),
+        lastIndex = sortedNumbers.lastIndexOf(rankValue);
       return (
-        w < 0 && n("#N/A"),
-        y
-          ? 1 + (e === "RANK.AVG" ? (w + E) / 2 : w)
-          : f.length - (e === "RANK.AVG" ? (w + E) / 2 : E)
+        firstIndex < 0 && raiseIssue("#N/A"),
+        rankOrder
+          ? 1 +
+            (functionName === "RANK.AVG"
+              ? (firstIndex + lastIndex) / 2
+              : firstIndex)
+          : sortedNumbers.length -
+            (functionName === "RANK.AVG"
+              ? (firstIndex + lastIndex) / 2
+              : lastIndex)
       );
     }
-    if (e === "MODE.SNGL") {
-      const b = new Map();
-      f.forEach((w) => b.set(w, (b.get(w) ?? 0) + 1));
-      const y = [...b].sort((w, E) => E[1] - w[1] || w[0] - E[0]);
-      return y[0][1] > 1 ? y[0][0] : n("#N/A");
+    if (functionName === "MODE.SNGL") {
+      const frequencyByValue = new Map();
+      sortedNumbers.forEach((sampleValue) =>
+        frequencyByValue.set(
+          sampleValue,
+          (frequencyByValue.get(sampleValue) ?? 0) + 1,
+        ),
+      );
+      const frequencyEntries = [...frequencyByValue].sort(
+        (leftEntry, rightEntry) =>
+          rightEntry[1] - leftEntry[1] || leftEntry[0] - rightEntry[0],
+      );
+      return frequencyEntries[0][1] > 1
+        ? frequencyEntries[0][0]
+        : raiseIssue("#N/A");
     }
-    if (e === "STDEV.P" || e === "VAR.P") {
-      const b = f.reduce((w, E) => w + E, 0) / f.length,
-        y = f.reduce((w, E) => w + (E - b) ** 2, 0) / f.length;
-      return e === "STDEV.P" ? Math.sqrt(y) : y;
+    if (functionName === "STDEV.P" || functionName === "VAR.P") {
+      const populationMean =
+          sortedNumbers.reduce((total, numberValue) => total + numberValue, 0) /
+          sortedNumbers.length,
+        populationVariance =
+          sortedNumbers.reduce(
+            (varianceTotal, valueItem) =>
+              varianceTotal + (valueItem - populationMean) ** 2,
+            0,
+          ) / sortedNumbers.length;
+      return functionName === "STDEV.P"
+        ? Math.sqrt(populationVariance)
+        : populationVariance;
     }
-    const p = o(u[1]) / (e.startsWith("QUARTILE") ? 4 : 1),
-      m = e.endsWith("EXC"),
-      v = m ? p * (f.length + 1) - 1 : p * (f.length - 1);
-    (p < 0 || p > 1 || v < 0 || v > f.length - 1) && n("#NUM!");
-    const g = Math.floor(v);
-    return f[g] + (v - g) * ((f[g + 1] ?? f[g]) - f[g]);
-  }
-  if (e === "MDETERM" || e === "MINVERSE") {
-    r.length !== 1 && n();
-    const matrixArgument = toMatrixArgument(u[0]),
-      f = matrixArgument.length;
-    (f > 32 && n("#LIMIT!"),
-      (!f || matrixArgument.some((g) => g.length !== f)) && n());
-    for (const g of matrixArgument.flat()) {
-      if (t.isIssue(g)) return g;
-      (typeof g != "number" && n(), Number.isFinite(g) || n("#NUM!"));
-    }
-    const p = matrixArgument.map((g, b) => [
-      ...g.map((y) => y),
-      ...Array.from({ length: f }, (y, w) => (b === w ? 1 : 0)),
-    ]);
-    let m = 1;
-    for (let g = 0; g < f; g++) {
-      let b = g;
-      for (let w = g + 1; w < f; w++)
-        Math.abs(p[w][g]) > Math.abs(p[b][g]) && (b = w);
-      if (p[b][g] === 0) return e === "MDETERM" ? 0 : n("#NUM!");
-      b !== g && (([p[g], p[b]] = [p[b], p[g]]), (m *= -1));
-      const y = p[g][g];
-      ((m *= y), (p[g] = p[g].map((w) => w / y)));
-      for (let w = 0; w < f; w++)
-        if (w !== g) {
-          const E = p[w][g];
-          p[w] = p[w].map((A, k) => A - E * p[g][k]);
-        }
-    }
-    const v = p.map((g) => g.slice(f));
-    return e === "MDETERM"
-      ? Number.isFinite(m)
-        ? m
-        : n("#NUM!")
-      : (v.some((g) => g.some((b) => !Number.isFinite(b))) && n("#NUM!"), v);
-  }
-  if (e === "CONCAT" || e === "TEXTJOIN") {
-    e === "TEXTJOIN" && u.length < 3 && n();
-    const h = e === "TEXTJOIN" ? coerceValueToText(u[0]) : "",
-      f = e === "TEXTJOIN" && d(u[1]),
-      p = u
-        .slice(e === "TEXTJOIN" ? 2 : 0)
-        .flatMap(flattenNestedValues)
-        .filter((m) => !f || (m !== null && m !== ""));
+    const percentileFraction =
+        coerceNumberArg(retrievedArgs[1]) /
+        (functionName.startsWith("QUARTILE") ? 4 : 1),
+      isExclusive = functionName.endsWith("EXC"),
+      fractionalIndex = isExclusive
+        ? percentileFraction * (sortedNumbers.length + 1) - 1
+        : percentileFraction * (sortedNumbers.length - 1);
+    (percentileFraction < 0 ||
+      percentileFraction > 1 ||
+      fractionalIndex < 0 ||
+      fractionalIndex > sortedNumbers.length - 1) &&
+      raiseIssue("#NUM!");
+    const lowerIndex = Math.floor(fractionalIndex);
     return (
-      p.reduce((m, v) => m + coerceValueToText(v).length, 0) +
-        Math.max(0, p.length - 1) * h.length >
-        32767 && n("#LIMIT!"),
-      p.map(coerceValueToText).join(h)
+      sortedNumbers[lowerIndex] +
+      (fractionalIndex - lowerIndex) *
+        ((sortedNumbers[lowerIndex + 1] ?? sortedNumbers[lowerIndex]) -
+          sortedNumbers[lowerIndex])
     );
   }
-  if (e === "MAXIFS" || e === "MINIFS") {
-    (u.length < 3 || u.length % 2 === 0) && n();
-    const h = flattenNestedValues(u[0]),
-      f = [];
-    for (let g = 1; g < u.length; g += 2) {
-      const b = flattenNestedValues(u[g]);
-      if (
-        ((b.length !== h.length ||
-          toMatrixArgument(u[g]).length !== toMatrixArgument(u[0]).length ||
-          toMatrixArgument(u[g])[0].length !==
-            toMatrixArgument(u[0])[0].length ||
-          Array.isArray(u[g + 1])) &&
-          n(),
-        t.isIssue(u[g + 1]))
-      )
-        throw u[g + 1];
-      f.push([b, u[g + 1]]);
+  if (functionName === "MDETERM" || functionName === "MINVERSE") {
+    argRefs.length !== 1 && raiseIssue();
+    const matrixArgument = toMatrixArgument(retrievedArgs[0]),
+      matrixSize = matrixArgument.length;
+    (matrixSize > 32 && raiseIssue("#LIMIT!"),
+      (!matrixSize ||
+        matrixArgument.some(
+          (matrixRowToCheck) => matrixRowToCheck.length !== matrixSize,
+        )) &&
+        raiseIssue());
+    for (const cellValue of matrixArgument.flat()) {
+      if (evaluationContext.isIssue(cellValue)) return cellValue;
+      (typeof cellValue != "number" && raiseIssue(),
+        Number.isFinite(cellValue) || raiseIssue("#NUM!"));
     }
-    h.length * f.length > 1e5 && n("#LIMIT!");
-    const p = h.filter((g, b) =>
-        f.every(([y, w]) => !t.isIssue(y[b]) && t.matches(y[b], w)),
+    const augmentedMatrix = matrixArgument.map(
+      (sourceRow, augmentedRowIndex) => [
+        ...sourceRow.map((cell) => cell),
+        ...Array.from({ length: matrixSize }, (y, identityColumn) =>
+          augmentedRowIndex === identityColumn ? 1 : 0,
+        ),
+      ],
+    );
+    let determinant = 1;
+    for (let pivotIndex = 0; pivotIndex < matrixSize; pivotIndex++) {
+      let pivotRow = pivotIndex;
+      for (
+        let candidateRow = pivotIndex + 1;
+        candidateRow < matrixSize;
+        candidateRow++
+      )
+        Math.abs(augmentedMatrix[candidateRow][pivotIndex]) >
+          Math.abs(augmentedMatrix[pivotRow][pivotIndex]) &&
+          (pivotRow = candidateRow);
+      if (augmentedMatrix[pivotRow][pivotIndex] === 0)
+        return functionName === "MDETERM" ? 0 : raiseIssue("#NUM!");
+      pivotRow !== pivotIndex &&
+        (([augmentedMatrix[pivotIndex], augmentedMatrix[pivotRow]] = [
+          augmentedMatrix[pivotRow],
+          augmentedMatrix[pivotIndex],
+        ]),
+        (determinant *= -1));
+      const pivotValue = augmentedMatrix[pivotIndex][pivotIndex];
+      ((determinant *= pivotValue),
+        (augmentedMatrix[pivotIndex] = augmentedMatrix[pivotIndex].map(
+          (rowCell) => rowCell / pivotValue,
+        )));
+      for (
+        let eliminationRow = 0;
+        eliminationRow < matrixSize;
+        eliminationRow++
+      )
+        if (eliminationRow !== pivotIndex) {
+          const eliminationFactor = augmentedMatrix[eliminationRow][pivotIndex];
+          augmentedMatrix[eliminationRow] = augmentedMatrix[eliminationRow].map(
+            (targetCell, elementIndex) =>
+              targetCell -
+              eliminationFactor * augmentedMatrix[pivotIndex][elementIndex],
+          );
+        }
+    }
+    const inverseRows = augmentedMatrix.map((matrixRow) =>
+      matrixRow.slice(matrixSize),
+    );
+    return functionName === "MDETERM"
+      ? Number.isFinite(determinant)
+        ? determinant
+        : raiseIssue("#NUM!")
+      : (inverseRows.some((inverseRow) =>
+          inverseRow.some((inverseCell) => !Number.isFinite(inverseCell)),
+        ) && raiseIssue("#NUM!"),
+        inverseRows);
+  }
+  if (functionName === "CONCAT" || functionName === "TEXTJOIN") {
+    functionName === "TEXTJOIN" && retrievedArgs.length < 3 && raiseIssue();
+    const delimiterText =
+        functionName === "TEXTJOIN" ? coerceValueToText(retrievedArgs[0]) : "",
+      shouldIgnoreEmpty =
+        functionName === "TEXTJOIN" && coerceBooleanArg(retrievedArgs[1]),
+      joinedValues = retrievedArgs
+        .slice(functionName === "TEXTJOIN" ? 2 : 0)
+        .flatMap(flattenNestedValues)
+        .filter(
+          (flatItem) =>
+            !shouldIgnoreEmpty || (flatItem !== null && flatItem !== ""),
+        );
+    return (
+      joinedValues.reduce(
+        (totalLength, textItem) =>
+          totalLength + coerceValueToText(textItem).length,
+        0,
+      ) +
+        Math.max(0, joinedValues.length - 1) * delimiterText.length >
+        32767 && raiseIssue("#LIMIT!"),
+      joinedValues.map(coerceValueToText).join(delimiterText)
+    );
+  }
+  if (functionName === "MAXIFS" || functionName === "MINIFS") {
+    (retrievedArgs.length < 3 || retrievedArgs.length % 2 === 0) &&
+      raiseIssue();
+    const valueRange = flattenNestedValues(retrievedArgs[0]),
+      criteriaPairs = [];
+    for (
+      let criteriaIndex = 1;
+      criteriaIndex < retrievedArgs.length;
+      criteriaIndex += 2
+    ) {
+      const criteriaRange = flattenNestedValues(retrievedArgs[criteriaIndex]);
+      if (
+        ((criteriaRange.length !== valueRange.length ||
+          toMatrixArgument(retrievedArgs[criteriaIndex]).length !==
+            toMatrixArgument(retrievedArgs[0]).length ||
+          toMatrixArgument(retrievedArgs[criteriaIndex])[0].length !==
+            toMatrixArgument(retrievedArgs[0])[0].length ||
+          Array.isArray(retrievedArgs[criteriaIndex + 1])) &&
+          raiseIssue(),
+        evaluationContext.isIssue(retrievedArgs[criteriaIndex + 1]))
+      )
+        throw retrievedArgs[criteriaIndex + 1];
+      criteriaPairs.push([criteriaRange, retrievedArgs[criteriaIndex + 1]]);
+    }
+    valueRange.length * criteriaPairs.length > 1e5 && raiseIssue("#LIMIT!");
+    const matchingValues = valueRange.filter((g, valueIndex) =>
+        criteriaPairs.every(
+          ([rangeValues, criterion]) =>
+            !evaluationContext.isIssue(rangeValues[valueIndex]) &&
+            evaluationContext.matches(rangeValues[valueIndex], criterion),
+        ),
       ),
-      m = p.find(t.isIssue);
-    if (m) return m;
-    const v = p.filter((g) => typeof g == "number");
-    return v.length
-      ? v.reduce((g, b) => (e === "MAXIFS" ? Math.max(g, b) : Math.min(g, b)))
+      firstError = matchingValues.find(evaluationContext.isIssue);
+    if (firstError) return firstError;
+    const numericValues = matchingValues.filter(
+      (matchedValue) => typeof matchedValue == "number",
+    );
+    return numericValues.length
+      ? numericValues.reduce((extremum, candidateValue) =>
+          functionName === "MAXIFS"
+            ? Math.max(extremum, candidateValue)
+            : Math.min(extremum, candidateValue),
+        )
       : 0;
   }
-  if (e === "XMATCH" || e === "XLOOKUP") {
-    ((r.length < (e === "XMATCH" ? 2 : 3) ||
-      r.length > (e === "XMATCH" ? 4 : 6)) &&
-      n(),
-      (u[0] === undefined ||
-        u[1] === undefined ||
-        (e === "XLOOKUP" && u[2] === undefined)) &&
-        n());
-    const h = u[0],
-      matrixArgument = toMatrixArgument(u[1]);
-    if (t.isIssue(h)) return h;
-    if (t.isIssue(u[1])) return u[1];
-    (Array.isArray(h) ||
+  if (functionName === "XMATCH" || functionName === "XLOOKUP") {
+    ((argRefs.length < (functionName === "XMATCH" ? 2 : 3) ||
+      argRefs.length > (functionName === "XMATCH" ? 4 : 6)) &&
+      raiseIssue(),
+      (retrievedArgs[0] === undefined ||
+        retrievedArgs[1] === undefined ||
+        (functionName === "XLOOKUP" && retrievedArgs[2] === undefined)) &&
+        raiseIssue());
+    const lookupValue = retrievedArgs[0],
+      matrixArgument = toMatrixArgument(retrievedArgs[1]);
+    if (evaluationContext.isIssue(lookupValue)) return lookupValue;
+    if (evaluationContext.isIssue(retrievedArgs[1])) return retrievedArgs[1];
+    (Array.isArray(lookupValue) ||
       !matrixArgument.length ||
       !matrixArgument[0].length ||
-      matrixArgument.some((A) => A.length !== matrixArgument[0].length) ||
+      matrixArgument.some(
+        (lookupRow) => lookupRow.length !== matrixArgument[0].length,
+      ) ||
       (matrixArgument.length > 1 && matrixArgument[0].length > 1)) &&
-      n();
-    const p = flattenNestedValues(matrixArgument),
-      m = o(u[e === "XMATCH" ? 2 : 4], 0),
-      v = o(u[e === "XMATCH" ? 3 : 5], 1);
-    (![0, -1, 1, 2].includes(m) || ![1, -1, 2, -2].includes(v)) && n();
-    const g = p.find(t.isIssue);
-    if (g) return g;
-    let b = [];
-    if (e === "XLOOKUP") {
-      if (t.isIssue(u[2])) return u[2];
-      ((b = toMatrixArgument(u[2])),
-        (!b.length ||
-          !b[0].length ||
-          b.some((A) => A.length !== b[0].length)) &&
-          n(),
-        (matrixArgument.length > 1
-          ? b.length !== p.length
-          : b[0].length !== p.length) && n());
-    }
-    (Math.abs(v) === 2 || m === -1 || m === 1) &&
-      (!["number", "string", "boolean"].includes(typeof h) ||
-        p.some((A) => typeof A != typeof h)) &&
-      n();
-    const y = p.map((A, k) => k);
-    (v < 0 && y.reverse(),
-      Math.abs(v) === 2 &&
-        p.some(
-          (A, k) => k > 0 && compareSortValues(A, p[k - 1]) * Math.sign(v) < 0,
-        ) &&
-        n());
-    let w = 0,
-      E = y.find((A) =>
-        m !== 2 || typeof h != "string"
-          ? valuesEqualIgnoringCase(p[A], h)
-          : typeof p[A] != "string"
-            ? false
-            : ((w += p[A].length * h.length),
-              w > 1e5 && n("#LIMIT!"),
-              t.matches(p[A], `=${h}`)),
+      raiseIssue();
+    const lookupValues = flattenNestedValues(matrixArgument),
+      matchMode = coerceNumberArg(
+        retrievedArgs[functionName === "XMATCH" ? 2 : 4],
+        0,
+      ),
+      searchMode = coerceNumberArg(
+        retrievedArgs[functionName === "XMATCH" ? 3 : 5],
+        1,
       );
-    if (E === undefined && (m === -1 || m === 1)) {
-      const A = y.filter((k) => Math.sign(compareSortValues(p[k], h)) === m);
-      (A.sort((k, F) => compareSortValues(p[k], p[F]) * m), (E = A[0]));
+    (![0, -1, 1, 2].includes(matchMode) ||
+      ![1, -1, 2, -2].includes(searchMode)) &&
+      raiseIssue();
+    const valueError = lookupValues.find(evaluationContext.isIssue);
+    if (valueError) return valueError;
+    let returnMatrix = [];
+    if (functionName === "XLOOKUP") {
+      if (evaluationContext.isIssue(retrievedArgs[2])) return retrievedArgs[2];
+      ((returnMatrix = toMatrixArgument(retrievedArgs[2])),
+        (!returnMatrix.length ||
+          !returnMatrix[0].length ||
+          returnMatrix.some(
+            (returnRow) => returnRow.length !== returnMatrix[0].length,
+          )) &&
+          raiseIssue(),
+        (matrixArgument.length > 1
+          ? returnMatrix.length !== lookupValues.length
+          : returnMatrix[0].length !== lookupValues.length) && raiseIssue());
     }
-    return E === undefined
-      ? e === "XLOOKUP" && u[3] !== undefined
-        ? (u[3] ?? 0)
-        : n("#N/A")
-      : e === "XMATCH"
-        ? E + 1
+    (Math.abs(searchMode) === 2 || matchMode === -1 || matchMode === 1) &&
+      (!["number", "string", "boolean"].includes(typeof lookupValue) ||
+        lookupValues.some(
+          (lookupItem) => typeof lookupItem != typeof lookupValue,
+        )) &&
+      raiseIssue();
+    const searchOrder = lookupValues.map((A, sourceIndex) => sourceIndex);
+    (searchMode < 0 && searchOrder.reverse(),
+      Math.abs(searchMode) === 2 &&
+        lookupValues.some(
+          (sortedValue, sortedIndex) =>
+            sortedIndex > 0 &&
+            compareSortValues(sortedValue, lookupValues[sortedIndex - 1]) *
+              Math.sign(searchMode) <
+              0,
+        ) &&
+        raiseIssue());
+    let comparisonCost = 0,
+      matchIndex = searchOrder.find((candidateIndex) =>
+        matchMode !== 2 || typeof lookupValue != "string"
+          ? valuesEqualIgnoringCase(lookupValues[candidateIndex], lookupValue)
+          : typeof lookupValues[candidateIndex] != "string"
+            ? false
+            : ((comparisonCost +=
+                lookupValues[candidateIndex].length * lookupValue.length),
+              comparisonCost > 1e5 && raiseIssue("#LIMIT!"),
+              evaluationContext.matches(
+                lookupValues[candidateIndex],
+                `=${lookupValue}`,
+              )),
+      );
+    if (matchIndex === undefined && (matchMode === -1 || matchMode === 1)) {
+      const approximateMatches = searchOrder.filter(
+        (approxIndex) =>
+          Math.sign(
+            compareSortValues(lookupValues[approxIndex], lookupValue),
+          ) === matchMode,
+      );
+      (approximateMatches.sort(
+        (leftIndex, rightIndex) =>
+          compareSortValues(lookupValues[leftIndex], lookupValues[rightIndex]) *
+          matchMode,
+      ),
+        (matchIndex = approximateMatches[0]));
+    }
+    return matchIndex === undefined
+      ? functionName === "XLOOKUP" && retrievedArgs[3] !== undefined
+        ? (retrievedArgs[3] ?? 0)
+        : raiseIssue("#N/A")
+      : functionName === "XMATCH"
+        ? matchIndex + 1
         : matrixArgument.length > 1
-          ? b[E].length === 1
-            ? (b[E][0] ?? 0)
-            : [b[E]]
-          : b.length === 1
-            ? (b[0][E] ?? 0)
-            : b.map((A) => [A[E]]);
+          ? returnMatrix[matchIndex].length === 1
+            ? (returnMatrix[matchIndex][0] ?? 0)
+            : [returnMatrix[matchIndex]]
+          : returnMatrix.length === 1
+            ? (returnMatrix[0][matchIndex] ?? 0)
+            : returnMatrix.map((returnMatrixRow) => [
+                returnMatrixRow[matchIndex],
+              ]);
   }
-  if (e === "SEQUENCE") {
-    u[0] === undefined && u[1] === undefined && n();
-    const h = a(u[0], 1),
-      f = a(u[1], 1),
-      p = o(u[2], 1),
-      m = o(u[3], 1);
+  if (functionName === "SEQUENCE") {
+    retrievedArgs[0] === undefined &&
+      retrievedArgs[1] === undefined &&
+      raiseIssue();
+    const sequenceRows = coerceIntegerArg(retrievedArgs[0], 1),
+      sequenceColumns = coerceIntegerArg(retrievedArgs[1], 1),
+      startValue = coerceNumberArg(retrievedArgs[2], 1),
+      stepValue = coerceNumberArg(retrievedArgs[3], 1);
     return (
-      s(h, f),
-      Array.from({ length: h }, (v, g) =>
-        Array.from({ length: f }, (b, y) => p + (g * f + y) * m),
+      validateArrayShape(sequenceRows, sequenceColumns),
+      Array.from({ length: sequenceRows }, (v, sequenceRowIndex) =>
+        Array.from(
+          { length: sequenceColumns },
+          (b, sequenceColumnIndex) =>
+            startValue +
+            (sequenceRowIndex * sequenceColumns + sequenceColumnIndex) *
+              stepValue,
+        ),
       )
     );
   }
-  if (e === "FILTER") {
-    const matrixArgument = toMatrixArgument(u[0]),
-      f = toMatrixArgument(u[1]);
-    u[1] === undefined && n();
-    const p = flattenNestedValues(f).find(t.isIssue);
-    if (p) throw p;
-    let m;
-    if (f.length === matrixArgument.length && f[0].length === 1)
-      m = matrixArgument.filter((v, g) => d(f[g][0]));
-    else if (f.length === 1 && f[0].length === matrixArgument[0].length)
-      m = matrixArgument.map((v) => v.filter((g, b) => d(f[0][b])));
-    else return n();
-    return !m.length || !m[0].length
-      ? u[2] !== undefined
-        ? toMatrixArgument(u[2])
-        : n("#CALC!")
-      : m;
-  }
-  if (e === "TRANSPOSE")
-    return toMatrixArgument(u[0])[0].map((h, f) =>
-      toMatrixArgument(u[0]).map((p) => p[f]),
+  if (functionName === "FILTER") {
+    const matrixArgument = toMatrixArgument(retrievedArgs[0]),
+      includeMatrix = toMatrixArgument(retrievedArgs[1]);
+    retrievedArgs[1] === undefined && raiseIssue();
+    const maskError = flattenNestedValues(includeMatrix).find(
+      evaluationContext.isIssue,
     );
-  if (e === "SORT" || e === "SORTBY") {
-    const h = toMatrixArgument(u[0]).map((b) => [...b]);
-    if (e === "SORTBY") {
-      const matrixArgument = toMatrixArgument(u[1]);
-      u[1] === undefined && n();
-      const y =
-          matrixArgument.length === 1 &&
-          matrixArgument[0].length === h[0].length &&
-          (h.length === 1 || matrixArgument[0].length > 1),
-        w = y ? h[0].length : h.length,
-        E = [];
-      for (let k = 1; k < u.length; k += 2) {
-        u[k] === undefined && n();
-        const matrixArgument = toMatrixArgument(u[k]),
-          order = o(u[k + 1], 1);
-        ((y
-          ? matrixArgument.length !== 1 || matrixArgument[0].length !== w
-          : matrixArgument.length !== w ||
-            matrixArgument.some((z) => z.length !== 1)) ||
-          ![-1, 1].includes(order)) &&
-          n();
-        const O = flattenNestedValues(matrixArgument),
-          j = O.find(t.isIssue);
-        if (j) throw j;
-        E.push({ data: O, order: order });
-      }
-      const A = Array.from({ length: w }, (k, F) => F).sort((k, F) => {
-        for (const I of E) {
-          const O = compareSortKeyWithDirection(I.data[k], I.data[F], I.order);
-          if (O) return O;
-        }
-        return k - F;
-      });
-      return y ? h.map((k) => A.map((F) => k[F])) : A.map((k) => h[k]);
-    }
-    const f = a(u[1], 1) - 1,
-      p = o(u[2], 1),
-      m = u[3] === undefined ? false : d(u[3]);
-    [-1, 1].includes(p) || n();
-    const v = m ? h[0].map((b, y) => h.map((w) => w[y])) : h;
-    (f < 0 || f >= v[0].length) && n();
-    const g = v.map((b) => b[f]).find(t.isIssue);
-    if (g) throw g;
-    return (
-      v.sort((b, y) => compareSortKeyWithDirection(b[f], y[f], p)),
-      m ? v[0].map((b, y) => v.map((w) => w[y])) : v
-    );
-  }
-  if (e === "UNIQUE") {
-    const matrixArgument = toMatrixArgument(u[0]),
-      f = u[1] === undefined ? false : d(u[1]),
-      p = u[2] === undefined ? false : d(u[2]),
-      m = f
-        ? matrixArgument[0].map((w, E) => matrixArgument.map((A) => A[E]))
-        : matrixArgument,
-      v = (w) =>
-        JSON.stringify(
-          w.map((E) => (typeof E == "string" ? E.toLowerCase() : (E ?? 0))),
+    if (maskError) throw maskError;
+    let filteredRows;
+    if (
+      includeMatrix.length === matrixArgument.length &&
+      includeMatrix[0].length === 1
+    )
+      filteredRows = matrixArgument.filter((v, filterRowIndex) =>
+        coerceBooleanArg(includeMatrix[filterRowIndex][0]),
+      );
+    else if (
+      includeMatrix.length === 1 &&
+      includeMatrix[0].length === matrixArgument[0].length
+    )
+      filteredRows = matrixArgument.map((filterSourceRow) =>
+        filterSourceRow.filter((g, filterColumnIndex) =>
+          coerceBooleanArg(includeMatrix[0][filterColumnIndex]),
         ),
-      g = new Map();
-    m.forEach((w) => g.set(v(w), (g.get(v(w)) ?? 0) + 1));
-    const b = new Set(),
-      y = m.filter((w) => {
-        const E = v(w);
-        return b.has(E) || (p && g.get(E) !== 1) ? false : (b.add(E), true);
+      );
+    else return raiseIssue();
+    return !filteredRows.length || !filteredRows[0].length
+      ? retrievedArgs[2] !== undefined
+        ? toMatrixArgument(retrievedArgs[2])
+        : raiseIssue("#CALC!")
+      : filteredRows;
+  }
+  if (functionName === "TRANSPOSE")
+    return toMatrixArgument(retrievedArgs[0])[0].map((h, transposeColumn) =>
+      toMatrixArgument(retrievedArgs[0]).map(
+        (transposeSourceRow) => transposeSourceRow[transposeColumn],
+      ),
+    );
+  if (functionName === "SORT" || functionName === "SORTBY") {
+    const sortableRows = toMatrixArgument(retrievedArgs[0]).map((rowCopy) => [
+      ...rowCopy,
+    ]);
+    if (functionName === "SORTBY") {
+      const matrixArgument = toMatrixArgument(retrievedArgs[1]);
+      retrievedArgs[1] === undefined && raiseIssue();
+      const isRowWiseSort =
+          matrixArgument.length === 1 &&
+          matrixArgument[0].length === sortableRows[0].length &&
+          (sortableRows.length === 1 || matrixArgument[0].length > 1),
+        sortItemCount = isRowWiseSort
+          ? sortableRows[0].length
+          : sortableRows.length,
+        sortKeys = [];
+      for (let keyIndex = 1; keyIndex < retrievedArgs.length; keyIndex += 2) {
+        retrievedArgs[keyIndex] === undefined && raiseIssue();
+        const matrixArgument = toMatrixArgument(retrievedArgs[keyIndex]),
+          order = coerceNumberArg(retrievedArgs[keyIndex + 1], 1);
+        ((isRowWiseSort
+          ? matrixArgument.length !== 1 ||
+            matrixArgument[0].length !== sortItemCount
+          : matrixArgument.length !== sortItemCount ||
+            matrixArgument.some((keyRow) => keyRow.length !== 1)) ||
+          ![-1, 1].includes(order)) &&
+          raiseIssue();
+        const keyValues = flattenNestedValues(matrixArgument),
+          keyError = keyValues.find(evaluationContext.isIssue);
+        if (keyError) throw keyError;
+        sortKeys.push({ data: keyValues, order: order });
+      }
+      const sortedIndexes = Array.from(
+        { length: sortItemCount },
+        (k, itemIndex) => itemIndex,
+      ).sort((leftItemIndex, rightItemIndex) => {
+        for (const sortKey of sortKeys) {
+          const keyComparison = compareSortKeyWithDirection(
+            sortKey.data[leftItemIndex],
+            sortKey.data[rightItemIndex],
+            sortKey.order,
+          );
+          if (keyComparison) return keyComparison;
+        }
+        return leftItemIndex - rightItemIndex;
       });
+      return isRowWiseSort
+        ? sortableRows.map((sortedRowValues) =>
+            sortedIndexes.map(
+              (sortedColumnIndex) => sortedRowValues[sortedColumnIndex],
+            ),
+          )
+        : sortedIndexes.map((sortedRowIndex) => sortableRows[sortedRowIndex]);
+    }
+    const sortColumnIndex = coerceIntegerArg(retrievedArgs[1], 1) - 1,
+      sortDirection = coerceNumberArg(retrievedArgs[2], 1),
+      isSortByColumn =
+        retrievedArgs[3] === undefined
+          ? false
+          : coerceBooleanArg(retrievedArgs[3]);
+    [-1, 1].includes(sortDirection) || raiseIssue();
+    const orientedRows = isSortByColumn
+      ? sortableRows[0].map((b, transposeColumnIndex) =>
+          sortableRows.map(
+            (transposeRow) => transposeRow[transposeColumnIndex],
+          ),
+        )
+      : sortableRows;
+    (sortColumnIndex < 0 || sortColumnIndex >= orientedRows[0].length) &&
+      raiseIssue();
+    const keyColumnError = orientedRows
+      .map((orientedRow) => orientedRow[sortColumnIndex])
+      .find(evaluationContext.isIssue);
+    if (keyColumnError) throw keyColumnError;
     return (
-      y.length || n("#CALC!"),
-      f ? y[0].map((w, E) => y.map((A) => A[E])) : y
+      orientedRows.sort((leftRow, rightRow) =>
+        compareSortKeyWithDirection(
+          leftRow[sortColumnIndex],
+          rightRow[sortColumnIndex],
+          sortDirection,
+        ),
+      ),
+      isSortByColumn
+        ? orientedRows[0].map((b, restoreColumnIndex) =>
+            orientedRows.map((restoreRow) => restoreRow[restoreColumnIndex]),
+          )
+        : orientedRows
     );
   }
-  if (e === "TAKE" || e === "DROP") {
-    const matrixArgument = toMatrixArgument(u[0]),
-      f = u[1] === undefined ? undefined : a(u[1]),
-      p = u[2] === undefined ? undefined : a(u[2]),
-      m = (g, b) =>
-        b === undefined
-          ? g
-          : e === "TAKE"
-            ? b > 0
-              ? g.slice(0, b)
-              : g.slice(b)
-            : b >= 0
-              ? g.slice(b)
-              : g.slice(0, b);
-    (f === undefined && p === undefined && n(),
-      (f === 0 || p === 0) && n("#CALC!"));
-    const v = m(matrixArgument, f).map((g) => m(g, p));
-    return ((!v.length || !v[0].length) && n("#CALC!"), v);
+  if (functionName === "UNIQUE") {
+    const matrixArgument = toMatrixArgument(retrievedArgs[0]),
+      isByColumn =
+        retrievedArgs[1] === undefined
+          ? false
+          : coerceBooleanArg(retrievedArgs[1]),
+      isExactlyOnce =
+        retrievedArgs[2] === undefined
+          ? false
+          : coerceBooleanArg(retrievedArgs[2]),
+      rowsToCompare = isByColumn
+        ? matrixArgument[0].map((w, uniqueColumnIndex) =>
+            matrixArgument.map(
+              (transposedRow) => transposedRow[uniqueColumnIndex],
+            ),
+          )
+        : matrixArgument,
+      rowKey = (keyInputRow) =>
+        JSON.stringify(
+          keyInputRow.map((keyCell) =>
+            typeof keyCell == "string" ? keyCell.toLowerCase() : (keyCell ?? 0),
+          ),
+        ),
+      occurrenceCounts = new Map();
+    rowsToCompare.forEach((valueRow) =>
+      occurrenceCounts.set(
+        rowKey(valueRow),
+        (occurrenceCounts.get(rowKey(valueRow)) ?? 0) + 1,
+      ),
+    );
+    const seenKeys = new Set(),
+      uniqueRows = rowsToCompare.filter((filterRow) => {
+        const filterKey = rowKey(filterRow);
+        return seenKeys.has(filterKey) ||
+          (isExactlyOnce && occurrenceCounts.get(filterKey) !== 1)
+          ? false
+          : (seenKeys.add(filterKey), true);
+      });
+    return (
+      uniqueRows.length || raiseIssue("#CALC!"),
+      isByColumn
+        ? uniqueRows[0].map((w, resultColumnIndex) =>
+            uniqueRows.map(
+              (uniqueResultRow) => uniqueResultRow[resultColumnIndex],
+            ),
+          )
+        : uniqueRows
+    );
   }
-  if (e === "CHOOSECOLS" || e === "CHOOSEROWS") {
-    const matrixArgument = toMatrixArgument(u[0]),
-      f = e === "CHOOSECOLS" ? matrixArgument[0].length : matrixArgument.length,
-      p = u
+  if (functionName === "TAKE" || functionName === "DROP") {
+    const matrixArgument = toMatrixArgument(retrievedArgs[0]),
+      rowCount =
+        retrievedArgs[1] === undefined
+          ? undefined
+          : coerceIntegerArg(retrievedArgs[1]),
+      columnCount =
+        retrievedArgs[2] === undefined
+          ? undefined
+          : coerceIntegerArg(retrievedArgs[2]),
+      takeOrDropAxis = (axisItems, axisCount) =>
+        axisCount === undefined
+          ? axisItems
+          : functionName === "TAKE"
+            ? axisCount > 0
+              ? axisItems.slice(0, axisCount)
+              : axisItems.slice(axisCount)
+            : axisCount >= 0
+              ? axisItems.slice(axisCount)
+              : axisItems.slice(0, axisCount);
+    (rowCount === undefined && columnCount === undefined && raiseIssue(),
+      (rowCount === 0 || columnCount === 0) && raiseIssue("#CALC!"));
+    const result = takeOrDropAxis(matrixArgument, rowCount).map((resultRow) =>
+      takeOrDropAxis(resultRow, columnCount),
+    );
+    return (
+      (!result.length || !result[0].length) && raiseIssue("#CALC!"),
+      result
+    );
+  }
+  if (functionName === "CHOOSECOLS" || functionName === "CHOOSEROWS") {
+    const matrixArgument = toMatrixArgument(retrievedArgs[0]),
+      axisLength =
+        functionName === "CHOOSECOLS"
+          ? matrixArgument[0].length
+          : matrixArgument.length,
+      selectedIndexes = retrievedArgs
         .slice(1)
         .flatMap(flattenNestedValues)
-        .map((m) => {
-          const v = a(m),
-            g = v > 0 ? v - 1 : f + v;
-          return ((!v || g < 0 || g >= f) && n(), g);
+        .map((indexArgument) => {
+          const requestedIndex = coerceIntegerArg(indexArgument),
+            zeroBasedIndex =
+              requestedIndex > 0
+                ? requestedIndex - 1
+                : axisLength + requestedIndex;
+          return (
+            (!requestedIndex ||
+              zeroBasedIndex < 0 ||
+              zeroBasedIndex >= axisLength) &&
+              raiseIssue(),
+            zeroBasedIndex
+          );
         });
     return (
-      p.length || n(),
-      e === "CHOOSECOLS"
-        ? matrixArgument.map((m) => p.map((v) => m[v]))
-        : p.map((m) => matrixArgument[m])
+      selectedIndexes.length || raiseIssue(),
+      functionName === "CHOOSECOLS"
+        ? matrixArgument.map((sourceMatrixRow) =>
+            selectedIndexes.map(
+              (selectedColumnIndex) => sourceMatrixRow[selectedColumnIndex],
+            ),
+          )
+        : selectedIndexes.map(
+            (selectedRowSource) => matrixArgument[selectedRowSource],
+          )
     );
   }
-  if (e === "HSTACK" || e === "VSTACK") {
-    const h = u.map(toMatrixArgument),
-      f =
-        e === "VSTACK"
-          ? h.reduce((m, v) => m + v.length, 0)
-          : Math.max(...h.map((m) => m.length)),
-      p =
-        e === "HSTACK"
-          ? h.reduce((m, v) => m + v[0].length, 0)
-          : Math.max(...h.map((m) => m[0].length));
+  if (functionName === "HSTACK" || functionName === "VSTACK") {
+    const stackedMatrices = retrievedArgs.map(toMatrixArgument),
+      totalRows =
+        functionName === "VSTACK"
+          ? stackedMatrices.reduce(
+              (rowTotal, matrixForRows) => rowTotal + matrixForRows.length,
+              0,
+            )
+          : Math.max(
+              ...stackedMatrices.map(
+                (matrixForRowCount) => matrixForRowCount.length,
+              ),
+            ),
+      totalColumns =
+        functionName === "HSTACK"
+          ? stackedMatrices.reduce(
+              (columnTotal, matrixForColumns) =>
+                columnTotal + matrixForColumns[0].length,
+              0,
+            )
+          : Math.max(
+              ...stackedMatrices.map(
+                (matrixForColumnCount) => matrixForColumnCount[0].length,
+              ),
+            );
     return (
-      s(f, p),
-      e === "VSTACK"
-        ? h.flatMap((m) =>
-            m.map((v) =>
-              Array.from({ length: p }, (g, b) =>
-                b < v.length ? v[b] : t.issue("#N/A"),
+      validateArrayShape(totalRows, totalColumns),
+      functionName === "VSTACK"
+        ? stackedMatrices.flatMap((sourceMatrix) =>
+            sourceMatrix.map((stackedSourceRow) =>
+              Array.from({ length: totalColumns }, (g, columnIndex) =>
+                columnIndex < stackedSourceRow.length
+                  ? stackedSourceRow[columnIndex]
+                  : evaluationContext.issue("#N/A"),
               ),
             ),
           )
-        : Array.from({ length: f }, (m, v) =>
-            h.flatMap((g) =>
-              Array.from({ length: g[0].length }, (b, y) =>
-                v < g.length ? g[v][y] : t.issue("#N/A"),
+        : Array.from({ length: totalRows }, (m, rowIndex) =>
+            stackedMatrices.flatMap((stackedMatrix) =>
+              Array.from(
+                { length: stackedMatrix[0].length },
+                (b, stackedColumnIndex) =>
+                  rowIndex < stackedMatrix.length
+                    ? stackedMatrix[rowIndex][stackedColumnIndex]
+                    : evaluationContext.issue("#N/A"),
               ),
             ),
           )
     );
   }
-  if (e === "TOCOL" || e === "TOROW") {
-    const matrixArgument = toMatrixArgument(u[0]),
-      f = a(u[1], 0),
-      p = u[2] === undefined ? false : d(u[2]);
-    [0, 1, 2, 3].includes(f) || n();
-    const m = (
-      p
-        ? matrixArgument[0].flatMap((v, g) => matrixArgument.map((b) => b[g]))
+  if (functionName === "TOCOL" || functionName === "TOROW") {
+    const matrixArgument = toMatrixArgument(retrievedArgs[0]),
+      ignoreMode = coerceIntegerArg(retrievedArgs[1], 0),
+      scanByRow =
+        retrievedArgs[2] === undefined
+          ? false
+          : coerceBooleanArg(retrievedArgs[2]);
+    [0, 1, 2, 3].includes(ignoreMode) || raiseIssue();
+    const flatValues = (
+      scanByRow
+        ? matrixArgument[0].flatMap((v, sourceColumnIndex) =>
+            matrixArgument.map(
+              (sourceRowCells) => sourceRowCells[sourceColumnIndex],
+            ),
+          )
         : matrixArgument.flat()
     ).filter(
-      (v) =>
-        !((f === 1 || f === 3) && v === null) &&
-        !((f === 2 || f === 3) && t.isIssue(v)),
+      (flatValue) =>
+        !((ignoreMode === 1 || ignoreMode === 3) && flatValue === null) &&
+        !(
+          (ignoreMode === 2 || ignoreMode === 3) &&
+          evaluationContext.isIssue(flatValue)
+        ),
     );
     return (
-      m.length || n("#CALC!"),
-      e === "TOCOL" ? m.map((v) => [v ?? 0]) : [m.map((v) => v ?? 0)]
+      flatValues.length || raiseIssue("#CALC!"),
+      functionName === "TOCOL"
+        ? flatValues.map((columnOutputValue) => [columnOutputValue ?? 0])
+        : [flatValues.map((rowOutputValue) => rowOutputValue ?? 0)]
     );
   }
-  if (e === "EXPAND") {
-    const matrixArgument = toMatrixArgument(u[0]),
-      f = a(u[1], matrixArgument.length),
-      p = a(u[2], matrixArgument[0].length);
+  if (functionName === "EXPAND") {
+    const matrixArgument = toMatrixArgument(retrievedArgs[0]),
+      expandedRows = coerceIntegerArg(retrievedArgs[1], matrixArgument.length),
+      expandedColumns = coerceIntegerArg(
+        retrievedArgs[2],
+        matrixArgument[0].length,
+      );
     return (
-      s(f, p),
-      (f < matrixArgument.length || p < matrixArgument[0].length) && n(),
-      Array.from({ length: f }, (m, v) =>
-        Array.from({ length: p }, (g, b) =>
-          v < matrixArgument.length && b < matrixArgument[v].length
-            ? matrixArgument[v][b]
-            : (u[3] ?? t.issue("#N/A")),
+      validateArrayShape(expandedRows, expandedColumns),
+      (expandedRows < matrixArgument.length ||
+        expandedColumns < matrixArgument[0].length) &&
+        raiseIssue(),
+      Array.from({ length: expandedRows }, (m, expandRowIndex) =>
+        Array.from({ length: expandedColumns }, (g, expandColumnIndex) =>
+          expandRowIndex < matrixArgument.length &&
+          expandColumnIndex < matrixArgument[expandRowIndex].length
+            ? matrixArgument[expandRowIndex][expandColumnIndex]
+            : (retrievedArgs[3] ?? evaluationContext.issue("#N/A")),
         ),
       )
     );
   }
-  if (e === "TEXTBEFORE" || e === "TEXTAFTER") {
-    const h = coerceValueToText(u[0]),
-      f = coerceValueToText(u[1]),
-      p = a(u[2], 1),
-      m = a(u[3], 0) === 1,
-      v = a(u[4], 0) === 1;
-    (!p || !f) && n();
-    const g = m ? h.toLowerCase() : h,
-      b = m ? f.toLowerCase() : f,
-      y = [];
-    for (let E = 0; E <= g.length - b.length;) {
-      const A = g.indexOf(b, E);
-      if (A < 0) break;
-      (y.push(A), (E = A + b.length));
+  if (functionName === "TEXTBEFORE" || functionName === "TEXTAFTER") {
+    const textValue = coerceValueToText(retrievedArgs[0]),
+      delimiterValue = coerceValueToText(retrievedArgs[1]),
+      instanceNumber = coerceIntegerArg(retrievedArgs[2], 1),
+      isCaseInsensitive = coerceIntegerArg(retrievedArgs[3], 0) === 1,
+      shouldMatchEnd = coerceIntegerArg(retrievedArgs[4], 0) === 1;
+    (!instanceNumber || !delimiterValue) && raiseIssue();
+    const searchText = isCaseInsensitive ? textValue.toLowerCase() : textValue,
+      searchDelimiter = isCaseInsensitive
+        ? delimiterValue.toLowerCase()
+        : delimiterValue,
+      delimiterPositions = [];
+    for (
+      let searchStart = 0;
+      searchStart <= searchText.length - searchDelimiter.length;
+    ) {
+      const foundIndex = searchText.indexOf(searchDelimiter, searchStart);
+      if (foundIndex < 0) break;
+      (delimiterPositions.push(foundIndex),
+        (searchStart = foundIndex + searchDelimiter.length));
     }
-    const w = y[p > 0 ? p - 1 : y.length + p];
-    return w === undefined
-      ? v && Math.abs(p) === y.length + 1
-        ? e === "TEXTBEFORE"
-          ? p > 0
-            ? h
+    const matchPosition =
+      delimiterPositions[
+        instanceNumber > 0
+          ? instanceNumber - 1
+          : delimiterPositions.length + instanceNumber
+      ];
+    return matchPosition === undefined
+      ? shouldMatchEnd &&
+        Math.abs(instanceNumber) === delimiterPositions.length + 1
+        ? functionName === "TEXTBEFORE"
+          ? instanceNumber > 0
+            ? textValue
             : ""
-          : p > 0
+          : instanceNumber > 0
             ? ""
-            : h
-        : u[5] !== undefined
-          ? u[5]
-          : n("#N/A")
-      : e === "TEXTBEFORE"
-        ? h.slice(0, w)
-        : h.slice(w + f.length);
+            : textValue
+        : retrievedArgs[5] !== undefined
+          ? retrievedArgs[5]
+          : raiseIssue("#N/A")
+      : functionName === "TEXTBEFORE"
+        ? textValue.slice(0, matchPosition)
+        : textValue.slice(matchPosition + delimiterValue.length);
   }
-  if (e === "TEXTSPLIT") {
-    (u.length < 2 || u.length > 6) && n();
-    const h = u.slice(0, 5).flatMap(flattenNestedValues).find(t.isIssue);
-    if (h) return h;
-    const f = coerceValueToText(u[0]),
-      p = u[3] === undefined ? false : d(u[3]),
-      m = o(u[4], 0);
-    (Array.isArray(u[0]) || ![0, 1].includes(m)) && n();
-    const v = (A) =>
-        flattenNestedValues(A)
-          .filter((k) => k != null)
-          .map((k) => {
-            if (t.isIssue(k)) throw k;
-            return coerceValueToText(k);
+  if (functionName === "TEXTSPLIT") {
+    (retrievedArgs.length < 2 || retrievedArgs.length > 6) && raiseIssue();
+    const argumentError = retrievedArgs
+      .slice(0, 5)
+      .flatMap(flattenNestedValues)
+      .find(evaluationContext.isIssue);
+    if (argumentError) return argumentError;
+    const textToSplit = coerceValueToText(retrievedArgs[0]),
+      shouldIgnoreEmptyValues =
+        retrievedArgs[3] === undefined
+          ? false
+          : coerceBooleanArg(retrievedArgs[3]),
+      textMatchMode = coerceNumberArg(retrievedArgs[4], 0);
+    (Array.isArray(retrievedArgs[0]) || ![0, 1].includes(textMatchMode)) &&
+      raiseIssue();
+    const toTextValues = (valueArgument) =>
+        flattenNestedValues(valueArgument)
+          .filter((nonNullItem) => nonNullItem != null)
+          .map((splitItem) => {
+            if (evaluationContext.isIssue(splitItem)) throw splitItem;
+            return coerceValueToText(splitItem);
           })
           .filter(Boolean),
-      g = v(u[1]),
-      b = v(u[2]);
-    (!g.length && !b.length && n(),
-      (g.length + b.length > 100 || [...g, ...b].join("").length > 1e4) &&
-        n("#LIMIT!"));
-    const y = (A, k) =>
-        k.length
-          ? A.split(
-              new RegExp(
-                k
-                  .map((F) => F.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-                  .join("|"),
-                m ? "i" : "",
-              ),
-            ).filter((F) => !p || F !== "")
-          : [A],
-      w = y(f, b).map((A) => y(A, g)),
-      E = Math.max(...w.map((A) => A.length));
+      columnDelimiters = toTextValues(retrievedArgs[1]),
+      rowDelimiters = toTextValues(retrievedArgs[2]);
+    (!columnDelimiters.length && !rowDelimiters.length && raiseIssue(),
+      (columnDelimiters.length + rowDelimiters.length > 100 ||
+        [...columnDelimiters, ...rowDelimiters].join("").length > 1e4) &&
+        raiseIssue("#LIMIT!"));
+    const splitByDelimiters = (splitText, delimiterList) =>
+        delimiterList.length
+          ? splitText
+              .split(
+                new RegExp(
+                  delimiterList
+                    .map((delimiterItem) =>
+                      delimiterItem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+                    )
+                    .join("|"),
+                  textMatchMode ? "i" : "",
+                ),
+              )
+              .filter((segment) => !shouldIgnoreEmptyValues || segment !== "")
+          : [splitText],
+      splitRows = splitByDelimiters(textToSplit, rowDelimiters).map((rowText) =>
+        splitByDelimiters(rowText, columnDelimiters),
+      ),
+      maxColumnCount = Math.max(
+        ...splitRows.map((splitRowForWidth) => splitRowForWidth.length),
+      );
     return (
-      s(w.length, E),
-      w.map((A) =>
-        Array.from({ length: E }, (k, F) => A[F] ?? u[5] ?? t.issue("#N/A")),
+      validateArrayShape(splitRows.length, maxColumnCount),
+      splitRows.map((splitRowSegments) =>
+        Array.from(
+          { length: maxColumnCount },
+          (k, segmentIndex) =>
+            splitRowSegments[segmentIndex] ??
+            retrievedArgs[5] ??
+            evaluationContext.issue("#N/A"),
+        ),
       )
     );
   }
   return notModernFunctionSentinel;
 }
-function validateDefinedName(e, workbook) {
-  if (e === undefined) return [];
-  if (!Array.isArray(e) || e.length > 1e3)
+function validateDefinedName(definedNames, workbook) {
+  if (definedNames === undefined) return [];
+  if (!Array.isArray(definedNames) || definedNames.length > 1e3)
     throw new Error("A workbook may contain at most 1,000 defined names.");
-  const t = new Set();
-  return e.map((n) => {
-    if (!n || typeof n != "object" || Array.isArray(n))
-      throw new Error("Invalid defined name.");
-    const o = n;
+  const seenScopeKeys = new Set();
+  return definedNames.map((definedName) => {
     if (
-      Object.keys(o).some(
-        (s) => !["name", "refersTo", "scopeSheetId", "comment"].includes(s),
+      !definedName ||
+      typeof definedName != "object" ||
+      Array.isArray(definedName)
+    )
+      throw new Error("Invalid defined name.");
+    const entry = definedName;
+    if (
+      Object.keys(entry).some(
+        (key) => !["name", "refersTo", "scopeSheetId", "comment"].includes(key),
       )
     )
       throw new Error("Unknown defined-name field.");
     if (
-      typeof o.name != "string" ||
-      !/^[A-Za-z_\\][A-Za-z0-9_.\\]{0,254}$/.test(o.name) ||
-      /^(?:[A-Za-z]{1,3}[1-9]\d*|R\d+C\d+|R|C)$/i.test(o.name)
+      typeof entry.name != "string" ||
+      !/^[A-Za-z_\\][A-Za-z0-9_.\\]{0,254}$/.test(entry.name) ||
+      /^(?:[A-Za-z]{1,3}[1-9]\d*|R\d+C\d+|R|C)$/i.test(entry.name)
     )
       throw new Error(
         "Names must begin with a letter or underscore and cannot be cell addresses.",
       );
     if (
-      typeof o.refersTo != "string" ||
-      !o.refersTo.startsWith("=") ||
-      o.refersTo.length > 4096 ||
-      o.refersTo.length < 2
+      typeof entry.refersTo != "string" ||
+      !entry.refersTo.startsWith("=") ||
+      entry.refersTo.length > 4096 ||
+      entry.refersTo.length < 2
     )
       throw new Error(
         "A name must refer to a formula beginning with = (up to 4,096 characters).",
       );
     if (
-      o.scopeSheetId !== undefined &&
-      (typeof o.scopeSheetId != "string" ||
-        !workbook.sheets.some((sheet) => sheet.id === o.scopeSheetId))
+      entry.scopeSheetId !== undefined &&
+      (typeof entry.scopeSheetId != "string" ||
+        !workbook.sheets.some((sheet) => sheet.id === entry.scopeSheetId))
     )
       throw new Error("Defined-name worksheet scope was not found.");
     if (
-      o.comment !== undefined &&
-      (typeof o.comment != "string" || o.comment.length > 1e3)
+      entry.comment !== undefined &&
+      (typeof entry.comment != "string" || entry.comment.length > 1e3)
     )
       throw new Error(
         "Defined-name comments may contain at most 1,000 characters.",
       );
-    const a = `${o.scopeSheetId ?? ""}:${o.name.toLowerCase()}`;
-    if (t.has(a)) throw new Error("A name already exists in this scope.");
+    const scopeKey = `${entry.scopeSheetId ?? ""}:${entry.name.toLowerCase()}`;
+    if (seenScopeKeys.has(scopeKey))
+      throw new Error("A name already exists in this scope.");
     return (
-      t.add(a),
+      seenScopeKeys.add(scopeKey),
       {
-        name: o.name,
-        refersTo: o.refersTo,
-        ...(o.scopeSheetId ? { scopeSheetId: o.scopeSheetId } : {}),
-        ...(o.comment ? { comment: o.comment } : {}),
+        name: entry.name,
+        refersTo: entry.refersTo,
+        ...(entry.scopeSheetId ? { scopeSheetId: entry.scopeSheetId } : {}),
+        ...(entry.comment ? { comment: entry.comment } : {}),
       }
     );
   });
 }
-const definedNameScopeKey = (e) =>
-    `${e.scopeSheetId ?? ""}:${e.name.toLowerCase()}`,
-  formatQuotedSheetPrefix = (e) => `'${e.replace(/'/g, "''")}'!`;
-function inspectFormulaForMigration(e, r = false) {
-  const t = [];
+const definedNameScopeKey = (definedName) =>
+    `${definedName.scopeSheetId ?? ""}:${definedName.name.toLowerCase()}`,
+  formatQuotedSheetPrefix = (sheetName) =>
+    `'${sheetName.replace(/'/g, "''")}'!`;
+function inspectFormulaForMigration(formulaText, throwOnError = false) {
+  const references = [];
   let end = 0;
-  const o = (s) => {
-      if (r) throw Error(s);
+  const reportIssue = (message) => {
+      if (throwOnError) throw Error(message);
     },
-    a = () => {
-      let s = 0;
-      do (e[end] === "[" && s++, e[end] === "]" && s--, end++);
-      while (end < e.length && s);
-      s && o("Unbalanced table references cannot be safely migrated.");
+    skipTableReference = () => {
+      let depth = 0;
+      do
+        (formulaText[end] === "[" && depth++,
+          formulaText[end] === "]" && depth--,
+          end++);
+      while (end < formulaText.length && depth);
+      depth &&
+        reportIssue("Unbalanced table references cannot be safely migrated.");
     };
-  for (; end < e.length;) {
+  for (; end < formulaText.length;) {
     const start = end,
-      d = e[end];
-    if (d === '"') {
+      currentChar = formulaText[end];
+    if (currentChar === '"') {
       end++;
-      let m = false;
-      for (; end < e.length;)
-        if (e[end++] === '"')
-          if (e[end] === '"') end++;
+      let isTerminated = false;
+      for (; end < formulaText.length;)
+        if (formulaText[end++] === '"')
+          if (formulaText[end] === '"') end++;
           else {
-            m = true;
+            isTerminated = true;
             break;
           }
-      m || o("An unterminated formula string cannot be safely migrated.");
+      isTerminated ||
+        reportIssue(
+          "An unterminated formula string cannot be safely migrated.",
+        );
       continue;
     }
-    if (d === "#") {
-      const m =
+    if (currentChar === "#") {
+      const errorMatch =
         /^#(?:REF!|NAME\?|VALUE!|DIV\/0!|N\/A|NUM!|NULL!|SPILL!|CALC!|CYCLE!|LIMIT!|BLOCKED!|ERROR!)/i.exec(
-          e.slice(end),
+          formulaText.slice(end),
         );
-      if (m) {
-        end += m[0].length;
+      if (errorMatch) {
+        end += errorMatch[0].length;
         continue;
       }
       end++;
       continue;
     }
-    const u =
+    const threeDimMatch =
       /^(?:'(?:[^']|'')+'|[A-Za-z0-9_.]+):(?:'(?:[^']|'')+'|[A-Za-z0-9_.]+)!/.exec(
-        e.slice(end),
+        formulaText.slice(end),
       );
-    if (u) {
-      (o("Three-dimensional references cannot be safely migrated."),
-        (end += u[0].length));
+    if (threeDimMatch) {
+      (reportIssue("Three-dimensional references cannot be safely migrated."),
+        (end += threeDimMatch[0].length));
       continue;
     }
     let qualifier;
-    if (d === "'") {
-      const m = /^'((?:[^']|'')+)'!/.exec(e.slice(end));
-      if (!m) {
+    if (currentChar === "'") {
+      const quotedMatch = /^'((?:[^']|'')+)'!/.exec(formulaText.slice(end));
+      if (!quotedMatch) {
         for (
-          o("An unsupported quoted reference cannot be safely migrated."),
+          reportIssue(
+            "An unsupported quoted reference cannot be safely migrated.",
+          ),
             end++;
-          end < e.length && e[end++] !== "'";
+          end < formulaText.length && formulaText[end++] !== "'";
         );
         continue;
       }
-      ((qualifier = m[1].replace(/''/g, "'")),
-        (end += m[0].length),
+      ((qualifier = quotedMatch[1].replace(/''/g, "'")),
+        (end += quotedMatch[0].length),
         /[\[\]:|]/.test(qualifier) &&
-          o(
+          reportIssue(
             "External or three-dimensional references cannot be safely migrated.",
           ));
     } else {
-      const m = /^([A-Za-z0-9_\\][A-Za-z0-9_.\\]*)!/.exec(e.slice(end));
-      m && ((qualifier = m[1]), (end += m[0].length));
+      const unquotedMatch = /^([A-Za-z0-9_\\][A-Za-z0-9_.\\]*)!/.exec(
+        formulaText.slice(end),
+      );
+      unquotedMatch &&
+        ((qualifier = unquotedMatch[1]), (end += unquotedMatch[0].length));
     }
-    if (qualifier === undefined && d === "[") {
-      (e.startsWith("[@", end) ||
-        o(
+    if (qualifier === undefined && currentChar === "[") {
+      (formulaText.startsWith("[@", end) ||
+        reportIssue(
           "External or unqualified bracket references cannot be safely migrated.",
         ),
-        a());
+        skipTableReference());
       continue;
     }
-    const c =
+    const cellRangeMatch =
       /^(?:\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}|\$?[1-9]\d*:\$?[1-9]\d*)(?![A-Za-z0-9_.\\])/.exec(
-        e.slice(end),
+        formulaText.slice(end),
       );
-    if (c) {
-      ((end += c[0].length),
-        t.push({
+    if (cellRangeMatch) {
+      ((end += cellRangeMatch[0].length),
+        references.push({
           start: start,
           end: end,
-          text: e.slice(start, end),
-          name: c[0],
+          text: formulaText.slice(start, end),
+          name: cellRangeMatch[0],
           ...(qualifier ? { qualifier: qualifier } : {}),
           cell: true,
         }));
       continue;
     }
-    if (qualifier === undefined && /[0-9.]/.test(d)) {
-      const m = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(e.slice(end));
-      if (m) {
-        end += m[0].length;
+    if (qualifier === undefined && /[0-9.]/.test(currentChar)) {
+      const numberMatch = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(
+        formulaText.slice(end),
+      );
+      if (numberMatch) {
+        end += numberMatch[0].length;
         continue;
       }
     }
-    const h =
+    const nameMatch =
       /^(?:\$?[A-Za-z]{1,3}\$?[1-9]\d*(?![A-Za-z0-9_.\\])|[A-Za-z_\\][A-Za-z0-9_.\\]*)/.exec(
-        e.slice(end),
+        formulaText.slice(end),
       );
-    if (!h) {
-      (qualifier && o("The qualified reference cannot be safely migrated."),
-        d === "!" && o("The reference qualifier cannot be safely migrated."),
-        d === "@" && e[end + 1] === "[" ? (end++, a()) : end++);
+    if (!nameMatch) {
+      (qualifier &&
+        reportIssue("The qualified reference cannot be safely migrated."),
+        currentChar === "!" &&
+          reportIssue("The reference qualifier cannot be safely migrated."),
+        currentChar === "@" && formulaText[end + 1] === "["
+          ? (end++, skipTableReference())
+          : end++);
       continue;
     }
-    const f = h[0];
-    if (((end += f.length), e[end] === "[")) {
-      a();
+    const nameText = nameMatch[0];
+    if (((end += nameText.length), formulaText[end] === "[")) {
+      skipTableReference();
       continue;
     }
-    const p = /^\s*\(/.test(e.slice(end));
-    (p &&
-      /^(?:_xlfn\.)?(?:INDIRECT|EVALUATE|GET\.CELL)$/i.test(f) &&
-      o(
-        `${f} uses dynamic or locally bound names and cannot be safely migrated.`,
+    const isFunctionCall = /^\s*\(/.test(formulaText.slice(end));
+    (isFunctionCall &&
+      /^(?:_xlfn\.)?(?:INDIRECT|EVALUATE|GET\.CELL)$/i.test(nameText) &&
+      reportIssue(
+        `${nameText} uses dynamic or locally bound names and cannot be safely migrated.`,
       ),
-      !(start > 0 && /[A-Za-z0-9_.$\\]/.test(e[start - 1])) &&
-        t.push({
+      !(start > 0 && /[A-Za-z0-9_.$\\]/.test(formulaText[start - 1])) &&
+        references.push({
           start: start,
           end: end,
-          text: e.slice(start, end),
-          name: f,
-          ...(p ? { call: true } : {}),
+          text: formulaText.slice(start, end),
+          name: nameText,
+          ...(isFunctionCall ? { call: true } : {}),
           ...(qualifier ? { qualifier: qualifier } : {}),
-          ...(/^\$?[A-Za-z]{1,3}\$?[1-9]\d*$/.test(f) ? { cell: true } : {}),
+          ...(/^\$?[A-Za-z]{1,3}\$?[1-9]\d*$/.test(nameText)
+            ? { cell: true }
+            : {}),
         }));
   }
-  return t;
+  return references;
 }
-function m5(e, r = false) {
-  const t = inspectFormulaForMigration(e, r);
-  if (!/\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(e)) return t;
-  const n = new Map();
+function m5(formulaText, throwOnError = false) {
+  const references = inspectFormulaForMigration(formulaText, throwOnError);
+  if (!/\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(formulaText))
+    return references;
+  const boundByStart = new Map();
   try {
-    walkFormulaNodes(tokenizeFormulaText(e), (o, a, s, d) => {
-      n.set(o.start, {
-        bound: new Set(a),
-        excluded: d || (!o.qualifier && a.has(normalizeBindingName(o.name))),
-      });
-    });
+    walkFormulaNodes(
+      tokenizeFormulaText(formulaText),
+      (token, boundNames, s, isExcluded) => {
+        boundByStart.set(token.start, {
+          bound: new Set(boundNames),
+          excluded:
+            isExcluded ||
+            (!token.qualifier &&
+              boundNames.has(normalizeBindingName(token.name))),
+        });
+      },
+    );
   } catch (error) {
-    if (r) throw error;
-    return t;
+    if (throwOnError) throw error;
+    return references;
   }
-  return t
-    .filter((o) => !n.get(o.start)?.excluded)
-    .map((o) => ({ ...o, bound: n.get(o.start)?.bound }));
+  return references
+    .filter((candidate) => !boundByStart.get(candidate.start)?.excluded)
+    .map((reference) => ({
+      ...reference,
+      bound: boundByStart.get(reference.start)?.bound,
+    }));
 }
-function replaceTextSpans(e, r, t) {
-  let n = "",
-    o = 0;
-  for (const a of r) ((n += e.slice(o, a.start) + t(a)), (o = a.end));
-  return n + e.slice(o);
+function replaceTextSpans(text, spans, getReplacement) {
+  let result = "",
+    lastEnd = 0;
+  for (const span of spans)
+    ((result += text.slice(lastEnd, span.start) + getReplacement(span)),
+      (lastEnd = span.end));
+  return result + text.slice(lastEnd);
 }
 const pO = 500;
-function stripFormulaStringLiterals(e) {
-  let r = "",
-    t = 0;
-  for (; t < e.length;) {
-    const n = e[t];
-    if (n === '"' || n === "'") {
-      const a = t++,
-        s = n;
-      for (; t < e.length;)
-        if (e[t++] === s)
-          if (e[t] === s) t++;
+function stripFormulaStringLiterals(formulaText) {
+  let output = "",
+    index = 0;
+  for (; index < formulaText.length;) {
+    const currentChar = formulaText[index];
+    if (currentChar === '"' || currentChar === "'") {
+      const quoteStart = index++,
+        quoteChar = currentChar;
+      for (; index < formulaText.length;)
+        if (formulaText[index++] === quoteChar)
+          if (formulaText[index] === quoteChar) index++;
           else break;
-      r += e.slice(a, t);
+      output += formulaText.slice(quoteStart, index);
       continue;
     }
-    const o = /^(?:[A-Za-z_][A-Za-z0-9_.]*\[|\[@)/.exec(e.slice(t));
-    if (o && (t === 0 || !/[A-Za-z0-9_.$]/.test(e[t - 1]))) {
-      const a = t;
-      t += o[0].length;
-      let s = 1;
-      for (; t < e.length && s;)
-        (e[t] === "[" && s++, e[t] === "]" && s--, t++);
-      const d = e.slice(a, t);
-      !s && !/[!|]/.test(d) && !/^[A-Za-z0-9_!]/.test(e.slice(t))
-        ? (r += "0")
-        : (r += d);
+    const bracketMatch = /^(?:[A-Za-z_][A-Za-z0-9_.]*\[|\[@)/.exec(
+      formulaText.slice(index),
+    );
+    if (
+      bracketMatch &&
+      (index === 0 || !/[A-Za-z0-9_.$]/.test(formulaText[index - 1]))
+    ) {
+      const bracketStart = index;
+      index += bracketMatch[0].length;
+      let bracketDepth = 1;
+      for (; index < formulaText.length && bracketDepth;)
+        (formulaText[index] === "[" && bracketDepth++,
+          formulaText[index] === "]" && bracketDepth--,
+          index++);
+      const bracketText = formulaText.slice(bracketStart, index);
+      !bracketDepth &&
+      !/[!|]/.test(bracketText) &&
+      !/^[A-Za-z0-9_!]/.test(formulaText.slice(index))
+        ? (output += "0")
+        : (output += bracketText);
       continue;
     }
-    r += e[t++];
+    output += formulaText[index++];
   }
-  return r;
+  return output;
 }
-function $v(e, r, t, names = {}, o = false) {
-  const a = new Map(
-    Object.entries(names).map(([u, l]) => [u.toLowerCase(), l]),
+function $v(
+  formulaText,
+  oldTableName,
+  newTableName,
+  names = {},
+  canMatchThisRow = false,
+) {
+  const columnRenames = new Map(
+    Object.entries(names).map(([originalName, newName]) => [
+      originalName.toLowerCase(),
+      newName,
+    ]),
   );
-  let s = "",
-    d = 0;
-  for (; d < e.length;) {
-    const u = e[d];
-    if (u === '"' || u === "'") {
-      const c = d++,
-        h = u;
-      for (; d < e.length;)
-        if (e[d++] === h)
-          if (e[d] === h) d++;
+  let result = "",
+    index = 0;
+  for (; index < formulaText.length;) {
+    const currentChar = formulaText[index];
+    if (currentChar === '"' || currentChar === "'") {
+      const quoteStart = index++,
+        quoteChar = currentChar;
+      for (; index < formulaText.length;)
+        if (formulaText[index++] === quoteChar)
+          if (formulaText[index] === quoteChar) index++;
           else break;
-      s += e.slice(c, d);
+      result += formulaText.slice(quoteStart, index);
       continue;
     }
-    const l = /^([A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(e.slice(d));
-    if (l && (d === 0 || !/[A-Za-z0-9_.$]/.test(e[d - 1]))) {
-      const c = d;
-      d += l[0].length;
-      let h = 1;
-      for (; d < e.length && h;)
-        (e[d] === "[" && h++, e[d] === "]" && h--, d++);
-      const f = e.slice(c, d),
-        p = l[1] ?? "",
-        m = p ? p.toLowerCase() === r.toLowerCase() : o && f.startsWith("[@");
-      if (!h && m && !/[!|]/.test(f) && !/^[A-Za-z0-9_!]/.test(e.slice(d))) {
-        const v = f
-          .slice(p.length)
-          .replace(/\[(@?)([^\[\]]+)\]/g, (g, b, y) => {
-            const w = a.get(y.toLowerCase());
-            return w ? `[${b}${w}]` : g;
-          });
-        s += `${p ? t : ""}${v}`;
-      } else s += f;
+    const tableRefMatch = /^([A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(
+      formulaText.slice(index),
+    );
+    if (
+      tableRefMatch &&
+      (index === 0 || !/[A-Za-z0-9_.$]/.test(formulaText[index - 1]))
+    ) {
+      const refStart = index;
+      index += tableRefMatch[0].length;
+      let bracketDepth = 1;
+      for (; index < formulaText.length && bracketDepth;)
+        (formulaText[index] === "[" && bracketDepth++,
+          formulaText[index] === "]" && bracketDepth--,
+          index++);
+      const refText = formulaText.slice(refStart, index),
+        qualifier = tableRefMatch[1] ?? "",
+        isSameTable = qualifier
+          ? qualifier.toLowerCase() === oldTableName.toLowerCase()
+          : canMatchThisRow && refText.startsWith("[@");
+      if (
+        !bracketDepth &&
+        isSameTable &&
+        !/[!|]/.test(refText) &&
+        !/^[A-Za-z0-9_!]/.test(formulaText.slice(index))
+      ) {
+        const rewrittenRef = refText
+          .slice(qualifier.length)
+          .replace(
+            /\[(@?)([^\[\]]+)\]/g,
+            (wholeMatch, atMarker, columnName) => {
+              const newColumnName = columnRenames.get(columnName.toLowerCase());
+              return newColumnName
+                ? `[${atMarker}${newColumnName}]`
+                : wholeMatch;
+            },
+          );
+        result += `${qualifier ? newTableName : ""}${rewrittenRef}`;
+      } else result += refText;
       continue;
     }
-    s += e[d++];
+    result += formulaText[index++];
   }
-  return s;
+  return result;
 }
 const reservedDefinedNames = new Set([
     "_xlnm.print_area",
@@ -891,105 +1330,125 @@ const reservedDefinedNames = new Set([
   ]),
   spreadsheetMlNamespace =
     "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-  throwXlsxDefinedNameError = (e) => {
+  throwXlsxDefinedNameError = (reason) => {
     throw Error(
-      `XLSX defined names: ${e} Import/export stopped to prevent changed formula bindings.`,
+      `XLSX defined names: ${reason} Import/export stopped to prevent changed formula bindings.`,
     );
   },
   invalidXmlCharPattern = new RegExp(
     "[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\uFFFE\\uFFFF]|[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|(?<![\\uD800-\\uDBFF])[\\uDC00-\\uDFFF]",
   );
-function nP(e) {
-  return e.includes("<") || e.includes("]]>") || invalidXmlCharPattern.test(e)
+function nP(xmlText) {
+  return xmlText.includes("<") ||
+    xmlText.includes("]]>") ||
+    invalidXmlCharPattern.test(xmlText)
     ? throwXlsxDefinedNameError("Malformed XML text.")
-    : e.replace(/&[^;\s<]*;|&/g, (r) => {
-        const t = {
+    : xmlText.replace(/&[^;\s<]*;|&/g, (entityText) => {
+        const namedEntities = {
           "&amp;": "&",
           "&lt;": "<",
           "&gt;": ">",
           "&quot;": '"',
           "&apos;": "'",
         };
-        if (t[r]) return t[r];
-        if (!/^&#(?:[0-9]+|x[0-9a-fA-F]+);$/.test(r))
+        if (namedEntities[entityText]) return namedEntities[entityText];
+        if (!/^&#(?:[0-9]+|x[0-9a-fA-F]+);$/.test(entityText))
           return throwXlsxDefinedNameError("Unknown or malformed XML entity.");
-        const n = r.startsWith("&#x"),
-          o = Number.parseInt(r.slice(n ? 3 : 2, -1), n ? 16 : 10);
+        const isHexEntity = entityText.startsWith("&#x"),
+          codePoint = Number.parseInt(
+            entityText.slice(isHexEntity ? 3 : 2, -1),
+            isHexEntity ? 16 : 10,
+          );
         if (
-          !Number.isSafeInteger(o) ||
-          o > 1114111 ||
-          o < 0 ||
-          (o >= 55296 && o <= 57343)
+          !Number.isSafeInteger(codePoint) ||
+          codePoint > 1114111 ||
+          codePoint < 0 ||
+          (codePoint >= 55296 && codePoint <= 57343)
         )
           return throwXlsxDefinedNameError("Invalid XML character entity.");
-        const a = String.fromCodePoint(o);
-        return invalidXmlCharPattern.test(a)
+        const character = String.fromCodePoint(codePoint);
+        return invalidXmlCharPattern.test(character)
           ? throwXlsxDefinedNameError("Invalid XML character entity.")
-          : a;
+          : character;
       });
 }
-function validateXmlSafeName(e, r = false) {
-  return invalidXmlCharPattern.test(e)
+function validateXmlSafeName(nameValue, shouldEscapeAsNumeric = false) {
+  return invalidXmlCharPattern.test(nameValue)
     ? throwXlsxDefinedNameError("A name contains an invalid XML character.")
-    : e.replace(
+    : nameValue.replace(
         /[&<>"'\r\n\t]/g,
-        (t) =>
+        (matchedChar) =>
           ({
             "&": "&amp;",
             "<": "&lt;",
             ">": "&gt;",
             '"': "&quot;",
             "'": "&apos;",
-          })[t] ?? (r ? `&#${t.charCodeAt(0)};` : t === "\r" ? "&#13;" : t),
+          })[matchedChar] ??
+          (shouldEscapeAsNumeric
+            ? `&#${matchedChar.charCodeAt(0)};`
+            : matchedChar === "\r"
+              ? "&#13;"
+              : matchedChar),
       );
 }
-function parseDefinedNameXmlAttributes(e) {
-  const r = Object.create(null);
-  let t = e;
-  for (; t.trim();) {
-    const n = /^\s+([A-Za-z_][A-Za-z0-9_.:-]*)\s*=\s*(["'])([\s\S]*?)\2/.exec(
-      t,
-    );
-    if (!n || Object.hasOwn(r, n[1]))
+function parseDefinedNameXmlAttributes(attributeText) {
+  const attributes = Object.create(null);
+  let remaining = attributeText;
+  for (; remaining.trim();) {
+    const attributeMatch =
+      /^\s+([A-Za-z_][A-Za-z0-9_.:-]*)\s*=\s*(["'])([\s\S]*?)\2/.exec(
+        remaining,
+      );
+    if (!attributeMatch || Object.hasOwn(attributes, attributeMatch[1]))
       return throwXlsxDefinedNameError(
         "Malformed or duplicate defined-name XML attribute.",
       );
-    ((r[n[1]] = nP(n[3].replace(/\r\n?|\n|\t/g, " "))),
-      (t = t.slice(n[0].length)));
+    ((attributes[attributeMatch[1]] = nP(
+      attributeMatch[3].replace(/\r\n?|\n|\t/g, " "),
+    )),
+      (remaining = remaining.slice(attributeMatch[0].length)));
   }
-  return r;
+  return attributes;
 }
-function parseDefinedNamesXml(e) {
-  if (/<!DOCTYPE|<!ENTITY/i.test(e))
+function parseDefinedNamesXml(workbookXml) {
+  if (/<!DOCTYPE|<!ENTITY/i.test(workbookXml))
     return throwXlsxDefinedNameError(
       "DTD and entity declarations are not supported.",
     );
-  const r = [
-    ...e.matchAll(
+  const definedNamesMatches = [
+    ...workbookXml.matchAll(
       /<((?:[A-Za-z_][\w.-]*:)?definedNames)\b((?:[^"'<>]|"[^"]*"|'[^']*')*?)(?:\/>|>([\s\S]*?)<\/\1\s*>)/g,
     ),
   ];
-  if (r.length > 1)
+  if (definedNamesMatches.length > 1)
     return throwXlsxDefinedNameError("Duplicate definedNames sections.");
-  const t = r[0],
-    n = t ? e.slice(0, t.index) + e.slice(t.index + t[0].length) : e;
-  if (/<\/?(?:[A-Za-z_][\w.-]*:)?definedNames?\b/.test(n))
+  const definedNamesMatch = definedNamesMatches[0],
+    xmlWithoutDefinedNames = definedNamesMatch
+      ? workbookXml.slice(0, definedNamesMatch.index) +
+        workbookXml.slice(definedNamesMatch.index + definedNamesMatch[0].length)
+      : workbookXml;
+  if (/<\/?(?:[A-Za-z_][\w.-]*:)?definedNames?\b/.test(xmlWithoutDefinedNames))
     return throwXlsxDefinedNameError(
       "Malformed or misplaced defined-name elements.",
     );
-  if (!t) return;
-  const definedNameXmlAttributes = parseDefinedNameXmlAttributes(t[2]),
-    a =
+  if (!definedNamesMatch) return;
+  const definedNameXmlAttributes = parseDefinedNameXmlAttributes(
+      definedNamesMatch[2],
+    ),
+    workbookTagMatch =
       /<(?:[A-Za-z_][\w.-]*:)?workbook\b((?:[^"'<>]|"[^"]*"|'[^']*')*?)>/.exec(
-        e,
+        workbookXml,
       ),
     namespaces = {
-      ...(a ? parseDefinedNameXmlAttributes(a[1]) : {}),
+      ...(workbookTagMatch
+        ? parseDefinedNameXmlAttributes(workbookTagMatch[1])
+        : {}),
       ...definedNameXmlAttributes,
     },
-    d = t[1].slice(0, -12);
+    prefix = definedNamesMatch[1].slice(0, -12);
   if (
-    namespaces[d ? `xmlns:${d.slice(0, -1)}` : "xmlns"] !==
+    namespaces[prefix ? `xmlns:${prefix.slice(0, -1)}` : "xmlns"] !==
     spreadsheetMlNamespace
   )
     return throwXlsxDefinedNameError(
@@ -1005,10 +1464,10 @@ function parseDefinedNamesXml(e) {
         "Unsupported definedNames namespace or attribute.",
       );
   return {
-    start: t.index,
-    end: t.index + t[0].length,
-    prefix: t[1].slice(0, -12),
-    body: t[3] ?? "",
+    start: definedNamesMatch.index,
+    end: definedNamesMatch.index + definedNamesMatch[0].length,
+    prefix: definedNamesMatch[1].slice(0, -12),
+    body: definedNamesMatch[3] ?? "",
     namespaces: namespaces,
   };
 }
@@ -1021,57 +1480,66 @@ function validateNameFormulaText(refersTo) {
     return throwXlsxDefinedNameError(
       "A definition must contain a formula of 1–4,095 characters after =.",
     );
-  let r = 0,
-    t = 0,
-    n = 0,
-    o = 1,
-    a = "";
-  for (; o < refersTo.length;) {
-    const d = refersTo[o];
-    if (!t && (d === '"' || d === "'")) {
-      const u = d,
-        l = o++;
-      let c = false;
-      for (; o < refersTo.length;)
-        if (refersTo[o++] === u)
-          if (refersTo[o] === u) o++;
+  let parenDepth = 0,
+    bracketDepth = 0,
+    braceDepth = 0,
+    position = 1,
+    formulaBody = "";
+  for (; position < refersTo.length;) {
+    const currentChar = refersTo[position];
+    if (!bracketDepth && (currentChar === '"' || currentChar === "'")) {
+      const quoteChar = currentChar,
+        quoteStart = position++;
+      let isClosed = false;
+      for (; position < refersTo.length;)
+        if (refersTo[position++] === quoteChar)
+          if (refersTo[position] === quoteChar) position++;
           else {
-            c = true;
+            isClosed = true;
             break;
           }
-      if (!c)
+      if (!isClosed)
         return throwXlsxDefinedNameError(
           "Unterminated formula string or worksheet qualifier.",
         );
-      if (u === "'") {
-        if (refersTo[o] !== "!")
+      if (quoteChar === "'") {
+        if (refersTo[position] !== "!")
           return throwXlsxDefinedNameError(
             "Malformed quoted worksheet qualifier.",
           );
-        a += refersTo.slice(l, o);
-      } else a += '""';
+        formulaBody += refersTo.slice(quoteStart, position);
+      } else formulaBody += '""';
       continue;
     }
-    if ((d === "[" && t++, d === "]" && --t < 0))
+    if (
+      (currentChar === "[" && bracketDepth++,
+      currentChar === "]" && --bracketDepth < 0)
+    )
       return throwXlsxDefinedNameError("Unbalanced bracket reference.");
-    if (!t) {
-      if ((d === "{" && n++, d === "}" && --n < 0))
+    if (!bracketDepth) {
+      if (
+        (currentChar === "{" && braceDepth++,
+        currentChar === "}" && --braceDepth < 0)
+      )
         return throwXlsxDefinedNameError("Unbalanced array braces.");
-      if ((d === "(" && r++, d === ")" && --r < 0))
+      if (
+        (currentChar === "(" && parenDepth++,
+        currentChar === ")" && --parenDepth < 0)
+      )
         return throwXlsxDefinedNameError("Unbalanced formula parentheses.");
     }
-    ((a += d), o++);
+    ((formulaBody += currentChar), position++);
   }
-  if (r || t || n)
+  if (parenDepth || bracketDepth || braceDepth)
     return throwXlsxDefinedNameError(
       "Unbalanced formula parentheses, array braces or bracket reference.",
     );
-  const s = stripFormulaStringLiterals(a);
+  const strippedText = stripFormulaStringLiterals(formulaBody);
   if (
-    /[\[\]|]/.test(s) ||
-    /(?:https?:|file:|javascript:|data:|\\\\)/i.test(s) ||
+    /[\[\]|]/.test(strippedText) ||
+    /(?:https?:|file:|javascript:|data:|\\\\)/i.test(strippedText) ||
     /\b(?:_xlfn\.)?(?:WEBSERVICE|HYPERLINK|IMAGE|RTD|DDE|CALL|EXEC|EXECUTE|REGISTER(?:\.ID)?|RUN|SQL\.REQUEST|STOCKHISTORY|EVALUATE|GET\.CELL)\s*\(/i.test(
-      s,
+      strippedText,
     )
   )
     return throwXlsxDefinedNameError(
@@ -1079,47 +1547,53 @@ function validateNameFormulaText(refersTo) {
     );
   if (
     /(?:'(?:[^']|'')+'|[A-Za-z0-9_.]+):(?:'(?:[^']|'')+'|[A-Za-z0-9_.]+)!/.test(
-      s,
+      strippedText,
     )
   )
     return throwXlsxDefinedNameError(
       "Three-dimensional name references are not supported.",
     );
-  if (!a.trim())
+  if (!formulaBody.trim())
     return throwXlsxDefinedNameError("An empty formula is not supported.");
 }
 function validateNameSheetReferences(refersTo, workbook) {
-  const t = stripFormulaStringLiterals(
+  const strippedRefersTo = stripFormulaStringLiterals(
     refersTo.replace(/"(?:[^"]|"")*"/g, '""'),
   );
-  for (const o of t.matchAll(
+  for (const sheetRefMatch of strippedRefersTo.matchAll(
     /(?:'((?:[^']|'')+)'|([A-Za-z_\\][A-Za-z0-9_.\\]*))!/g,
   )) {
-    const a = o[1]?.replace(/''/g, "'") ?? o[2];
+    const sheetName = sheetRefMatch[1]?.replace(/''/g, "'") ?? sheetRefMatch[2];
     if (
       !workbook.sheets.some(
-        (sheet) => sheet.name.toLowerCase() === a.toLowerCase(),
+        (sheet) => sheet.name.toLowerCase() === sheetName.toLowerCase(),
       )
     )
       return throwXlsxDefinedNameError(
-        `A name refers to an unknown worksheet "${a}".`,
+        `A name refers to an unknown worksheet "${sheetName}".`,
       );
   }
 }
-function insertDefinedNamesIntoWorkbookXml(e, builtinNameXml) {
-  const definedNamesXml = parseDefinedNamesXml(e),
-    n = builtinNameXml
+function insertDefinedNamesIntoWorkbookXml(workbookXml, builtinNameXml) {
+  const definedNamesXml = parseDefinedNamesXml(workbookXml),
+    definedNamesBlockXml = builtinNameXml
       ? `<definedNames xmlns="${spreadsheetMlNamespace}">${builtinNameXml}</definedNames>`
       : "";
   if (definedNamesXml)
-    return e.slice(0, definedNamesXml.start) + n + e.slice(definedNamesXml.end);
-  if (!builtinNameXml) return e;
-  const o =
-    /<(?:[A-Za-z_][\w.-]*:)?(?:calcPr|oleSize|customWorkbookViews|pivotCaches|smartTagPr|smartTagTypes|webPublishing|fileRecoveryPr|webPublishObjects|extLst)\b|<\/(?:[A-Za-z_][\w.-]*:)?workbook\s*>/.exec(
-      e,
+    return (
+      workbookXml.slice(0, definedNamesXml.start) +
+      definedNamesBlockXml +
+      workbookXml.slice(definedNamesXml.end)
     );
-  return o
-    ? e.slice(0, o.index) + n + e.slice(o.index)
+  if (!builtinNameXml) return workbookXml;
+  const insertionMatch =
+    /<(?:[A-Za-z_][\w.-]*:)?(?:calcPr|oleSize|customWorkbookViews|pivotCaches|smartTagPr|smartTagTypes|webPublishing|fileRecoveryPr|webPublishObjects|extLst)\b|<\/(?:[A-Za-z_][\w.-]*:)?workbook\s*>/.exec(
+      workbookXml,
+    );
+  return insertionMatch
+    ? workbookXml.slice(0, insertionMatch.index) +
+        definedNamesBlockXml +
+        workbookXml.slice(insertionMatch.index)
     : throwXlsxDefinedNameError(
         "The workbook XML has no supported insertion point.",
       );
@@ -1131,76 +1605,93 @@ const localBindingFunctionNames = ["LET", "LAMBDA"],
     work: 1e6,
     retainedValues: 1e5,
   },
-  isFormulaClosure = (e) =>
-    !!e && typeof e == "object" && "kind" in e && e.kind === "formula-closure",
+  isFormulaClosure = (value) =>
+    !!value &&
+    typeof value == "object" &&
+    "kind" in value &&
+    value.kind === "formula-closure",
   y5 = "__LGVALUE";
-function evaluateReusableFormula(e, workbook, sheetId, n) {
-  let o = 0,
-    a = 0,
-    s = 0;
-  const d = new Map(),
-    u = new Set(),
-    l = (E, A) => {
-      throw (n.diagnostic(E, A), n.issue(E));
+function evaluateReusableFormula(
+  formulaText,
+  workbook,
+  sheetId,
+  evaluationContext,
+) {
+  let workUnits = 0,
+    callCount = 0,
+    retainedValueCount = 0;
+  const tokenCache = new Map(),
+    activeNameKeys = new Set(),
+    raiseCalcError = (errorCode, errorMessage) => {
+      throw (
+        evaluationContext.diagnostic(errorCode, errorMessage),
+        evaluationContext.issue(errorCode)
+      );
     },
-    c = (E, A) => {
-      ((o += E),
-        (A > reusableFormulaLimits.depth || o > reusableFormulaLimits.work) &&
-          l(
+    chargeWork = (workUnitCount, nestingDepth) => {
+      ((workUnits += workUnitCount),
+        (nestingDepth > reusableFormulaLimits.depth ||
+          workUnits > reusableFormulaLimits.work) &&
+          raiseCalcError(
             "#LIMIT!",
             `Reusable formula evaluation exceeds ${reusableFormulaLimits.depth} levels or ${reusableFormulaLimits.work.toLocaleString()} work units.`,
           ));
     },
-    h = (E) => {
-      const A = Array.isArray(E)
-        ? E.reduce((k, F) => k + (Array.isArray(F) ? F.length : 1), 0)
+    retainValues = (retainedValue) => {
+      const retainedCellCount = Array.isArray(retainedValue)
+        ? retainedValue.reduce(
+            (total, row) => total + (Array.isArray(row) ? row.length : 1),
+            0,
+          )
         : 1;
       return (
-        (s += A),
-        s > reusableFormulaLimits.retainedValues &&
-          l(
+        (retainedValueCount += retainedCellCount),
+        retainedValueCount > reusableFormulaLimits.retainedValues &&
+          raiseCalcError(
             "#LIMIT!",
             "Reusable formula intermediate values exceed 100,000 cells.",
           ),
-        E
+        retainedValue
       );
     },
-    f = (E) => {
-      let A = d.get(E);
-      if (!A) {
-        c(E.length, 0);
+    cachedTokenize = (sourceText) => {
+      let cachedTokens = tokenCache.get(sourceText);
+      if (!cachedTokens) {
+        chargeWork(sourceText.length, 0);
         try {
           try {
-            validateNameFormulaText(E.startsWith("=") ? E : `=${E}`);
+            validateNameFormulaText(
+              sourceText.startsWith("=") ? sourceText : `=${sourceText}`,
+            );
           } catch (error) {
-            const F =
+            const validationMessage =
               error instanceof Error ? error.message : "Unsafe formula.";
-            l(
-              /External|executable|Three-dimensional/i.test(F)
+            raiseCalcError(
+              /External|executable|Three-dimensional/i.test(validationMessage)
                 ? "#BLOCKED!"
                 : "#VALUE!",
-              F,
+              validationMessage,
             );
           }
-          ((A = tokenizeFormulaText(E)),
-            walkFormulaNodes(A, (k, F, I, O) => {
+          ((cachedTokens = tokenizeFormulaText(sourceText)),
+            walkFormulaNodes(cachedTokens, (formulaNode, F, I, O) => {
               (!O &&
-                /^__LG/i.test(k.name) &&
-                l(
+                /^__LG/i.test(formulaNode.name) &&
+                raiseCalcError(
                   "#NAME?",
                   "Internal calculation names cannot be called from a workbook.",
                 ),
                 /^(?:_xlfn\.)?(?:WEBSERVICE|HYPERLINK|IMAGE|RTD|DDE|CALL|EXEC|EXECUTE|REGISTER(?:\.ID)?|RUN|SQL\.REQUEST|STOCKHISTORY|EVALUATE|GET\.CELL)$/i.test(
-                  k.name,
+                  formulaNode.name,
                 ) &&
-                  l(
+                  raiseCalcError(
                     "#BLOCKED!",
                     "External or executable custom functions are not supported.",
                   ));
             }));
         } catch (error) {
-          if (n.isIssue(error)) throw error;
-          l(
+          if (evaluationContext.isIssue(error)) throw error;
+          raiseCalcError(
             error instanceof Error && error.message === "#LIMIT!"
               ? "#LIMIT!"
               : "#VALUE!",
@@ -1209,22 +1700,23 @@ function evaluateReusableFormula(e, workbook, sheetId, n) {
               : "Invalid reusable formula.",
           );
         }
-        d.set(E, A);
+        tokenCache.set(sourceText, cachedTokens);
       }
-      return A;
+      return cachedTokens;
     },
-    p = (E, A) => {
-      const k = E.qualifier
+    resolveNameBinding = (reference, fallbackSheetId) => {
+      const targetSheetId = reference.qualifier
         ? workbook.sheets.find(
-            (sheet) => sheet.name.toLowerCase() === E.qualifier.toLowerCase(),
+            (sheet) =>
+              sheet.name.toLowerCase() === reference.qualifier.toLowerCase(),
           )?.id
-        : A;
-      if (!k) return;
-      const bindingName = normalizeBindingName(E.name),
+        : fallbackSheetId;
+      if (!targetSheetId) return;
+      const bindingName = normalizeBindingName(reference.name),
         found =
           workbook.definedNames?.find(
             (definedName) =>
-              definedName.scopeSheetId === k &&
+              definedName.scopeSheetId === targetSheetId &&
               definedName.name.toLowerCase() === bindingName,
           ) ??
           workbook.definedNames?.find(
@@ -1233,190 +1725,367 @@ function evaluateReusableFormula(e, workbook, sheetId, n) {
               definedName.name.toLowerCase() === bindingName,
           );
       return found
-        ? { found: found, sheetId: found.scopeSheetId ?? k }
+        ? { found: found, sheetId: found.scopeSheetId ?? targetSheetId }
         : undefined;
     },
-    m = (E, A, k) => {
+    parseOrIssue = (text, contextSheetId, externalValues) => {
       try {
-        return n.parse(E, A, k);
+        return evaluationContext.parse(text, contextSheetId, externalValues);
       } catch (error) {
-        const I =
+        const errorDetails =
           error && typeof error == "object" && "details" in error
             ? error.details
             : undefined;
-        return n.isIssue(I) ? I : n.isIssue(error) ? error : n.issue("#ERROR!");
+        return evaluationContext.isIssue(errorDetails)
+          ? errorDetails
+          : evaluationContext.isIssue(error)
+            ? error
+            : evaluationContext.issue("#ERROR!");
       }
     },
-    v = (E, A, k, F, I) => {
-      const bindingName = normalizeBindingName(E.name);
-      if (!E.qualifier && k.has(bindingName)) return k.get(bindingName);
-      if (!E.qualifier && /^(?:TRUE|FALSE)$/i.test(E.name))
+    resolveSymbol = (
+      symbolNode,
+      symbolSource,
+      symbolBindings,
+      symbolSheetId,
+      symbolDepth,
+    ) => {
+      const bindingName = normalizeBindingName(symbolNode.name);
+      if (!symbolNode.qualifier && symbolBindings.has(bindingName))
+        return symbolBindings.get(bindingName);
+      if (!symbolNode.qualifier && /^(?:TRUE|FALSE)$/i.test(symbolNode.name))
         return bindingName === "true";
-      const j = p(E, F);
-      if (!j)
-        return l(
+      const resolvedName = resolveNameBinding(symbolNode, symbolSheetId);
+      if (!resolvedName)
+        return raiseCalcError(
           "#NAME?",
-          `Unknown name or unsupported custom function: ${A.slice(E.start, E.end)}.`,
+          `Unknown name or unsupported custom function: ${symbolSource.slice(symbolNode.start, symbolNode.end)}.`,
         );
-      const z = `${j.sheetId}:${j.found.name.toLowerCase()}`;
-      if (n.allowName && !n.allowName(j.sheetId))
-        return l(
+      const nameKey = `${resolvedName.sheetId}:${resolvedName.found.name.toLowerCase()}`;
+      if (
+        evaluationContext.allowName &&
+        !evaluationContext.allowName(resolvedName.sheetId)
+      )
+        return raiseCalcError(
           "#BLOCKED!",
           "The defined name is outside the authorized inspection context.",
         );
-      if (u.has(z))
-        return l("#CYCLE!", `Circular defined name: ${j.found.name}.`);
-      u.add(z);
+      if (activeNameKeys.has(nameKey))
+        return raiseCalcError(
+          "#CYCLE!",
+          `Circular defined name: ${resolvedName.found.name}.`,
+        );
+      activeNameKeys.add(nameKey);
       try {
-        return w(
-          f(j.found.refersTo),
-          j.found.refersTo,
+        return evaluateTokens(
+          cachedTokenize(resolvedName.found.refersTo),
+          resolvedName.found.refersTo,
           new Map(),
-          j.sheetId,
-          I + 1,
+          resolvedName.sheetId,
+          symbolDepth + 1,
         );
       } finally {
-        u.delete(z);
+        activeNameKeys.delete(nameKey);
       }
     },
-    g = (E, A, k) => {
-      if (!isFormulaClosure(E))
-        return l(
+    callLambda = (closure, args, lambdaDepth) => {
+      if (!isFormulaClosure(closure))
+        return raiseCalcError(
           "#VALUE!",
           "Only a LAMBDA formula can be called with arguments.",
         );
-      if (A.length !== E.parameters.length)
-        return l(
+      if (args.length !== closure.parameters.length)
+        return raiseCalcError(
           "#VALUE!",
-          `LAMBDA expects ${E.parameters.length} argument(s); received ${A.length}.`,
+          `LAMBDA expects ${closure.parameters.length} argument(s); received ${args.length}.`,
         );
-      if (++a > reusableFormulaLimits.calls)
-        return l("#LIMIT!", "Reusable formula evaluation exceeds 1,024 calls.");
-      const F = new Map(E.environment);
+      if (++callCount > reusableFormulaLimits.calls)
+        return raiseCalcError(
+          "#LIMIT!",
+          "Reusable formula evaluation exceeds 1,024 calls.",
+        );
+      const closureEnvironment = new Map(closure.environment);
       return (
-        E.parameters.forEach((parameter, O) => F.set(parameter, h(A[O]))),
-        w(E.body, E.source, F, E.sheetId, k + 1)
+        closure.parameters.forEach((parameter, index) =>
+          closureEnvironment.set(parameter, retainValues(args[index])),
+        ),
+        evaluateTokens(
+          closure.body,
+          closure.source,
+          closureEnvironment,
+          closure.sheetId,
+          lambdaDepth + 1,
+        )
       );
     },
-    b = (E, source, k, sheetId, I) => {
-      if ((c(1, I), E.kind === "symbol")) return v(E, source, k, sheetId, I);
-      if (E.kind === "group") return w(E.body, source, k, sheetId, I + 1);
-      if (E.kind === "text") return m(E.text, sheetId, []);
-      const O = validateLetLambdaCall(E);
-      if (O === "LET") {
-        const R = new Map(k);
-        for (let L = 0; L < E.args.length - 1; L += 2) {
-          const $ = w(E.args[L + 1], source, R, sheetId, I + 1),
+    evaluateNode = (node, source, localBindings, sheetId, callDepth) => {
+      if ((chargeWork(1, callDepth), node.kind === "symbol"))
+        return resolveSymbol(node, source, localBindings, sheetId, callDepth);
+      if (node.kind === "group")
+        return evaluateTokens(
+          node.body,
+          source,
+          localBindings,
+          sheetId,
+          callDepth + 1,
+        );
+      if (node.kind === "text") return parseOrIssue(node.text, sheetId, []);
+      const localBindingFunction = validateLetLambdaCall(node);
+      if (localBindingFunction === "LET") {
+        const letBindings = new Map(localBindings);
+        for (let argIndex = 0; argIndex < node.args.length - 1; argIndex += 2) {
+          const bindingValue = evaluateTokens(
+              node.args[argIndex + 1],
+              source,
+              letBindings,
+              sheetId,
+              callDepth + 1,
+            ),
             bindingName = normalizeBindingName(
-              validateBindingName(E.args[L]).name,
+              validateBindingName(node.args[argIndex]).name,
             );
-          (R.set(bindingName, h($)),
-            n.step?.("binding", `LET ${bindingName}`, $));
+          (letBindings.set(bindingName, retainValues(bindingValue)),
+            evaluationContext.step?.(
+              "binding",
+              `LET ${bindingName}`,
+              bindingValue,
+            ));
         }
-        return w(E.args.at(-1), source, R, sheetId, I + 1);
+        return evaluateTokens(
+          node.args.at(-1),
+          source,
+          letBindings,
+          sheetId,
+          callDepth + 1,
+        );
       }
-      if (O === "LAMBDA")
+      if (localBindingFunction === "LAMBDA")
         return {
           kind: "formula-closure",
-          parameters: E.args
+          parameters: node.args
             .slice(0, -1)
-            .map((R) =>
-              normalizeBindingName(validateBindingName(R, true).name),
+            .map((parameterNode) =>
+              normalizeBindingName(
+                validateBindingName(parameterNode, true).name,
+              ),
             ),
-          body: E.args.at(-1),
+          body: node.args.at(-1),
           source: source,
-          environment: new Map(k),
+          environment: new Map(localBindings),
           sheetId: sheetId,
         };
-      const j =
-          E.callee.kind === "symbol" && !E.callee.qualifier
-            ? normalizeFunctionName(E.callee.name)
+      const functionName =
+          node.callee.kind === "symbol" && !node.callee.qualifier
+            ? normalizeFunctionName(node.callee.name)
             : "",
-        z =
-          E.callee.kind === "symbol" &&
-          !E.callee.qualifier &&
-          k.has(normalizeBindingName(E.callee.name));
-      if (!z && j === "IF" && E.args.length >= 2 && E.args.length <= 3) {
-        const R = w(E.args[0], source, k, sheetId, I + 1);
-        if (n.isIssue(R)) return R;
-        if (!Array.isArray(R)) {
-          if (typeof R == "string" && !/^(?:TRUE|FALSE)$/i.test(R))
-            return n.issue("#VALUE!");
-          const L = typeof R == "string" ? R.toUpperCase() === "TRUE" : !!R;
+        isLocalCallee =
+          node.callee.kind === "symbol" &&
+          !node.callee.qualifier &&
+          localBindings.has(normalizeBindingName(node.callee.name));
+      if (
+        !isLocalCallee &&
+        functionName === "IF" &&
+        node.args.length >= 2 &&
+        node.args.length <= 3
+      ) {
+        const conditionValue = evaluateTokens(
+          node.args[0],
+          source,
+          localBindings,
+          sheetId,
+          callDepth + 1,
+        );
+        if (evaluationContext.isIssue(conditionValue)) return conditionValue;
+        if (!Array.isArray(conditionValue)) {
+          if (
+            typeof conditionValue == "string" &&
+            !/^(?:TRUE|FALSE)$/i.test(conditionValue)
+          )
+            return evaluationContext.issue("#VALUE!");
+          const isConditionTrue =
+            typeof conditionValue == "string"
+              ? conditionValue.toUpperCase() === "TRUE"
+              : !!conditionValue;
           return (
-            n.step?.(
+            evaluationContext.step?.(
               "branch",
-              `IF: ${L ? "true" : "false"} branch selected`,
-              R,
+              `IF: ${isConditionTrue ? "true" : "false"} branch selected`,
+              conditionValue,
             ),
-            E.args[L ? 1 : 2]
-              ? w(E.args[L ? 1 : 2], source, k, sheetId, I + 1)
+            node.args[isConditionTrue ? 1 : 2]
+              ? evaluateTokens(
+                  node.args[isConditionTrue ? 1 : 2],
+                  source,
+                  localBindings,
+                  sheetId,
+                  callDepth + 1,
+                )
               : false
           );
         }
       }
-      if (!z && /^(?:IFERROR|IFNA)$/.test(j) && E.args.length === 2) {
-        const R = w(E.args[0], source, k, sheetId, I + 1);
-        if (!Array.isArray(R)) {
+      if (
+        !isLocalCallee &&
+        /^(?:IFERROR|IFNA)$/.test(functionName) &&
+        node.args.length === 2
+      ) {
+        const guardedValue = evaluateTokens(
+          node.args[0],
+          source,
+          localBindings,
+          sheetId,
+          callDepth + 1,
+        );
+        if (!Array.isArray(guardedValue)) {
           if (
-            n.isIssue(R) &&
-            ["#LIMIT!", "#BLOCKED!", "#CYCLE!", "#ERROR!"].includes(R.error)
+            evaluationContext.isIssue(guardedValue) &&
+            ["#LIMIT!", "#BLOCKED!", "#CYCLE!", "#ERROR!"].includes(
+              guardedValue.error,
+            )
           )
-            return R;
-          const L = n.isIssue(R) && (j === "IFERROR" || R.error === "#N/A");
+            return guardedValue;
+          const shouldUseFallback =
+            evaluationContext.isIssue(guardedValue) &&
+            (functionName === "IFERROR" || guardedValue.error === "#N/A");
           return (
-            n.step?.("branch", `${j}: ${L ? "fallback" : "value"} selected`, R),
-            L ? w(E.args[1], source, k, sheetId, I + 1) : R
+            evaluationContext.step?.(
+              "branch",
+              `${functionName}: ${shouldUseFallback ? "fallback" : "value"} selected`,
+              guardedValue,
+            ),
+            shouldUseFallback
+              ? evaluateTokens(
+                  node.args[1],
+                  source,
+                  localBindings,
+                  sheetId,
+                  callDepth + 1,
+                )
+              : guardedValue
           );
         }
       }
-      if (!z && j && n.supported.has(j)) {
-        const R = [],
-          L = E.args.map((arg) => y(arg, source, k, sheetId, I + 1, R));
-        return m(`${j}(${L.join(",")})`, sheetId, R);
+      if (
+        !isLocalCallee &&
+        functionName &&
+        evaluationContext.supported.has(functionName)
+      ) {
+        const supportedArgValues = [],
+          argTexts = node.args.map((arg) =>
+            serializeTokens(
+              arg,
+              source,
+              localBindings,
+              sheetId,
+              callDepth + 1,
+              supportedArgValues,
+            ),
+          );
+        return parseOrIssue(
+          `${functionName}(${argTexts.join(",")})`,
+          sheetId,
+          supportedArgValues,
+        );
       }
-      const V = b(E.callee, source, k, sheetId, I + 1),
-        D = E.args.map((arg) =>
+      const calleeValue = evaluateNode(
+          node.callee,
+          source,
+          localBindings,
+          sheetId,
+          callDepth + 1,
+        ),
+        argumentValues = node.args.map((arg) =>
           dropBlankTextTokens(arg).length
-            ? w(arg, source, k, sheetId, I + 1)
+            ? evaluateTokens(arg, source, localBindings, sheetId, callDepth + 1)
             : null,
         ),
-        B = g(V, D, I);
+        callResult = callLambda(calleeValue, argumentValues, callDepth);
       return (
-        n.step?.("function", source.slice(E.callee.start, E.callee.end), B),
-        B
+        evaluationContext.step?.(
+          "function",
+          source.slice(node.callee.start, node.callee.end),
+          callResult,
+        ),
+        callResult
       );
     },
-    y = (E, A, k, F, I, O) =>
-      E.map((j) => {
-        if (j.kind === "text") {
-          const V = /^(\d+(?:\.\d*)?|\.\d+)[eE]([+-]?\d+)$/.exec(j.text);
-          return V ? `(${V[1]}*10^(${Number(V[2])}))` : j.text;
-        }
-        const z = b(j, A, k, F, I);
-        return isFormulaClosure(z)
-          ? l(
-              "#CALC!",
-              "A LAMBDA must be called with arguments or saved as a reusable name.",
-            )
-          : (h(z),
-            O.push(
-              Array.isArray(z)
-                ? z.map((V) => (Array.isArray(V) ? [...V] : V))
-                : z,
-            ),
-            `${y5}(${O.length - 1})`);
-      }).join(""),
-    w = (E, A, k, F, I) => {
+    serializeTokens = (
+      tokenList,
+      tokenSource,
+      tokenBindings,
+      tokenSheetId,
+      tokenDepth,
+      pushedValues,
+    ) =>
+      tokenList
+        .map((token) => {
+          if (token.kind === "text") {
+            const scientificMatch =
+              /^(\d+(?:\.\d*)?|\.\d+)[eE]([+-]?\d+)$/.exec(token.text);
+            return scientificMatch
+              ? `(${scientificMatch[1]}*10^(${Number(scientificMatch[2])}))`
+              : token.text;
+          }
+          const tokenValue = evaluateNode(
+            token,
+            tokenSource,
+            tokenBindings,
+            tokenSheetId,
+            tokenDepth,
+          );
+          return isFormulaClosure(tokenValue)
+            ? raiseCalcError(
+                "#CALC!",
+                "A LAMBDA must be called with arguments or saved as a reusable name.",
+              )
+            : (retainValues(tokenValue),
+              pushedValues.push(
+                Array.isArray(tokenValue)
+                  ? tokenValue.map((valueRow) =>
+                      Array.isArray(valueRow) ? [...valueRow] : valueRow,
+                    )
+                  : tokenValue,
+              ),
+              `${y5}(${pushedValues.length - 1})`);
+        })
+        .join(""),
+    evaluateTokens = (
+      tokenNodes,
+      evaluationSource,
+      scopeBindings,
+      formulaSheetId,
+      evaluationDepth,
+    ) => {
       try {
-        c(E.length, I);
-        const O = dropBlankTextTokens(E);
-        if (O.length === 1 && O[0].kind !== "text") return b(O[0], A, k, F, I);
-        const j = [];
-        return m(y(E, A, k, F, I, j), F, j);
+        chargeWork(tokenNodes.length, evaluationDepth);
+        const meaningfulTokens = dropBlankTextTokens(tokenNodes);
+        if (
+          meaningfulTokens.length === 1 &&
+          meaningfulTokens[0].kind !== "text"
+        )
+          return evaluateNode(
+            meaningfulTokens[0],
+            evaluationSource,
+            scopeBindings,
+            formulaSheetId,
+            evaluationDepth,
+          );
+        const collectedValues = [];
+        return parseOrIssue(
+          serializeTokens(
+            tokenNodes,
+            evaluationSource,
+            scopeBindings,
+            formulaSheetId,
+            evaluationDepth,
+            collectedValues,
+          ),
+          formulaSheetId,
+          collectedValues,
+        );
       } catch (error) {
         if (
-          n.isIssue(error) &&
+          evaluationContext.isIssue(error) &&
           !["#LIMIT!", "#BLOCKED!", "#CYCLE!", "#ERROR!"].includes(error.error)
         )
           return error;
@@ -1424,22 +2093,29 @@ function evaluateReusableFormula(e, workbook, sheetId, n) {
       }
     };
   try {
-    const E = w(f(e), e, new Map(), sheetId, 0);
-    return isFormulaClosure(E)
-      ? l(
+    const result = evaluateTokens(
+      cachedTokenize(formulaText),
+      formulaText,
+      new Map(),
+      sheetId,
+      0,
+    );
+    return isFormulaClosure(result)
+      ? raiseCalcError(
           "#CALC!",
           "A LAMBDA must be called with arguments or saved as a reusable name.",
         )
-      : E;
+      : result;
   } catch (error) {
-    if (n.isIssue(error)) return error;
+    if (evaluationContext.isIssue(error)) return error;
     throw error;
   }
 }
-function summarizeWorksheets(workbook, r = {}) {
+function summarizeWorksheets(workbook, options = {}) {
   return workbook.sheets
     .filter(
-      (sheet) => !r.allowedSheetIds || r.allowedSheetIds.includes(sheet.id),
+      (sheet) =>
+        !options.allowedSheetIds || options.allowedSheetIds.includes(sheet.id),
     )
     .map((sheet) => ({
       sheetId: sheet.id,
@@ -1463,37 +2139,39 @@ function summarizeWorksheets(workbook, r = {}) {
 }
 const createUuid = () => crypto.randomUUID();
 
-const isPlainObject = (e) =>
-  !!e &&
-  typeof e == "object" &&
-  !Array.isArray(e) &&
-  [null, Object.prototype].includes(Object.getPrototypeOf(e));
-function validateWorksheetName(e) {
+const isPlainObject = (value) =>
+  !!value &&
+  typeof value == "object" &&
+  !Array.isArray(value) &&
+  [null, Object.prototype].includes(Object.getPrototypeOf(value));
+function validateWorksheetName(sheetName) {
   return (
-    (typeof e != "string" ||
-      !e.trim() ||
-      e.length > 31 ||
-      /[\\/\[\]*?:\u0000-\u001f]/.test(e) ||
-      /^'|'$/.test(e)) &&
+    (typeof sheetName != "string" ||
+      !sheetName.trim() ||
+      sheetName.length > 31 ||
+      /[\\/\[\]*?:\u0000-\u001f]/.test(sheetName) ||
+      /^'|'$/.test(sheetName)) &&
       throwWorkbookError(
         "Sheet names must contain 1–31 characters and cannot contain control characters, Excel-reserved characters, or begin or end with an apostrophe.",
       ),
-    e
+    sheetName
   );
 }
-function assertUniqueWorksheetName(workbook, r, t) {
-  const n = validateWorksheetName(r);
+function assertUniqueWorksheetName(workbook, sheetName, excludedSheetId) {
+  const validatedName = validateWorksheetName(sheetName);
   return (
     workbook.sheets.some(
-      (sheet) => sheet.id !== t && sheet.name.toLowerCase() === n.toLowerCase(),
+      (sheet) =>
+        sheet.id !== excludedSheetId &&
+        sheet.name.toLowerCase() === validatedName.toLowerCase(),
     ) && throwWorkbookError("A worksheet with that name already exists."),
-    n
+    validatedName
   );
 }
-const findWorksheetById = (workbook, r) =>
-    workbook.sheets.find((sheet) => sheet.id === r) ??
+const findWorksheetById = (workbook, sheetId) =>
+    workbook.sheets.find((sheet) => sheet.id === sheetId) ??
     throwWorkbookError("The worksheet was not found."),
-  isVisibleWorksheet = (e) => !e.hidden && !e.veryHidden;
+  isVisibleWorksheet = (sheet) => !sheet.hidden && !sheet.veryHidden;
 function validateTabColor(tabColor) {
   return (
     (typeof tabColor != "string" || !/^#[a-f\d]{6}$/i.test(tabColor)) &&
@@ -1501,46 +2179,46 @@ function validateTabColor(tabColor) {
     tabColor.toLowerCase()
   );
 }
-function validateWorksheetVisibility(sheet, r) {
-  (validateWorksheetName(r.name),
+function validateWorksheetVisibility(sheet, targetSheet) {
+  (validateWorksheetName(targetSheet.name),
     sheet.veryHidden !== undefined &&
       (typeof sheet.veryHidden != "boolean" &&
         throwWorkbookError("The very-hidden flag must be boolean."),
       sheet.veryHidden &&
         sheet.hidden === false &&
         throwWorkbookError("A very-hidden worksheet must also be hidden."),
-      (r.veryHidden = sheet.veryHidden),
-      sheet.veryHidden && (r.hidden = true)),
+      (targetSheet.veryHidden = sheet.veryHidden),
+      sheet.veryHidden && (targetSheet.hidden = true)),
     sheet.tabColor !== undefined &&
-      (r.tabColor = validateTabColor(sheet.tabColor)));
+      (targetSheet.tabColor = validateTabColor(sheet.tabColor)));
 }
 function validateWorkbookStructureProtection(structureProtection, workbook) {
-  const t = structureProtection;
-  if (t !== undefined) {
-    (!isPlainObject(t) ||
-      t.enabled !== true ||
-      Object.keys(t).some(
-        (a) => !["enabled", "passwordHash", "salt"].includes(a),
+  const protection = structureProtection;
+  if (protection !== undefined) {
+    (!isPlainObject(protection) ||
+      protection.enabled !== true ||
+      Object.keys(protection).some(
+        (key) => !["enabled", "passwordHash", "salt"].includes(key),
       )) &&
       throwWorkbookError("Invalid workbook structure protection.");
-    const n = t.passwordHash !== undefined,
-      o = t.salt !== undefined;
-    ((n !== o ||
-      (n &&
-        (typeof t.passwordHash != "string" ||
-          !/^[a-f\d]{64}$/i.test(t.passwordHash) ||
-          typeof t.salt != "string" ||
-          t.salt.length < 16 ||
-          t.salt.length > 100))) &&
+    const hasPasswordHash = protection.passwordHash !== undefined,
+      hasSalt = protection.salt !== undefined;
+    ((hasPasswordHash !== hasSalt ||
+      (hasPasswordHash &&
+        (typeof protection.passwordHash != "string" ||
+          !/^[a-f\d]{64}$/i.test(protection.passwordHash) ||
+          typeof protection.salt != "string" ||
+          protection.salt.length < 16 ||
+          protection.salt.length > 100))) &&
       throwWorkbookError(
         "Workbook structure protection requires a valid salted password hash.",
       ),
       (workbook.structureProtection = {
         enabled: true,
-        ...(n
+        ...(hasPasswordHash
           ? {
-              passwordHash: String(t.passwordHash).toLowerCase(),
-              salt: String(t.salt),
+              passwordHash: String(protection.passwordHash).toLowerCase(),
+              salt: String(protection.salt),
             }
           : {}),
       }));
@@ -1548,8 +2226,8 @@ function validateWorkbookStructureProtection(structureProtection, workbook) {
   workbook.sheets.some(isVisibleWorksheet) ||
     throwWorkbookError("At least one worksheet must remain visible.");
 }
-function assertWorkbookStructureEditable(e) {
-  e.structureProtection?.enabled &&
+function assertWorkbookStructureEditable(workbook) {
+  workbook.structureProtection?.enabled &&
     throwWorkbookError(
       "Workbook structure is protected. Unprotect the structure before changing worksheets.",
     );
@@ -1557,86 +2235,102 @@ function assertWorkbookStructureEditable(e) {
 const S5 = String.raw`(?:'(?:[^']|'')+'|[^\s+\-*/^&=<>(),;:'"\[\]!]+)`,
   sheetPrefixPattern = new RegExp(`^(${S5})!`),
   Bne = new RegExp(`^(${S5}):(${S5})!`),
-  unquoteSheetName = (e) =>
-    e.startsWith("'") ? e.slice(1, -1).replace(/''/g, "'") : e,
-  quoteSheetName = (e) => `'${e.replace(/'/g, "''")}'`;
-function findClosingBracketIndex(e, r) {
-  let t = r,
-    n = 0;
-  do (e[t] === "[" && n++, e[t] === "]" && n--, t++);
-  while (t < e.length && n > 0);
-  return n === 0 ? t : -1;
+  unquoteSheetName = (quotedSheetName) =>
+    quotedSheetName.startsWith("'")
+      ? quotedSheetName.slice(1, -1).replace(/''/g, "'")
+      : quotedSheetName,
+  quoteSheetName = (sheetName) => `'${sheetName.replace(/'/g, "''")}'`;
+function findClosingBracketIndex(formulaText, startIndex) {
+  let scanIndex = startIndex,
+    bracketDepth = 0;
+  do
+    (formulaText[scanIndex] === "[" && bracketDepth++,
+      formulaText[scanIndex] === "]" && bracketDepth--,
+      scanIndex++);
+  while (scanIndex < formulaText.length && bracketDepth > 0);
+  return bracketDepth === 0 ? scanIndex : -1;
 }
-function Q6(e, end) {
-  const t = Math.max(
+function Q6(formulaText, end) {
+  const matchLength = Math.max(
     0,
     ...[
       /^\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?/,
       /^\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}/,
       /^\$?[1-9]\d*:\$?[1-9]\d*/,
       /^[A-Za-z_\\][A-Za-z0-9_.\\]*/,
-    ].map((o) => o.exec(e.slice(end))?.[0].length ?? 0),
+    ].map((pattern) => pattern.exec(formulaText.slice(end))?.[0].length ?? 0),
   );
-  if (!t) return end;
-  let n = end + t;
+  if (!matchLength) return end;
+  let referenceEnd = end + matchLength;
   return (
-    e[n] === "[" && (n = findClosingBracketIndex(e, n)),
-    n < end || /[\w.$]/.test(e[n] ?? "") || /^\s*\(/.test(e.slice(n))
+    formulaText[referenceEnd] === "[" &&
+      (referenceEnd = findClosingBracketIndex(formulaText, referenceEnd)),
+    referenceEnd < end ||
+    /[\w.$]/.test(formulaText[referenceEnd] ?? "") ||
+    /^\s*\(/.test(formulaText.slice(referenceEnd))
       ? end
-      : (e[n] === "#" && n++, n)
+      : (formulaText[referenceEnd] === "#" && referenceEnd++, referenceEnd)
   );
 }
-function parseWorksheetQualifiedReference(e) {
-  const r = [];
+function parseWorksheetQualifiedReference(formulaText) {
+  const references = [];
   let end = 0;
-  for (; end < e.length;) {
-    const n = end,
-      o = e[end];
-    if (o === '"') {
-      for (end++; end < e.length;)
-        if (e[end++] === '"')
-          if (e[end] === '"') end++;
+  for (; end < formulaText.length;) {
+    const tokenStart = end,
+      currentChar = formulaText[end];
+    if (currentChar === '"') {
+      for (end++; end < formulaText.length;)
+        if (formulaText[end++] === '"')
+          if (formulaText[end] === '"') end++;
           else break;
       continue;
     }
-    const a = end === 0 || !/[\w.$]/.test(e[end - 1]);
-    a &&
-      /^(?:_xlfn\.)?INDIRECT\s*\(/i.test(e.slice(end)) &&
-      r.push({
-        start: n,
-        end: n,
+    const isTokenStart = end === 0 || !/[\w.$]/.test(formulaText[end - 1]);
+    isTokenStart &&
+      /^(?:_xlfn\.)?INDIRECT\s*\(/i.test(formulaText.slice(end)) &&
+      references.push({
+        start: tokenStart,
+        end: tokenStart,
         text: "INDIRECT",
         unsupported: "Dynamic INDIRECT references cannot be safely repaired.",
       });
-    const s = a ? Bne.exec(e.slice(end)) : null;
-    if (s) {
-      end += s[0].length;
-      const l = Q6(e, end);
-      ((end = Math.max(end, l)),
-        r.push({
-          start: n,
+    const sheetRangeMatch = isTokenStart
+      ? Bne.exec(formulaText.slice(end))
+      : null;
+    if (sheetRangeMatch) {
+      end += sheetRangeMatch[0].length;
+      const referenceEnd = Q6(formulaText, end);
+      ((end = Math.max(end, referenceEnd)),
+        references.push({
+          start: tokenStart,
           end: end,
-          text: e.slice(n, end),
-          sheets: [unquoteSheetName(s[1]), unquoteSheetName(s[2])],
+          text: formulaText.slice(tokenStart, end),
+          sheets: [
+            unquoteSheetName(sheetRangeMatch[1]),
+            unquoteSheetName(sheetRangeMatch[2]),
+          ],
           unsupported:
             "Three-dimensional worksheet references require explicit references before this operation.",
         }));
       continue;
     }
-    const d = a ? sheetPrefixPattern.exec(e.slice(end)) : null;
-    if (d) {
-      const sheet = unquoteSheetName(d[1]);
-      end += d[0].length;
-      const c = Q6(e, end),
-        reference = e.slice(end, c);
+    const sheetPrefixMatch = isTokenStart
+      ? sheetPrefixPattern.exec(formulaText.slice(end))
+      : null;
+    if (sheetPrefixMatch) {
+      const sheet = unquoteSheetName(sheetPrefixMatch[1]);
+      end += sheetPrefixMatch[0].length;
+      const sheetReferenceEnd = Q6(formulaText, end),
+        reference = formulaText.slice(end, sheetReferenceEnd);
       if (
-        ((end = Math.max(end, c)), sheet.includes("[") || sheet.includes("]"))
+        ((end = Math.max(end, sheetReferenceEnd)),
+        sheet.includes("[") || sheet.includes("]"))
       )
         continue;
-      r.push({
-        start: n,
+      references.push({
+        start: tokenStart,
         end: end,
-        text: e.slice(n, end),
+        text: formulaText.slice(tokenStart, end),
         ...(sheet.includes(":")
           ? {
               sheets: sheet.split(":"),
@@ -1656,214 +2350,270 @@ function parseWorksheetQualifiedReference(e) {
       });
       continue;
     }
-    const u = a ? /^([A-Za-z_][A-Za-z0-9_.]*)\[/.exec(e.slice(end)) : null;
-    if (u) {
-      const closingBracketIndex = findClosingBracketIndex(e, end + u[1].length);
+    const tableMatch = isTokenStart
+      ? /^([A-Za-z_][A-Za-z0-9_.]*)\[/.exec(formulaText.slice(end))
+      : null;
+    if (tableMatch) {
+      const closingBracketIndex = findClosingBracketIndex(
+        formulaText,
+        end + tableMatch[1].length,
+      );
       if (closingBracketIndex > 0) {
         ((end = closingBracketIndex),
-          r.push({
-            start: n,
+          references.push({
+            start: tokenStart,
             end: closingBracketIndex,
-            text: e.slice(n, closingBracketIndex),
-            table: u[1],
+            text: formulaText.slice(tokenStart, closingBracketIndex),
+            table: tableMatch[1],
           }));
         continue;
       }
     }
-    if (o === "[") {
-      const closingBracketIndex = findClosingBracketIndex(e, end);
+    if (currentChar === "[") {
+      const closingBracketIndex = findClosingBracketIndex(formulaText, end);
       if (closingBracketIndex > 0) {
         end = closingBracketIndex;
-        const c = sheetPrefixPattern.exec(e.slice(end));
-        c && ((end += c[0].length), (end = Math.max(end, Q6(e, end))));
+        const trailingSheetMatch = sheetPrefixPattern.exec(
+          formulaText.slice(end),
+        );
+        trailingSheetMatch &&
+          ((end += trailingSheetMatch[0].length),
+          (end = Math.max(end, Q6(formulaText, end))));
         continue;
       }
     }
-    if (o === "'") {
-      for (end++; end < e.length;)
-        if (e[end++] === "'")
-          if (e[end] === "'") end++;
+    if (currentChar === "'") {
+      for (end++; end < formulaText.length;)
+        if (formulaText[end++] === "'")
+          if (formulaText[end] === "'") end++;
           else break;
       continue;
     }
     end++;
   }
-  return r;
+  return references;
 }
-function xP(workbook, r, worksheetById) {
+function xP(workbook, workbookModel, worksheetById) {
   if (workbook.sheet)
     return workbook.sheet.toLowerCase() === worksheetById.name.toLowerCase();
   if (workbook.sheets) {
-    const n = workbook.sheets.map((sheet) =>
-        r.sheets.findIndex((s) => s.name.toLowerCase() === sheet.toLowerCase()),
+    const sheetIndexes = workbook.sheets.map((sheet) =>
+        workbookModel.sheets.findIndex(
+          (modelSheet) => modelSheet.name.toLowerCase() === sheet.toLowerCase(),
+        ),
       ),
-      o = r.sheets.findIndex((sheet) => sheet.id === worksheetById.id);
-    return n.some((a) => a < 0) || (o >= Math.min(...n) && o <= Math.max(...n));
+      worksheetIndex = workbookModel.sheets.findIndex(
+        (sheet) => sheet.id === worksheetById.id,
+      );
+    return (
+      sheetIndexes.some((sheetIndex) => sheetIndex < 0) ||
+      (worksheetIndex >= Math.min(...sheetIndexes) &&
+        worksheetIndex <= Math.max(...sheetIndexes))
+    );
   }
   return !!workbook.unsupported;
 }
 function rewriteStructuredTableReference(
-  e,
+  formulaText,
   workbook,
   worksheetById,
-  n,
-  o = false,
+  newSheetName,
+  shouldRewriteTables = false,
 ) {
-  const a = new Set(
-    (worksheetById.tables ?? []).map((u) => u.name.toLowerCase()),
+  const localTableNames = new Set(
+    (worksheetById.tables ?? []).map((table) => table.name.toLowerCase()),
   );
-  let s = "",
-    d = 0;
-  for (const u of parseWorksheetQualifiedReference(e)) {
-    const l = xP(u, workbook, worksheetById),
-      c = o && u.table && a.has(u.table.toLowerCase());
-    (u.unsupported && l && throwWorkbookError(u.unsupported),
-      !(!l && !c) &&
-        ((s += e.slice(d, u.start)),
-        (s +=
-          n !== undefined ? `${quoteSheetName(n)}!${u.reference}` : "#REF!"),
-        (d = u.end)));
+  let rewrittenText = "",
+    copiedUntil = 0;
+  for (const qualifiedReference of parseWorksheetQualifiedReference(
+    formulaText,
+  )) {
+    const isTargetSheetReference = xP(
+        qualifiedReference,
+        workbook,
+        worksheetById,
+      ),
+      isOwnTableReference =
+        shouldRewriteTables &&
+        qualifiedReference.table &&
+        localTableNames.has(qualifiedReference.table.toLowerCase());
+    (qualifiedReference.unsupported &&
+      isTargetSheetReference &&
+      throwWorkbookError(qualifiedReference.unsupported),
+      !(!isTargetSheetReference && !isOwnTableReference) &&
+        ((rewrittenText += formulaText.slice(
+          copiedUntil,
+          qualifiedReference.start,
+        )),
+        (rewrittenText +=
+          newSheetName !== undefined
+            ? `${quoteSheetName(newSheetName)}!${qualifiedReference.reference}`
+            : "#REF!"),
+        (copiedUntil = qualifiedReference.end)));
   }
-  return s + e.slice(d);
+  return rewrittenText + formulaText.slice(copiedUntil);
 }
-function visitTableFormulasOutsideSheet(workbook, r, t) {
+function visitTableFormulasOutsideSheet(
+  workbook,
+  visitFormula,
+  excludedSheetId,
+) {
   for (const sheet of workbook.sheets)
-    if (sheet.id !== t) {
-      for (const o of sheet.tables ?? [])
-        for (const column of o.columns)
-          column.calculatedFormula && r(column.calculatedFormula, sheet.id);
-      for (const o of [
+    if (sheet.id !== excludedSheetId) {
+      for (const table of sheet.tables ?? [])
+        for (const column of table.columns)
+          column.calculatedFormula &&
+            visitFormula(column.calculatedFormula, sheet.id);
+      for (const rule of [
         ...(sheet.conditionalFormats ?? []),
         ...(sheet.validations ?? []),
       ])
-        (o.kind === "formula" || o.kind === "custom") &&
-          o.formula &&
-          r(o.formula, sheet.id, o.range.split(":")[0]);
-      for (const [o, cell] of Object.entries(sheet.cells))
+        (rule.kind === "formula" || rule.kind === "custom") &&
+          rule.formula &&
+          visitFormula(rule.formula, sheet.id, rule.range.split(":")[0]);
+      for (const [address, cell] of Object.entries(sheet.cells))
         !cell.literal &&
           typeof cell.raw == "string" &&
           cell.raw.startsWith("=") &&
-          r(cell.raw, sheet.id, o);
+          visitFormula(cell.raw, sheet.id, address);
     }
-  for (const n of workbook.definedNames ?? [])
-    r(n.refersTo, n.scopeSheetId ?? "", undefined);
+  for (const definedName of workbook.definedNames ?? [])
+    visitFormula(
+      definedName.refersTo,
+      definedName.scopeSheetId ?? "",
+      undefined,
+    );
 }
-function createUniqueWorksheetName(workbook, r) {
-  for (let t = 2; t < Number.MAX_SAFE_INTEGER; t++) {
-    const n = ` (${t})`,
-      o = r.slice(0, 31 - n.length) + n;
+function createUniqueWorksheetName(workbook, baseName) {
+  for (
+    let suffixNumber = 2;
+    suffixNumber < Number.MAX_SAFE_INTEGER;
+    suffixNumber++
+  ) {
+    const suffix = ` (${suffixNumber})`,
+      candidateName = baseName.slice(0, 31 - suffix.length) + suffix;
     if (
       !workbook.sheets.some(
-        (sheet) => sheet.name.toLowerCase() === o.toLowerCase(),
+        (sheet) => sheet.name.toLowerCase() === candidateName.toLowerCase(),
       )
     )
-      return o;
+      return candidateName;
   }
   return throwWorkbookError("No unique worksheet name is available.");
 }
 function describeSheetDeletionImpacts(workbook, sheetId) {
   const worksheetById = findWorksheetById(workbook, sheetId),
-    n = [],
-    o = new Set((worksheetById.tables ?? []).map((s) => s.name.toLowerCase())),
-    a = (s, d) => {
-      const worksheetQualifiedReference = parseWorksheetQualifiedReference(s),
-        l = worksheetQualifiedReference.filter(
-          (c) =>
-            xP(c, workbook, worksheetById) ||
-            (c.table && o.has(c.table.toLowerCase())),
+    impacts = [],
+    deletedTableNames = new Set(
+      (worksheetById.tables ?? []).map((deletedTable) =>
+        deletedTable.name.toLowerCase(),
+      ),
+    ),
+    addReferenceImpact = (formulaText, impact) => {
+      const worksheetQualifiedReference =
+          parseWorksheetQualifiedReference(formulaText),
+        affectedReferences = worksheetQualifiedReference.filter(
+          (qualifiedReference) =>
+            xP(qualifiedReference, workbook, worksheetById) ||
+            (qualifiedReference.table &&
+              deletedTableNames.has(qualifiedReference.table.toLowerCase())),
         );
-      l.some((c) => c.unsupported)
-        ? n.push({
-            ...d,
+      affectedReferences.some(
+        (affectedReference) => affectedReference.unsupported,
+      )
+        ? impacts.push({
+            ...impact,
             kind: "unsupported-reference",
-            label: `${d.label}: ${l.find((c) => c.unsupported).unsupported}`,
+            label: `${impact.label}: ${affectedReferences.find((unsupportedReference) => unsupportedReference.unsupported).unsupported}`,
           })
-        : l.length && n.push(d);
+        : affectedReferences.length && impacts.push(impact);
     };
   for (const sheet of workbook.sheets)
     if (sheet.id !== sheetId) {
-      for (const d of sheet.tables ?? [])
-        for (const column of d.columns)
+      for (const sheetTable of sheet.tables ?? [])
+        for (const column of sheetTable.columns)
           column.calculatedFormula &&
-            a(column.calculatedFormula, {
+            addReferenceImpact(column.calculatedFormula, {
               kind: "table-column",
-              label: `${sheet.name}: ${d.name}[${column.name}] calculated rule will contain #REF!`,
+              label: `${sheet.name}: ${sheetTable.name}[${column.name}] calculated rule will contain #REF!`,
               sheetId: sheet.id,
             });
       for (const [address, cell] of Object.entries(sheet.cells))
         !cell.literal &&
           typeof cell.raw == "string" &&
           cell.raw.startsWith("=") &&
-          a(cell.raw, {
+          addReferenceImpact(cell.raw, {
             kind: "formula",
             label: `${sheet.name}!${address} will contain #REF!`,
             sheetId: sheet.id,
             address: address,
           });
-      for (const d of [
+      for (const rule of [
         ...(sheet.conditionalFormats ?? []),
         ...(sheet.validations ?? []),
       ])
-        (d.kind === "formula" || d.kind === "custom") &&
-          d.formula &&
-          a(d.formula, {
+        (rule.kind === "formula" || rule.kind === "custom") &&
+          rule.formula &&
+          addReferenceImpact(rule.formula, {
             kind: "formula",
-            label: `${sheet.name}: ${d.kind === "custom" ? "validation" : "conditional"} rule ${d.id} will contain #REF!`,
+            label: `${sheet.name}: ${rule.kind === "custom" ? "validation" : "conditional"} rule ${rule.id} will contain #REF!`,
             sheetId: sheet.id,
-            address: d.range.split(":")[0],
+            address: rule.range.split(":")[0],
           });
-      for (const d of sheet.pivots ?? [])
-        d.source.sheetId === sheetId &&
-          n.push({
+      for (const pivot of sheet.pivots ?? [])
+        pivot.source.sheetId === sheetId &&
+          impacts.push({
             kind: "pivot-refresh",
-            label: `${sheet.name}: ${d.name} refresh settings will be removed; output cells retained`,
+            label: `${sheet.name}: ${pivot.name} refresh settings will be removed; output cells retained`,
             sheetId: sheet.id,
           });
-      for (const d of sheet.queries ?? [])
-        d.source.sheetId === sheetId &&
-          n.push({
+      for (const query of sheet.queries ?? [])
+        query.source.sheetId === sheetId &&
+          impacts.push({
             kind: "query-refresh",
-            label: `${sheet.name}: ${d.name} refresh settings will be removed; output cells retained`,
+            label: `${sheet.name}: ${query.name} refresh settings will be removed; output cells retained`,
             sheetId: sheet.id,
           });
     }
-  for (const s of workbook.definedNames ?? [])
-    s.scopeSheetId === sheetId
-      ? n.push({
+  for (const definedName of workbook.definedNames ?? [])
+    definedName.scopeSheetId === sheetId
+      ? impacts.push({
           kind: "local-name",
-          label: `${worksheetById.name}!${s.name} local name will be removed`,
+          label: `${worksheetById.name}!${definedName.name} local name will be removed`,
           sheetId: sheetId,
         })
-      : a(s.refersTo, {
+      : addReferenceImpact(definedName.refersTo, {
           kind: "defined-name",
-          label: `${s.name} will contain #REF!`,
-          ...(s.scopeSheetId ? { sheetId: s.scopeSheetId } : {}),
+          label: `${definedName.name} will contain #REF!`,
+          ...(definedName.scopeSheetId
+            ? { sheetId: definedName.scopeSheetId }
+            : {}),
         });
-  for (const s of workbook.formulaWatches ?? [])
-    !s.orphaned &&
-      s.anchor.sheetId === sheetId &&
-      n.push({
+  for (const formulaWatch of workbook.formulaWatches ?? [])
+    !formulaWatch.orphaned &&
+      formulaWatch.anchor.sheetId === sheetId &&
+      impacts.push({
         kind: "formula-watch",
-        label: `${worksheetById.name}!${s.anchor.address} watch will be retained as a deleted-sheet orphan`,
+        label: `${worksheetById.name}!${formulaWatch.anchor.address} watch will be retained as a deleted-sheet orphan`,
         sheetId: sheetId,
-        address: s.anchor.address,
+        address: formulaWatch.anchor.address,
       });
-  return n;
+  return impacts;
 }
-function validateWorkbookPassword(e) {
+function validateWorkbookPassword(password) {
   return (
-    (typeof e != "string" || e.length > 200) &&
+    (typeof password != "string" || password.length > 200) &&
       throwWorkbookError("Passwords must be text of at most 200 characters."),
-    e
+    password
   );
 }
-async function hashWorkbookStructurePassword(e, r) {
-  const t = await crypto.subtle.digest(
+async function hashWorkbookStructurePassword(password, salt) {
+  const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(`workbook-structure\0${r}\0${e}`),
+    new TextEncoder().encode(`workbook-structure\0${salt}\0${password}`),
   );
-  return [...new Uint8Array(t)]
-    .map((n) => n.toString(16).padStart(2, "0"))
+  return [...new Uint8Array(digest)]
+    .map((byteValue) => byteValue.toString(16).padStart(2, "0"))
     .join("");
 }
 const tableColumnDataTypes = ["any", "text", "number", "boolean", "date"];
@@ -1872,79 +2622,104 @@ function validateTableColumnType(dataType) {
     throw Error("Choose a supported table column type.");
   return dataType;
 }
-function applyTableSourceEvidence(workbook, r) {
-  if (!workbook.tableEvidence?.length) return r;
-  const t = new Map(workbook.tableEvidence.map((o) => [o.id, o]));
-  for (const o of r.tableEvidence ?? []) {
-    const a = t.get(o.id);
-    if (a && JSON.stringify(a) !== JSON.stringify(o))
+function applyTableSourceEvidence(workbook, incomingWorkbook) {
+  if (!workbook.tableEvidence?.length) return incomingWorkbook;
+  const existingEvidenceById = new Map(
+    workbook.tableEvidence.map((evidenceItem) => [
+      evidenceItem.id,
+      evidenceItem,
+    ]),
+  );
+  for (const incomingEvidence of incomingWorkbook.tableEvidence ?? []) {
+    const existingEvidence = existingEvidenceById.get(incomingEvidence.id);
+    if (
+      existingEvidence &&
+      JSON.stringify(existingEvidence) !== JSON.stringify(incomingEvidence)
+    )
       throw Error("Saved table source evidence cannot be changed.");
   }
   return {
-    ...r,
+    ...incomingWorkbook,
     tableEvidence: [
       ...workbook.tableEvidence,
-      ...(r.tableEvidence ?? []).filter((o) => !t.has(o.id)),
+      ...(incomingWorkbook.tableEvidence ?? []).filter(
+        (evidence) => !existingEvidenceById.has(evidence.id),
+      ),
     ],
   };
 }
-const isNullOrEmptyValue = (e) => e === null || e === "";
-function parseIsoDateText(e) {
+const isNullOrEmptyValue = (value) => value === null || value === "";
+function parseIsoDateText(dateText) {
   if (
-    typeof e != "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(e) ||
-    e.startsWith("0000")
+    typeof dateText != "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateText) ||
+    dateText.startsWith("0000")
   )
     return false;
-  const r = Date.parse(e + "T00:00:00.000Z");
-  return Number.isFinite(r) && new Date(r).toISOString().slice(0, 10) === e;
-}
-function coerceImportedValue(e, dataType = "any") {
+  const timestamp = Date.parse(dateText + "T00:00:00.000Z");
   return (
-    dataType === "any" ||
-    isNullOrEmptyValue(e) ||
-    (dataType === "date"
-      ? parseIsoDateText(e)
-      : typeof e === (dataType === "text" ? "string" : dataType) &&
-        (dataType !== "number" || Number.isFinite(e)))
+    Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString().slice(0, 10) === dateText
   );
 }
-function convertTextForDataType(e, r) {
-  if (coerceImportedValue(e, r.dataType)) return e;
-  if (r.dataType === "text") return String(e);
-  if (typeof e != "string")
+function coerceImportedValue(importedValue, dataType = "any") {
+  return (
+    dataType === "any" ||
+    isNullOrEmptyValue(importedValue) ||
+    (dataType === "date"
+      ? parseIsoDateText(importedValue)
+      : typeof importedValue === (dataType === "text" ? "string" : dataType) &&
+        (dataType !== "number" || Number.isFinite(importedValue)))
+  );
+}
+function convertTextForDataType(importedValue, options) {
+  if (coerceImportedValue(importedValue, options.dataType))
+    return importedValue;
+  if (options.dataType === "text") return String(importedValue);
+  if (typeof importedValue != "string")
     throw Error("This value cannot be converted without guessing.");
-  const t = e.trim();
-  if (r.dataType === "boolean" && /^(true|false)$/i.test(t))
-    return /^true$/i.test(t);
-  if (r.dataType === "date" && parseIsoDateText(t)) return t;
-  if (r.dataType === "number") {
-    const n = r.decimal ?? ".",
-      o = r.group ?? ",",
-      a = (c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-      s = o ? `(?:\\d+|\\d{1,3}(?:${a(o)}\\d{3})+)` : "\\d+";
-    if (!new RegExp(`^[+-]?(?:${s}(?:${a(n)}\\d+)?|${a(n)}\\d+)$`).test(t))
+  const trimmedText = importedValue.trim();
+  if (options.dataType === "boolean" && /^(true|false)$/i.test(trimmedText))
+    return /^true$/i.test(trimmedText);
+  if (options.dataType === "date" && parseIsoDateText(trimmedText))
+    return trimmedText;
+  if (options.dataType === "number") {
+    const decimalSeparator = options.decimal ?? ".",
+      groupSeparator = options.group ?? ",",
+      escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+      integerPattern = groupSeparator
+        ? `(?:\\d+|\\d{1,3}(?:${escapeRegExp(groupSeparator)}\\d{3})+)`
+        : "\\d+";
+    if (
+      !new RegExp(
+        `^[+-]?(?:${integerPattern}(?:${escapeRegExp(decimalSeparator)}\\d+)?|${escapeRegExp(decimalSeparator)}\\d+)$`,
+      ).test(trimmedText)
+    )
       throw Error(
         "Use a number with the selected decimal/group separators; currency, percentages and scientific text require a separate cleanup.",
       );
-    const d = (o ? t.split(o).join("") : t).replace(n, "."),
-      u = Number(d),
-      l = d
+    const normalizedNumberText = (
+        groupSeparator
+          ? trimmedText.split(groupSeparator).join("")
+          : trimmedText
+      ).replace(decimalSeparator, "."),
+      numericValue = Number(normalizedNumberText),
+      significantDigits = normalizedNumberText
         .replace(/^[+-]?0*/, "")
         .replace(".", "")
         .replace(/0+$/, "");
     if (
-      !Number.isFinite(u) ||
-      l.length > 15 ||
-      (Number.isInteger(u) && !Number.isSafeInteger(u))
+      !Number.isFinite(numericValue) ||
+      significantDigits.length > 15 ||
+      (Number.isInteger(numericValue) && !Number.isSafeInteger(numericValue))
     )
       throw Error(
         "Conversion would exceed safe numeric precision. Keep the original text.",
       );
-    return u;
+    return numericValue;
   }
   throw Error(
-    r.dataType === "date"
+    options.dataType === "date"
       ? "Dates must be valid YYYY-MM-DD text; no locale or date-system inference."
       : "Boolean text must be TRUE or FALSE.",
   );
@@ -1983,65 +2758,66 @@ function validateChartSettings(chartOptions) {
         ].includes(chartOption),
     )) &&
     failWithMessage("Invalid or unknown chart settings.");
-  const r = {};
-  for (const t of ["altText", "xTitle", "yTitle", "units"])
-    chartOptions[t] !== undefined &&
-      ((typeof chartOptions[t] != "string" ||
-        chartOptions[t].length > (t === "altText" ? 2e3 : 200)) &&
-        failWithMessage(`Invalid chart ${t}.`),
-      (r[t] = chartOptions[t]));
-  for (const t of ["xScale", "yScale"])
-    chartOptions[t] !== undefined &&
-      (["linear", "log"].includes(String(chartOptions[t])) ||
+  const validatedSettings = {};
+  for (const textField of ["altText", "xTitle", "yTitle", "units"])
+    chartOptions[textField] !== undefined &&
+      ((typeof chartOptions[textField] != "string" ||
+        chartOptions[textField].length >
+          (textField === "altText" ? 2e3 : 200)) &&
+        failWithMessage(`Invalid chart ${textField}.`),
+      (validatedSettings[textField] = chartOptions[textField]));
+  for (const scaleField of ["xScale", "yScale"])
+    chartOptions[scaleField] !== undefined &&
+      (["linear", "log"].includes(String(chartOptions[scaleField])) ||
         failWithMessage("Chart scales must be linear or log."),
-      (r[t] = chartOptions[t]));
+      (validatedSettings[scaleField] = chartOptions[scaleField]));
   if (
     (chartOptions.showLegend !== undefined &&
       (typeof chartOptions.showLegend != "boolean" &&
         failWithMessage("Invalid chart legend setting."),
-      (r.showLegend = chartOptions.showLegend)),
+      (validatedSettings.showLegend = chartOptions.showLegend)),
     chartOptions.histogramBins !== undefined &&
       ((!Number.isInteger(chartOptions.histogramBins) ||
         Number(chartOptions.histogramBins) < 1 ||
         Number(chartOptions.histogramBins) > 50) &&
         failWithMessage("Choose 1 to 50 histogram bins."),
-      (r.histogramBins = Number(chartOptions.histogramBins))),
+      (validatedSettings.histogramBins = Number(chartOptions.histogramBins))),
     chartOptions.sparklineKind !== undefined &&
       (["line", "column", "winLoss"].includes(
         String(chartOptions.sparklineKind),
       ) || failWithMessage("Invalid sparkline style."),
-      (r.sparklineKind = chartOptions.sparklineKind)),
+      (validatedSettings.sparklineKind = chartOptions.sparklineKind)),
     chartOptions.series !== undefined)
   ) {
     (!Array.isArray(chartOptions.series) || chartOptions.series.length > 20) &&
       failWithMessage("Select at most 20 chart series.");
-    const t = new Set();
-    r.series = chartOptions.series.map((sery) => {
+    const seenColumns = new Set();
+    validatedSettings.series = chartOptions.series.map((sery) => {
       ((!isNonArrayObject(sery) ||
         Object.keys(sery).some(
-          (a) => !["column", "name", "kind"].includes(a),
+          (key) => !["column", "name", "kind"].includes(key),
         ) ||
         !Number.isInteger(sery.column) ||
         Number(sery.column) < 1 ||
         Number(sery.column) > 16384 ||
-        t.has(Number(sery.column))) &&
+        seenColumns.has(Number(sery.column))) &&
         failWithMessage(
           "Chart series require unique one-based worksheet columns.",
         ),
-        t.add(Number(sery.column)));
-      const o = { column: Number(sery.column) };
+        seenColumns.add(Number(sery.column)));
+      const normalizedSeries = { column: Number(sery.column) };
       return (
         sery.name !== undefined &&
           ((typeof sery.name != "string" ||
             !sery.name.trim() ||
             sery.name.length > 200) &&
             failWithMessage("Chart series names require 1 to 200 characters."),
-          (o.name = sery.name)),
+          (normalizedSeries.name = sery.name)),
         sery.kind !== undefined &&
           (["column", "line"].includes(String(sery.kind)) ||
             failWithMessage("Combo series must be column or line."),
-          (o.kind = sery.kind)),
-        o
+          (normalizedSeries.kind = sery.kind)),
+        normalizedSeries
       );
     });
   }
@@ -2060,39 +2836,46 @@ function validateChartSettings(chartOptions) {
         failWithMessage(
           "Chart filters require at most 500 unique one-based worksheet rows.",
         ),
-      (r.includedRows = [...chartOptions.includedRows].sort((t, n) => t - n))),
-    r
+      (validatedSettings.includedRows = [...chartOptions.includedRows].sort(
+        (leftRow, rightRow) => leftRow - rightRow,
+      ))),
+    validatedSettings
   );
 }
-function formatDiagnosticsMessage(e) {
-  const r = e.diagnostics.filter(
+function formatDiagnosticsMessage(validationResult) {
+  const errorDiagnostics = validationResult.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "error",
   );
-  r.length &&
+  errorDiagnostics.length &&
     failWithMessage(
-      r
+      errorDiagnostics
         .slice(0, 5)
-        .map((t) => t.message)
+        .map((errorDiagnostic) => errorDiagnostic.message)
         .join(" "),
     );
 }
 const Kne = 100,
   maxPictureHashBytes = 2 * 1024 * 1024,
   Yne = 500,
-  validateDrawingNumber = (e, r, t, n) => {
-    if (typeof e != "number" || !Number.isFinite(e) || e < r || e > t)
-      throw new Error(`Invalid drawing ${n}.`);
-    return e;
+  validateDrawingNumber = (value, minimum, maximum, fieldName) => {
+    if (
+      typeof value != "number" ||
+      !Number.isFinite(value) ||
+      value < minimum ||
+      value > maximum
+    )
+      throw new Error(`Invalid drawing ${fieldName}.`);
+    return value;
   },
-  validateDrawingText = (e, r, t) => {
-    if (typeof e != "string" || e.length > r)
-      throw new Error(`Invalid drawing ${t}.`);
-    return e;
+  validateDrawingText = (value, maxLength, fieldName) => {
+    if (typeof value != "string" || value.length > maxLength)
+      throw new Error(`Invalid drawing ${fieldName}.`);
+    return value;
   },
-  validateDrawingColor = (e) => {
-    if (typeof e != "string" || !/^#[\da-f]{6}$/i.test(e))
+  validateDrawingColor = (value) => {
+    if (typeof value != "string" || !/^#[\da-f]{6}$/i.test(value))
       throw new Error("Drawing colors must be six-digit hex colors.");
-    return e;
+    return value;
   };
 function hashPictureBytes(bytes) {
   if (!(bytes instanceof Uint8Array) || bytes.length > maxPictureHashBytes)

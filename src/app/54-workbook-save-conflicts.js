@@ -42,23 +42,41 @@ import {
   physicalToLogicalPixels,
 } from "./53-find-replace-go-to.js";
 
-function computeVirtualizedRange(e, r, t, zoomScale, o = 5) {
-  const axisScale = resolveAxisScale(e.total, t, zoomScale),
-    s = clampNumber(r, 0, axisScale.physicalMax),
-    logicalOffset = physicalToLogicalPixels(s, e.total, t, zoomScale),
-    first = e.count ? Math.max(0, e.indexAt(logicalOffset) - o) : 0,
-    last = e.count
+function computeVirtualizedRange(
+  axis,
+  scrollOffset,
+  t,
+  zoomScale,
+  overscan = 5,
+) {
+  const axisScale = resolveAxisScale(axis.total, t, zoomScale),
+    clampedOffset = clampNumber(scrollOffset, 0, axisScale.physicalMax),
+    logicalOffset = physicalToLogicalPixels(
+      clampedOffset,
+      axis.total,
+      t,
+      zoomScale,
+    ),
+    first = axis.count
+      ? Math.max(0, axis.indexAt(logicalOffset) - overscan)
+      : 0,
+    last = axis.count
       ? Math.min(
-          e.count,
-          e.indexAt(logicalOffset + axisScale.viewport / zoomScale) + o + 1,
+          axis.count,
+          axis.indexAt(logicalOffset + axisScale.viewport / zoomScale) +
+            overscan +
+            1,
         )
       : 0,
-    leading = Math.max(0, s / zoomScale + e.offset(first) - logicalOffset),
+    leading = Math.max(
+      0,
+      clampedOffset / zoomScale + axis.offset(first) - logicalOffset,
+    ),
     trailing = Math.max(
       0,
       axisScale.physicalPixels / zoomScale -
         leading -
-        (e.offset(last) - e.offset(first)),
+        (axis.offset(last) - axis.offset(first)),
     );
   return {
     first: first,
@@ -79,9 +97,9 @@ function getBrowserLockManager() {
     return null;
   }
 }
-function cloneSaveInputs(e) {
+function cloneSaveInputs(saveInputs) {
   try {
-    return structuredClone(e);
+    return structuredClone(saveInputs);
   } catch {
     throw new WorkbookRevisionConflictError(
       "invalid",
@@ -89,98 +107,124 @@ function cloneSaveInputs(e) {
     );
   }
 }
-function saveWorkbookWithLock(e, r, t = {}) {
-  const localWorkbookStore = createLocalWorkbookStore(e, r, {
-      maxBytes: t.maxBytes,
-      maxCheckpoints: t.maxCheckpoints,
+function saveWorkbookWithLock(e, workbookKey, options = {}) {
+  const localWorkbookStore = createLocalWorkbookStore(e, workbookKey, {
+      maxBytes: options.maxBytes,
+      maxCheckpoints: options.maxCheckpoints,
     }),
-    o = t.locks === undefined ? getBrowserLockManager() : t.locks,
-    a = t.lockTimeoutMs ?? 5e3,
-    s = workbookLockName(r);
-  if (!Number.isInteger(a) || a < 1 || a > 6e4)
+    lockManager =
+      options.locks === undefined ? getBrowserLockManager() : options.locks,
+    lockTimeoutMs = options.lockTimeoutMs ?? 5e3,
+    lockName = workbookLockName(workbookKey);
+  if (
+    !Number.isInteger(lockTimeoutMs) ||
+    lockTimeoutMs < 1 ||
+    lockTimeoutMs > 6e4
+  )
     throw new WorkbookRevisionConflictError(
       "invalid",
       "The browser save lock timeout must be between 1 and 60,000 milliseconds.",
     );
-  function d(u, l) {
-    return new Promise((c, h) => {
-      const f = (j) => new WorkbookRevisionConflictError("unavailable", j),
-        p = new AbortController(),
-        m = performance.now() + a;
-      let v = true,
-        g = false,
-        b = false,
-        y,
-        w,
-        E;
-      const A = () => {
-          (E !== undefined && clearTimeout(E),
-            l?.removeEventListener("abort", F));
+  function runWithLock(operation, signal) {
+    return new Promise((resolve, reject) => {
+      const createUnavailableError = (message) =>
+          new WorkbookRevisionConflictError("unavailable", message),
+        abortController = new AbortController(),
+        deadline = performance.now() + lockTimeoutMs;
+      let isPending = true,
+        hasLockGranted = false,
+        hasOperationFailed = false,
+        operationError,
+        abortReason,
+        timeoutId;
+      const cleanup = () => {
+          (timeoutId !== undefined && clearTimeout(timeoutId),
+            signal?.removeEventListener("abort", handleAbort));
         },
-        k = (j) => {
-          !v || g || ((v = false), (w = j), A(), p.abort(j), h(j));
+        abortWith = (reason) => {
+          !isPending ||
+            hasLockGranted ||
+            ((isPending = false),
+            (abortReason = reason),
+            cleanup(),
+            abortController.abort(reason),
+            reject(reason));
         },
-        F = () =>
-          k(
-            f(
+        handleAbort = () =>
+          abortWith(
+            createUnavailableError(
               "The queued browser save was cancelled. No changes were written; your unsaved work remains in memory.",
             ),
           ),
-        I = () =>
-          f(
+        createTimeoutError = () =>
+          createUnavailableError(
             "Timed out waiting for another workbook window to finish saving. No changes were written; retry or export your unsaved work.",
           ),
-        O = (j) => {
-          ((v = false),
-            A(),
-            h(
-              b
-                ? y
-                : j instanceof WorkbookRevisionConflictError
-                  ? j
-                  : f(
+        handleFailure = (error) => {
+          ((isPending = false),
+            cleanup(),
+            reject(
+              hasOperationFailed
+                ? operationError
+                : error instanceof WorkbookRevisionConflictError
+                  ? error
+                  : createUnavailableError(
                       "Browser save locking is unavailable. No changes were written; keep the workbook open and export your unsaved work.",
                     ),
             ));
         };
-      if (l?.aborted) {
-        F();
+      if (signal?.aborted) {
+        handleAbort();
         return;
       }
       try {
-        if (!o || typeof o.request != "function") {
-          O(
-            f(
+        if (!lockManager || typeof lockManager.request != "function") {
+          handleFailure(
+            createUnavailableError(
               "Browser save locking is unavailable. No changes were written; keep the workbook open and export your unsaved work.",
             ),
           );
           return;
         }
-        (l?.addEventListener("abort", F, { once: true }),
-          (E = setTimeout(() => k(I()), a)));
-        const j = o.request(s, { mode: "exclusive", signal: p.signal }, (z) => {
-          if (!v || p.signal.aborted)
-            throw w ?? f("The queued browser save was cancelled.");
-          if (performance.now() >= m) {
-            const V = I();
-            throw (k(V), V);
-          }
-          if (!z || z.name !== s || z.mode !== "exclusive")
-            throw f(
-              "The browser did not grant the required exclusive save lock.",
-            );
-          ((g = true), A());
-          try {
-            return u();
-          } catch (error) {
-            throw ((b = true), (y = error), error);
-          }
-        });
-        Promise.resolve(j).then((z) => {
-          ((v = false), A(), c(z));
-        }, O);
+        (signal?.addEventListener("abort", handleAbort, { once: true }),
+          (timeoutId = setTimeout(
+            () => abortWith(createTimeoutError()),
+            lockTimeoutMs,
+          )));
+        const lockRequest = lockManager.request(
+          lockName,
+          { mode: "exclusive", signal: abortController.signal },
+          (lock) => {
+            if (!isPending || abortController.signal.aborted)
+              throw (
+                abortReason ??
+                createUnavailableError("The queued browser save was cancelled.")
+              );
+            if (performance.now() >= deadline) {
+              const timeoutError = createTimeoutError();
+              throw (abortWith(timeoutError), timeoutError);
+            }
+            if (!lock || lock.name !== lockName || lock.mode !== "exclusive")
+              throw createUnavailableError(
+                "The browser did not grant the required exclusive save lock.",
+              );
+            ((hasLockGranted = true), cleanup());
+            try {
+              return operation();
+            } catch (error) {
+              throw (
+                (hasOperationFailed = true),
+                (operationError = error),
+                error
+              );
+            }
+          },
+        );
+        Promise.resolve(lockRequest).then((result) => {
+          ((isPending = false), cleanup(), resolve(result));
+        }, handleFailure);
       } catch (error) {
-        O(error);
+        handleFailure(error);
       }
     });
   }
@@ -189,43 +233,61 @@ function saveWorkbookWithLock(e, r, t = {}) {
     load: localWorkbookStore.load,
     listCheckpoints: localWorkbookStore.listCheckpoints,
     compareCheckpoint: localWorkbookStore.compareCheckpoint,
-    async save(workbook, view, expected, h = {}) {
-      const f = cloneSaveInputs({
+    async save(workbook, view, expected, saveOptions = {}) {
+      const clonedInputs = cloneSaveInputs({
           workbook: workbook,
           view: view,
           expected: expected,
-          options: { allowIdentityChange: h.allowIdentityChange },
+          options: { allowIdentityChange: saveOptions.allowIdentityChange },
         }),
-        signal = h.signal;
-      return d(
+        signal = saveOptions.signal;
+      return runWithLock(
         () =>
-          localWorkbookStore.save(f.workbook, f.view, f.expected, f.options),
+          localWorkbookStore.save(
+            clonedInputs.workbook,
+            clonedInputs.view,
+            clonedInputs.expected,
+            clonedInputs.options,
+          ),
         signal,
       );
     },
-    async checkpoint(u, expected, c = {}) {
-      const h = cloneSaveInputs({ label: u, expected: expected }),
-        signal = c.signal;
-      return d(
-        () => localWorkbookStore.checkpoint(h.label, h.expected),
+    async checkpoint(label, expected, checkpointOptions = {}) {
+      const clonedInputs = cloneSaveInputs({
+          label: label,
+          expected: expected,
+        }),
+        signal = checkpointOptions.signal;
+      return runWithLock(
+        () =>
+          localWorkbookStore.checkpoint(
+            clonedInputs.label,
+            clonedInputs.expected,
+          ),
         signal,
       );
     },
-    async restoreCheckpoint(u, workbook, expected, actor, f = {}) {
-      const p = cloneSaveInputs({
-          id: u,
+    async restoreCheckpoint(
+      checkpointId,
+      workbook,
+      expected,
+      actor,
+      restoreOptions = {},
+    ) {
+      const clonedInputs = cloneSaveInputs({
+          id: checkpointId,
           workbook: workbook,
           expected: expected,
           actor: actor,
         }),
-        signal = f.signal;
-      return d(
+        signal = restoreOptions.signal;
+      return runWithLock(
         () =>
           localWorkbookStore.restoreCheckpoint(
-            p.id,
-            p.workbook,
-            p.expected,
-            p.actor,
+            clonedInputs.id,
+            clonedInputs.workbook,
+            clonedInputs.expected,
+            clonedInputs.actor,
           ),
         signal,
       );
@@ -285,33 +347,36 @@ const workbookSectionLabels = {
     color: "Text color",
     align: "Alignment",
   },
-  humanizeFieldName = (e) =>
-    workbookSectionLabels[e] ??
-    e
+  humanizeFieldName = (fieldName) =>
+    workbookSectionLabels[fieldName] ??
+    fieldName
       .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
       .replace(/[_-]/g, " ")
-      .replace(/^./, (r) => r.toUpperCase()),
-  wp = (e) => e !== null && typeof e == "object" && !Array.isArray(e),
-  stableSerialize = (e) =>
-    Array.isArray(e)
-      ? `[${e.map(stableSerialize).join(",")}]`
-      : wp(e)
-        ? `{${Object.keys(e)
+      .replace(/^./, (character) => character.toUpperCase()),
+  wp = (value) =>
+    value !== null && typeof value == "object" && !Array.isArray(value),
+  stableSerialize = (value) =>
+    Array.isArray(value)
+      ? `[${value.map(stableSerialize).join(",")}]`
+      : wp(value)
+        ? `{${Object.keys(value)
             .sort()
-            .map((r) => `${JSON.stringify(r)}:${stableSerialize(e[r])}`)
+            .map(
+              (key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`,
+            )
             .join(",")}}`
-        : (JSON.stringify(e) ?? "undefined"),
-  truncateDisplayText = (e, r = 220) =>
-    e.length > r ? `${e.slice(0, r)}…` : e;
-function summarizeConflictValue(e, r = 0) {
-  if (e === undefined) return "Not set";
-  if (e === null || e === "") return "Blank";
-  if (typeof e == "boolean") return e ? "Yes" : "No";
-  if (typeof e == "string")
-    return e.startsWith("data:image/")
+        : (JSON.stringify(value) ?? "undefined"),
+  truncateDisplayText = (text, maxLength = 220) =>
+    text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
+function summarizeConflictValue(value, depth = 0) {
+  if (value === undefined) return "Not set";
+  if (value === null || value === "") return "Blank";
+  if (typeof value == "boolean") return value ? "Yes" : "No";
+  if (typeof value == "string")
+    return value.startsWith("data:image/")
       ? "Embedded image"
-      : /^\d{4}-\d{2}-\d{2}T/.test(e) && Number.isFinite(Date.parse(e))
-        ? new Date(e).toLocaleString(undefined, {
+      : /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value))
+        ? new Date(value).toLocaleString(undefined, {
             year: "numeric",
             month: "short",
             day: "numeric",
@@ -321,37 +386,39 @@ function summarizeConflictValue(e, r = 0) {
             fractionalSecondDigits: 3,
             timeZoneName: "short",
           })
-        : truncateDisplayText(e);
-  if (Array.isArray(e))
-    return e.length
-      ? r >= 2
-        ? `${e.length} items`
+        : truncateDisplayText(value);
+  if (Array.isArray(value))
+    return value.length
+      ? depth >= 2
+        ? `${value.length} items`
         : truncateDisplayText(
-            e
+            value
               .slice(0, 4)
-              .map((t) => summarizeConflictValue(t, r + 1))
+              .map((item) => summarizeConflictValue(item, depth + 1))
               .join("; ") +
-              (e.length > 4 ? `; ${e.length - 4} more items` : ""),
+              (value.length > 4 ? `; ${value.length - 4} more items` : ""),
           )
       : "None";
-  if (wp(e)) {
-    const t = Object.entries(e);
-    return t.length
-      ? r >= 2
-        ? `${t.length} settings`
+  if (wp(value)) {
+    const entries = Object.entries(value);
+    return entries.length
+      ? depth >= 2
+        ? `${entries.length} settings`
         : truncateDisplayText(
-            t
+            entries
               .slice(0, 4)
               .map(
-                ([n, o]) =>
-                  `${humanizeFieldName(n)}: ${summarizeConflictValue(o, r + 1)}`,
+                ([entryKey, entryValue]) =>
+                  `${humanizeFieldName(entryKey)}: ${summarizeConflictValue(entryValue, depth + 1)}`,
               )
               .join(" · ") +
-              (t.length > 4 ? ` · ${t.length - 4} more settings` : ""),
+              (entries.length > 4
+                ? ` · ${entries.length - 4} more settings`
+                : ""),
           )
       : "No settings";
   }
-  return String(e);
+  return String(value);
 }
 function describeCellContent(cell) {
   return cell
@@ -370,95 +437,113 @@ function describeCellContent(cell) {
           : String(cell.raw)
     : "Empty cell";
 }
-function collectConflictChanges(e) {
-  const r = [],
-    t = (path, before, after, s) => {
+function collectConflictChanges(conflict) {
+  const changes = [],
+    collectChange = (path, before, after, depth) => {
       if (stableSerialize(before) !== stableSerialize(after)) {
         if (
-          s < 3 &&
+          depth < 3 &&
           (wp(before) || wp(after)) &&
           (before === undefined || wp(before)) &&
           (after === undefined || wp(after))
         ) {
-          const d = wp(before) ? before : {},
-            u = wp(after) ? after : {},
-            l = new Set([...Object.keys(d), ...Object.keys(u)]);
-          if (l.size) {
-            for (const c of l) t([...path, c], d[c], u[c], s + 1);
+          const beforeObject = wp(before) ? before : {},
+            afterObject = wp(after) ? after : {},
+            allKeys = new Set([
+              ...Object.keys(beforeObject),
+              ...Object.keys(afterObject),
+            ]);
+          if (allKeys.size) {
+            for (const key of allKeys)
+              collectChange(
+                [...path, key],
+                beforeObject[key],
+                afterObject[key],
+                depth + 1,
+              );
             return;
           }
         }
-        r.push({ path: path, before: before, after: after });
+        changes.push({ path: path, before: before, after: after });
       }
     };
-  return (t(e.path.split("."), e.before, e.after, 0), r);
+  return (
+    collectChange(conflict.path.split("."), conflict.before, conflict.after, 0),
+    changes
+  );
 }
-function WorkbookSaveConflictDialog(e) {
+function WorkbookSaveConflictDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    [n, o] = ne.useState(null),
-    [a, s] = ne.useState(null),
-    [d, u] = ne.useState(""),
-    [checked, c] = ne.useState(false),
-    [open, f] = ne.useState(false),
-    p = ne.useRef(null),
+    [savedWorkbook, setSavedWorkbook] = ne.useState(null),
+    [comparison, setComparison] = ne.useState(null),
+    [loadError, setLoadError] = ne.useState(""),
+    [checked, setChecked] = ne.useState(false),
+    [open, setOpen] = ne.useState(false),
+    dialogRef = ne.useRef(null),
     onClick = () => {
-      (c(false), f(false));
+      (setChecked(false), setOpen(false));
       try {
-        const w = e.loadSaved();
-        (o(w),
-          s(
-            w?.workbook.id === e.workbook.id
-              ? compareWorkbookVersions(w.workbook, e.workbook)
+        const loaded = props.loadSaved();
+        (setSavedWorkbook(loaded),
+          setComparison(
+            loaded?.workbook.id === props.workbook.id
+              ? compareWorkbookVersions(loaded.workbook, props.workbook)
               : null,
           ),
-          u(
-            w
+          setLoadError(
+            loaded
               ? ""
               : "The saved workbook is no longer available. Export your local changes before continuing.",
           ));
       } catch (error) {
-        (o(null),
-          s(null),
-          u(
+        (setSavedWorkbook(null),
+          setComparison(null),
+          setLoadError(
             error instanceof Error
               ? error.message
               : "The saved workbook cannot be read.",
           ));
       }
     };
-  (ne.useEffect(onClick, [e.workbook]),
+  (ne.useEffect(onClick, [props.workbook]),
     ne.useEffect(() => {
       const activeElement = document.activeElement;
       return (
-        p.current?.querySelector("button")?.focus(),
+        dialogRef.current?.querySelector("button")?.focus(),
         () => {
           activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []));
-  const v = (w) =>
-      e.workbook.sheets.find((sheet) => sheet.id === w)?.name ??
-      n?.workbook.sheets.find((sheet) => sheet.id === w)?.name ??
+  const sheetNameFor = (sheetId) =>
+      props.workbook.sheets.find((sheet) => sheet.id === sheetId)?.name ??
+      savedWorkbook?.workbook.sheets.find((sheet) => sheet.id === sheetId)
+        ?.name ??
       "Removed worksheet",
-    g = (w) =>
-      w[0] === "sheets" && w[1] === "order"
+    pathLabel = (path) =>
+      path[0] === "sheets" && path[1] === "order"
         ? "Worksheet order"
-        : w[0] === "sheets"
-          ? [v(w[1]), ...w.slice(2).map(humanizeFieldName)].join(" · ")
-          : w.map(humanizeFieldName).join(" · "),
-    b = a
-      ? [...a.metadataChanges, ...a.structuralChanges].flatMap(
-          collectConflictChanges,
-        )
+        : path[0] === "sheets"
+          ? [
+              sheetNameFor(path[1]),
+              ...path.slice(2).map(humanizeFieldName),
+            ].join(" · ")
+          : path.map(humanizeFieldName).join(" · "),
+    propertyChanges = comparison
+      ? [
+          ...comparison.metadataChanges,
+          ...comparison.structuralChanges,
+        ].flatMap(collectConflictChanges)
       : [],
-    y = (w, E) =>
-      w[0] === "sheets" && w[1] === "order" && Array.isArray(E)
-        ? E.map((A) => v(String(A))).join(" → ") || "No worksheets"
-        : summarizeConflictValue(E);
+    formatChangeValue = (path, value) =>
+      path[0] === "sheets" && path[1] === "order" && Array.isArray(value)
+        ? value.map((sheetId) => sheetNameFor(String(sheetId))).join(" → ") ||
+          "No worksheets"
+        : summarizeConflictValue(value);
   return i.jsx("div", {
     className: "wm-backdrop",
     children: i.jsxs("div", {
-      ref: p,
+      ref: dialogRef,
       className: "wm-dialog pc-dialog",
       role: "dialog",
       "aria-modal": "true",
@@ -466,21 +551,23 @@ function WorkbookSaveConflictDialog(e) {
       onKeyDown: (event) => {
         if (
           (event.key === "Escape" &&
-            (event.preventDefault(), event.stopPropagation(), e.onClose()),
+            (event.preventDefault(), event.stopPropagation(), props.onClose()),
           event.key === "Tab")
         ) {
-          const A = [
-              ...(p.current?.querySelectorAll(
+          const focusableElements = [
+              ...(dialogRef.current?.querySelectorAll(
                 'button:not(:disabled),input:not(:disabled),summary,[tabindex="0"]',
               ) ?? []),
             ],
-            k = A[0],
-            F = A.at(-1);
-          event.shiftKey && document.activeElement === k
-            ? (event.preventDefault(), F == null || F.focus())
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === F &&
-              (event.preventDefault(), k == null || k.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       lang: language("Workbook save conflict"),
@@ -495,7 +582,7 @@ function WorkbookSaveConflictDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close save conflict"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close save conflict"),
               "data-ui-label": "Close save conflict",
               children: i.jsx(X, { size: 18 }),
@@ -519,14 +606,14 @@ function WorkbookSaveConflictDialog(e) {
                   }),
                 }),
                 " ",
-                e.workbook.name,
+                props.workbook.name,
                 " ",
                 i.jsx(LocalizedText, { children: "· revision" }),
                 " ",
-                e.workbook.revision,
+                props.workbook.revision,
               ],
             }),
-            n &&
+            savedWorkbook &&
               i.jsxs("p", {
                 children: [
                   i.jsx("strong", {
@@ -535,17 +622,17 @@ function WorkbookSaveConflictDialog(e) {
                     }),
                   }),
                   " ",
-                  n.workbook.name,
+                  savedWorkbook.workbook.name,
                   " ",
                   i.jsx(LocalizedText, { children: "· revision " }),
-                  n.workbook.revision,
+                  savedWorkbook.workbook.revision,
                 ],
               }),
             i.jsxs("div", {
               className: "pc-actions",
               children: [
                 i.jsx("button", {
-                  onClick: e.onExport,
+                  onClick: props.onExport,
                   children: i.jsx(LocalizedText, {
                     children: "Export my changes",
                   }),
@@ -558,15 +645,15 @@ function WorkbookSaveConflictDialog(e) {
                 }),
               ],
             }),
-            n &&
-              n.workbook.id !== e.workbook.id &&
+            savedWorkbook &&
+              savedWorkbook.workbook.id !== props.workbook.id &&
               i.jsx("p", {
                 children: i.jsx(LocalizedText, {
                   children:
                     "The saved location now contains a different workbook. Export your local workbook before deciding whether to load it.",
                 }),
               }),
-            a &&
+            comparison &&
               i.jsxs("section", {
                 "aria-label": text("Conflicting workbook changes"),
                 lang: language("Conflicting workbook changes"),
@@ -579,20 +666,20 @@ function WorkbookSaveConflictDialog(e) {
                   }),
                   i.jsxs("p", {
                     children: [
-                      a.cellChanges.length,
+                      comparison.cellChanges.length,
                       " ",
                       i.jsx(LocalizedText, { children: "cell changes ·" }),
                       " ",
-                      a.metadataChanges.length,
+                      comparison.metadataChanges.length,
                       " ",
                       i.jsx(LocalizedText, { children: "workbook changes ·" }),
                       " ",
-                      a.structuralChanges.length,
+                      comparison.structuralChanges.length,
                       " ",
                       i.jsx(LocalizedText, { children: "worksheet changes" }),
                     ],
                   }),
-                  a.cellChanges.length > 0 &&
+                  comparison.cellChanges.length > 0 &&
                     i.jsxs("table", {
                       className: "pc-table",
                       children: [
@@ -621,80 +708,95 @@ function WorkbookSaveConflictDialog(e) {
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: a.cellChanges.slice(0, 100).map((w) => {
-                            const E = [
-                              ...new Set([
-                                ...Object.keys(w.before ?? {}),
-                                ...Object.keys(w.after ?? {}),
-                              ]),
-                            ].filter(
-                              (A) =>
-                                A !== "raw" &&
-                                stableSerialize(w.before?.[A]) !==
-                                  stableSerialize(w.after?.[A]),
-                            );
-                            return i.jsxs(
-                              "tr",
-                              {
-                                children: [
-                                  i.jsxs("th", {
-                                    scope: "row",
-                                    children: [v(w.sheetId), "!", w.address],
-                                  }),
-                                  [w.before, w.after].map((cell, k) =>
-                                    i.jsxs(
-                                      "td",
-                                      {
-                                        children: [
-                                          i.jsx("span", {
-                                            className: "pc-cell-value",
-                                            children: describeCellContent(cell),
-                                          }),
-                                          E.length > 0 &&
-                                            i.jsx("ul", {
-                                              className: "pc-cell-fields",
-                                              children: E.map((F) =>
-                                                i.jsxs(
-                                                  "li",
-                                                  {
-                                                    children: [
-                                                      i.jsxs("strong", {
-                                                        children: [
-                                                          humanizeFieldName(F),
-                                                          ":",
-                                                        ],
-                                                      }),
-                                                      " ",
-                                                      summarizeConflictValue(
-                                                        cell?.[F],
+                          children: comparison.cellChanges
+                            .slice(0, 100)
+                            .map((cellChange) => {
+                              const changedFields = [
+                                ...new Set([
+                                  ...Object.keys(cellChange.before ?? {}),
+                                  ...Object.keys(cellChange.after ?? {}),
+                                ]),
+                              ].filter(
+                                (field) =>
+                                  field !== "raw" &&
+                                  stableSerialize(
+                                    cellChange.before?.[field],
+                                  ) !==
+                                    stableSerialize(cellChange.after?.[field]),
+                              );
+                              return i.jsxs(
+                                "tr",
+                                {
+                                  children: [
+                                    i.jsxs("th", {
+                                      scope: "row",
+                                      children: [
+                                        sheetNameFor(cellChange.sheetId),
+                                        "!",
+                                        cellChange.address,
+                                      ],
+                                    }),
+                                    [cellChange.before, cellChange.after].map(
+                                      (cell, sideIndex) =>
+                                        i.jsxs(
+                                          "td",
+                                          {
+                                            children: [
+                                              i.jsx("span", {
+                                                className: "pc-cell-value",
+                                                children:
+                                                  describeCellContent(cell),
+                                              }),
+                                              changedFields.length > 0 &&
+                                                i.jsx("ul", {
+                                                  className: "pc-cell-fields",
+                                                  children: changedFields.map(
+                                                    (changedField) =>
+                                                      i.jsxs(
+                                                        "li",
+                                                        {
+                                                          children: [
+                                                            i.jsxs("strong", {
+                                                              children: [
+                                                                humanizeFieldName(
+                                                                  changedField,
+                                                                ),
+                                                                ":",
+                                                              ],
+                                                            }),
+                                                            " ",
+                                                            summarizeConflictValue(
+                                                              cell?.[
+                                                                changedField
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        },
+                                                        changedField,
                                                       ),
-                                                    ],
-                                                  },
-                                                  F,
-                                                ),
-                                              ),
-                                            }),
-                                        ],
-                                      },
-                                      k,
+                                                  ),
+                                                }),
+                                            ],
+                                          },
+                                          sideIndex,
+                                        ),
                                     ),
-                                  ),
-                                ],
-                              },
-                              `${w.sheetId}:${w.address}`,
-                            );
-                          }),
+                                  ],
+                                },
+                                `${cellChange.sheetId}:${cellChange.address}`,
+                              );
+                            }),
                         }),
                       ],
                     }),
-                  a.cellChanges.length > 100 &&
+                  comparison.cellChanges.length > 100 &&
                     i.jsx("p", {
                       children: i.jsx(LocalizedText, {
                         children:
                           "Showing the first 100 changed cells. Full comparison details include every change.",
                       }),
                     }),
-                  b.length > 0 &&
+                  propertyChanges.length > 0 &&
                     i.jsxs("table", {
                       className: "pc-table",
                       children: [
@@ -723,41 +825,50 @@ function WorkbookSaveConflictDialog(e) {
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: b.slice(0, 100).map((w) =>
-                            i.jsxs(
-                              "tr",
-                              {
-                                children: [
-                                  i.jsx("th", {
-                                    scope: "row",
-                                    children: g(w.path),
-                                  }),
-                                  i.jsx("td", {
-                                    children: y(w.path, w.before),
-                                  }),
-                                  i.jsx("td", {
-                                    children: y(w.path, w.after),
-                                  }),
-                                ],
-                              },
-                              JSON.stringify(w.path),
+                          children: propertyChanges
+                            .slice(0, 100)
+                            .map((propertyChange) =>
+                              i.jsxs(
+                                "tr",
+                                {
+                                  children: [
+                                    i.jsx("th", {
+                                      scope: "row",
+                                      children: pathLabel(propertyChange.path),
+                                    }),
+                                    i.jsx("td", {
+                                      children: formatChangeValue(
+                                        propertyChange.path,
+                                        propertyChange.before,
+                                      ),
+                                    }),
+                                    i.jsx("td", {
+                                      children: formatChangeValue(
+                                        propertyChange.path,
+                                        propertyChange.after,
+                                      ),
+                                    }),
+                                  ],
+                                },
+                                JSON.stringify(propertyChange.path),
+                              ),
                             ),
-                          ),
                         }),
                       ],
                     }),
-                  b.length > 100 &&
+                  propertyChanges.length > 100 &&
                     i.jsx("p", {
                       children: i.jsx(LocalizedText, {
                         children:
                           "Showing the first 100 changed properties. Full comparison details include every change.",
                       }),
                     }),
-                  (a.cellChanges.length > 0 || b.length > 0) &&
+                  (comparison.cellChanges.length > 0 ||
+                    propertyChanges.length > 0) &&
                     i.jsxs("details", {
                       className: "pc-details",
                       open: open,
-                      onToggle: (event) => f(event.currentTarget.open),
+                      onToggle: (event) => setOpen(event.currentTarget.open),
                       children: [
                         i.jsx("summary", {
                           children: i.jsx(LocalizedText, {
@@ -775,7 +886,7 @@ function WorkbookSaveConflictDialog(e) {
                               }),
                               i.jsx("pre", {
                                 tabIndex: 0,
-                                children: JSON.stringify(a, null, 2),
+                                children: JSON.stringify(comparison, null, 2),
                               }),
                             ],
                           }),
@@ -788,15 +899,15 @@ function WorkbookSaveConflictDialog(e) {
         i.jsxs("footer", {
           className: "pc-footer",
           children: [
-            d && i.jsx("p", { role: "alert", children: d }),
+            loadError && i.jsx("p", { role: "alert", children: loadError }),
             i.jsxs("label", {
               className: "wm-confirm",
               children: [
                 i.jsx("input", {
                   type: "checkbox",
                   checked: checked,
-                  disabled: !n,
-                  onChange: (event) => c(event.target.checked),
+                  disabled: !savedWorkbook,
+                  onChange: (event) => setChecked(event.target.checked),
                 }),
                 i.jsx(LocalizedText, {
                   children:
@@ -814,13 +925,13 @@ function WorkbookSaveConflictDialog(e) {
               className: "pc-footer-actions",
               children: [
                 i.jsx("button", {
-                  disabled: !n || !checked,
+                  disabled: !savedWorkbook || !checked,
                   onClick: () => {
                     try {
-                      e.onReload(n);
+                      props.onReload(savedWorkbook);
                     } catch (error) {
-                      (c(false),
-                        u(
+                      (setChecked(false),
+                        setLoadError(
                           error instanceof Error
                             ? error.message
                             : "The saved workbook could not be loaded.",
@@ -832,7 +943,7 @@ function WorkbookSaveConflictDialog(e) {
                   }),
                 }),
                 i.jsx("button", {
-                  onClick: e.onClose,
+                  onClick: props.onClose,
                   children: i.jsx(LocalizedText, {
                     children: "Keep editing my local copy",
                   }),
@@ -893,10 +1004,10 @@ const diagnosticGroupDefinitions = {
     "#BLOCKED!": "unavailable",
     "#PENDING!": "cancelled",
   };
-function isAbortOrQuotaError(e) {
+function isAbortOrQuotaError(error) {
   try {
-    if (e && typeof e == "object") {
-      const { code, name } = e;
+    if (error && typeof error == "object") {
+      const { code, name } = error;
       if (typeof code == "string") {
         if (wH.has(code)) return code;
         if (Object.hasOwn(workbookErrorCodes, code))
@@ -909,17 +1020,21 @@ function isAbortOrQuotaError(e) {
   } catch {}
   return "unknown";
 }
-function createWorkbookDiagnosticsMonitor(e = {}) {
-  const r = e.maxEvents ?? 200;
-  if (!Number.isInteger(r) || r < 2 || r > 1e3)
+function createWorkbookDiagnosticsMonitor(options = {}) {
+  const maxRetainedEvents = options.maxEvents ?? 200;
+  if (
+    !Number.isInteger(maxRetainedEvents) ||
+    maxRetainedEvents < 2 ||
+    maxRetainedEvents > 1e3
+  )
     throw new Error(
       "Diagnostic history must retain between 2 and 1000 events.",
     );
-  const t = new Set(),
-    n = new Map();
-  let o = 0,
-    a = 0;
-  const s = Object.fromEntries(
+  const listeners = new Set(),
+    latestAttempts = new Map();
+  let eventSequence = 0,
+    attemptCounter = 0;
+  const initialHealth = Object.fromEntries(
     Object.keys(diagnosticGroupDefinitions).map((diagnosticGroupDefinition) => [
       diagnosticGroupDefinition,
       Object.freeze({
@@ -933,59 +1048,69 @@ function createWorkbookDiagnosticsMonitor(e = {}) {
       }),
     ]),
   );
-  let d = Object.freeze({
+  let snapshot = Object.freeze({
       events: Object.freeze([]),
-      health: Object.freeze(s),
+      health: Object.freeze(initialHealth),
       droppedEvents: 0,
       sinkFailures: 0,
       droppedDeliveries: 0,
     }),
-    u = false;
-  const l = () => {
-      u ||
-        ((u = true),
+    isNotifyScheduled = false;
+  const notifySubscribers = () => {
+      isNotifyScheduled ||
+        ((isNotifyScheduled = true),
         queueMicrotask(() => {
-          u = false;
-          for (const m of t)
+          isNotifyScheduled = false;
+          for (const listener of listeners)
             try {
-              m();
+              listener();
             } catch {}
         }));
     },
-    c = () => {
-      ((d = Object.freeze({ ...d, sinkFailures: d.sinkFailures + 1 })), l());
+    recordSinkFailure = () => {
+      ((snapshot = Object.freeze({
+        ...snapshot,
+        sinkFailures: snapshot.sinkFailures + 1,
+      })),
+        notifySubscribers());
     };
-  let h = 0;
-  const f = (m, v) => {
-      const g = [...d.events, Object.freeze(m)],
-        b = Math.max(0, g.length - r);
+  let pendingDeliveries = 0;
+  const recordEvent = (diagnosticEvent, adapterHealth) => {
+      const nextEvents = [...snapshot.events, Object.freeze(diagnosticEvent)],
+        droppedCount = Math.max(0, nextEvents.length - maxRetainedEvents);
       if (
-        ((d = Object.freeze({
-          ...d,
-          events: Object.freeze(g.slice(-r)),
-          health: Object.freeze({ ...d.health, [m.adapter]: Object.freeze(v) }),
-          droppedEvents: d.droppedEvents + b,
+        ((snapshot = Object.freeze({
+          ...snapshot,
+          events: Object.freeze(nextEvents.slice(-maxRetainedEvents)),
+          health: Object.freeze({
+            ...snapshot.health,
+            [diagnosticEvent.adapter]: Object.freeze(adapterHealth),
+          }),
+          droppedEvents: snapshot.droppedEvents + droppedCount,
         })),
-        l(),
-        h >= 16)
+        notifySubscribers(),
+        pendingDeliveries >= 16)
       ) {
-        d = Object.freeze({ ...d, droppedDeliveries: d.droppedDeliveries + 1 });
+        snapshot = Object.freeze({
+          ...snapshot,
+          droppedDeliveries: snapshot.droppedDeliveries + 1,
+        });
         return;
       }
       try {
-        const w = e.onEvent?.(m);
-        w &&
-          (h++,
-          Promise.resolve(w).then(
+        const deliveryPromise = options.onEvent?.(diagnosticEvent);
+        deliveryPromise &&
+          (pendingDeliveries++,
+          Promise.resolve(deliveryPromise).then(
             () => {
-              h--;
+              pendingDeliveries--;
             },
             () => {
-              (h--, c());
+              (pendingDeliveries--, recordSinkFailure());
             },
           ));
       } catch {
-        c();
+        recordSinkFailure();
       }
     },
     start = (adapter, operation) => {
@@ -994,41 +1119,46 @@ function createWorkbookDiagnosticsMonitor(e = {}) {
         !diagnosticGroupDefinitions[adapter].includes(operation)
       )
         throw new Error("Unknown diagnostic adapter or operation.");
-      const attempt = ++a,
-        b = performance.now(),
-        y = `${adapter}:${operation}`;
-      let w = false;
-      f(
+      const attempt = ++attemptCounter,
+        startedAt = performance.now(),
+        attemptKey = `${adapter}:${operation}`;
+      let isFinished = false;
+      recordEvent(
         {
           version: 1,
-          sequence: ++o,
+          sequence: ++eventSequence,
           attempt: attempt,
           adapter: adapter,
           operation: operation,
           phase: "started",
         },
-        { ...d.health[adapter], active: d.health[adapter].active + 1 },
+        {
+          ...snapshot.health[adapter],
+          active: snapshot.health[adapter].active + 1,
+        },
       );
-      const finish = (outcome = "succeeded", k) => {
-        if (w) return;
-        ((w = true),
+      const finish = (outcome = "succeeded", errorCode) => {
+        if (isFinished) return;
+        ((isFinished = true),
           ["succeeded", "failed", "cancelled", "recovered"].includes(outcome) ||
             (outcome = "failed"));
-        const code = k && wH.has(k) ? k : "unknown",
+        const code = errorCode && wH.has(errorCode) ? errorCode : "unknown",
           elapsedMs = Math.max(
             0,
-            Math.round((performance.now() - b) * 10) / 10,
+            Math.round((performance.now() - startedAt) * 10) / 10,
           ),
-          O = d.health[adapter],
-          j = { ...O.issues };
-        (attempt >= (n.get(y) ?? 0) &&
+          previousHealth = snapshot.health[adapter],
+          issuesByOperation = { ...previousHealth.issues };
+        (attempt >= (latestAttempts.get(attemptKey) ?? 0) &&
           outcome !== "cancelled" &&
-          (n.set(y, attempt),
-          outcome === "failed" ? (j[operation] = code) : delete j[operation]),
-          f(
+          (latestAttempts.set(attemptKey, attempt),
+          outcome === "failed"
+            ? (issuesByOperation[operation] = code)
+            : delete issuesByOperation[operation]),
+          recordEvent(
             {
               version: 1,
-              sequence: ++o,
+              sequence: ++eventSequence,
               attempt: attempt,
               adapter: adapter,
               operation: operation,
@@ -1042,53 +1172,58 @@ function createWorkbookDiagnosticsMonitor(e = {}) {
               elapsedMs: elapsedMs,
             },
             {
-              active: Math.max(0, O.active - 1),
-              completed: O.completed + 1,
-              failures: O.failures + +(outcome === "failed"),
-              cancellations: O.cancellations + +(outcome === "cancelled"),
-              maxElapsedMs: Math.max(O.maxElapsedMs, elapsedMs),
-              totalElapsedMs: O.totalElapsedMs + elapsedMs,
-              issues: Object.freeze(j),
+              active: Math.max(0, previousHealth.active - 1),
+              completed: previousHealth.completed + 1,
+              failures: previousHealth.failures + +(outcome === "failed"),
+              cancellations:
+                previousHealth.cancellations + +(outcome === "cancelled"),
+              maxElapsedMs: Math.max(previousHealth.maxElapsedMs, elapsedMs),
+              totalElapsedMs: previousHealth.totalElapsedMs + elapsedMs,
+              issues: Object.freeze(issuesByOperation),
             },
           ));
       };
       return {
         finish: finish,
-        fail(A) {
-          const k = isAbortOrQuotaError(A);
-          finish(k === "cancelled" ? "cancelled" : "failed", k);
+        fail(error) {
+          const failureCode = isAbortOrQuotaError(error);
+          finish(
+            failureCode === "cancelled" ? "cancelled" : "failed",
+            failureCode,
+          );
         },
       };
     };
   return {
     start: start,
-    run(m, v, g) {
-      const b = start(m, v);
+    run(adapter, operation, callback) {
+      const attemptHandle = start(adapter, operation);
       try {
-        const y = g();
-        return y && typeof y.then == "function"
-          ? Promise.resolve(y).then(
-              (w) => (b.finish(), w),
-              (w) => {
-                throw (b.fail(w), w);
+        const result = callback();
+        return result && typeof result.then == "function"
+          ? Promise.resolve(result).then(
+              (value) => (attemptHandle.finish(), value),
+              (reason) => {
+                throw (attemptHandle.fail(reason), reason);
               },
             )
-          : (b.finish(), y);
+          : (attemptHandle.finish(), result);
       } catch (error) {
-        throw (b.fail(error), error);
+        throw (attemptHandle.fail(error), error);
       }
     },
-    getSnapshot: () => d,
-    subscribe(m) {
+    getSnapshot: () => snapshot,
+    subscribe(listener) {
       return (
-        t.add(m),
+        listeners.add(listener),
         () => {
-          t.delete(m);
+          listeners.delete(listener);
         }
       );
     },
     clearEvents() {
-      ((d = Object.freeze({ ...d, events: Object.freeze([]) })), l());
+      ((snapshot = Object.freeze({ ...snapshot, events: Object.freeze([]) })),
+        notifySubscribers());
     },
   };
 }
@@ -1097,8 +1232,9 @@ const invalidStorageAckError = () =>
       "invalid",
       "The storage adapter returned an invalid acknowledgement. Your local changes are retained; check the saved copy before retrying.",
     ),
-  workbookSnapshotsEqual = (e, r) =>
-    e === r || JSON.stringify(e) === JSON.stringify(r);
+  workbookSnapshotsEqual = (leftValue, rightValue) =>
+    leftValue === rightValue ||
+    JSON.stringify(leftValue) === JSON.stringify(rightValue);
 function captureWorkbookView(workbook, view) {
   const sheet = workbook.sheets.find(
     (sheet) => !sheet.hidden && sheet.id === view.activeSheetId,
@@ -1111,20 +1247,26 @@ function captureWorkbookView(workbook, view) {
     rangeAddress.lastCol >= sheet.colCount
   )
     throw invalidStorageAckError();
-  const o = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
-    a = `${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`;
+  const firstAddress = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
+    lastAddress = `${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`;
   return {
     activeSheetId: sheet.id,
-    selection: { sheetId: sheet.id, range: o === a ? o : `${o}:${a}` },
+    selection: {
+      sheetId: sheet.id,
+      range:
+        firstAddress === lastAddress
+          ? firstAddress
+          : `${firstAddress}:${lastAddress}`,
+    },
   };
 }
-function normalizeCheckpointRecord(e, r) {
+function normalizeCheckpointRecord(record, savedRecord) {
   try {
     const canonicalWorkbookSnapshot = buildCanonicalWorkbookSnapshot(
-        e.workbook,
+        record.workbook,
       ),
-      view = captureWorkbookView(canonicalWorkbookSnapshot, e.view),
-      guard = e.guard;
+      view = captureWorkbookView(canonicalWorkbookSnapshot, record.view),
+      guard = record.guard;
     if (
       !guard ||
       typeof guard.namespace != "string" ||
@@ -1135,10 +1277,10 @@ function normalizeCheckpointRecord(e, r) {
       !guard.digest ||
       guard.workbookId !== canonicalWorkbookSnapshot.id ||
       guard.revision !== canonicalWorkbookSnapshot.revision ||
-      typeof e.recovered != "boolean" ||
-      !Array.isArray(e.checkpoints) ||
-      e.checkpoints.length > 20 ||
-      e.checkpoints.some(
+      typeof record.recovered != "boolean" ||
+      !Array.isArray(record.checkpoints) ||
+      record.checkpoints.length > 20 ||
+      record.checkpoints.some(
         (checkpoint) =>
           !checkpoint ||
           typeof checkpoint.id != "string" ||
@@ -1149,84 +1291,107 @@ function normalizeCheckpointRecord(e, r) {
           typeof checkpoint.createdAt != "string" ||
           !Number.isFinite(Date.parse(checkpoint.createdAt)),
       ) ||
-      (r &&
+      (savedRecord &&
         (!workbookSnapshotsEqual(
           canonicalWorkbookSnapshot,
-          buildCanonicalWorkbookSnapshot(r.workbook),
+          buildCanonicalWorkbookSnapshot(savedRecord.workbook),
         ) ||
           !workbookSnapshotsEqual(
             view,
-            captureWorkbookView(r.workbook, r.view),
+            captureWorkbookView(savedRecord.workbook, savedRecord.view),
           )))
     )
       throw invalidStorageAckError();
     return {
-      ...e,
+      ...record,
       workbook: canonicalWorkbookSnapshot,
       view: view,
       guard: { ...guard },
-      checkpoints: e.checkpoints.map((checkpoint) => ({ ...checkpoint })),
+      checkpoints: record.checkpoints.map((checkpoint) => ({ ...checkpoint })),
     };
   } catch {
     throw invalidStorageAckError();
   }
 }
-function instrumentWorkbookPersistence(e, activeReliabilityMonitor) {
-  const t = (n, o) =>
-    n && typeof n.then == "function"
-      ? Promise.resolve(n).then((a) => normalizeCheckpointRecord(a, o))
-      : normalizeCheckpointRecord(n, o);
+function instrumentWorkbookPersistence(
+  storageAdapter,
+  activeReliabilityMonitor,
+) {
+  const normalizeRecordResult = (result, savedRecord) =>
+    result && typeof result.then == "function"
+      ? Promise.resolve(result).then((storedRecord) =>
+          normalizeCheckpointRecord(storedRecord, savedRecord),
+        )
+      : normalizeCheckpointRecord(result, savedRecord);
   return {
-    ...("coordination" in e ? { coordination: e.coordination } : {}),
+    ...("coordination" in storageAdapter
+      ? { coordination: storageAdapter.coordination }
+      : {}),
     load: () => {
-      const n = activeReliabilityMonitor.start("persistence", "load");
+      const attempt = activeReliabilityMonitor.start("persistence", "load");
       try {
-        const o = e.load(),
-          a = o ? normalizeCheckpointRecord(o) : null;
-        return (n.finish(a?.recovered ? "recovered" : "succeeded"), a);
+        const loadedRecord = storageAdapter.load(),
+          normalizedRecord = loadedRecord
+            ? normalizeCheckpointRecord(loadedRecord)
+            : null;
+        return (
+          attempt.finish(
+            normalizedRecord?.recovered ? "recovered" : "succeeded",
+          ),
+          normalizedRecord
+        );
       } catch (error) {
-        throw (n.fail(error), error);
+        throw (attempt.fail(error), error);
       }
     },
-    save: (workbook, view, a, s) =>
+    save: (workbook, view, guard, s) =>
       activeReliabilityMonitor.run("persistence", "save", () => {
-        const d = {
+        const canonicalRecord = {
           workbook: buildCanonicalWorkbookSnapshot(workbook),
           view: captureWorkbookView(workbook, view),
         };
-        return t(
-          e.save(d.workbook, structuredClone(d.view), a ? { ...a } : null, s),
-          d,
+        return normalizeRecordResult(
+          storageAdapter.save(
+            canonicalRecord.workbook,
+            structuredClone(canonicalRecord.view),
+            guard ? { ...guard } : null,
+            s,
+          ),
+          canonicalRecord,
         );
       }),
     checkpoint: (n, o, a) =>
       activeReliabilityMonitor.run("persistence", "checkpoint", () =>
-        t(e.checkpoint(n, o, a)),
+        normalizeRecordResult(storageAdapter.checkpoint(n, o, a)),
       ),
     listCheckpoints: () =>
       activeReliabilityMonitor.run("persistence", "list", () =>
-        e.listCheckpoints(),
+        storageAdapter.listCheckpoints(),
       ),
     compareCheckpoint: (n, o) =>
       activeReliabilityMonitor.run("persistence", "compare", () =>
-        e.compareCheckpoint(n, o),
+        storageAdapter.compareCheckpoint(n, o),
       ),
     restoreCheckpoint: (n, o, a, s, d) =>
       activeReliabilityMonitor.run("persistence", "restore", () =>
-        t(e.restoreCheckpoint(n, o, a, s, d)),
+        normalizeRecordResult(storageAdapter.restoreCheckpoint(n, o, a, s, d)),
       ),
   };
 }
-function findRecoverableCheckpoint(workbookPersistence, book, t) {
-  const n = workbookPersistence.load();
-  if (!n) return null;
-  const checkpointRecord = normalizeCheckpointRecord(n);
+function findRecoverableCheckpoint(
+  workbookPersistence,
+  book,
+  hasUnsavedChanges,
+) {
+  const loadedRecord = workbookPersistence.load();
+  if (!loadedRecord) return null;
+  const checkpointRecord = normalizeCheckpointRecord(loadedRecord);
   return checkpointRecord.recovered ||
     !workbookSnapshotsEqual(
       checkpointRecord.workbook,
       buildCanonicalWorkbookSnapshot(book),
     ) ||
-    t
+    hasUnsavedChanges
     ? null
     : checkpointRecord;
 }
@@ -1239,25 +1404,25 @@ const diagnosticGroupLabels = {
   host: "Application callbacks",
 };
 function WorkbookHealthDialog({ monitor, onClose }) {
-  const t = ne.useSyncExternalStore(
+  const snapshot = ne.useSyncExternalStore(
       monitor.subscribe,
       monitor.getSnapshot,
       monitor.getSnapshot,
     ),
-    n = ne.useId(),
-    o = ne.useRef(null),
+    titleId = ne.useId(),
+    closeButtonRef = ne.useRef(null),
     workbookMessages = useWorkbookMessages();
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      o.current?.focus(),
+      closeButtonRef.current?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
   const onClick = () => {
-    const d = URL.createObjectURL(
+    const downloadUrl = URL.createObjectURL(
         new Blob(
           [
             JSON.stringify(
@@ -1272,11 +1437,11 @@ function WorkbookHealthDialog({ monitor, onClose }) {
           { type: "application/json" },
         ),
       ),
-      u = document.createElement("a");
-    ((u.href = d),
-      (u.download = "Workbook-diagnostics.json"),
-      u.click(),
-      setTimeout(() => URL.revokeObjectURL(d), 1e3));
+      downloadLink = document.createElement("a");
+    ((downloadLink.href = downloadUrl),
+      (downloadLink.download = "Workbook-diagnostics.json"),
+      downloadLink.click(),
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1e3));
   };
   return i.jsx("div", {
     className: "lg-modal-backdrop",
@@ -1284,32 +1449,36 @@ function WorkbookHealthDialog({ monitor, onClose }) {
       className: "lg-reliability",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": n,
+      "aria-labelledby": titleId,
       onKeyDown: (event) => {
-        var u, l;
+        var lastFocusable, firstFocusable;
         if (
           (event.key === "Escape" && (event.stopPropagation(), onClose()),
           event.key === "Tab")
         ) {
-          const c = [
+          const focusableButtons = [
             ...event.currentTarget.querySelectorAll("button:not(:disabled)"),
           ];
-          event.shiftKey && document.activeElement === c[0]
-            ? (event.preventDefault(), (u = c.at(-1)) == null || u.focus())
+          event.shiftKey && document.activeElement === focusableButtons[0]
+            ? (event.preventDefault(),
+              (lastFocusable = focusableButtons.at(-1)) == null ||
+                lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === c.at(-1) &&
-              (event.preventDefault(), (l = c[0]) == null || l.focus());
+              document.activeElement === focusableButtons.at(-1) &&
+              (event.preventDefault(),
+              (firstFocusable = focusableButtons[0]) == null ||
+                firstFocusable.focus());
         }
       },
       children: [
         i.jsxs("header", {
           children: [
             i.jsx("h2", {
-              id: n,
+              id: titleId,
               children: i.jsx(LocalizedText, { children: "Workbook health" }),
             }),
             i.jsx("button", {
-              ref: o,
+              ref: closeButtonRef,
               type: "button",
               "aria-label": workbookMessages.text("Close workbook health"),
               onClick: onClose,
@@ -1335,14 +1504,16 @@ function WorkbookHealthDialog({ monitor, onClose }) {
                     "Completed",
                     "Failures",
                     "Longest operation",
-                  ].map((d) =>
+                  ].map((headerLabel) =>
                     i.jsx(
                       "th",
                       {
                         scope: "col",
-                        children: i.jsx(LocalizedText, { children: d }),
+                        children: i.jsx(LocalizedText, {
+                          children: headerLabel,
+                        }),
                       },
-                      d,
+                      headerLabel,
                     ),
                   ),
                 }),
@@ -1350,12 +1521,12 @@ function WorkbookHealthDialog({ monitor, onClose }) {
               i.jsx("tbody", {
                 children: Object.keys(diagnosticGroupLabels).map(
                   (diagnosticGroupLabel) => {
-                    const u = t.health[diagnosticGroupLabel],
-                      l = Object.keys(u.issues).length
+                    const groupHealth = snapshot.health[diagnosticGroupLabel],
+                      statusLabel = Object.keys(groupHealth.issues).length
                         ? "Needs attention"
-                        : u.active
+                        : groupHealth.active
                           ? "Working…"
-                          : u.completed
+                          : groupHealth.completed
                             ? "Ready"
                             : "Not used";
                     return i.jsxs(
@@ -1370,17 +1541,19 @@ function WorkbookHealthDialog({ monitor, onClose }) {
                             }),
                           }),
                           i.jsx("td", {
-                            children: i.jsx(LocalizedText, { children: l }),
+                            children: i.jsx(LocalizedText, {
+                              children: statusLabel,
+                            }),
                           }),
-                          i.jsx("td", { children: u.completed }),
-                          i.jsx("td", { children: u.failures }),
+                          i.jsx("td", { children: groupHealth.completed }),
+                          i.jsx("td", { children: groupHealth.failures }),
                           i.jsxs("td", {
                             children: [
                               workbookMessages.locale
-                                ? u.maxElapsedMs.toLocaleString(
+                                ? groupHealth.maxElapsedMs.toLocaleString(
                                     workbookMessages.locale,
                                   )
-                                : u.maxElapsedMs,
+                                : groupHealth.maxElapsedMs,
                               " ",
                               "ms",
                             ],
@@ -1400,19 +1573,19 @@ function WorkbookHealthDialog({ monitor, onClose }) {
           children: [
             i.jsx(LocalizedText, { children: "Retained events" }),
             ": ",
-            t.events.length,
+            snapshot.events.length,
             " ",
             "· ",
             i.jsx(LocalizedText, { children: "Discarded older events" }),
             ":",
             " ",
-            t.droppedEvents,
+            snapshot.droppedEvents,
             " ·",
             " ",
             i.jsx(LocalizedText, { children: "Diagnostic delivery failures" }),
             ":",
             " ",
-            t.sinkFailures,
+            snapshot.sinkFailures,
           ],
         }),
         i.jsx("p", {
@@ -1447,9 +1620,9 @@ const cellSnapshotCache = new WeakMap();
 function snapshotSheetContent(sheet) {
   return fingerprintCanonicalValue({
     cells: Object.fromEntries(
-      Object.entries(sheet.cells).map(([r, t]) => [
-        r,
-        { ...t, style: undefined, numFmt: undefined, format: undefined },
+      Object.entries(sheet.cells).map(([cellAddress, cell]) => [
+        cellAddress,
+        { ...cell, style: undefined, numFmt: undefined, format: undefined },
       ]),
     ),
     tables: sheet.tables,
@@ -1457,8 +1630,8 @@ function snapshotSheetContent(sheet) {
     rowOrigins: sheet.rowOriginIds,
   });
 }
-function checkSourceSheetAccess(workbook, sheetId, t) {
-  if (t.readOnly) throw new ExternalSourceError("refused");
+function checkSourceSheetAccess(workbook, sheetId, options) {
+  if (options.readOnly) throw new ExternalSourceError("refused");
   if (!sheetId) {
     assertWorkbookStructureEditable(workbook);
     return;
@@ -1469,276 +1642,322 @@ function checkSourceSheetAccess(workbook, sheetId, t) {
     sheet.hidden ||
     sheet.veryHidden ||
     sheet.protection?.enabled ||
-    (t.allowedSheetIds && !t.allowedSheetIds.includes(sheetId))
+    (options.allowedSheetIds && !options.allowedSheetIds.includes(sheetId))
   )
     throw new ExternalSourceError("refused");
   if (!sheet.externalConnection) throw new ExternalSourceError("invalid");
   if (snapshotSheetContent(sheet) !== sheet.externalConnection.outputHash)
     throw new ExternalSourceError("stale");
 }
-function EH(workbook, snapshot, grant, n, o = {}) {
-  return evaluateExternalSourceQuery(workbook, snapshot, grant, n, o);
+function EH(workbook, snapshot, grant, plan, options = {}) {
+  return evaluateExternalSourceQuery(workbook, snapshot, grant, plan, options);
 }
 function evaluateExternalSourceQuery(
   workbook,
   snapshot,
   grant,
-  n,
-  o = {},
-  a = [],
+  plan,
+  options = {},
+  batchSheetIds = [],
 ) {
-  checkSourceSheetAccess(workbook, n.sheetId, o);
+  checkSourceSheetAccess(workbook, plan.sheetId, options);
   const activeSourceApproval = parseActiveSourceApproval(grant),
-    d = validateExternalSourcePayload(snapshot, activeSourceApproval.source),
-    u = n.sheetId
-      ? workbook.sheets.find((sheet) => sheet.id === n.sheetId)
+    payload = validateExternalSourcePayload(
+      snapshot,
+      activeSourceApproval.source,
+    ),
+    existingConnection = plan.sheetId
+      ? workbook.sheets.find((sheet) => sheet.id === plan.sheetId)
           .externalConnection
       : undefined;
-  if (u && !isSameContentHash(u.source, d.source))
+  if (
+    existingConnection &&
+    !isSameContentHash(existingConnection.source, payload.source)
+  )
     throw new ExternalSourceError("schema");
   if (
-    !n.sheetId &&
+    !plan.sheetId &&
     (workbook.sheets.filter((sheet) => sheet.externalConnection).length >=
       externalSourceLimits.sources ||
-      !n.outputName.trim() ||
-      n.outputName !== n.outputName.trim() ||
-      n.outputName.length > 31 ||
-      /[\\/\[\]*?:\u0000-\u001f]/.test(n.outputName) ||
-      /^'|'$/.test(n.outputName) ||
+      !plan.outputName.trim() ||
+      plan.outputName !== plan.outputName.trim() ||
+      plan.outputName.length > 31 ||
+      /[\\/\[\]*?:\u0000-\u001f]/.test(plan.outputName) ||
+      /^'|'$/.test(plan.outputName) ||
       workbook.sheets.some(
-        (sheet) => sheet.name.toLowerCase() === n.outputName.toLowerCase(),
+        (sheet) => sheet.name.toLowerCase() === plan.outputName.toLowerCase(),
       ))
   )
     throw new ExternalSourceError("invalid");
   if (
-    (n.sheetId || inspectOutputNameSafety(workbook, n.outputName),
+    (plan.sheetId || inspectOutputNameSafety(workbook, plan.outputName),
     workbook.sheets
-      .filter((sheet) => sheet.id !== n.sheetId && !a.includes(sheet.id))
-      .reduce((h, f) => h + Object.keys(f.cells).length, 0) +
-      (d.rows.length + 1) * d.source.columns.length >
+      .filter(
+        (sheet) =>
+          sheet.id !== plan.sheetId && !batchSheetIds.includes(sheet.id),
+      )
+      .reduce((total, sheet) => total + Object.keys(sheet.cells).length, 0) +
+      (payload.rows.length + 1) * payload.source.columns.length >
       workbookLimits.maxCells)
   )
     throw new ExternalSourceError("limit");
-  const c = {
+  const queryPlan = {
     workbookHash: fingerprintCanonicalValue(workbook),
-    outputName: n.outputName,
-    ...(n.sheetId ? { sheetId: n.sheetId } : {}),
-    snapshot: d,
+    outputName: plan.outputName,
+    ...(plan.sheetId ? { sheetId: plan.sheetId } : {}),
+    snapshot: payload,
     grant: activeSourceApproval,
-    ...(u
+    ...(existingConnection
       ? {
           previous: {
-            rows: u.lastSuccess.rows,
-            controls: structuredClone(u.lastSuccess.controls),
-            at: u.lastSuccess.at,
+            rows: existingConnection.lastSuccess.rows,
+            controls: structuredClone(existingConnection.lastSuccess.controls),
+            at: existingConnection.lastSuccess.at,
           },
         }
       : {}),
-    controls: computeSourceControlTotals(d),
+    controls: computeSourceControlTotals(payload),
   };
   if (
-    c.controls.some(
+    queryPlan.controls.some(
       (control) =>
         !Number.isFinite(
           control.sum -
-            (c.previous?.controls.find((m) => m.field === control.field)?.sum ??
-              0),
+            (queryPlan.previous?.controls.find(
+              (previousControl) => previousControl.field === control.field,
+            )?.sum ?? 0),
         ),
     )
   )
     throw new ExternalSourceError("limit");
-  return (cellSnapshotCache.set(c, fingerprintCanonicalValue(c)), c);
+  return (
+    cellSnapshotCache.set(queryPlan, fingerprintCanonicalValue(queryPlan)),
+    queryPlan
+  );
 }
-function grantSheetSnapshotSource(workbook, r, t, n = {}) {
+function grantSheetSnapshotSource(workbook, plan, grant, options = {}) {
   if (
-    !cellSnapshotCache.has(r) ||
-    cellSnapshotCache.get(r) !== fingerprintCanonicalValue(r) ||
-    fingerprintCanonicalValue(workbook) !== r.workbookHash
+    !cellSnapshotCache.has(plan) ||
+    cellSnapshotCache.get(plan) !== fingerprintCanonicalValue(plan) ||
+    fingerprintCanonicalValue(workbook) !== plan.workbookHash
   )
     throw new ExternalSourceError("stale");
-  checkSourceSheetAccess(workbook, r.sheetId, n);
-  const activeSourceApproval = parseActiveSourceApproval(t);
+  checkSourceSheetAccess(workbook, plan.sheetId, options);
+  const activeSourceApproval = parseActiveSourceApproval(grant);
   if (
-    (parseActiveSourceApproval(r.grant),
-    !isSameContentHash(activeSourceApproval.source, r.snapshot.source))
+    (parseActiveSourceApproval(plan.grant),
+    !isSameContentHash(activeSourceApproval.source, plan.snapshot.source))
   )
     throw new ExternalSourceError("schema");
-  EH(workbook, r.snapshot, activeSourceApproval, r, n);
-  const sourceSheetSnapshot = buildSourceSheetSnapshot(workbook, r),
+  EH(workbook, plan.snapshot, activeSourceApproval, plan, options);
+  const sourceSheetSnapshot = buildSourceSheetSnapshot(workbook, plan),
     workbookInput = normalizeWorkbookInput({
       ...workbook,
-      sheets: r.sheetId
+      sheets: plan.sheetId
         ? workbook.sheets.map((sheet) =>
             sheet.id === sourceSheetSnapshot.id ? sourceSheetSnapshot : sheet,
           )
         : [...workbook.sheets, sourceSheetSnapshot],
     });
-  return (cellSnapshotCache.delete(r), workbookInput);
+  return (cellSnapshotCache.delete(plan), workbookInput);
 }
 function buildSourceSheetSnapshot(workbook, plan) {
   const sheet = workbook.sheets.find((sheet) => sheet.id === plan.sheetId),
-    n = sheet ? { ...sheet } : createWorksheetRecord(plan.outputName),
-    o = {};
+    targetSheet = sheet ? { ...sheet } : createWorksheetRecord(plan.outputName),
+    cells = {};
   ([
     plan.snapshot.source.columns.map((column) => column.name),
     ...plan.snapshot.rows,
-  ].forEach((d, u) =>
-    d.forEach((raw, c) => {
-      const h = `${columnIndexToLetters(c)}${u + 1}`,
-        f = sheet?.cells[h];
-      o[h] = {
+  ].forEach((row, rowIndex) =>
+    row.forEach((raw, columnIndex) => {
+      const cellAddress = `${columnIndexToLetters(columnIndex)}${rowIndex + 1}`,
+        existingCell = sheet?.cells[cellAddress];
+      cells[cellAddress] = {
         raw: raw,
         ...(typeof raw == "string" && /^[=+@-]/.test(raw)
           ? { literal: true }
           : {}),
-        ...(f?.style
-          ? { style: structuredClone(f.style) }
-          : u === 0
+        ...(existingCell?.style
+          ? { style: structuredClone(existingCell.style) }
+          : rowIndex === 0
             ? { style: { bold: true, fill: "#eef2ff" } }
             : {}),
-        ...(f?.numFmt ? { numFmt: f.numFmt } : {}),
-        ...(f?.format ? { format: f.format } : {}),
-        note: `Source ${plan.snapshot.source.id} · version ${plan.snapshot.version} · ${u === 0 ? "header" : `record ${u}`} · as of ${plan.snapshot.sourceTimestamp}`,
+        ...(existingCell?.numFmt ? { numFmt: existingCell.numFmt } : {}),
+        ...(existingCell?.format ? { format: existingCell.format } : {}),
+        note: `Source ${plan.snapshot.source.id} · version ${plan.snapshot.version} · ${rowIndex === 0 ? "header" : `record ${rowIndex}`} · as of ${plan.snapshot.sourceTimestamp}`,
       };
     }),
   ),
-    (n.cells = o));
-  const s = new Date().toISOString();
+    (targetSheet.cells = cells));
+  const syncedAt = new Date().toISOString();
   return (
-    (n.externalConnection = {
+    (targetSheet.externalConnection = {
       protocol: externalSourceFormatVersion,
       source: structuredClone(plan.snapshot.source),
       lastSuccess: {
-        at: s,
+        at: syncedAt,
         sourceTimestamp: plan.snapshot.sourceTimestamp,
         version: plan.snapshot.version,
         rows: plan.snapshot.rows.length,
         controls: structuredClone(plan.controls),
         dataHash: fingerprintCanonicalValue(plan.snapshot),
       },
-      lastAttempt: { at: s, outcome: "succeeded" },
-      outputHash: snapshotSheetContent(n),
+      lastAttempt: { at: syncedAt, outcome: "succeeded" },
+      outputHash: snapshotSheetContent(targetSheet),
     }),
-    n
+    targetSheet
   );
 }
 const sourceGrantCache = new WeakMap();
-function assertSourceGrantsValid(workbook, r, t = {}) {
+function assertSourceGrantsValid(workbook, sheetIds, options = {}) {
   if (
-    !r.length ||
-    r.length > externalSourceLimits.sources ||
-    new Set(r).size !== r.length
+    !sheetIds.length ||
+    sheetIds.length > externalSourceLimits.sources ||
+    new Set(sheetIds).size !== sheetIds.length
   )
     throw new ExternalSourceError("invalid");
-  for (const sheetId of r) checkSourceSheetAccess(workbook, sheetId, t);
+  for (const sheetId of sheetIds)
+    checkSourceSheetAccess(workbook, sheetId, options);
 }
-function planSourceGrants(workbook, r, t = {}) {
-  const n = r.map((d) => d.sheetId);
+function planSourceGrants(workbook, grants, options = {}) {
+  const sheetIds = grants.map((entry) => entry.sheetId);
   if (
-    (assertSourceGrantsValid(workbook, n, t),
-    new TextEncoder().encode(JSON.stringify(r)).length >
+    (assertSourceGrantsValid(workbook, sheetIds, options),
+    new TextEncoder().encode(JSON.stringify(grants)).length >
       externalSourceLimits.responseBytes)
   )
     throw new ExternalSourceError("limit");
-  const plans = r.map((d) =>
+  const plans = grants.map((grantEntry) =>
     evaluateExternalSourceQuery(
       workbook,
-      d.snapshot,
-      d.grant,
+      grantEntry.snapshot,
+      grantEntry.grant,
       {
-        sheetId: d.sheetId,
-        outputName: workbook.sheets.find((sheet) => sheet.id === d.sheetId)
-          .name,
+        sheetId: grantEntry.sheetId,
+        outputName: workbook.sheets.find(
+          (sheet) => sheet.id === grantEntry.sheetId,
+        ).name,
       },
-      t,
-      n,
+      options,
+      sheetIds,
     ),
   );
   if (
     workbook.sheets
-      .filter((sheet) => !n.includes(sheet.id))
-      .reduce((d, u) => d + Object.keys(u.cells).length, 0) +
+      .filter((sheet) => !sheetIds.includes(sheet.id))
+      .reduce((total, sheet) => total + Object.keys(sheet.cells).length, 0) +
       plans.reduce(
-        (d, u) =>
-          d + (u.snapshot.rows.length + 1) * u.snapshot.source.columns.length,
+        (planCells, plan) =>
+          planCells +
+          (plan.snapshot.rows.length + 1) * plan.snapshot.source.columns.length,
         0,
       ) >
     workbookLimits.maxCells
   )
     throw new ExternalSourceError("limit");
-  const s = { workbookHash: fingerprintCanonicalValue(workbook), plans: plans };
-  return (sourceGrantCache.set(s, fingerprintCanonicalValue(s)), s);
+  const planBundle = {
+    workbookHash: fingerprintCanonicalValue(workbook),
+    plans: plans,
+  };
+  return (
+    sourceGrantCache.set(planBundle, fingerprintCanonicalValue(planBundle)),
+    planBundle
+  );
 }
-function applySourceGrantPlans(workbook, r, t, n = {}) {
+function applySourceGrantPlans(workbook, planBundle, approvals, options = {}) {
   if (
-    !sourceGrantCache.has(r) ||
-    sourceGrantCache.get(r) !== fingerprintCanonicalValue(r) ||
-    r.workbookHash !== fingerprintCanonicalValue(workbook)
+    !sourceGrantCache.has(planBundle) ||
+    sourceGrantCache.get(planBundle) !==
+      fingerprintCanonicalValue(planBundle) ||
+    planBundle.workbookHash !== fingerprintCanonicalValue(workbook)
   )
     throw new ExternalSourceError("stale");
-  const o = t.map((u) => parseActiveSourceApproval(u)),
-    a = new Set(r.plans.map((plan) => plan.snapshot.source.id));
+  const parsedApprovals = approvals.map((approval) =>
+      parseActiveSourceApproval(approval),
+    ),
+    planSourceIds = new Set(
+      planBundle.plans.map((plan) => plan.snapshot.source.id),
+    );
   if (
-    o.length !== a.size ||
-    new Set(o.map((u) => u.source.id)).size !== o.length ||
-    o.some((u) => !a.has(u.source.id))
+    parsedApprovals.length !== planSourceIds.size ||
+    new Set(parsedApprovals.map((parsedApproval) => parsedApproval.source.id))
+      .size !== parsedApprovals.length ||
+    parsedApprovals.some(
+      (unplannedApproval) => !planSourceIds.has(unplannedApproval.source.id),
+    )
   )
     throw new ExternalSourceError("refused");
-  for (const plan of r.plans) {
+  for (const plan of planBundle.plans) {
     parseActiveSourceApproval(plan.grant);
-    const l = o.find((c) => c.source.id === plan.snapshot.source.id);
-    if (!l || !isSameContentHash(l.source, plan.snapshot.source))
+    const matchingApproval = parsedApprovals.find(
+      (approvalCandidate) =>
+        approvalCandidate.source.id === plan.snapshot.source.id,
+    );
+    if (
+      !matchingApproval ||
+      !isSameContentHash(matchingApproval.source, plan.snapshot.source)
+    )
       throw new ExternalSourceError("schema");
   }
   planSourceGrants(
     workbook,
-    r.plans.map((plan) => ({
+    planBundle.plans.map((plan) => ({
       sheetId: plan.sheetId,
       snapshot: plan.snapshot,
-      grant: o.find((l) => l.source.id === plan.snapshot.source.id),
+      grant: parsedApprovals.find(
+        (grantApproval) => grantApproval.source.id === plan.snapshot.source.id,
+      ),
     })),
-    n,
+    options,
   );
-  const s = new Map(
-      r.plans.map((plan) => [
+  const snapshotsBySheetId = new Map(
+      planBundle.plans.map((plan) => [
         plan.sheetId,
         buildSourceSheetSnapshot(workbook, plan),
       ]),
     ),
     workbookInput = normalizeWorkbookInput({
       ...workbook,
-      sheets: workbook.sheets.map((sheet) => s.get(sheet.id) ?? sheet),
+      sheets: workbook.sheets.map(
+        (sheet) => snapshotsBySheetId.get(sheet.id) ?? sheet,
+      ),
     });
-  sourceGrantCache.delete(r);
-  for (const plan of r.plans) cellSnapshotCache.delete(plan);
+  sourceGrantCache.delete(planBundle);
+  for (const plan of planBundle.plans) cellSnapshotCache.delete(plan);
   return workbookInput;
 }
-function normalizeExternalSourceState(workbook, r, t, code, o = {}) {
-  if (o.readOnly) return workbook;
-  const a = workbook.sheets.find((sheet) => sheet.id === r);
+function normalizeExternalSourceState(
+  workbook,
+  sheetId,
+  sourceId,
+  code,
+  options = {},
+) {
+  if (options.readOnly) return workbook;
+  const targetSheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   if (
-    !a?.externalConnection ||
-    a.externalConnection.source.id !== t ||
-    a.hidden ||
-    a.veryHidden ||
-    a.protection?.enabled ||
-    (o.allowedSheetIds && !o.allowedSheetIds.includes(r))
+    !targetSheet?.externalConnection ||
+    targetSheet.externalConnection.source.id !== sourceId ||
+    targetSheet.hidden ||
+    targetSheet.veryHidden ||
+    targetSheet.protection?.enabled ||
+    (options.allowedSheetIds && !options.allowedSheetIds.includes(sheetId))
   )
     return workbook;
-  const externalConnection = a.externalConnection,
-    d = new Date(
+  const externalConnection = targetSheet.externalConnection,
+    attemptAt = new Date(
       Math.max(Date.now(), Date.parse(externalConnection.lastSuccess.at)),
     ).toISOString();
   return normalizeWorkbookInput({
     ...workbook,
     sheets: workbook.sheets.map((sheet) =>
-      sheet === a
+      sheet === targetSheet
         ? {
             ...sheet,
             externalConnection: {
               ...externalConnection,
               lastAttempt: {
-                at: d,
+                at: attemptAt,
                 outcome: code === "cancelled" ? "cancelled" : "failed",
                 code: code,
               },
@@ -1748,76 +1967,95 @@ function normalizeExternalSourceState(workbook, r, t, code, o = {}) {
     ),
   });
 }
-async function runSourceWithTimeout(e, r, t = {}) {
-  const n = t.timeoutMs ?? externalSourceLimits.timeoutMs;
-  if (!Number.isInteger(n) || n < 1 || n > externalSourceLimits.timeoutMs)
+async function runSourceWithTimeout(operationName, operation, options = {}) {
+  const timeoutMs = options.timeoutMs ?? externalSourceLimits.timeoutMs;
+  if (
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs < 1 ||
+    timeoutMs > externalSourceLimits.timeoutMs
+  )
     throw new ExternalSourceError("invalid");
-  const o = t.reliability?.start("source", e),
-    a = new AbortController();
-  let s,
-    d = () => {};
+  const reliabilityRecord = options.reliability?.start("source", operationName),
+    abortController = new AbortController();
+  let timeoutId,
+    onAbort = () => {};
   try {
-    if (t.signal?.aborted) throw new ExternalSourceError("cancelled");
-    const h = new Promise((p, m) => {
-        ((d = () => {
-          (a.abort(), m(new ExternalSourceError("cancelled")));
+    if (options.signal?.aborted) throw new ExternalSourceError("cancelled");
+    const timeoutPromise = new Promise((resolve, reject) => {
+        ((onAbort = () => {
+          (abortController.abort(),
+            reject(new ExternalSourceError("cancelled")));
         }),
-          t.signal?.addEventListener("abort", d, { once: true }),
-          (s = setTimeout(() => {
-            (a.abort(), m(new ExternalSourceError("timeout")));
-          }, n)));
+          options.signal?.addEventListener("abort", onAbort, { once: true }),
+          (timeoutId = setTimeout(() => {
+            (abortController.abort(),
+              reject(new ExternalSourceError("timeout")));
+          }, timeoutMs)));
       }),
-      f = await Promise.race([Promise.resolve().then(() => r(a.signal)), h]);
-    if (a.signal.aborted) throw new ExternalSourceError("cancelled");
-    return (o?.finish(), f);
+      operationResult = await Promise.race([
+        Promise.resolve().then(() => operation(abortController.signal)),
+        timeoutPromise,
+      ]);
+    if (abortController.signal.aborted)
+      throw new ExternalSourceError("cancelled");
+    return (reliabilityRecord?.finish(), operationResult);
   } catch (error) {
-    const f = isExternalSourceError(error);
-    throw (o?.fail(f), f);
+    const sourceError = isExternalSourceError(error);
+    throw (reliabilityRecord?.fail(sourceError), sourceError);
   } finally {
-    (clearTimeout(s), t.signal?.removeEventListener("abort", d));
+    (clearTimeout(timeoutId),
+      options.signal?.removeEventListener("abort", onAbort));
   }
 }
-async function fetchSourceCatalog(adapter, r = {}) {
+async function fetchSourceCatalog(adapter, options = {}) {
   return runSourceWithTimeout(
     "catalog",
     async (signal) => {
-      const n = await adapter.catalog({ signal: signal });
-      if (!Array.isArray(n) || n.length > externalSourceLimits.sources)
+      const rawCatalog = await adapter.catalog({ signal: signal });
+      if (
+        !Array.isArray(rawCatalog) ||
+        rawCatalog.length > externalSourceLimits.sources
+      )
         throw new ExternalSourceError("invalid");
-      const o = n.map((a) => parseActiveSourceApproval(a));
-      if (new Set(o.map((a) => a.source.id)).size !== o.length)
+      const parsedCatalog = rawCatalog.map((approval) =>
+        parseActiveSourceApproval(approval),
+      );
+      if (
+        new Set(parsedCatalog.map((parsedApproval) => parsedApproval.source.id))
+          .size !== parsedCatalog.length
+      )
         throw new ExternalSourceError("invalid");
-      return o;
+      return parsedCatalog;
     },
-    r,
+    options,
   );
 }
-async function authorizeSourceAccess(adapter, r, t = {}) {
+async function authorizeSourceAccess(adapter, sourceId, options = {}) {
   return runSourceWithTimeout(
     "authorize",
     async (signal) => {
       const activeSourceApproval = parseActiveSourceApproval(
-        await adapter.authorize(r, { signal: signal }),
+        await adapter.authorize(sourceId, { signal: signal }),
       );
-      if (activeSourceApproval.source.id !== r)
+      if (activeSourceApproval.source.id !== sourceId)
         throw new ExternalSourceError("refused");
       return activeSourceApproval;
     },
-    t,
+    options,
   );
 }
-async function refreshSourceSnapshot(adapter, sourceId, t = {}) {
-  const grant = await authorizeSourceAccess(adapter, sourceId, t),
+async function refreshSourceSnapshot(adapter, sourceId, options = {}) {
+  const grant = await authorizeSourceAccess(adapter, sourceId, options),
     snapshot = await runSourceWithTimeout(
       "refresh",
       async (signal) => {
-        const s = validateExternalSourcePayload(
+        const validatedSnapshot = validateExternalSourcePayload(
           await adapter.refresh(sourceId, { signal: signal }),
           grant.source,
         );
-        return (parseActiveSourceApproval(grant), s);
+        return (parseActiveSourceApproval(grant), validatedSnapshot);
       },
-      t,
+      options,
     );
   return { grant: grant, snapshot: snapshot };
 }
@@ -1828,69 +2066,74 @@ discriminatedUnion("operation", [
     sourceId: string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/),
   }),
 ]);
-async function runSourceRefreshBatch(workbook, adapter, t, n = {}) {
-  assertSourceGrantsValid(workbook, t, n);
+async function runSourceRefreshBatch(
+  workbook,
+  adapter,
+  sheetIds,
+  options = {},
+) {
+  assertSourceGrantsValid(workbook, sheetIds, options);
   const entries = [],
-    a = new Map();
-  let s;
+    resultsBySourceId = new Map();
+  let failureCode;
   try {
     await runSourceWithTimeout(
       "refresh",
       async (signal) => {
-        for (const sheetId of t) {
+        for (const sheetId of sheetIds) {
           if (signal.aborted) throw new ExternalSourceError("cancelled");
           const sourceId = workbook.sheets.find((sheet) => sheet.id === sheetId)
             .externalConnection.source.id;
-          let h = a.get(sourceId);
-          if (!h) {
+          let refreshResult = resultsBySourceId.get(sourceId);
+          if (!refreshResult) {
             try {
-              h = await refreshSourceSnapshot(adapter, sourceId, {
-                ...n,
+              refreshResult = await refreshSourceSnapshot(adapter, sourceId, {
+                ...options,
                 signal: signal,
               });
             } catch (error) {
-              h = isExternalSourceError(error).code;
+              refreshResult = isExternalSourceError(error).code;
             }
             if (signal.aborted) throw new ExternalSourceError("cancelled");
-            a.set(sourceId, h);
+            resultsBySourceId.set(sourceId, refreshResult);
           }
           if (
             (entries.push(
-              typeof h == "string"
-                ? { sheetId: sheetId, sourceId: sourceId, error: h }
-                : { sheetId: sheetId, sourceId: sourceId, ...h },
+              typeof refreshResult == "string"
+                ? { sheetId: sheetId, sourceId: sourceId, error: refreshResult }
+                : { sheetId: sheetId, sourceId: sourceId, ...refreshResult },
             ),
             new TextEncoder().encode(JSON.stringify(entries)).length >
               externalSourceLimits.responseBytes)
           )
             throw new ExternalSourceError("limit");
-          n.onProgress?.(entries.length, t.length);
+          options.onProgress?.(entries.length, sheetIds.length);
         }
       },
-      n,
+      options,
     );
   } catch (error) {
-    s = isExternalSourceError(error).code;
+    failureCode = isExternalSourceError(error).code;
   }
-  if (s) {
-    for (const sheetId of t)
+  if (failureCode) {
+    for (const sheetId of sheetIds)
       entries.some((entry) => entry.sheetId === sheetId) ||
         entries.push({
           sheetId: sheetId,
           sourceId: workbook.sheets.find((sheet) => sheet.id === sheetId)
             .externalConnection.source.id,
-          error: s,
+          error: failureCode,
         });
-    return s === "limit"
+    return failureCode === "limit"
       ? {
           entries: entries.map(({ sheetId, sourceId }) => ({
             sheetId,
             sourceId,
-            error: s,
+            error: failureCode,
           })),
-          error: s,
+          error: failureCode,
         }
-      : { entries: entries, error: s };
+      : { entries: entries, error: failureCode };
   }
   if (entries.some((entry) => entry.error)) return { entries: entries };
   try {
@@ -1901,29 +2144,34 @@ async function runSourceRefreshBatch(workbook, adapter, t, n = {}) {
         snapshot: entry.snapshot,
         grant: entry.grant,
       })),
-      n,
+      options,
     );
     return { entries: entries, plan: plan };
   } catch (error) {
     return { entries: entries, error: isExternalSourceError(error).code };
   }
 }
-async function G2e(adapter, plan, t = {}) {
+async function G2e(adapter, plan, options = {}) {
   return runSourceWithTimeout(
     "authorize",
     async (signal) => {
-      const o = [];
-      for (const a of new Set(
+      const authorizedApprovals = [];
+      for (const sourceId of new Set(
         plan.plans.map((plan) => plan.snapshot.source.id),
       )) {
         if (signal.aborted) throw new ExternalSourceError("cancelled");
-        o.push(
-          await authorizeSourceAccess(adapter, a, { ...t, signal: signal }),
+        authorizedApprovals.push(
+          await authorizeSourceAccess(adapter, sourceId, {
+            ...options,
+            signal: signal,
+          }),
         );
       }
-      return o.map((a) => parseActiveSourceApproval(a));
+      return authorizedApprovals.map((approval) =>
+        parseActiveSourceApproval(approval),
+      );
     },
-    t,
+    options,
   );
 }
 

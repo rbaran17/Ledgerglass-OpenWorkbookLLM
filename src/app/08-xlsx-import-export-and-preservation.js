@@ -100,26 +100,26 @@ import {
 } from "./07-file-import-and-worker-dispatch.js";
 
 async function exportXltxTemplate(workbook) {
-  const r = await exportWorkbookToXlsx(workbook),
-    t = convertTemplateToXlsx(
-      new Uint8Array(await readGeneratedTemplateBuffer(r.blob)),
+  const exportResult = await exportWorkbookToXlsx(workbook),
+    templateBytes = convertTemplateToXlsx(
+      new Uint8Array(await readGeneratedTemplateBuffer(exportResult.blob)),
       "xlsx",
       "xltx",
     ),
     warnings = [
-      ...r.warnings,
+      ...exportResult.warnings,
       "Derived XLTX template: supported worksheet content only. Macro projects, native automation and unsupported special parts are not transferred. Reopening creates a new workbook; keep native JSON and original source files.",
     ];
   return {
-    blob: new Blob([new Uint8Array(t)], {
+    blob: new Blob([new Uint8Array(templateBytes)], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
     }),
     warnings: warnings,
     report: {
-      ...r.report,
+      ...exportResult.report,
       format: "xltx",
       fileName: describeImportSource(workbook, "xltx"),
-      fileBytes: t.length,
+      fileBytes: templateBytes.length,
       warnings: warnings,
     },
   };
@@ -127,135 +127,177 @@ async function exportXltxTemplate(workbook) {
 const g7 = "http://schemas.openxmlformats.org/package/2006/relationships",
   contentTypesNamespace =
     "http://schemas.openxmlformats.org/package/2006/content-types",
-  escapeXmlAttribute = (e) =>
-    e.replace(
+  escapeXmlAttribute = (value) =>
+    value.replace(
       /[&<>"']/g,
-      (r) =>
+      (matchedCharacter) =>
         ({
           "&": "&amp;",
           "<": "&lt;",
           ">": "&gt;",
           '"': "&quot;",
           "'": "&apos;",
-        })[r],
+        })[matchedCharacter],
     );
 
-function rebuildPreservedPackage(e, r, t) {
-  const n = structuredClone(t),
-    packageRelationships = readPackageRelationships(e),
-    a = readPackageRelationships(r),
-    s = { ...r };
-  n.phase = "export-result";
-  for (const d of ["custom XML", "custom properties"]) {
-    const l = n.parts
+function rebuildPreservedPackage(
+  originalParts,
+  generatedParts,
+  preservationInventory,
+) {
+  const inventory = structuredClone(preservationInventory),
+    packageRelationships = readPackageRelationships(originalParts),
+    generatedRelationships = readPackageRelationships(generatedParts),
+    packageFiles = { ...generatedParts };
+  inventory.phase = "export-result";
+  for (const family of ["custom XML", "custom properties"]) {
+    const preservedOpaqueParts = inventory.parts
       .filter(
         (part) =>
-          part.family === d ||
-          (d === "custom XML" && part.path.startsWith("customXml/")),
+          part.family === family ||
+          (family === "custom XML" && part.path.startsWith("customXml/")),
       )
-      .filter((m) => m.disposition === "preserved-opaque");
-    if (!l.length) continue;
-    const c = new Set(l.map((m) => m.path)),
-      h = packageRelationships.relationships.filter(
+      .filter(
+        (candidatePart) => candidatePart.disposition === "preserved-opaque",
+      );
+    if (!preservedOpaqueParts.length) continue;
+    const opaquePaths = new Set(
+        preservedOpaqueParts.map((opaquePart) => opaquePart.path),
+      ),
+      inboundRelationships = packageRelationships.relationships.filter(
         (relationship) =>
-          !c.has(relationship.owner) && c.has(relationship.target),
+          !opaquePaths.has(relationship.owner) &&
+          opaquePaths.has(relationship.target),
       );
     if (
-      l.some((m) => s[m.path] && sha256HexDigest(s[m.path]) !== m.sha256) ||
-      h.some((m) =>
-        a.relationships.some(
+      preservedOpaqueParts.some(
+        (collidingPart) =>
+          packageFiles[collidingPart.path] &&
+          sha256HexDigest(packageFiles[collidingPart.path]) !==
+            collidingPart.sha256,
+      ) ||
+      inboundRelationships.some((inboundRelationship) =>
+        generatedRelationships.relationships.some(
           (relationship) =>
-            relationship.owner === m.owner && relationship.type === m.type,
+            relationship.owner === inboundRelationship.owner &&
+            relationship.type === inboundRelationship.type,
         ),
       )
     ) {
-      for (const m of l)
-        ((m.disposition = "dropped"),
-          (m.reason =
+      for (const droppedPart of preservedOpaqueParts)
+        ((droppedPart.disposition = "dropped"),
+          (droppedPart.reason =
             "Generated package has a conflicting part or relationship. The entire metadata island remains only in the original."));
       continue;
     }
-    for (const m of l) s[m.path] = e[m.path];
-    for (const m of new Set(h.map((v) => v.owner))) {
-      const v = relationshipsPathFor(m),
-        g = s[v] ? strFromU8(s[v]) : `<Relationships xmlns="${g7}"/>`,
-        b = new Set();
-      s[v] &&
-        parseXmlPartStrict(s[v], (E) => {
-          E.local === "Relationship" && b.add(E.attributes.Id?.value ?? "");
+    for (const copiedPart of preservedOpaqueParts)
+      packageFiles[copiedPart.path] = originalParts[copiedPart.path];
+    for (const owner of new Set(
+      inboundRelationships.map((relationshipEntry) => relationshipEntry.owner),
+    )) {
+      const relsPath = relationshipsPathFor(owner),
+        relsXml = packageFiles[relsPath]
+          ? strFromU8(packageFiles[relsPath])
+          : `<Relationships xmlns="${g7}"/>`,
+        existingIds = new Set();
+      packageFiles[relsPath] &&
+        parseXmlPartStrict(packageFiles[relsPath], (xmlElement) => {
+          xmlElement.local === "Relationship" &&
+            existingIds.add(xmlElement.attributes.Id?.value ?? "");
         });
-      let y = 1;
-      const w = h
-        .filter((E) => E.owner === m)
-        .map((E) => {
-          for (; b.has(`lgPreserve${y}`);) y++;
-          const A = `lgPreserve${y++}`;
+      let preserveIndex = 1;
+      const addedRelationships = inboundRelationships
+        .filter((candidateEntry) => candidateEntry.owner === owner)
+        .map((ownedEntry) => {
+          for (; existingIds.has(`lgPreserve${preserveIndex}`);)
+            preserveIndex++;
+          const preserveId = `lgPreserve${preserveIndex++}`;
           return (
-            b.add(A),
-            `<Relationship xmlns="${g7}" Id="${A}" Type="${escapeXmlAttribute(E.type)}" Target="/${escapeXmlAttribute(E.target)}"/>`
+            existingIds.add(preserveId),
+            `<Relationship xmlns="${g7}" Id="${preserveId}" Type="${escapeXmlAttribute(ownedEntry.type)}" Target="/${escapeXmlAttribute(ownedEntry.target)}"/>`
           );
         })
         .join("");
-      s[v] = strToU8(expandEmptyXmlElements(g, "Relationships", w));
+      packageFiles[relsPath] = strToU8(
+        expandEmptyXmlElements(relsXml, "Relationships", addedRelationships),
+      );
     }
-    const p = l
-      .filter((m) => !m.path.endsWith(".rels") && !a.types.has(m.path))
+    const contentTypeOverrides = preservedOpaqueParts
+      .filter(
+        (unregisteredPart) =>
+          !unregisteredPart.path.endsWith(".rels") &&
+          !generatedRelationships.types.has(unregisteredPart.path),
+      )
       .map(
-        (m) =>
-          `<Override xmlns="${contentTypesNamespace}" PartName="/${escapeXmlAttribute(m.path)}" ContentType="${escapeXmlAttribute(m.contentType)}"/>`,
+        (overridePart) =>
+          `<Override xmlns="${contentTypesNamespace}" PartName="/${escapeXmlAttribute(overridePart.path)}" ContentType="${escapeXmlAttribute(overridePart.contentType)}"/>`,
       )
       .join("");
-    s["[Content_Types].xml"] = strToU8(
-      expandEmptyXmlElements(strFromU8(s["[Content_Types].xml"]), "Types", p),
+    packageFiles["[Content_Types].xml"] = strToU8(
+      expandEmptyXmlElements(
+        strFromU8(packageFiles["[Content_Types].xml"]),
+        "Types",
+        contentTypeOverrides,
+      ),
     );
   }
-  return { bytes: zipSync(s), inventory: summarizePreservedParts(n) };
+  return {
+    bytes: zipSync(packageFiles),
+    inventory: summarizePreservedParts(inventory),
+  };
 }
-function expandEmptyXmlElements(e, r, t) {
-  if (!t) return e;
-  const n = new RegExp(`</((?:[\\w.-]+:)?${r})\\s*>\\s*$`);
-  if (n.test(e)) return e.replace(n, `${t}$&`);
-  const o = new RegExp(`<((?:[\\w.-]+:)?${r})([^>]*)/>(\\s*)$`);
-  if (o.test(e)) return e.replace(o, `<$1$2>${t}</$1>$3`);
+function expandEmptyXmlElements(xmlText, elementName, insertedXml) {
+  if (!insertedXml) return xmlText;
+  const closingTagPattern = new RegExp(
+    `</((?:[\\w.-]+:)?${elementName})\\s*>\\s*$`,
+  );
+  if (closingTagPattern.test(xmlText))
+    return xmlText.replace(closingTagPattern, `${insertedXml}$&`);
+  const selfClosingPattern = new RegExp(
+    `<((?:[\\w.-]+:)?${elementName})([^>]*)/>(\\s*)$`,
+  );
+  if (selfClosingPattern.test(xmlText))
+    return xmlText.replace(selfClosingPattern, `<$1$2>${insertedXml}</$1>$3`);
   throw Error("Unable to preserve XLSX package metadata safely.");
 }
-function describePreservationDisposition(e, r) {
-  const t = structuredClone(e);
-  t.phase = "export-result";
-  for (const part of t.parts)
+function describePreservationDisposition(inventory, dropReason) {
+  const droppedInventory = structuredClone(inventory);
+  droppedInventory.phase = "export-result";
+  for (const part of droppedInventory.parts)
     part.disposition === "preserved-opaque" &&
-      ((part.disposition = "dropped"), (part.reason = r));
-  return summarizePreservedParts(t);
+      ((part.disposition = "dropped"), (part.reason = dropReason));
+  return summarizePreservedParts(droppedInventory);
 }
 
-const countRangeCells = (e) => {
-    const rangeAddress = parseRangeAddress(e);
+const countRangeCells = (rangeText) => {
+    const rangeAddress = parseRangeAddress(rangeText);
     return (
       (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
       (rangeAddress.lastCol - rangeAddress.firstCol + 1)
     );
   },
-  hexColorToArgb = (e) => `FF${e.slice(1).toUpperCase()}`;
+  hexColorToArgb = (hexColor) => `FF${hexColor.slice(1).toUpperCase()}`;
 
-function applyValidationDropdownFlags(e, sheet) {
-  return e.replace(/<dataValidation\b[^>]*>/g, (t) => {
-    const n = /\bsqref="([^"]+)"/.exec(t)?.[1],
-      o = sheet.validations?.find(
+function applyValidationDropdownFlags(sheetXml, sheet) {
+  return sheetXml.replace(/<dataValidation\b[^>]*>/g, (validationTag) => {
+    const sqref = /\bsqref="([^"]+)"/.exec(validationTag)?.[1],
+      matchingValidation = sheet.validations?.find(
         (validation) =>
-          n &&
+          sqref &&
           formatRangeCornerCells(validation.range) ===
-            formatRangeCornerCells(n),
+            formatRangeCornerCells(sqref),
       );
-    return o?.kind === "list" && o.showDropdown === false
-      ? t
+    return matchingValidation?.kind === "list" &&
+      matchingValidation.showDropdown === false
+      ? validationTag
           .replace(/\s+showDropDown="[^"]*"/, "")
           .replace(/>$/, ' showDropDown="1">')
-      : t;
+      : validationTag;
   });
 }
 
-function serializeDataValidationRule(e) {
-  const r = {
+function serializeDataValidationRule(validationRule) {
+  const excelType = {
     list: "list",
     number: "decimal",
     integer: "whole",
@@ -263,104 +305,119 @@ function serializeDataValidationRule(e) {
     date: "date",
     time: "time",
     custom: "custom",
-  }[e.kind];
+  }[validationRule.kind];
   if (
-    e.kind === "list" &&
-    (e.list.some((t) => /[",\r\n]/.test(t)) || e.list.join(",").length > 253)
+    validationRule.kind === "list" &&
+    (validationRule.list.some((listItem) => /[",\r\n]/.test(listItem)) ||
+      validationRule.list.join(",").length > 253)
   )
     throw Error(
       "This list validation cannot be represented by an inline XLSX list. Retain the native workbook or use shorter values without commas, quotes or line breaks.",
     );
-  if (e.kind === "custom" && isExternalReferenceFormula(e.formula))
+  if (
+    validationRule.kind === "custom" &&
+    isExternalReferenceFormula(validationRule.formula)
+  )
     throw Error(
       "An unsafe custom validation formula cannot be exported. Keep the native workbook and review the rule.",
     );
   return {
-    type: r,
-    ...(["list", "custom"].includes(e.kind)
+    type: excelType,
+    ...(["list", "custom"].includes(validationRule.kind)
       ? {}
-      : { operator: dataValidationOperators[e.operator] }),
-    allowBlank: e.allowBlank,
+      : { operator: dataValidationOperators[validationRule.operator] }),
+    allowBlank: validationRule.allowBlank,
     showErrorMessage: true,
-    errorStyle: e.errorStyle ?? "stop",
-    errorTitle: e.errorTitle ?? "Invalid value",
-    error: e.message,
-    showInputMessage: e.showInputMessage !== false,
-    promptTitle: e.inputTitle ?? "",
-    prompt: e.inputMessage ?? "",
+    errorStyle: validationRule.errorStyle ?? "stop",
+    errorTitle: validationRule.errorTitle ?? "Invalid value",
+    error: validationRule.message,
+    showInputMessage: validationRule.showInputMessage !== false,
+    promptTitle: validationRule.inputTitle ?? "",
+    prompt: validationRule.inputMessage ?? "",
     formulae:
-      e.kind === "list"
-        ? [JSON.stringify(e.list.join(","))]
-        : e.kind === "custom"
-          ? [e.formula.slice(1)]
+      validationRule.kind === "list"
+        ? [JSON.stringify(validationRule.list.join(","))]
+        : validationRule.kind === "custom"
+          ? [validationRule.formula.slice(1)]
           : [
-              e.min,
-              ...(["between", "notBetween"].includes(e.operator)
-                ? [e.max]
+              validationRule.min,
+              ...(["between", "notBetween"].includes(validationRule.operator)
+                ? [validationRule.max]
                 : []),
-            ].map((t) =>
-              e.kind === "date"
-                ? new Date(Date.UTC(1899, 11, 30) + t * 864e5)
-                : t,
+            ].map((formulaValue) =>
+              validationRule.kind === "date"
+                ? new Date(Date.UTC(1899, 11, 30) + formulaValue * 864e5)
+                : formulaValue,
             ),
   };
 }
 
-function appendStopIfTrueAttribute(e, sheet) {
-  const t = sortConditionalRulesByPriority(sheet.conditionalFormats ?? []);
-  return e.replace(/<cfRule\b[^>]*>/g, (n) => {
-    const o = Number(/\bpriority="(\d+)"/.exec(n)?.[1]),
-      a = t[o - 1];
-    return a?.stopIfTrue
-      ? n.replace(/\s+stopIfTrue="[^"]*"/, "").replace(/>$/, ' stopIfTrue="1">')
-      : n;
+function appendStopIfTrueAttribute(xmlText, sheet) {
+  const sortedRules = sortConditionalRulesByPriority(
+    sheet.conditionalFormats ?? [],
+  );
+  return xmlText.replace(/<cfRule\b[^>]*>/g, (ruleTag) => {
+    const priority = Number(/\bpriority="(\d+)"/.exec(ruleTag)?.[1]),
+      matchedRule = sortedRules[priority - 1];
+    return matchedRule?.stopIfTrue
+      ? ruleTag
+          .replace(/\s+stopIfTrue="[^"]*"/, "")
+          .replace(/>$/, ' stopIfTrue="1">')
+      : ruleTag;
   });
 }
-function serializeConditionalFormatRules(e, priority) {
-  const t = {
+function serializeConditionalFormatRules(conditionalFormat, priority) {
+  const dxfStyle = {
       fill: {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: hexColorToArgb(e.fill) },
+        fgColor: { argb: hexColorToArgb(conditionalFormat.fill) },
       },
-      font: { color: { argb: hexColorToArgb(e.color) } },
+      font: { color: { argb: hexColorToArgb(conditionalFormat.color) } },
     },
-    rangeAddress = parseRangeAddress(e.range),
+    rangeAddress = parseRangeAddress(conditionalFormat.range),
     cellAddress = formatCellAddress(
       rangeAddress.firstRow,
       rangeAddress.firstCol,
     ),
-    a = (u) => ({
+    buildExpressionRule = (formulaText) => ({
       type: "expression",
       priority: priority,
-      formulae: [u.replace(/^=/, "")],
-      style: t,
+      formulae: [formulaText.replace(/^=/, "")],
+      style: dxfStyle,
     });
-  if (e.kind === "formula") {
-    if (isExternalReferenceFormula(e.formula ?? ""))
+  if (conditionalFormat.kind === "formula") {
+    if (isExternalReferenceFormula(conditionalFormat.formula ?? ""))
       throw Error(
         "External-action conditional formulas cannot be exported. Remove that rule or use native JSON.",
       );
-    return a(e.formula);
+    return buildExpressionRule(conditionalFormat.formula);
   }
-  if (["blank", "notBlank", "error", "notError"].includes(e.kind))
-    return a(
-      e.kind === "blank"
+  if (
+    ["blank", "notBlank", "error", "notError"].includes(conditionalFormat.kind)
+  )
+    return buildExpressionRule(
+      conditionalFormat.kind === "blank"
         ? `LEN(${cellAddress})=0`
-        : e.kind === "notBlank"
+        : conditionalFormat.kind === "notBlank"
           ? `LEN(${cellAddress})>0`
-          : e.kind === "error"
+          : conditionalFormat.kind === "error"
             ? `ISERROR(${cellAddress})`
             : `NOT(ISERROR(${cellAddress}))`,
     );
-  if (e.kind === "unique" || e.kind === "duplicate")
-    return a(Wle(e.kind, e.range));
-  if (e.kind === "dataBar")
+  if (
+    conditionalFormat.kind === "unique" ||
+    conditionalFormat.kind === "duplicate"
+  )
+    return buildExpressionRule(
+      Wle(conditionalFormat.kind, conditionalFormat.range),
+    );
+  if (conditionalFormat.kind === "dataBar")
     return {
       type: "dataBar",
       priority: priority,
       cfvo: [{ type: "min" }, { type: "max" }],
-      color: { argb: hexColorToArgb(e.fill) },
+      color: { argb: hexColorToArgb(conditionalFormat.fill) },
       gradient: false,
       showValue: true,
       negativeBarColorSameAsPositive: false,
@@ -371,7 +428,7 @@ function serializeConditionalFormatRules(e, priority) {
       minLength: 0,
       maxLength: 100,
     };
-  if (e.kind === "iconSet")
+  if (conditionalFormat.kind === "iconSet")
     return {
       type: "iconSet",
       priority: priority,
@@ -380,59 +437,70 @@ function serializeConditionalFormatRules(e, priority) {
       reverse: false,
       cfvo: [
         { type: "min" },
-        ...(e.iconThresholds ?? [33, 67]).map((u) => ({
-          type: e.thresholdType === "number" ? "num" : "percent",
-          value: u,
+        ...(conditionalFormat.iconThresholds ?? [33, 67]).map((threshold) => ({
+          type:
+            conditionalFormat.thresholdType === "number" ? "num" : "percent",
+          value: threshold,
         })),
       ],
     };
-  if (e.kind === "contains")
-    return a(buildContainsTextFormula(e.value, cellAddress));
-  if (e.kind === "colorScale")
+  if (conditionalFormat.kind === "contains")
+    return buildExpressionRule(
+      buildContainsTextFormula(conditionalFormat.value, cellAddress),
+    );
+  if (conditionalFormat.kind === "colorScale")
     return {
       type: "colorScale",
       priority: priority,
       cfvo: [{ type: "min" }, { type: "max" }],
       color: [
-        { argb: hexColorToArgb(e.minColor ?? "#f8e99b") },
-        { argb: hexColorToArgb(e.maxColor ?? "#63be7b") },
+        { argb: hexColorToArgb(conditionalFormat.minColor ?? "#f8e99b") },
+        { argb: hexColorToArgb(conditionalFormat.maxColor ?? "#63be7b") },
       ],
     };
   const operator =
-      e.kind === "greater"
+      conditionalFormat.kind === "greater"
         ? "greaterThan"
-        : e.kind === "less"
+        : conditionalFormat.kind === "less"
           ? "lessThan"
-          : e.kind === "equal"
+          : conditionalFormat.kind === "equal"
             ? "equal"
             : "between",
-    d = (u) =>
-      u.trim() !== "" && Number.isFinite(Number(u))
-        ? Number(u)
-        : `"${u.replace(/"/g, '""')}"`;
+    toFormulaLiteral = (rawValue) =>
+      rawValue.trim() !== "" && Number.isFinite(Number(rawValue))
+        ? Number(rawValue)
+        : `"${rawValue.replace(/"/g, '""')}"`;
   return {
     type: "cellIs",
     operator: operator,
-    formulae: [d(e.value), ...(e.kind === "between" ? [d(e.second)] : [])],
+    formulae: [
+      toFormulaLiteral(conditionalFormat.value),
+      ...(conditionalFormat.kind === "between"
+        ? [toFormulaLiteral(conditionalFormat.second)]
+        : []),
+    ],
     priority: priority,
-    style: t,
+    style: dxfStyle,
   };
 }
-function serializeWorksheetRuleXml(e, sheet) {
-  let t = 0,
-    n = 0;
-  for (const d of sheet.merges ?? []) {
-    if ((t += countRangeCells(d)) > workbookLimits.maxCells)
+function serializeWorksheetRuleXml(worksheet, sheet) {
+  let mergedCellTotal = 0,
+    validationCellTotal = 0;
+  for (const mergeRange of sheet.merges ?? []) {
+    if (
+      (mergedCellTotal += countRangeCells(mergeRange)) > workbookLimits.maxCells
+    )
       throw Error("Merged ranges exceed the 100,000-cell interchange budget.");
-    const rangeAddress = parseRangeAddress(d);
-    for (const [l, cell] of Object.entries(sheet.cells)) {
-      const h = _t(l);
+    const rangeAddress = parseRangeAddress(mergeRange);
+    for (const [cellAddress, cell] of Object.entries(sheet.cells)) {
+      const cellPosition = _t(cellAddress);
       if (
-        h.row >= rangeAddress.firstRow &&
-        h.row <= rangeAddress.lastRow &&
-        h.col >= rangeAddress.firstCol &&
-        h.col <= rangeAddress.lastCol &&
-        (h.row !== rangeAddress.firstRow || h.col !== rangeAddress.firstCol) &&
+        cellPosition.row >= rangeAddress.firstRow &&
+        cellPosition.row <= rangeAddress.lastRow &&
+        cellPosition.col >= rangeAddress.firstCol &&
+        cellPosition.col <= rangeAddress.lastCol &&
+        (cellPosition.row !== rangeAddress.firstRow ||
+          cellPosition.col !== rangeAddress.firstCol) &&
         ((cell.raw !== null && cell.raw !== "") ||
           cell.note ||
           cell.tickmark ||
@@ -442,52 +510,60 @@ function serializeWorksheetRuleXml(e, sheet) {
           "Exporting this merged area would discard populated cells or annotations. Unmerge it or preserve those values before XLSX export.",
         );
     }
-    e.mergeCells(d);
+    worksheet.mergeCells(mergeRange);
   }
-  const o = [];
-  for (const d of sheet.validations ?? []) {
-    const rangeAddress = parseRangeAddress(d.range);
+  const validationRanges = [];
+  for (const validation of sheet.validations ?? []) {
+    const rangeAddress = parseRangeAddress(validation.range);
     if (
-      o.some(
-        (l) =>
-          l.firstRow <= rangeAddress.lastRow &&
-          l.lastRow >= rangeAddress.firstRow &&
-          l.firstCol <= rangeAddress.lastCol &&
-          l.lastCol >= rangeAddress.firstCol,
+      validationRanges.some(
+        (pushedRange) =>
+          pushedRange.firstRow <= rangeAddress.lastRow &&
+          pushedRange.lastRow >= rangeAddress.firstRow &&
+          pushedRange.firstCol <= rangeAddress.lastCol &&
+          pushedRange.lastCol >= rangeAddress.firstCol,
       )
     )
       throw Error(
         "Overlapping validation rules cannot be represented by one Excel rule per cell. Use native JSON or resolve overlapping rules before export.",
       );
     if (
-      (o.push(rangeAddress),
-      (n += countRangeCells(d.range)) > workbookLimits.maxCells)
+      (validationRanges.push(rangeAddress),
+      (validationCellTotal += countRangeCells(validation.range)) >
+        workbookLimits.maxCells)
     )
       throw Error(
         "XLSX validation ranges exceed the 100,000-cell interchange budget. Use native JSON to preserve larger rules.",
       );
-    e.dataValidations.add(d.range, serializeDataValidationRule(d));
+    worksheet.dataValidations.add(
+      validation.range,
+      serializeDataValidationRule(validation),
+    );
   }
-  const a = new Map(
+  const priorityById = new Map(
     sortConditionalRulesByPriority(sheet.conditionalFormats ?? []).map(
-      (d, u) => [d.id, u + 1],
+      (sortedRule, sortedIndex) => [sortedRule.id, sortedIndex + 1],
     ),
   );
-  let s = 0;
-  for (const d of sheet.conditionalFormats ?? []) {
-    if (d.kind !== "duplicate" && d.kind !== "unique") continue;
-    const rangeAddress = parseRangeAddress(d.range);
-    for (const [l, cell] of Object.entries(sheet.cells)) {
-      if (++s > 1e6)
+  let populationChecks = 0;
+  for (const conditionalRule of sheet.conditionalFormats ?? []) {
+    if (
+      conditionalRule.kind !== "duplicate" &&
+      conditionalRule.kind !== "unique"
+    )
+      continue;
+    const rangeAddress = parseRangeAddress(conditionalRule.range);
+    for (const [candidateAddress, cell] of Object.entries(sheet.cells)) {
+      if (++populationChecks > 1e6)
         throw Error(
           "Duplicate/unique conditional export exceeds 1,000,000 population checks. Use native JSON or fewer rules.",
         );
-      const h = _t(l);
+      const candidatePosition = _t(candidateAddress);
       if (
-        h.row < rangeAddress.firstRow ||
-        h.row > rangeAddress.lastRow ||
-        h.col < rangeAddress.firstCol ||
-        h.col > rangeAddress.lastCol
+        candidatePosition.row < rangeAddress.firstRow ||
+        candidatePosition.row > rangeAddress.lastRow ||
+        candidatePosition.col < rangeAddress.firstCol ||
+        candidatePosition.col > rangeAddress.lastCol
       )
         continue;
       let raw = cell.raw;
@@ -495,43 +571,54 @@ function serializeWorksheetRuleXml(e, sheet) {
         (typeof cell.raw == "string" &&
           cell.raw.startsWith("=") &&
           !cell.literal &&
-          (raw = e.getCell(l).result),
+          (raw = worksheet.getCell(candidateAddress).result),
         !Hle(raw))
       )
         throw Error(
-          `Duplicate/unique conditional rule at ${l} cannot preserve Excel comparison semantics for this value. Use native JSON; XLSX supports finite numbers, canonical numeric text and short printable ASCII text without date-like numeric prefixes.`,
+          `Duplicate/unique conditional rule at ${candidateAddress} cannot preserve Excel comparison semantics for this value. Use native JSON; XLSX supports finite numbers, canonical numeric text and short printable ASCII text without date-like numeric prefixes.`,
         );
     }
   }
-  (sheet.conditionalFormats ?? []).forEach((d) =>
-    e.addConditionalFormatting({
-      ref: d.range,
-      rules: [serializeConditionalFormatRules(d, a.get(d.id))],
+  (sheet.conditionalFormats ?? []).forEach((formatRule) =>
+    worksheet.addConditionalFormatting({
+      ref: formatRule.range,
+      rules: [
+        serializeConditionalFormatRules(
+          formatRule,
+          priorityById.get(formatRule.id),
+        ),
+      ],
     }),
   );
 }
 
-function serializeCalculationProperties(e, workbookInput) {
+function serializeCalculationProperties(workbookXml, workbookInput) {
   const calculationSettings = normalizeCalculationSettings(
       workbookInput.calculation ?? defaultCalculationSettings,
     ),
-    n = `<calcPr fullPrecision="1" calcId="0" calcMode="${calculationSettings.mode === "manual" ? "manual" : "auto"}" fullCalcOnLoad="1" forceFullCalc="1" calcOnSave="${calculationSettings.mode === "manual" ? "0" : "1"}" iterate="${calculationSettings.iterative ? "1" : "0"}" iterateCount="${calculationSettings.maxIterations}" iterateDelta="${calculationSettings.maxChange}"/>`;
-  return /<(?:\w+:)?calcPr\b[^>]*\/>/.test(e)
-    ? e.replace(/<(?:\w+:)?calcPr\b[^>]*\/>/, n)
-    : /<(?:\w+:)?calcPr\b[^>]*>[\s\S]*?<\/(?:\w+:)?calcPr>/.test(e)
-      ? e.replace(/<(?:\w+:)?calcPr\b[^>]*>[\s\S]*?<\/(?:\w+:)?calcPr>/, n)
-      : e.replace(/<\/(?:\w+:)?workbook>/, `${n}$&`);
+    calcPrXml = `<calcPr fullPrecision="1" calcId="0" calcMode="${calculationSettings.mode === "manual" ? "manual" : "auto"}" fullCalcOnLoad="1" forceFullCalc="1" calcOnSave="${calculationSettings.mode === "manual" ? "0" : "1"}" iterate="${calculationSettings.iterative ? "1" : "0"}" iterateCount="${calculationSettings.maxIterations}" iterateDelta="${calculationSettings.maxChange}"/>`;
+  return /<(?:\w+:)?calcPr\b[^>]*\/>/.test(workbookXml)
+    ? workbookXml.replace(/<(?:\w+:)?calcPr\b[^>]*\/>/, calcPrXml)
+    : /<(?:\w+:)?calcPr\b[^>]*>[\s\S]*?<\/(?:\w+:)?calcPr>/.test(workbookXml)
+      ? workbookXml.replace(
+          /<(?:\w+:)?calcPr\b[^>]*>[\s\S]*?<\/(?:\w+:)?calcPr>/,
+          calcPrXml,
+        )
+      : workbookXml.replace(/<\/(?:\w+:)?workbook>/, `${calcPrXml}$&`);
 }
 function verifyAutomationInspection(inspection) {
-  const r = inspectionSignatureCache.get(inspection);
-  if (!r || r.signature !== JSON.stringify(inspection))
+  const cachedInspection = inspectionSignatureCache.get(inspection);
+  if (
+    !cachedInspection ||
+    cachedInspection.signature !== JSON.stringify(inspection)
+  )
     throw Error(
       "Automation inspection was modified or is untrusted. Inspect the original bytes again.",
     );
-  return r.bytes.slice();
+  return cachedInspection.bytes.slice();
 }
 function retainSourceArtifact(inspection, actor) {
-  const t = verifyAutomationInspection(inspection);
+  const inspectionBytes = verifyAutomationInspection(inspection);
   if (!inspection.retainedEligible)
     throw Error(
       "This source exceeds the 2 MB artifact-retention limit. Keep the original file separately.",
@@ -543,18 +630,18 @@ function retainSourceArtifact(inspection, actor) {
     fileName: inspection.fileName,
     kind: inspection.kind,
     sha256: inspection.sha256,
-    byteLength: t.length,
-    base64: encodeBytesToBase64(t),
+    byteLength: inspectionBytes.length,
+    base64: encodeBytesToBase64(inspectionBytes),
     retainedAt: new Date().toISOString(),
     retainedBy: actor,
   };
 }
 function inspectEmbeddedObjects(inspection) {
   verifyAutomationInspection(inspection);
-  const r = inspection.items.filter((item) =>
+  const embeddedItems = inspection.items.filter((item) =>
     /embedded|activeX|OLE|External automation/i.test(item.kind),
   );
-  if (!r.length)
+  if (!embeddedItems.length)
     throw Error(
       "No known OLE, ActiveX or embedded-object references were detected. Separately stored objects remain unknown.",
     );
@@ -565,21 +652,24 @@ function inspectEmbeddedObjects(inspection) {
     sourceSha256: inspection.sha256,
     inspectedAt: new Date().toISOString(),
     execution: "never",
-    items: r.map((t) => ({ ...t, execution: "never" })),
+    items: embeddedItems.map((embeddedItem) => ({
+      ...embeddedItem,
+      execution: "never",
+    })),
     warnings: [
       ...inspection.warnings,
       "Inventory only: no payload is opened, fetched or executed. Missing parts and external references remain unresolved. Keep the original source separately.",
     ],
   };
 }
-function retainEmbeddedObjectInventory(workbook, inspection, t = {}) {
-  if (t.readOnly) throw Error("This workbook is read-only.");
+function retainEmbeddedObjectInventory(workbook, inspection, options = {}) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
   assertWorkbookStructureEditable(workbook);
-  const n = inspectEmbeddedObjects(inspection);
+  const inventory = inspectEmbeddedObjects(inspection);
   if (
     workbook.embeddedObjectInventories?.some(
       (embeddedObjectInventory) =>
-        embeddedObjectInventory.sourceSha256 === n.sourceSha256,
+        embeddedObjectInventory.sourceSha256 === inventory.sourceSha256,
     )
   )
     throw Error("This source inventory has already been retained.");
@@ -587,7 +677,7 @@ function retainEmbeddedObjectInventory(workbook, inspection, t = {}) {
     ...workbook,
     embeddedObjectInventories: [
       ...(workbook.embeddedObjectInventories ?? []),
-      n,
+      inventory,
     ],
   });
 }
@@ -601,43 +691,54 @@ const excelErrorLiterals = new Set([
   "#NUM!",
   "#N/A",
 ]);
-function toExportedCellValue(e) {
-  if (e.type !== "blank")
-    return e.type === "error"
-      ? excelErrorLiterals.has(String(e.value))
-        ? { error: e.value }
+function toExportedCellValue(cell) {
+  if (cell.type !== "blank")
+    return cell.type === "error"
+      ? excelErrorLiterals.has(String(cell.value))
+        ? { error: cell.value }
         : undefined
-      : e.value;
+      : cell.value;
 }
-function classifyArrayFormula(e, r) {
-  const t = (o, a) => {
-    const s = new RegExp(`(?:^|\\s)${a}\\s*=\\s*(["'])(.*?)\\1`, "i").exec(
-      o,
-    )?.[2];
-    return s?.replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (u, l) =>
-      String.fromCodePoint(
-        l[0].toLowerCase() === "x" ? parseInt(l.slice(1), 16) : Number(l),
-      ),
+function classifyArrayFormula(xmlText, sheetName) {
+  const readAttribute = (tagText, attributeName) => {
+    const attributeValue = new RegExp(
+      `(?:^|\\s)${attributeName}\\s*=\\s*(["'])(.*?)\\1`,
+      "i",
+    ).exec(tagText)?.[2];
+    return attributeValue?.replace(
+      /&#(x[0-9a-f]+|[0-9]+);/gi,
+      (entityMatch, entityCode) =>
+        String.fromCodePoint(
+          entityCode[0].toLowerCase() === "x"
+            ? parseInt(entityCode.slice(1), 16)
+            : Number(entityCode),
+        ),
     );
   };
-  let n;
-  for (const o of e.matchAll(
+  let cellAttributes;
+  for (const xmlMatch of xmlText.matchAll(
     /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<(\/?)(?:\w+:)?(c|f)\b([^>]*)>/gi,
   )) {
-    if (!o[2]) continue;
-    if (o[2].toLowerCase() === "c") {
-      n = o[1] || /\/\s*$/.test(o[3]) ? undefined : o[3];
+    if (!xmlMatch[2]) continue;
+    if (xmlMatch[2].toLowerCase() === "c") {
+      cellAttributes =
+        xmlMatch[1] || /\/\s*$/.test(xmlMatch[3]) ? undefined : xmlMatch[3];
       continue;
     }
-    if (n === undefined || o[1] || t(o[3], "t") !== "array") continue;
-    const a = t(n, "r") ?? "unknown address",
-      s = t(o[3], "ref") ?? a,
-      d =
-        t(n, "cm") !== undefined
+    if (
+      cellAttributes === undefined ||
+      xmlMatch[1] ||
+      readAttribute(xmlMatch[3], "t") !== "array"
+    )
+      continue;
+    const cellAddress = readAttribute(cellAttributes, "r") ?? "unknown address",
+      formulaRange = readAttribute(xmlMatch[3], "ref") ?? cellAddress,
+      arrayKindLabel =
+        readAttribute(cellAttributes, "cm") !== undefined
           ? "Metadata-qualified Excel array formula (dynamic/legacy classification requires Excel metadata)"
           : "Legacy CSE array formula";
     throw new Error(
-      `${d} at ${r}!${a}, range ${s}. Import stopped before changing the workbook. Open the original in Excel and convert the array to ordinary supported formulas or an explicitly reviewed values snapshot, then import that copy. Fixed CSE ranges and Excel array metadata are not silently treated as dynamic spills.`,
+      `${arrayKindLabel} at ${sheetName}!${cellAddress}, range ${formulaRange}. Import stopped before changing the workbook. Open the original in Excel and convert the array to ordinary supported formulas or an explicitly reviewed values snapshot, then import that copy. Fixed CSE ranges and Excel array metadata are not silently treated as dynamic spills.`,
     );
   }
 }
@@ -646,34 +747,42 @@ const oue = unwrapDefaultExport(iue);
 
 const x7 = unwrapDefaultExport(lue);
 
-function dateSerialToIsoText(raw, dateOrder, t = "1900") {
-  if (!Number.isFinite(raw) || raw < 0 || raw >= dateSystemMaxSerial(t) + 1)
+function dateSerialToIsoText(raw, dateOrder, dateSystem = "1900") {
+  if (
+    !Number.isFinite(raw) ||
+    raw < 0 ||
+    raw >= dateSystemMaxSerial(dateSystem) + 1
+  )
     throw Error(
-      `Date serial is outside 0–${dateSystemMaxSerial(t)} for the ${t} system.`,
+      `Date serial is outside 0–${dateSystemMaxSerial(dateSystem)} for the ${dateSystem} system.`,
     );
-  let n = Math.floor(raw),
-    o = Math.round((raw - n) * 86400);
-  if ((o === 86400 && (n++, (o = 0)), n > dateSystemMaxSerial(t)))
+  let wholeDays = Math.floor(raw),
+    secondsOfDay = Math.round((raw - wholeDays) * 86400);
+  if (
+    (secondsOfDay === 86400 && (wholeDays++, (secondsOfDay = 0)),
+    wholeDays > dateSystemMaxSerial(dateSystem))
+  )
     throw Error("Rounded date/time exceeds year 9999.");
-  const a =
-      t === "1900" && n === 60
+  const isoDate =
+      dateSystem === "1900" && wholeDays === 60
         ? "1900-02-29"
         : new Date(
-            t === "1904"
-              ? Date.UTC(1904, 0, 1) + n * 864e5
-              : Date.UTC(1899, 11, 31) + (n > 60 ? n - 1 : n) * 864e5,
+            dateSystem === "1904"
+              ? Date.UTC(1904, 0, 1) + wholeDays * 864e5
+              : Date.UTC(1899, 11, 31) +
+                  (wholeDays > 60 ? wholeDays - 1 : wholeDays) * 864e5,
           )
             .toISOString()
             .slice(0, 10),
-    [s, d, u] = a.split("-");
+    [isoYear, isoMonth, isoDay] = isoDate.split("-");
   return (
     (dateOrder === "ymd"
-      ? a
+      ? isoDate
       : dateOrder === "dmy"
-        ? `${u}/${d}/${s}`
-        : `${d}/${u}/${s}`) +
-    (o
-      ? ` ${String(Math.floor(o / 3600)).padStart(2, "0")}:${String(Math.floor(o / 60) % 60).padStart(2, "0")}:${String(o % 60).padStart(2, "0")}`
+        ? `${isoDay}/${isoMonth}/${isoYear}`
+        : `${isoMonth}/${isoDay}/${isoYear}`) +
+    (secondsOfDay
+      ? ` ${String(Math.floor(secondsOfDay / 3600)).padStart(2, "0")}:${String(Math.floor(secondsOfDay / 60) % 60).padStart(2, "0")}:${String(secondsOfDay % 60).padStart(2, "0")}`
       : "")
   );
 }
@@ -684,98 +793,116 @@ function getWorksheetUsedRange(workbook, sheetId) {
   const occupiedRangeBounds = findOccupiedRangeBounds(sheet, false);
   return `A1:${columnIndexToLetters(Math.max(occupiedRangeBounds?.lastCol ?? 0, (sheet.delimitedSource?.columns ?? 1) - 1))}${Math.max(occupiedRangeBounds?.lastRow ?? 0, (sheet.delimitedSource?.records ?? 1) - 1) + 1}`;
 }
-function encodeExportTextBytes(e, encoding, bom) {
+function encodeExportTextBytes(text, encoding, bom) {
   if (
     !["utf-8", "utf-16le", "utf-16be", "windows-1252"].includes(encoding) ||
     typeof bom != "boolean"
   )
     throw Error("Invalid output encoding or BOM setting.");
-  for (const s of e)
-    if (s.length === 1 && s.charCodeAt(0) >= 55296 && s.charCodeAt(0) <= 57343)
+  for (const character of text)
+    if (
+      character.length === 1 &&
+      character.charCodeAt(0) >= 55296 &&
+      character.charCodeAt(0) <= 57343
+    )
       throw Error(
         "Unpaired Unicode surrogate cannot be exported; correct the text first.",
       );
   if (encoding === "utf-8")
-    return new TextEncoder().encode((bom ? "\uFEFF" : "") + e);
+    return new TextEncoder().encode((bom ? "\uFEFF" : "") + text);
   if (encoding === "windows-1252") {
     if (bom)
       throw Error(
         "Windows-1252 does not support a BOM; disable BOM or choose UTF-8.",
       );
-    const s = new Map(byteCharacterTable.map((u, l) => [u, l])),
-      d = [];
-    for (const u of e) {
-      const l = s.get(u);
-      if (l === undefined)
+    const byteByCharacter = new Map(
+        byteCharacterTable.map((tableCharacter, byteIndex) => [
+          tableCharacter,
+          byteIndex,
+        ]),
+      ),
+      bytes = [];
+    for (const textCharacter of text) {
+      const byteValue = byteByCharacter.get(textCharacter);
+      if (byteValue === undefined)
         throw Error(
           "A character cannot be represented in Windows-1252. Choose UTF-8; text is never replaced.",
         );
-      d.push(l);
+      bytes.push(byteValue);
     }
-    return Uint8Array.from(d);
+    return Uint8Array.from(bytes);
   }
-  const n = (bom ? "\uFEFF" : "") + e,
-    o = new Uint8Array(n.length * 2),
-    a = new DataView(o.buffer);
-  for (let s = 0; s < n.length; s++)
-    a.setUint16(s * 2, n.charCodeAt(s), encoding === "utf-16le");
-  return o;
+  const textWithBom = (bom ? "\uFEFF" : "") + text,
+    utf16Bytes = new Uint8Array(textWithBom.length * 2),
+    dataView = new DataView(utf16Bytes.buffer);
+  for (
+    let codeUnitIndex = 0;
+    codeUnitIndex < textWithBom.length;
+    codeUnitIndex++
+  )
+    dataView.setUint16(
+      codeUnitIndex * 2,
+      textWithBom.charCodeAt(codeUnitIndex),
+      encoding === "utf-16le",
+    );
+  return utf16Bytes;
 }
-const needsFormulaInjectionGuard = (e) =>
-  /^[\s\u0000-\u001f]*[=+\-@＝＋－＠]/u.test(e) || /^[\t\r\n]/.test(e);
-function quoteDelimitedField(e, delimitedOptions) {
-  const t =
-    e.includes(delimitedOptions.delimiter) ||
-    /[\r\n\uFEFF]/.test(e) ||
-    (delimitedOptions.quote !== "none" && e.includes(delimitedOptions.quote)) ||
-    /^[ ]|[ ]$/.test(e) ||
+const needsFormulaInjectionGuard = (text) =>
+  /^[\s\u0000-\u001f]*[=+\-@＝＋－＠]/u.test(text) || /^[\t\r\n]/.test(text);
+function quoteDelimitedField(field, delimitedOptions) {
+  const shouldQuote =
+    field.includes(delimitedOptions.delimiter) ||
+    /[\r\n\uFEFF]/.test(field) ||
+    (delimitedOptions.quote !== "none" &&
+      field.includes(delimitedOptions.quote)) ||
+    /^[ ]|[ ]$/.test(field) ||
     delimitedOptions.quoteAll;
   if (delimitedOptions.quote === "none") {
-    if (e.includes(delimitedOptions.delimiter) || /[\r\n]/.test(e))
+    if (field.includes(delimitedOptions.delimiter) || /[\r\n]/.test(field))
       throw Error(
         "A field needs quoting; choose a quote character to preserve delimiters/newlines.",
       );
-    return e;
+    return field;
   }
-  if (!t) return e;
-  const n =
+  if (!shouldQuote) return field;
+  const escapedField =
     delimitedOptions.escape === "double"
-      ? e
+      ? field
           .split(delimitedOptions.quote)
           .join(delimitedOptions.quote + delimitedOptions.quote)
-      : e
+      : field
           .replaceAll("\\", "\\\\")
           .split(delimitedOptions.quote)
           .join("\\" + delimitedOptions.quote);
-  return delimitedOptions.quote + n + delimitedOptions.quote;
+  return delimitedOptions.quote + escapedField + delimitedOptions.quote;
 }
-function exportWorksheetToCsv(workbook, sheetId, t = {}) {
+function exportWorksheetToCsv(workbook, sheetId, options = {}) {
   const workbookInput = normalizeWorkbookInput(workbook),
     sheet = workbookInput.sheets.find((sheet) => sheet.id === sheetId);
   if (!sheet) throw Error("Worksheet not found.");
   const delimitedOptions = {
     ...normalizeDelimitedOptions({
-      ...t,
-      delimiter: t.delimiter ?? ",",
-      encoding: t.encoding ?? "utf-8",
+      ...options,
+      delimiter: options.delimiter ?? ",",
+      encoding: options.encoding ?? "utf-8",
       newline:
-        t.newline ??
+        options.newline ??
         `\r
 `,
     }),
-    includeHeader: t.includeHeader ?? true,
-    bom: t.bom ?? false,
-    quoteAll: t.quoteAll ?? false,
-    dateOutput: t.dateOutput ?? "calendar",
+    includeHeader: options.includeHeader ?? true,
+    bom: options.bom ?? false,
+    quoteAll: options.quoteAll ?? false,
+    dateOutput: options.dateOutput ?? "calendar",
     range:
-      t.range ??
-      t.population?.definition.range ??
+      options.range ??
+      options.population?.definition.range ??
       getWorksheetUsedRange(workbookInput, sheetId),
-    ...(t.population ? { population: t.population } : {}),
+    ...(options.population ? { population: options.population } : {}),
   };
-  for (const w of ["includeHeader", "bom", "quoteAll"])
-    if (typeof delimitedOptions[w] != "boolean")
-      throw Error(`Invalid export ${w} control.`);
+  for (const optionName of ["includeHeader", "bom", "quoteAll"])
+    if (typeof delimitedOptions[optionName] != "boolean")
+      throw Error(`Invalid export ${optionName} control.`);
   if (!["calendar", "serial"].includes(delimitedOptions.dateOutput))
     throw Error("Invalid date export mode.");
   (delimitedOptions.delimiter === "auto" && (delimitedOptions.delimiter = ","),
@@ -785,9 +912,9 @@ function exportWorksheetToCsv(workbook, sheetId, t = {}) {
       (delimitedOptions.newline = `\r
 `));
   const rangeAddress = parseRangeAddress(delimitedOptions.range),
-    d = rangeAddress.lastRow - rangeAddress.firstRow + 1,
-    u = rangeAddress.lastCol - rangeAddress.firstCol + 1;
-  if (d * u > workbookLimits.maxCells)
+    rowCount = rangeAddress.lastRow - rangeAddress.firstRow + 1,
+    columnCount = rangeAddress.lastCol - rangeAddress.firstCol + 1;
+  if (rowCount * columnCount > workbookLimits.maxCells)
     throw Error(
       "Delimited/CSV export would expand more than 100,000 cells including blank gaps. Choose a smaller range or use native JSON.",
     );
@@ -798,7 +925,7 @@ function exportWorksheetToCsv(workbook, sheetId, t = {}) {
       delimitedOptions,
     ),
     workbookWithSettings = calculateWorkbookWithSettings(workbookInput),
-    h = [];
+    recordTexts = [];
   if (delimitedOptions.population) {
     if (
       !["full", "visible"].includes(delimitedOptions.population.scope) ||
@@ -835,10 +962,10 @@ function exportWorksheetToCsv(workbook, sheetId, t = {}) {
     delimitedImportReport.warnings.push(
       "Population scope: full selected rectangle, including hidden and filtered rows.",
     );
-  const f = delimitedImportReport.population
+  const exportedSourceRowSet = delimitedImportReport.population
     ? new Set(delimitedImportReport.population.exportedSourceRows)
     : null;
-  ((delimitedImportReport.columns = u),
+  ((delimitedImportReport.columns = columnCount),
     delimitedImportReport.warnings.push(
       "Values-only export: formulas are evaluated; formatting, notes, history and workbook metadata are not carried by CSV/TSV. Reimport with the visible schema; the file itself has no type schema.",
       "Safe export always prefixes an apostrophe to formula-like text, including whitespace/control-prefixed and full-width triggers. Numeric negatives stay numeric. Quotes alone do not neutralize spreadsheet formulas. Changed text is listed below; it is not automatically unescaped on reimport.",
@@ -847,138 +974,150 @@ function exportWorksheetToCsv(workbook, sheetId, t = {}) {
       delimitedImportReport.warnings.push(
         "The default range includes the historical imported footprint so trailing blank records survive. Review the range after structural edits; this is not a live table binding.",
       ));
-  let p = 0;
+  let totalBytes = 0;
   for (
     let firstRow = rangeAddress.firstRow;
     firstRow <= rangeAddress.lastRow;
     firstRow++
   ) {
-    if (firstRow !== rangeAddress.firstRow && f && !f.has(firstRow + 1))
+    if (
+      firstRow !== rangeAddress.firstRow &&
+      exportedSourceRowSet &&
+      !exportedSourceRowSet.has(firstRow + 1)
+    )
       continue;
     const record = firstRow - rangeAddress.firstRow + 1,
-      A = delimitedOptions.hasHeader && firstRow === rangeAddress.firstRow,
-      k = [],
+      isHeaderRow =
+        delimitedOptions.hasHeader && firstRow === rangeAddress.firstRow,
+      fields = [],
       raw = [],
       values = [];
-    let O = true;
-    for (let V = 0; V < u; V++) {
-      const D = `${columnIndexToLetters(rangeAddress.firstCol + V)}${firstRow + 1}`,
-        B = sheet.cells[D],
-        _ = workbookWithSettings(sheetId, D),
-        C = delimitedOptions.columns[V] ?? "auto";
+    let isBlankRecord = true;
+    for (let columnOffset = 0; columnOffset < columnCount; columnOffset++) {
+      const cellAddress = `${columnIndexToLetters(rangeAddress.firstCol + columnOffset)}${firstRow + 1}`,
+        storedCell = sheet.cells[cellAddress],
+        cellValue = workbookWithSettings(sheetId, cellAddress),
+        columnType = delimitedOptions.columns[columnOffset] ?? "auto";
       if (
         (firstRow === rangeAddress.firstRow &&
           delimitedImportReport.schema.push({
-            index: V,
+            index: columnOffset,
             label: delimitedOptions.hasHeader
-              ? String(_ ?? "")
-              : columnIndexToLetters(rangeAddress.firstCol + V),
-            type: C,
+              ? String(cellValue ?? "")
+              : columnIndexToLetters(rangeAddress.firstCol + columnOffset),
+            type: columnType,
             observed: [],
           }),
-        A && !delimitedOptions.includeHeader)
+        isHeaderRow && !delimitedOptions.includeHeader)
       )
         continue;
-      let T = String(_ ?? ""),
-        N = typeof _ == "string";
+      let cellText = String(cellValue ?? ""),
+        isTextValue = typeof cellValue == "string";
       try {
         const cell =
-          A || C === "auto"
-            ? { raw: _ }
-            : typeof _ == "number" && ["number", "integer", "date"].includes(C)
-              ? { raw: _ }
+          isHeaderRow || columnType === "auto"
+            ? { raw: cellValue }
+            : typeof cellValue == "number" &&
+                ["number", "integer", "date"].includes(columnType)
+              ? { raw: cellValue }
               : parseDelimitedCellValue(
-                  T,
-                  C,
+                  cellText,
+                  columnType,
                   delimitedOptions,
                   workbookInput.datePolicy?.dateSystem,
                 );
         if (
-          !A &&
-          C === "integer" &&
+          !isHeaderRow &&
+          columnType === "integer" &&
           typeof cell.raw == "number" &&
           !Number.isSafeInteger(cell.raw)
         )
           throw Error("Integer column requires a safe whole number.");
         if (
-          ((N = typeof cell.raw == "string"),
-          (T = String(cell.raw ?? "")),
+          ((isTextValue = typeof cell.raw == "string"),
+          (cellText = String(cell.raw ?? "")),
           typeof cell.raw == "number" &&
-            (!A &&
-            (C === "date" || (C === "auto" && B?.format === "date")) &&
+            (!isHeaderRow &&
+            (columnType === "date" ||
+              (columnType === "auto" && storedCell?.format === "date")) &&
             delimitedOptions.dateOutput === "calendar"
-              ? (T = dateSerialToIsoText(
+              ? (cellText = dateSerialToIsoText(
                   cell.raw,
                   delimitedOptions.dateOrder,
                   workbookInput.datePolicy?.dateSystem,
                 ))
-              : (T = T.replace(".", delimitedOptions.decimal))),
-          N && needsFormulaInjectionGuard(T))
+              : (cellText = cellText.replace(".", delimitedOptions.decimal))),
+          isTextValue && needsFormulaInjectionGuard(cellText))
         ) {
-          const $ = T;
-          ((T = "'" + T),
+          const originalText = cellText;
+          ((cellText = "'" + cellText),
             delimitedImportReport.safeTextChanges++,
             recordDelimitedChange(
               delimitedImportReport,
               record,
-              V + 1,
-              D,
+              columnOffset + 1,
+              cellAddress,
               "Formula-like text prefixed with apostrophe",
-              $,
-              T,
+              originalText,
+              cellText,
             ));
         } else
-          T !== String(_ ?? "") &&
+          cellText !== String(cellValue ?? "") &&
             recordDelimitedChange(
               delimitedImportReport,
               record,
-              V + 1,
-              D,
+              columnOffset + 1,
+              cellAddress,
               "Selected type, number or date representation",
-              String(_ ?? ""),
-              T,
+              String(cellValue ?? ""),
+              cellText,
             );
-        const L = cell.raw === null ? "blank" : typeof cell.raw;
+        const observedType = cell.raw === null ? "blank" : typeof cell.raw;
         if (
-          (delimitedImportReport.schema[V].observed.includes(L) ||
-            delimitedImportReport.schema[V].observed.push(L),
-          T.length > fileImportLimits.maxCellTextLength)
+          (delimitedImportReport.schema[columnOffset].observed.includes(
+            observedType,
+          ) ||
+            delimitedImportReport.schema[columnOffset].observed.push(
+              observedType,
+            ),
+          cellText.length > fileImportLimits.maxCellTextLength)
         )
           throw Error(
             "Safe-export prefix would exceed the 32,767-character field limit. Shorten the text before exporting.",
           );
-        (T !== "" && (O = false),
-          k.push(quoteDelimitedField(T, delimitedOptions)));
+        (cellText !== "" && (isBlankRecord = false),
+          fields.push(quoteDelimitedField(cellText, delimitedOptions)));
       } catch (error) {
         (recordDelimitedIssue(
           delimitedImportReport,
           record,
-          V + 1,
+          columnOffset + 1,
           error instanceof Error ? error.message : "Export conversion failed.",
-          T,
+          cellText,
         ),
-          k.push(""));
+          fields.push(""));
       }
-      (_ !== null && delimitedImportReport.storedCells++,
-        V < 200 && (raw.push(String(_ ?? "")), values.push(T)));
+      (cellValue !== null && delimitedImportReport.storedCells++,
+        columnOffset < 200 &&
+          (raw.push(String(cellValue ?? "")), values.push(cellText)));
     }
-    if (A && !delimitedOptions.includeHeader) continue;
-    const j = k.join(delimitedOptions.delimiter);
-    O && delimitedImportReport.blankRecords++;
-    const z =
-      j === "" && delimitedOptions.quote !== "none"
+    if (isHeaderRow && !delimitedOptions.includeHeader) continue;
+    const joinedFields = fields.join(delimitedOptions.delimiter);
+    isBlankRecord && delimitedImportReport.blankRecords++;
+    const recordText =
+      joinedFields === "" && delimitedOptions.quote !== "none"
         ? delimitedOptions.quote + delimitedOptions.quote
-        : j;
+        : joinedFields;
     if (
-      ((p +=
-        new TextEncoder().encode(z).length +
-        (h.length ? delimitedOptions.newline.length : 0)),
-      p > workbookLimits.maxFileBytes * 3)
+      ((totalBytes +=
+        new TextEncoder().encode(recordText).length +
+        (recordTexts.length ? delimitedOptions.newline.length : 0)),
+      totalBytes > workbookLimits.maxFileBytes * 3)
     )
       throw Error(
         "Delimited export exceeds the 10 MB output limit. Choose a smaller range.",
       );
-    (h.push(z),
+    (recordTexts.push(recordText),
       delimitedImportReport.records++,
       delimitedImportReport.preview.length < 25 &&
         delimitedImportReport.preview.push({
@@ -987,14 +1126,14 @@ function exportWorksheetToCsv(workbook, sheetId, t = {}) {
           values: values,
         }));
   }
-  let m = h.join(delimitedOptions.newline);
-  h.at(-1) === "" &&
+  let csvText = recordTexts.join(delimitedOptions.newline);
+  recordTexts.at(-1) === "" &&
     delimitedOptions.quote === "none" &&
-    (m += delimitedOptions.newline);
-  let v = new Uint8Array();
+    (csvText += delimitedOptions.newline);
+  let encodedBytes = new Uint8Array();
   try {
-    v = encodeExportTextBytes(
-      m,
+    encodedBytes = encodeExportTextBytes(
+      csvText,
       delimitedOptions.encoding,
       delimitedOptions.bom,
     );
@@ -1006,116 +1145,149 @@ function exportWorksheetToCsv(workbook, sheetId, t = {}) {
       error instanceof Error ? error.message : "Encoding failure.",
     );
   }
-  if (v.length > workbookLimits.maxFileBytes)
+  if (encodedBytes.length > workbookLimits.maxFileBytes)
     throw Error(
       "CSV/TSV export exceeds the 10 MB output limit. Choose a smaller range or native JSON.",
     );
   return (
-    (delimitedImportReport.fileBytes = v.length),
+    (delimitedImportReport.fileBytes = encodedBytes.length),
     (delimitedImportReport.valid = delimitedImportReport.issueCount === 0),
     (delimitedImportReport.complete = true),
     {
-      text: m,
-      bytes: delimitedImportReport.valid ? v : new Uint8Array(),
+      text: csvText,
+      bytes: delimitedImportReport.valid ? encodedBytes : new Uint8Array(),
       report: delimitedImportReport,
     }
   );
 }
 
-function importXlsxWorkbook(bytes, r) {
-  const t = inspectXlsxPackage(bytes),
-    n = new Set(t.keys()),
-    size = t.size,
+function importXlsxWorkbook(bytes, importResult) {
+  const packageEntries = inspectXlsxPackage(bytes),
+    entryNames = new Set(packageEntries.keys()),
+    size = packageEntries.size,
     workbookParseState = createWorkbookParseState();
   if (
-    [...n].some((w) =>
+    [...entryNames].some((entryName) =>
       /(?:vbaProject\.bin|xl\/macrosheets\/|xl\/activeX\/|xl\/embeddings\/)/i.test(
-        w,
+        entryName,
       ),
     )
   )
     throw new Error(
       "Workbooks containing macros, ActiveX or embedded objects are not accepted. Save a clean XLSX copy first.",
     );
-  let s = 0,
-    d,
-    u = 0,
-    l = 0,
-    c = 0,
-    h = 0,
-    f = 0,
-    p = 0,
+  let expandedBytes = 0,
+    archiveError,
+    entryCount = 0,
+    completedEntries = 0,
+    mergedCellTotal = 0,
+    validationCellTotal = 0,
+    mergeCount = 0,
+    hiddenRowCount = 0,
     m = 0,
-    v = false;
-  const g = new Set(),
-    b = new Unzip((w) => {
-      if ((u++, !n.has(w.name) || g.has(w.name))) {
-        d = new Error("Archive entries do not match its directory.");
+    hasInvalidFontSize = false;
+  const seenEntryNames = new Set(),
+    unzipper = new Unzip((entry) => {
+      if (
+        (entryCount++,
+        !entryNames.has(entry.name) || seenEntryNames.has(entry.name))
+      ) {
+        archiveError = new Error("Archive entries do not match its directory.");
         return;
       }
-      g.add(w.name);
-      let E = 0;
-      const A = /\.(?:xml|rels|vml)$/i.test(w.name),
-        k = A ? new TextDecoder("utf-8", { fatal: true }) : undefined;
-      let F = -1,
-        I = "";
-      ((w.ondata = (O, j, z) => {
-        if (O) {
-          d = new Error(
-            `Corrupt XLSX compressed content in ${w.name}. Repair the original workbook and save a clean XLSX copy.`,
+      seenEntryNames.add(entry.name);
+      let entryBytes = 0;
+      const isXmlEntry = /\.(?:xml|rels|vml)$/i.test(entry.name),
+        xmlDecoder = isXmlEntry
+          ? new TextDecoder("utf-8", { fatal: true })
+          : undefined;
+      let crc = -1,
+        xmlText = "";
+      ((entry.ondata = (chunkError, chunk, isFinalChunk) => {
+        if (chunkError) {
+          archiveError = new Error(
+            `Corrupt XLSX compressed content in ${entry.name}. Repair the original workbook and save a clean XLSX copy.`,
           );
           return;
         }
-        if (((s += j.length), (E += j.length), s > maxXlsxExpandedByteLimit)) {
-          (w.terminate(),
-            (d = new Error("The XLSX archive expands beyond 50 MB.")));
+        if (
+          ((expandedBytes += chunk.length),
+          (entryBytes += chunk.length),
+          expandedBytes > maxXlsxExpandedByteLimit)
+        ) {
+          (entry.terminate(),
+            (archiveError = new Error(
+              "The XLSX archive expands beyond 50 MB.",
+            )));
           return;
         }
-        if (E > t.get(w.name).size) {
-          (w.terminate(),
-            (d = new Error(
+        if (entryBytes > packageEntries.get(entry.name).size) {
+          (entry.terminate(),
+            (archiveError = new Error(
               "The XLSX archive expansion does not match its directory.",
             )));
           return;
         }
-        F = computeCrc32(F, j);
+        crc = computeCrc32(crc, chunk);
         try {
-          k && (I += k.decode(j, { stream: !z }));
+          xmlDecoder &&
+            (xmlText += xmlDecoder.decode(chunk, { stream: !isFinalChunk }));
         } catch {
-          d = new Error(
-            `Unsupported XML encoding in ${w.name}. Save a standard UTF-8 XLSX copy.`,
+          archiveError = new Error(
+            `Unsupported XML encoding in ${entry.name}. Save a standard UTF-8 XLSX copy.`,
           );
           return;
         }
-        if (z) {
-          if (E !== t.get(w.name).size) {
-            d = new Error(
+        if (isFinalChunk) {
+          if (entryBytes !== packageEntries.get(entry.name).size) {
+            archiveError = new Error(
               "The XLSX archive expansion does not match its directory.",
             );
             return;
           }
-          if ((F ^ -1) >>> 0 !== t.get(w.name).crc) {
-            d = new Error(
-              `XLSX checksum mismatch in ${w.name}. The archive is corrupt; repair the original and save a clean XLSX copy.`,
+          if ((crc ^ -1) >>> 0 !== packageEntries.get(entry.name).crc) {
+            archiveError = new Error(
+              `XLSX checksum mismatch in ${entry.name}. The archive is corrupt; repair the original and save a clean XLSX copy.`,
             );
             return;
           }
           try {
             if (
-              (A && parseWorksheetXml(I, w.name, t, workbookParseState),
-              /^xl\/styles\.xml$/i.test(w.name))
+              (isXmlEntry &&
+                parseWorksheetXml(
+                  xmlText,
+                  entry.name,
+                  packageEntries,
+                  workbookParseState,
+                ),
+              /^xl\/styles\.xml$/i.test(entry.name))
             )
-              for (const D of I.matchAll(/<(?:\w+:)?sz\b([^>]*)>/g)) {
-                const B = Number(getXmlAttribute(D[1], "val"));
-                (!Number.isInteger(B) || B < 8 || B > 72) && (v = true);
+              for (const fontSizeMatch of xmlText.matchAll(
+                /<(?:\w+:)?sz\b([^>]*)>/g,
+              )) {
+                const fontSize = Number(
+                  getXmlAttribute(fontSizeMatch[1], "val"),
+                );
+                (!Number.isInteger(fontSize) ||
+                  fontSize < 8 ||
+                  fontSize > 72) &&
+                  (hasInvalidFontSize = true);
               }
-            if (/^xl\/worksheets\//i.test(w.name)) {
-              (classifyArrayFormula(I, w.name),
-                (m = parseWorksheetCells(I, w.name, m)),
-                /^xl\/worksheets\/[^/]+\.xml$/i.test(w.name) &&
-                  r.numericTokens.set(w.name, scanXlsxNumericTokens(I)));
-              for (const C of I.matchAll(/<(?:\w+:)?pageSetup\b([^>]*)>/gi)) {
-                const xmlAttribute = getXmlAttribute(C[1], "pageOrder");
+            if (/^xl\/worksheets\//i.test(entry.name)) {
+              (classifyArrayFormula(xmlText, entry.name),
+                (m = parseWorksheetCells(xmlText, entry.name, m)),
+                /^xl\/worksheets\/[^/]+\.xml$/i.test(entry.name) &&
+                  importResult.numericTokens.set(
+                    entry.name,
+                    scanXlsxNumericTokens(xmlText),
+                  ));
+              for (const pageSetupMatch of xmlText.matchAll(
+                /<(?:\w+:)?pageSetup\b([^>]*)>/gi,
+              )) {
+                const xmlAttribute = getXmlAttribute(
+                  pageSetupMatch[1],
+                  "pageOrder",
+                );
                 if (
                   xmlAttribute !== undefined &&
                   !["overThenDown", "downThenOver"].includes(
@@ -1126,8 +1298,13 @@ function importXlsxWorkbook(bytes, r) {
                     "Unsupported XLSX page order. Import stopped to preserve the source layout.",
                   );
               }
-              const D = {};
-              for (const [C, T, N, R] of [
+              const printBreaks = {};
+              for (const [
+                breakElementName,
+                breakKey,
+                breakLimit,
+                crossAxisLimit,
+              ] of [
                 [
                   "rowBreaks",
                   "rowBreaks",
@@ -1141,211 +1318,267 @@ function importXlsxWorkbook(bytes, r) {
                   workbookLimits.maxRows,
                 ],
               ]) {
-                const L = [
-                  ...I.matchAll(
+                const breakSectionMatches = [
+                  ...xmlText.matchAll(
                     new RegExp(
                       "<(?:\\w+:)?" +
-                        C +
+                        breakElementName +
                         "\\b[^>]*>([\\s\\S]*?)</(?:\\w+:)?" +
-                        C +
+                        breakElementName +
                         ">",
                       "gi",
                     ),
                   ),
                 ];
-                if (L.length > 1)
+                if (breakSectionMatches.length > 1)
                   throw Error(
                     "Duplicate XLSX page-break sections are not supported.",
                   );
-                const $ = [];
-                let U = 0;
-                for (const H of (L[0]?.[1] ?? "").matchAll(
-                  /<(?:\w+:)?brk\b([^>]*)\/?\s*>/gi,
-                )) {
-                  if (++U > 100)
+                const breakBoundaries = [];
+                let breakCount = 0;
+                for (const breakMatch of (
+                  breakSectionMatches[0]?.[1] ?? ""
+                ).matchAll(/<(?:\w+:)?brk\b([^>]*)\/?\s*>/gi)) {
+                  if (++breakCount > 100)
                     throw Error(
                       "XLSX page breaks exceed 100 boundaries per axis.",
                     );
-                  const xmlAttribute = getXmlAttribute(H[1], "id"),
-                    X = getXmlAttribute(H[1], "man");
+                  const xmlAttribute = getXmlAttribute(breakMatch[1], "id"),
+                    manualAttribute = getXmlAttribute(breakMatch[1], "man");
                   if (
                     !/^[1-9]\d*$/.test(xmlAttribute ?? "") ||
                     !Number.isSafeInteger(Number(xmlAttribute)) ||
-                    Number(xmlAttribute) >= N
+                    Number(xmlAttribute) >= breakLimit
                   )
                     throw Error("Invalid XLSX page-break boundary.");
-                  if (X !== "1" && X !== "true") continue;
-                  const J = Number(getXmlAttribute(H[1], "min") ?? 0),
-                    q = Number(getXmlAttribute(H[1], "max") ?? R - 1);
-                  if (J !== 0 || !Number.isSafeInteger(q) || q < R - 1)
+                  if (manualAttribute !== "1" && manualAttribute !== "true")
+                    continue;
+                  const spanStart = Number(
+                      getXmlAttribute(breakMatch[1], "min") ?? 0,
+                    ),
+                    spanEnd = Number(
+                      getXmlAttribute(breakMatch[1], "max") ??
+                        crossAxisLimit - 1,
+                    );
+                  if (
+                    spanStart !== 0 ||
+                    !Number.isSafeInteger(spanEnd) ||
+                    spanEnd < crossAxisLimit - 1
+                  )
                     throw Error(
                       "Partial-span XLSX page breaks are not supported. Use full-row or full-column breaks.",
                     );
-                  $.push(Number(xmlAttribute));
+                  breakBoundaries.push(Number(xmlAttribute));
                 }
-                $.sort((H, Q) => H - Q);
-                const G = validatePrintPageBreaks($, N);
-                G && (D[T] = G);
+                breakBoundaries.sort(
+                  (leftBoundary, rightBoundary) => leftBoundary - rightBoundary,
+                );
+                const validatedBreaks = validatePrintPageBreaks(
+                  breakBoundaries,
+                  breakLimit,
+                );
+                validatedBreaks && (printBreaks[breakKey] = validatedBreaks);
               }
-              (r.printBreaks.set(w.name, D),
-                r.conditionalStops.set(
-                  w.name,
-                  validateConditionalFormatRules(I),
+              (importResult.printBreaks.set(entry.name, printBreaks),
+                importResult.conditionalStops.set(
+                  entry.name,
+                  validateConditionalFormatRules(xmlText),
                 ),
-                r.validationAreas.set(w.name, parseXlsxDataValidations(I)));
-              const B = [],
-                _ = [];
-              for (const C of I.matchAll(/<(?:\w+:)?col\b([^>]*)>/gi)) {
-                const xmlAttribute = getXmlAttribute(C[1], "min"),
-                  N = getXmlAttribute(C[1], "max"),
-                  R = getXmlAttribute(C[1], "width"),
+                importResult.validationAreas.set(
+                  entry.name,
+                  parseXlsxDataValidations(xmlText),
+                ));
+              const hiddenRowIntervals = [],
+                columnMetadata = [];
+              for (const columnMatch of xmlText.matchAll(
+                /<(?:\w+:)?col\b([^>]*)>/gi,
+              )) {
+                const xmlAttribute = getXmlAttribute(columnMatch[1], "min"),
+                  maxAttribute = getXmlAttribute(columnMatch[1], "max"),
+                  widthAttribute = getXmlAttribute(columnMatch[1], "width"),
                   start = Number(xmlAttribute) - 1,
-                  end = Number(N) - 1;
+                  end = Number(maxAttribute) - 1;
                 if (
                   !/^[1-9]\d*$/.test(xmlAttribute ?? "") ||
-                  !/^[1-9]\d*$/.test(N ?? "") ||
+                  !/^[1-9]\d*$/.test(maxAttribute ?? "") ||
                   !Number.isSafeInteger(start) ||
                   !Number.isSafeInteger(end) ||
                   start < 0 ||
                   end < start ||
                   end >= workbookLimits.maxCols ||
-                  _.length >= workbookLimits.maxCols
+                  columnMetadata.length >= workbookLimits.maxCols
                 )
                   throw Error(
                     "XLSX column metadata must stay within 16,384 nonoverlapping columns.",
                   );
-                const width = R === undefined ? undefined : Number(R);
+                const width =
+                  widthAttribute === undefined
+                    ? undefined
+                    : Number(widthAttribute);
                 if (
                   width !== undefined &&
-                  (!R?.trim() || !Number.isFinite(width) || width < 0)
+                  (!widthAttribute?.trim() ||
+                    !Number.isFinite(width) ||
+                    width < 0)
                 )
                   throw Error(
                     "XLSX column widths must be finite nonnegative values.",
                   );
-                _.push({
+                columnMetadata.push({
                   start: start,
                   end: end,
                   ...(width === undefined ? {} : { width: width }),
                 });
               }
-              _.sort((C, T) => C.start - T.start);
-              for (let C = 1; C < _.length; C++)
-                if (_[C].start <= _[C - 1].end)
+              columnMetadata.sort(
+                (leftRange, rightRange) => leftRange.start - rightRange.start,
+              );
+              for (
+                let columnIndex = 1;
+                columnIndex < columnMetadata.length;
+                columnIndex++
+              )
+                if (
+                  columnMetadata[columnIndex].start <=
+                  columnMetadata[columnIndex - 1].end
+                )
                   throw Error(
                     "XLSX column metadata must stay within 16,384 nonoverlapping columns.",
                   );
               if (
-                (r.columns.set(w.name, _),
+                (importResult.columns.set(entry.name, columnMetadata),
                 /<(?:\w+:)?sheetFormatPr\b[^>]*\bzeroHeight\s*=\s*["'](?:1|true)["']/i.test(
-                  I,
+                  xmlText,
                 ))
               )
                 throw new Error(
                   "Default-hidden worksheet rows cannot be imported safely. Replace the default with explicit hidden rows before importing.",
                 );
-              for (const C of I.matchAll(/<(?:\w+:)?row\b([^>]*)>/gi)) {
-                if (!/\bhidden\s*=\s*["'](?:1|true)["']/i.test(C[1])) continue;
-                const T = Number(getXmlAttribute(C[1], "r")) - 1;
+              for (const rowMatch of xmlText.matchAll(
+                /<(?:\w+:)?row\b([^>]*)>/gi,
+              )) {
+                if (!/\bhidden\s*=\s*["'](?:1|true)["']/i.test(rowMatch[1]))
+                  continue;
+                const rowIndex = Number(getXmlAttribute(rowMatch[1], "r")) - 1;
                 if (
-                  !Number.isInteger(T) ||
-                  T < 0 ||
-                  T >= workbookLimits.maxRows
+                  !Number.isInteger(rowIndex) ||
+                  rowIndex < 0 ||
+                  rowIndex >= workbookLimits.maxRows
                 )
                   throw new Error(
                     "Hidden XLSX rows must have valid row numbers.",
                   );
-                const N = B.at(-1);
-                if (N && T <= N.end)
+                const previousInterval = hiddenRowIntervals.at(-1);
+                if (previousInterval && rowIndex <= previousInterval.end)
                   throw new Error(
                     "Hidden XLSX row numbers must be distinct and ascending.",
                   );
                 if (
-                  (N && T === N.end + 1
-                    ? (N.end = T)
-                    : B.push({ start: T, end: T }),
-                  B.length > worksheetCapacityLimits.maxIntervalsPerAxis)
+                  (previousInterval && rowIndex === previousInterval.end + 1
+                    ? (previousInterval.end = rowIndex)
+                    : hiddenRowIntervals.push({
+                        start: rowIndex,
+                        end: rowIndex,
+                      }),
+                  hiddenRowIntervals.length >
+                    worksheetCapacityLimits.maxIntervalsPerAxis)
                 )
                   throw new Error(
                     "Hidden metadata exceeds 10,000 intervals per worksheet axis.",
                   );
-                if (++p > worksheetCapacityLimits.maxXlsxHiddenRows)
+                if (
+                  ++hiddenRowCount > worksheetCapacityLimits.maxXlsxHiddenRows
+                )
                   throw new Error(
                     "XLSX hidden rows exceed the 100,000-row processing budget. Reduce hidden rows in the source; native JSON preserves larger visibility intervals.",
                   );
               }
-              B.length && r.hiddenRows.set(w.name, B);
+              hiddenRowIntervals.length &&
+                importResult.hiddenRows.set(entry.name, hiddenRowIntervals);
             }
-            if (w.name === "xl/workbook.xml")
-              for (const D of I.matchAll(/<(?:\w+:)?sheet\b([^>]*)>/g)) {
-                const xmlAttribute = getXmlAttribute(D[1], "name"),
-                  _ = getXmlAttribute(D[1], "r:id");
+            if (entry.name === "xl/workbook.xml")
+              for (const sheetMatch of xmlText.matchAll(
+                /<(?:\w+:)?sheet\b([^>]*)>/g,
+              )) {
+                const xmlAttribute = getXmlAttribute(sheetMatch[1], "name"),
+                  relationshipId = getXmlAttribute(sheetMatch[1], "r:id");
                 xmlAttribute &&
-                  _ &&
-                  r.sheetNames.set(
+                  relationshipId &&
+                  importResult.sheetNames.set(
                     decodeXmlEntities(xmlAttribute),
-                    decodeXmlEntities(_),
+                    decodeXmlEntities(relationshipId),
                   );
               }
-            if (w.name === "xl/_rels/workbook.xml.rels")
-              for (const D of I.matchAll(/<(?:\w+:)?Relationship\b([^>]*)>/g)) {
-                const xmlAttribute = getXmlAttribute(D[1], "Id"),
-                  _ = getXmlAttribute(D[1], "Target");
+            if (entry.name === "xl/_rels/workbook.xml.rels")
+              for (const relationshipMatch of xmlText.matchAll(
+                /<(?:\w+:)?Relationship\b([^>]*)>/g,
+              )) {
+                const xmlAttribute = getXmlAttribute(
+                    relationshipMatch[1],
+                    "Id",
+                  ),
+                  targetPath = getXmlAttribute(relationshipMatch[1], "Target");
                 xmlAttribute &&
-                  _ &&
-                  getXmlAttribute(D[1], "TargetMode") !== "External" &&
-                  r.sheetRelationships.set(
+                  targetPath &&
+                  getXmlAttribute(relationshipMatch[1], "TargetMode") !==
+                    "External" &&
+                  importResult.sheetRelationships.set(
                     decodeXmlEntities(xmlAttribute),
-                    resolvePackagePartPath(decodeXmlEntities(_)),
+                    resolvePackagePartPath(decodeXmlEntities(targetPath)),
                   );
               }
-            for (const D of I.matchAll(
+            for (const rangeMatch of xmlText.matchAll(
               /<(?:\w+:)?(mergeCell|dataValidation)\s[^>]*?\b(ref|sqref)\s*=\s*["']([^"']+)["'][^>]*>/g,
             ))
-              for (const B of decodeXmlEntities(D[3]).trim().split(/\s+/)) {
-                const rangeAddress = parseRangeAddress(B),
-                  C =
+              for (const rangeText of decodeXmlEntities(rangeMatch[3])
+                .trim()
+                .split(/\s+/)) {
+                const rangeAddress = parseRangeAddress(rangeText),
+                  cellCount =
                     (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
                     (rangeAddress.lastCol - rangeAddress.firstCol + 1);
-                if (D[1] === "mergeCell") {
+                if (rangeMatch[1] === "mergeCell") {
                   if (
-                    C > 500 ||
-                    ++f > 1e3 ||
-                    (c += C) > workbookLimits.maxCells
+                    cellCount > 500 ||
+                    ++mergeCount > 1e3 ||
+                    (mergedCellTotal += cellCount) > workbookLimits.maxCells
                   )
                     throw new Error(
                       "Merged ranges exceed the supported import budget (500 cells per merge and 100,000 cells overall).",
                     );
-                } else if ((h += C) > workbookLimits.maxCells)
+                } else if (
+                  (validationCellTotal += cellCount) > workbookLimits.maxCells
+                )
                   throw new Error(
                     "XLSX validation ranges exceed the 100,000-cell import budget. Narrow the validation area in the source workbook.",
                   );
               }
-            if (w.name === "xl/workbook.xml") {
-              r.calculation = parseCalculationProperties(I);
-              const D = aP(I);
-              ((r.names = D.names),
-                (r.nameWarnings = D.warnings),
-                (r.builtinNameXml = D.builtinXml));
+            if (entry.name === "xl/workbook.xml") {
+              importResult.calculation = parseCalculationProperties(xmlText);
+              const parsedNames = aP(xmlText);
+              ((importResult.names = parsedNames.names),
+                (importResult.nameWarnings = parsedNames.warnings),
+                (importResult.builtinNameXml = parsedNames.builtinXml));
             }
           } catch (error) {
-            d =
+            archiveError =
               error instanceof Error
                 ? error
                 : new Error("Invalid XLSX worksheet metadata.");
             return;
           }
-          l++;
+          completedEntries++;
         }
       }),
-        w.start());
+        entry.start());
     });
-  b.register(UnzipInflate);
-  for (let w = 0; w < bytes.length; w += 2048) {
-    if (d) throw d;
+  unzipper.register(UnzipInflate);
+  for (let byteOffset = 0; byteOffset < bytes.length; byteOffset += 2048) {
+    if (archiveError) throw archiveError;
     try {
-      b.push(
-        bytes.subarray(w, Math.min(w + 2048, bytes.length)),
-        w + 2048 >= bytes.length,
+      unzipper.push(
+        bytes.subarray(byteOffset, Math.min(byteOffset + 2048, bytes.length)),
+        byteOffset + 2048 >= bytes.length,
       );
     } catch {
       throw new Error(
@@ -1353,30 +1586,32 @@ function importXlsxWorkbook(bytes, r) {
       );
     }
   }
-  if (d) throw d;
-  if (u !== size || l !== size)
+  if (archiveError) throw archiveError;
+  if (entryCount !== size || completedEntries !== size)
     throw new Error("The XLSX archive contains incomplete entries.");
-  const y = [
+  const importWarnings = [
     xlsxExchangeSupportNotice,
-    ...r.nameWarnings,
-    ...validateWorkbookPackage(workbookParseState, n),
+    ...importResult.nameWarnings,
+    ...validateWorkbookPackage(workbookParseState, entryNames),
   ];
   return (
-    (r.emptyStringCaches = workbookParseState.emptyStringCaches),
-    v &&
-      y.push(
+    (importResult.emptyStringCaches = workbookParseState.emptyStringCaches),
+    hasInvalidFontSize &&
+      importWarnings.push(
         "Unsupported fractional or out-of-range font sizes were found in the source. The XLSX reader may normalize them; the editor supports integer font sizes from 8 to 72 points.",
       ),
-    [...n].some((w) => /externalLinks|connections\.xml/i.test(w)) &&
-      y.push(
+    [...entryNames].some((partName) =>
+      /externalLinks|connections\.xml/i.test(partName),
+    ) &&
+      importWarnings.push(
         "External workbook links or connections were detected. They will not be refreshed or included in the derived copy; the original retains their source parts.",
       ),
-    y
+    importWarnings
   );
 }
-const expandHexColorToArgb = (e) => {
-    const r = e.slice(1);
-    return `FF${r.length === 3 ? [...r].map((t) => t + t).join("") : r}`;
+const expandHexColorToArgb = (hexColor) => {
+    const hexDigits = hexColor.slice(1);
+    return `FF${hexDigits.length === 3 ? [...hexDigits].map((digit) => digit + digit).join("") : hexDigits}`;
   },
   builtinNumberFormatCodes = {
     general: "General",
@@ -1385,81 +1620,100 @@ const expandHexColorToArgb = (e) => {
     percent: "0.00%",
     date: "yyyy-mm-dd",
   };
-function serializeWorksheetXml(e, sheets) {
+function serializeWorksheetXml(xlsxBytes, sheets) {
   if (
     !sheets.some(
       (sheet) => sheet.hiddenRows?.length || sheet.hiddenCols?.length,
     )
   )
-    return e;
-  const t = unzipSync(e);
+    return xlsxBytes;
+  const zipEntries = unzipSync(xlsxBytes);
   return (
-    sheets.forEach((sheet, o) => {
+    sheets.forEach((sheet, sheetIndex) => {
       const hiddenAxisIntervals = readHiddenAxisIntervals(sheet, "row");
       if (!hiddenAxisIntervals.length && !sheet.hiddenCols?.length) return;
-      const s = "xl/worksheets/sheet" + (o + 1) + ".xml";
-      let d = strFromU8(t[s]);
+      const sheetPath = "xl/worksheets/sheet" + (sheetIndex + 1) + ".xml";
+      let sheetXml = strFromU8(zipEntries[sheetPath]);
       if (
-        ((d = d.replace(/<col\b([^>]*)\/>/g, (p, m) => {
-          const v = Number(getXmlAttribute(m, "min")) - 1,
-            g = Number(getXmlAttribute(m, "max")) - 1;
-          if (
-            !Number.isInteger(v) ||
-            !Number.isInteger(g) ||
-            v < 0 ||
-            g < v ||
-            g >= workbookLimits.maxCols
-          )
-            throw Error("The generated worksheet has invalid column metadata.");
-          const b = m
-              .replace(
-                /\s+(?:min|max|width|customWidth)\s*=\s*(["'])[\s\S]*?\1/g,
-                "",
+        ((sheetXml = sheetXml.replace(
+          /<col\b([^>]*)\/>/g,
+          (colTag, colAttributes) => {
+            const firstColumnIndex =
+                Number(getXmlAttribute(colAttributes, "min")) - 1,
+              lastColumnIndex =
+                Number(getXmlAttribute(colAttributes, "max")) - 1;
+            if (
+              !Number.isInteger(firstColumnIndex) ||
+              !Number.isInteger(lastColumnIndex) ||
+              firstColumnIndex < 0 ||
+              lastColumnIndex < firstColumnIndex ||
+              lastColumnIndex >= workbookLimits.maxCols
+            )
+              throw Error(
+                "The generated worksheet has invalid column metadata.",
+              );
+            const retainedColAttributes = colAttributes
+                .replace(
+                  /\s+(?:min|max|width|customWidth)\s*=\s*(["'])[\s\S]*?\1/g,
+                  "",
+                )
+                .replace(/\/\s*$/, ""),
+              colElements = [];
+            for (
+              let runStart = firstColumnIndex;
+              runStart <= lastColumnIndex;
+            ) {
+              const columnWidth = sheet.columnWidths?.[runStart];
+              let runEnd = runStart;
+              for (
+                ;
+                runEnd < lastColumnIndex &&
+                sheet.columnWidths?.[runEnd + 1] === columnWidth;
               )
-              .replace(/\/\s*$/, ""),
-            y = [];
-          for (let A = v; A <= g;) {
-            const k = sheet.columnWidths?.[A];
-            let F = A;
-            for (; F < g && sheet.columnWidths?.[F + 1] === k;) F++;
-            (y.push(
-              "<col" +
-                b +
-                ' min="' +
-                (A + 1) +
-                '" max="' +
-                (F + 1) +
-                '"' +
-                (k === undefined
-                  ? ' customWidth="0"'
-                  : ' width="' + k / 7 + '" customWidth="1"') +
-                "/>",
-            ),
-              (A = F + 1));
-          }
-          return y.join("");
-        })),
+                runEnd++;
+              (colElements.push(
+                "<col" +
+                  retainedColAttributes +
+                  ' min="' +
+                  (runStart + 1) +
+                  '" max="' +
+                  (runEnd + 1) +
+                  '"' +
+                  (columnWidth === undefined
+                    ? ' customWidth="0"'
+                    : ' width="' + columnWidth / 7 + '" customWidth="1"') +
+                  "/>",
+              ),
+                (runStart = runEnd + 1));
+            }
+            return colElements.join("");
+          },
+        )),
         !hiddenAxisIntervals.length)
       ) {
-        t[s] = strToU8(d);
+        zipEntries[sheetPath] = strToU8(sheetXml);
         return;
       }
-      const u =
+      const sheetDataMatch =
         /<sheetData\b[^>]*\/>|<sheetData\b[^>]*>([\s\S]*?)<\/sheetData>/.exec(
-          d,
+          sheetXml,
         );
-      if (!u)
+      if (!sheetDataMatch)
         throw new Error("The generated worksheet is missing its data section.");
-      const l = new Map();
-      for (const p of (u[1] ?? "").matchAll(
+      const rowXmlByNumber = new Map();
+      for (const rowMatch of (sheetDataMatch[1] ?? "").matchAll(
         /<row\b[^>]*(?:\/>|>[\s\S]*?<\/row>)/g,
       )) {
-        const m = Number(
-          getXmlAttribute(/^<row\b([^>]*)>/.exec(p[0])?.[1] ?? "", "r"),
+        const rowNumber = Number(
+          getXmlAttribute(/^<row\b([^>]*)>/.exec(rowMatch[0])?.[1] ?? "", "r"),
         );
-        if (!Number.isInteger(m) || m < 1 || m > workbookLimits.maxRows)
+        if (
+          !Number.isInteger(rowNumber) ||
+          rowNumber < 1 ||
+          rowNumber > workbookLimits.maxRows
+        )
           throw new Error("The generated worksheet has an invalid row number.");
-        l.set(m, p[0]);
+        rowXmlByNumber.set(rowNumber, rowMatch[0]);
       }
       for (const hiddenAxisInterval of hiddenAxisIntervals)
         for (
@@ -1467,34 +1721,41 @@ function serializeWorksheetXml(e, sheets) {
           start <= hiddenAxisInterval.end;
           start++
         ) {
-          const v = start + 1,
-            g = l.get(v);
-          l.set(
-            v,
-            g
-              ? g.replace(
+          const oneBasedRowNumber = start + 1,
+            existingRowXml = rowXmlByNumber.get(oneBasedRowNumber);
+          rowXmlByNumber.set(
+            oneBasedRowNumber,
+            existingRowXml
+              ? existingRowXml.replace(
                   /^<row\b([^>]*)>/,
-                  (b, y) =>
+                  (rowTag, rowAttributes) =>
                     "<row" +
-                    y
+                    rowAttributes
                       .replace(/\s+hidden\s*=\s*(["'])[\s\S]*?\1/g, "")
                       .replace(/\/\s*$/, "") +
                     ' hidden="1"' +
-                    (/\/\s*$/.test(y) ? "/>" : ">"),
+                    (/\/\s*$/.test(rowAttributes) ? "/>" : ">"),
                 )
-              : '<row r="' + v + '" hidden="1"/>',
+              : '<row r="' + oneBasedRowNumber + '" hidden="1"/>',
           );
         }
-      const c = [...l]
-        .sort(([p], [m]) => p - m)
-        .map(([, p]) => p)
+      const sortedRowsXml = [...rowXmlByNumber]
+        .sort(
+          ([leftRowNumber], [rightRowNumber]) => leftRowNumber - rightRowNumber,
+        )
+        .map(([, rowXml]) => rowXml)
         .join("");
-      t[s] = strToU8(d.replace(u[0], "<sheetData>" + c + "</sheetData>"));
+      zipEntries[sheetPath] = strToU8(
+        sheetXml.replace(
+          sheetDataMatch[0],
+          "<sheetData>" + sortedRowsXml + "</sheetData>",
+        ),
+      );
     }),
-    zipSync(t)
+    zipSync(zipEntries)
   );
 }
-function applyPageBreakXml(e, sheets) {
+function applyPageBreakXml(xlsxBytes, sheets) {
   if (
     !sheets.some(
       (sheet) =>
@@ -1502,39 +1763,39 @@ function applyPageBreakXml(e, sheets) {
         sheet.pageLayout?.columnBreaks?.length,
     )
   )
-    return e;
-  const t = unzipSync(e);
+    return xlsxBytes;
+  const zipEntries = unzipSync(xlsxBytes);
   return (
-    sheets.forEach((sheet, o) => {
+    sheets.forEach((sheet, sheetIndex) => {
       const pageLayout = sheet.pageLayout;
       if (!pageLayout?.rowBreaks?.length && !pageLayout?.columnBreaks?.length)
         return;
-      const s = `xl/worksheets/sheet${o + 1}.xml`;
-      let d = strFromU8(t[s]);
-      d = d.replace(
+      const sheetPath = `xl/worksheets/sheet${sheetIndex + 1}.xml`;
+      let sheetXml = strFromU8(zipEntries[sheetPath]);
+      sheetXml = sheetXml.replace(
         /<(?:rowBreaks|colBreaks)\b[^>]*(?:\/>|>[\s\S]*?<\/(?:rowBreaks|colBreaks)>)/g,
         "",
       );
-      const l = [
+      const breakXml = [
         ["rowBreaks", pageLayout.rowBreaks, 16383],
         ["colBreaks", pageLayout.columnBreaks, 1048575],
       ]
-        .map(([f, p, m]) =>
-          p?.length
-            ? `<${f} count="${p.length}" manualBreakCount="${p.length}">${p.map((v) => `<brk id="${v}" min="0" max="${m}" man="1"/>`).join("")}</${f}>`
+        .map(([breakElementName, breakIds, maxBreakId]) =>
+          breakIds?.length
+            ? `<${breakElementName} count="${breakIds.length}" manualBreakCount="${breakIds.length}">${breakIds.map((breakId) => `<brk id="${breakId}" min="0" max="${maxBreakId}" man="1"/>`).join("")}</${breakElementName}>`
             : "",
         )
         .join("");
-      ((d = d.replace(
+      ((sheetXml = sheetXml.replace(
         /<(?:customProperties|cellWatches|ignoredErrors|smartTags|drawing|legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b|<\/worksheet>/,
-        (f) => l + f,
+        (insertionAnchor) => breakXml + insertionAnchor,
       )),
-        (t[s] = strToU8(d)));
+        (zipEntries[sheetPath] = strToU8(sheetXml)));
     }),
-    zipSync(t)
+    zipSync(zipEntries)
   );
 }
-function applySheetRuleFlags(e, sheets) {
+function applySheetRuleFlags(xlsxBytes, sheets) {
   if (
     !sheets.some(
       (sheet) =>
@@ -1546,19 +1807,19 @@ function applySheetRuleFlags(e, sheets) {
         ),
     )
   )
-    return e;
-  const t = unzipSync(e);
+    return xlsxBytes;
+  const zipEntries = unzipSync(xlsxBytes);
   return (
-    sheets.forEach((sheet, o) => {
-      const a = `xl/worksheets/sheet${o + 1}.xml`;
-      t[a] = strToU8(
+    sheets.forEach((sheet, sheetIndex) => {
+      const sheetPath = `xl/worksheets/sheet${sheetIndex + 1}.xml`;
+      zipEntries[sheetPath] = strToU8(
         applyValidationDropdownFlags(
-          appendStopIfTrueAttribute(strFromU8(t[a]), sheet),
+          appendStopIfTrueAttribute(strFromU8(zipEntries[sheetPath]), sheet),
           sheet,
         ),
       );
     }),
-    zipSync(t)
+    zipSync(zipEntries)
   );
 }
 async function exportWorkbookToXlsx(workbook) {
@@ -1697,10 +1958,11 @@ async function exportWorkbookToXlsx(workbook) {
       (sheet.hiddenCols = cn(sheet, "column")));
   if (
     workbookInput.sheets.reduce(
-      (D, B) =>
-        D +
-        readHiddenAxisIntervals(B, "row").reduce(
-          (_, C) => _ + C.end - C.start + 1,
+      (hiddenRowTotal, sheetEntry) =>
+        hiddenRowTotal +
+        readHiddenAxisIntervals(sheetEntry, "row").reduce(
+          (hiddenRowCount, hiddenInterval) =>
+            hiddenRowCount + hiddenInterval.end - hiddenInterval.start + 1,
           0,
         ),
       0,
@@ -1709,24 +1971,24 @@ async function exportWorkbookToXlsx(workbook) {
     throw new Error(
       "XLSX export exceeds the 100,000-hidden-row processing budget. Use native JSON to preserve larger hidden ranges without expanding them.",
     );
-  const a = new oue.Workbook();
-  ((a.creator = "LedgerGlass"),
-    (a.properties.date1904 =
+  const excelWorkbook = new oue.Workbook();
+  ((excelWorkbook.creator = "LedgerGlass"),
+    (excelWorkbook.properties.date1904 =
       normalizeDatePolicy(workbookInput.datePolicy).dateSystem === "1904"));
-  const s = workbookInput.sheets
+  const numericCells = workbookInput.sheets
     .flatMap((sheet) => Object.values(sheet.cells))
     .filter(
       (cell) =>
         typeof cell.raw == "number" &&
         validateXlsxNumericValue(String(cell.raw)),
     );
-  (s.length &&
+  (numericCells.length &&
     xlsxWorkbookPackage.push(
-      `Numeric precision risk: ${s.length} stored numeric value(s) exceed Excel's 15-digit precision or numeric range. Export preserves stored numbers, not precision as displayed. Use explicit ROUND for monetary amounts and Text for identifiers; retain native JSON.`,
+      `Numeric precision risk: ${numericCells.length} stored numeric value(s) exceed Excel's 15-digit precision or numeric range. Export preserves stored numbers, not precision as displayed. Use explicit ROUND for monetary amounts and Text for identifiers; retain native JSON.`,
     ),
     workbookInput.metadata &&
-      ((a.created = new Date(workbookInput.metadata.createdAt)),
-      (a.modified = new Date(workbookInput.metadata.modifiedAt))));
+      ((excelWorkbook.created = new Date(workbookInput.metadata.createdAt)),
+      (excelWorkbook.modified = new Date(workbookInput.metadata.modifiedAt))));
   const exchangeSchemaReport = buildExchangeSchemaReport(
     "export",
     `${workbookInput.name}.xlsx`,
@@ -1735,7 +1997,7 @@ async function exportWorkbookToXlsx(workbook) {
     xlsxWorkbookPackage,
   );
   for (const sheet of workbookInput.sheets) {
-    const B = a.addWorksheet(sheet.name, {
+    const worksheet = excelWorkbook.addWorksheet(sheet.name, {
       state: sheet.veryHidden
         ? "veryHidden"
         : sheet.hidden
@@ -1759,15 +2021,21 @@ async function exportWorkbookToXlsx(workbook) {
             ]
           : [],
     });
-    for (const [_, C] of Object.entries(sheet.columnWidths ?? {}))
-      B.getColumn(Number(_) + 1).width = C / 7;
-    for (const [_, C] of Object.entries(sheet.rowHeights ?? {}))
-      B.getRow(Number(_) + 1).height = C * 0.75;
-    for (const _ of readHiddenAxisIntervals(sheet, "column"))
-      for (let start = _.start; start <= _.end; start++)
-        B.getColumn(start + 1).hidden = true;
-    for (const [_, cell] of Object.entries(sheet.cells)) {
-      const T = B.getCell(_);
+    for (const [columnKey, columnWidth] of Object.entries(
+      sheet.columnWidths ?? {},
+    ))
+      worksheet.getColumn(Number(columnKey) + 1).width = columnWidth / 7;
+    for (const [rowKey, rowHeight] of Object.entries(sheet.rowHeights ?? {}))
+      worksheet.getRow(Number(rowKey) + 1).height = rowHeight * 0.75;
+    for (const hiddenColumnInterval of readHiddenAxisIntervals(sheet, "column"))
+      for (
+        let start = hiddenColumnInterval.start;
+        start <= hiddenColumnInterval.end;
+        start++
+      )
+        worksheet.getColumn(start + 1).hidden = true;
+    for (const [cellAddress, cell] of Object.entries(sheet.cells)) {
+      const worksheetCell = worksheet.getCell(cellAddress);
       if (
         typeof cell.raw == "string" &&
         cell.raw.startsWith("=") &&
@@ -1775,34 +2043,34 @@ async function exportWorkbookToXlsx(workbook) {
         !isExternalActionFormula(cell.raw)
       ) {
         const exportedCellValue = toExportedCellValue(
-          workbookWithSettings.getTypedValue(sheet.id, _),
+          workbookWithSettings.getTypedValue(sheet.id, cellAddress),
         );
         (exchangeSchemaReport.caches.total++,
           exportedCellValue === undefined
             ? exchangeSchemaReport.caches.omitted++
             : exchangeSchemaReport.caches.written++,
-          (T.value = {
+          (worksheetCell.value = {
             formula: cell.raw.slice(1),
             ...(exportedCellValue !== undefined
               ? { result: exportedCellValue }
               : {}),
           }));
       } else
-        ((T.value = cell.raw),
+        ((worksheetCell.value = cell.raw),
           typeof cell.raw == "string" &&
             cell.raw.startsWith("=") &&
             !cell.literal &&
             (exchangeSchemaReport.caches.total++,
             exchangeSchemaReport.caches.neutralized++));
       if (
-        ((T.numFmt = cell.numberFormat
+        ((worksheetCell.numFmt = cell.numberFormat
           ? (buildNumberFormatCode(cell.numberFormat) ?? "General")
           : (cell.numFmt ??
             builtinNumberFormatCodes[cell.format ?? "general"])),
         cell.style)
       ) {
         const effectiveCellStyle = resolveEffectiveCellStyle(cell.style);
-        ((T.font = {
+        ((worksheetCell.font = {
           bold: effectiveCellStyle.bold,
           italic: effectiveCellStyle.italic,
           strike: effectiveCellStyle.strikethrough,
@@ -1816,7 +2084,7 @@ async function exportWorkbookToXlsx(workbook) {
             : {}),
         }),
           effectiveCellStyle.fill &&
-            (T.fill = {
+            (worksheetCell.fill = {
               type: "pattern",
               pattern: "solid",
               fgColor: { argb: expandHexColorToArgb(effectiveCellStyle.fill) },
@@ -1825,13 +2093,13 @@ async function exportWorkbookToXlsx(workbook) {
             effectiveCellStyle.wrap !== undefined ||
             effectiveCellStyle.verticalAlign ||
             effectiveCellStyle.indent !== undefined) &&
-            (T.alignment = {
+            (worksheetCell.alignment = {
               horizontal: effectiveCellStyle.align,
               wrapText: effectiveCellStyle.wrap,
               vertical: effectiveCellStyle.verticalAlign,
               indent: effectiveCellStyle.indent,
             }));
-        const R = {};
+        const cellBorders = {};
         for (const cellBorderEdge of cellBorderEdges) {
           const borderEdge = resolveBorderEdge(
             effectiveCellStyle,
@@ -1839,7 +2107,7 @@ async function exportWorkbookToXlsx(workbook) {
           );
           borderEdge &&
             borderEdge.style !== "none" &&
-            (R[cellBorderEdge] = {
+            (cellBorders[cellBorderEdge] = {
               style: borderEdge.style,
               color: {
                 argb: expandHexColorToArgb(borderEdge.color ?? "#000000"),
@@ -1847,51 +2115,60 @@ async function exportWorkbookToXlsx(workbook) {
             });
         }
         (effectiveCellStyle.border || effectiveCellStyle.borders) &&
-          (T.border = R);
+          (worksheetCell.border = cellBorders);
       }
-      cell.note && (T.note = cell.note);
+      cell.note && (worksheetCell.note = cell.note);
     }
-    (buildTableCellEntries(B, sheet),
-      serializeWorksheetRuleXml(B, sheet),
-      xlsxWorkbookPackage.push(...buildDrawingExportNotes(a, B, sheet)),
+    (buildTableCellEntries(worksheet, sheet),
+      serializeWorksheetRuleXml(worksheet, sheet),
       xlsxWorkbookPackage.push(
-        ...updateSheetPageSetup(B, sheet, workbookInput),
+        ...buildDrawingExportNotes(excelWorkbook, worksheet, sheet),
+      ),
+      xlsxWorkbookPackage.push(
+        ...updateSheetPageSetup(worksheet, sheet, workbookInput),
       ));
   }
-  a.calcProperties.fullCalcOnLoad = true;
-  const u = await a.xlsx.writeBuffer(),
-    l = unzipSync(new Uint8Array(u));
-  l["xl/workbook.xml"] = strToU8(
+  excelWorkbook.calcProperties.fullCalcOnLoad = true;
+  const xlsxBuffer = await excelWorkbook.xlsx.writeBuffer(),
+    packageEntries = unzipSync(new Uint8Array(xlsxBuffer));
+  packageEntries["xl/workbook.xml"] = strToU8(
     serializeCalculationProperties(
-      serializeDefinedNames(strFromU8(l["xl/workbook.xml"]), workbookInput),
+      serializeDefinedNames(
+        strFromU8(packageEntries["xl/workbook.xml"]),
+        workbookInput,
+      ),
       workbookInput,
     ),
   );
-  const c = zipSync(l);
+  const packageBytes = zipSync(packageEntries);
   let bytes = new Uint8Array(
     applySheetRuleFlags(
       applyPageBreakXml(
-        serializeWorksheetXml(c, workbookInput.sheets),
+        serializeWorksheetXml(packageBytes, workbookInput.sheets),
         workbookInput.sheets,
       ),
       workbookInput.sheets,
     ),
   );
   if (workbookInput.xlsxSource) {
-    const D = requireRetainedXlsxSource(workbookInput);
-    importXlsxWorkbook(D.bytes, createEmptyExportLedger());
-    const B = unzipSync(D.bytes),
-      _ = F$(B, D.sha256),
-      C = rebuildPreservedPackage(B, unzipSync(bytes), _);
+    const retainedSource = requireRetainedXlsxSource(workbookInput);
+    importXlsxWorkbook(retainedSource.bytes, createEmptyExportLedger());
+    const originalEntries = unzipSync(retainedSource.bytes),
+      sourcePreservation = F$(originalEntries, retainedSource.sha256),
+      preservedPackage = rebuildPreservedPackage(
+        originalEntries,
+        unzipSync(bytes),
+        sourcePreservation,
+      );
     try {
-      if (C.bytes.length > workbookLimits.maxFileBytes)
+      if (preservedPackage.bytes.length > workbookLimits.maxFileBytes)
         throw Error("Preserved metadata exceeds the XLSX reopen budget.");
-      (importXlsxWorkbook(C.bytes, createEmptyExportLedger()),
-        (bytes = new Uint8Array(C.bytes)),
-        (exchangeSchemaReport.partInventory = C.inventory));
+      (importXlsxWorkbook(preservedPackage.bytes, createEmptyExportLedger()),
+        (bytes = new Uint8Array(preservedPackage.bytes)),
+        (exchangeSchemaReport.partInventory = preservedPackage.inventory));
     } catch {
       ((exchangeSchemaReport.partInventory = describePreservationDisposition(
-        _,
+        sourcePreservation,
         "Opaque metadata could not pass the final output integrity or capacity checks. Retained only in the original; the derived copy excludes it.",
       )),
         xlsxWorkbookPackage.push(
@@ -1941,12 +2218,14 @@ async function exportWorkbookToXlsx(workbook) {
   );
 }
 function encodeNativeWorkbook(workbook) {
-  const r = JSON.stringify(normalizeWorkbookInput(workbook), null, 2);
-  if (new TextEncoder().encode(r).length > workbookLimits.maxNativeBytes)
+  const nativeJson = JSON.stringify(normalizeWorkbookInput(workbook), null, 2);
+  if (
+    new TextEncoder().encode(nativeJson).length > workbookLimits.maxNativeBytes
+  )
     throw new Error(
       "Native workbook exceeds the 50 MB save limit. Reduce the workbook size before saving.",
     );
-  return r;
+  return nativeJson;
 }
 
 export {

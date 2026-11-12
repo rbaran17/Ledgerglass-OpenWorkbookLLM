@@ -117,23 +117,23 @@ function EditorAssistantPanel({
                             workbook: activeWorkbook,
                             selection: assistantSelection,
                             evidence: assistantState.answerCitations,
-                            renderText: (fe) =>
+                            renderText: (markdownText) =>
                               i.jsx(LazyAssistantChatMarkdown, {
-                                children: fe,
+                                children: markdownText,
                               }),
-                            onNavigate: (fe, Oe) => {
-                              const Be = latestEditStateRef.current;
+                            onNavigate: (sheetId, cellAddress) => {
+                              const latestEdit = latestEditStateRef.current;
                               if (formulaEntryState.activeCellEditRef.current)
                                 throw Error(
                                   "Finish the current cell edit and request fresh evidence before following a citation.",
                                 );
                               if (
-                                fe !== Be.sheetId ||
+                                sheetId !== latestEdit.sheetId ||
                                 !evaluateAnswerEvidence(
-                                  Be.book,
+                                  latestEdit.book,
                                   {
-                                    sheetId: Be.sheetId,
-                                    range: Be.range,
+                                    sheetId: latestEdit.sheetId,
+                                    range: latestEdit.range,
                                   },
                                   assistantState.answerCitations,
                                 ).current
@@ -144,17 +144,28 @@ function EditorAssistantPanel({
                               ((filterSortState.filterValueSearch ||
                                 filterSortState.activeColumnSort ||
                                 activeFilterState) &&
-                                (filterSortState.setFilterStateByScope((Ue) => {
-                                  const Xe = { ...Ue };
-                                  return (delete Xe[filterStateKey], Xe);
-                                }),
+                                (filterSortState.setFilterStateByScope(
+                                  (previousFilterState) => {
+                                    const nextFilterState = {
+                                      ...previousFilterState,
+                                    };
+                                    return (
+                                      delete nextFilterState[filterStateKey],
+                                      nextFilterState
+                                    );
+                                  },
+                                ),
                                 filterSortState.setFilterValueSearch(""),
                                 filterSortState.setActiveColumnSort(null),
                                 operationStatusState.setStatusNotice(
                                   "The row view was cleared to reveal the cited cell. The approved shared range is unchanged.",
                                 )),
-                                selectionState.setActiveCellAddress(Oe),
-                                navigationState.setPendingScrollAddress(Oe),
+                                selectionState.setActiveCellAddress(
+                                  cellAddress,
+                                ),
+                                navigationState.setPendingScrollAddress(
+                                  cellAddress,
+                                ),
                                 viewAndSelectionActions.focusGridSurface());
                             },
                           },
@@ -209,46 +220,62 @@ function EditorAssistantPanel({
                                         ...Object.keys(patch.cell),
                                       ]),
                                     )
-                                      .filter((gt) => gt !== "raw")
-                                      .map((gt) => [
-                                        gt,
-                                        activeSheet.cells[patch.address]?.[gt],
-                                        patch.cell[gt],
+                                      .filter(
+                                        (propertyName) =>
+                                          propertyName !== "raw",
+                                      )
+                                      .map((cellField) => [
+                                        cellField,
+                                        activeSheet.cells[patch.address]?.[
+                                          cellField
+                                        ],
+                                        patch.cell[cellField],
                                       ]),
                                   ]
                                     .filter(
-                                      ([, gt, Nt]) =>
-                                        JSON.stringify(gt) !==
-                                        JSON.stringify(Nt),
+                                      ([, currentValue, proposedValue]) =>
+                                        JSON.stringify(currentValue) !==
+                                        JSON.stringify(proposedValue),
                                     )
-                                    .map(([gt, Nt, wt]) =>
-                                      i.jsxs(
-                                        ne.Fragment,
-                                        {
-                                          children: [
-                                            i.jsx("dt", {
-                                              children: String(gt),
-                                            }),
-                                            i.jsxs("dd", {
-                                              children: [
-                                                i.jsx("del", {
-                                                  children:
-                                                    Nt === undefined
-                                                      ? "(not set)"
-                                                      : JSON.stringify(Nt),
-                                                }),
-                                                i.jsx("ins", {
-                                                  children:
-                                                    wt === undefined
-                                                      ? "(not set)"
-                                                      : JSON.stringify(wt),
-                                                }),
-                                              ],
-                                            }),
-                                          ],
-                                        },
-                                        String(gt),
-                                      ),
+                                    .map(
+                                      ([
+                                        fieldName,
+                                        currentFieldValue,
+                                        proposedFieldValue,
+                                      ]) =>
+                                        i.jsxs(
+                                          ne.Fragment,
+                                          {
+                                            children: [
+                                              i.jsx("dt", {
+                                                children: String(fieldName),
+                                              }),
+                                              i.jsxs("dd", {
+                                                children: [
+                                                  i.jsx("del", {
+                                                    children:
+                                                      currentFieldValue ===
+                                                      undefined
+                                                        ? "(not set)"
+                                                        : JSON.stringify(
+                                                            currentFieldValue,
+                                                          ),
+                                                  }),
+                                                  i.jsx("ins", {
+                                                    children:
+                                                      proposedFieldValue ===
+                                                      undefined
+                                                        ? "(not set)"
+                                                        : JSON.stringify(
+                                                            proposedFieldValue,
+                                                          ),
+                                                  }),
+                                                ],
+                                              }),
+                                            ],
+                                          },
+                                          String(fieldName),
+                                        ),
                                     ),
                                 }),
                               ],
@@ -265,17 +292,18 @@ function EditorAssistantPanel({
                                 onClick: () =>
                                   viewAndSelectionActions.runGuardedAction(
                                     () => {
-                                      const fe = latestEditStateRef.current,
+                                      const currentEdit =
+                                          latestEditStateRef.current,
                                         assistantSelection = {
-                                          sheetId: fe.sheetId,
-                                          range: fe.range,
+                                          sheetId: currentEdit.sheetId,
+                                          range: currentEdit.range,
                                         };
                                       if (
-                                        fe.readOnly ||
+                                        currentEdit.readOnly ||
                                         formulaEntryState.activeCellEditRef
                                           .current ||
                                         !evaluateAnswerEvidence(
-                                          fe.book,
+                                          currentEdit.book,
                                           assistantSelection,
                                           assistantState.answerCitations,
                                         ).current
@@ -283,15 +311,16 @@ function EditorAssistantPanel({
                                         throw Error(
                                           "The current approved source changed or editing is unavailable. Request a fresh answer before applying changes.",
                                         );
-                                      const Be = validateProposedCalculation(
-                                        fe.book,
-                                        assistantSelection,
-                                        assistantState.assistantProposal,
-                                      );
+                                      const validatedProposal =
+                                        validateProposedCalculation(
+                                          currentEdit.book,
+                                          assistantSelection,
+                                          assistantState.assistantProposal,
+                                        );
                                       (cellEditActions.applyCellPatches(
-                                        Be.patches,
-                                        `Accepted assistant proposal ${Be.id}`,
-                                        fe.selectionKey,
+                                        validatedProposal.patches,
+                                        `Accepted assistant proposal ${validatedProposal.id}`,
+                                        currentEdit.selectionKey,
                                       ),
                                         operationStatusState.setStatusNotice(
                                           "Reviewed proposal applied and recorded in activity.",

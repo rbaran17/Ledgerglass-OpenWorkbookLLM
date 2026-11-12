@@ -46,60 +46,72 @@ import {
   getFormulaScanList,
 } from "./04-cell-input-paste-and-fill.js";
 
-function buildExtensionCallReview(workbook, extensionId, t = {}) {
-  const n = validateExtensionHostPolicy(workbook, t),
-    binding = requireApprovedExtension(workbook, extensionId, t),
+function buildExtensionCallReview(workbook, extensionId, options = {}) {
+  const hostPolicy = validateExtensionHostPolicy(workbook, options),
+    binding = requireApprovedExtension(workbook, extensionId, options),
     manifest = binding.manifest,
-    s = withExtensionHostScope(workbook, n.extensions),
+    hostScope = withExtensionHostScope(workbook, hostPolicy.extensions),
     requests = [],
-    u = hashExtensionManifest(manifest);
-  let l = 0;
-  for (const h of reviewExtensionFormulas(workbook))
-    for (const call of h.calls.filter((call) =>
+    manifestHash = hashExtensionManifest(manifest);
+  let inputCellCount = 0;
+  for (const formulaCell of reviewExtensionFormulas(workbook))
+    for (const call of formulaCell.calls.filter((call) =>
       call.name.startsWith(manifest.namespace + "."),
     )) {
-      if ((assertExtensionWriteScope(workbook, [h.sheetId], t), h.literal))
+      if (
+        (assertExtensionWriteScope(workbook, [formulaCell.sheetId], options),
+        formulaCell.literal)
+      )
         throw Error(
           "Inert imported formulas must be deliberately entered as active formulas before extension execution.",
         );
-      const p = evaluateExtensionFunctionCall(s, h, call, binding);
+      const callArguments = evaluateExtensionFunctionCall(
+        hostScope,
+        formulaCell,
+        call,
+        binding,
+      );
       if (
-        ((l += p.reduce(
-          (v, g) => v + (Array.isArray(g) ? g.length * (g[0]?.length ?? 0) : 1),
+        ((inputCellCount += callArguments.reduce(
+          (total, argument) =>
+            total +
+            (Array.isArray(argument)
+              ? argument.length * (argument[0]?.length ?? 0)
+              : 1),
           0,
         )),
-        l > extensionRuntimeLimits.inputCells ||
+        inputCellCount > extensionRuntimeLimits.inputCells ||
           requests.length >= extensionRuntimeLimits.calls)
       )
         throw Error(
           "Extension argument or call count exceeds its review limit.",
         );
-      const m = fingerprintExtensionCall(
-        h.sheetId,
-        h.address,
-        h.formula,
+      const callFingerprint = fingerprintExtensionCall(
+        formulaCell.sheetId,
+        formulaCell.address,
+        formulaCell.formula,
         call.name,
-        p,
-        u,
+        callArguments,
+        manifestHash,
       );
-      requests.some((request) => request.cacheKey === m) ||
+      requests.some((request) => request.cacheKey === callFingerprint) ||
         requests.push({
-          sheetId: h.sheetId,
-          address: h.address,
-          formula: h.formula,
-          cacheKey: m,
+          sheetId: formulaCell.sheetId,
+          address: formulaCell.address,
+          formula: formulaCell.formula,
+          cacheKey: callFingerprint,
           invocation: {
-            requestId: m,
+            requestId: callFingerprint,
             extensionId: extensionId,
             version: manifest.version,
             functionName: call.name,
-            arguments: p,
+            arguments: callArguments,
           },
         });
     }
   if (!requests.length)
     throw Error("No active formula calls use this extension.");
-  const c = {
+  const review = {
     extensionId: extensionId,
     manifest: structuredClone(manifest),
     requests: requests,
@@ -107,221 +119,259 @@ function buildExtensionCallReview(workbook, extensionId, t = {}) {
       "Only the listed argument values, function identity, extension version and request ID will be sent to the host adapter. Confirm processing separately; results require another review before changing the workbook.",
   };
   return (
-    k$.set(c, {
+    k$.set(review, {
       bookHash: fingerprintCanonicalValue(workbook),
-      policyHash: n.hash(),
-      planHash: fingerprintCanonicalValue(c),
+      policyHash: hostPolicy.hash(),
+      planHash: fingerprintCanonicalValue(review),
       binding: binding,
       used: false,
     }),
-    c
+    review
   );
 }
 const extensionResultCandidates = new WeakMap();
 async function runReviewedExtensionCalls(
   workbook,
-  r,
-  t = {},
-  n = { approved: false },
+  review,
+  options = {},
+  runOptions = { approved: false },
 ) {
-  const o = k$.get(r),
-    a = validateExtensionHostPolicy(workbook, t);
-  if (!o || o.used)
+  const reviewRecord = k$.get(review),
+    hostPolicy = validateExtensionHostPolicy(workbook, options);
+  if (!reviewRecord || reviewRecord.used)
     throw Error("Unknown or already executed extension input review.");
-  if (n.approved !== true)
+  if (runOptions.approved !== true)
     throw Error(
       "Explicit approval is required before sending extension arguments.",
     );
   if (
-    t.readOnly ||
-    o.bookHash !== fingerprintCanonicalValue(workbook) ||
-    o.policyHash !== a.hash() ||
-    o.planHash !== fingerprintCanonicalValue(r)
+    options.readOnly ||
+    reviewRecord.bookHash !== fingerprintCanonicalValue(workbook) ||
+    reviewRecord.policyHash !== hostPolicy.hash() ||
+    reviewRecord.planHash !== fingerprintCanonicalValue(review)
   )
     throw Error(
       "Workbook, extension or permissions changed. Review inputs again.",
     );
-  const s = n.timeoutMs ?? extensionRuntimeLimits.timeoutMs;
-  if (!Number.isInteger(s) || s < 1 || s > extensionRuntimeLimits.maxTimeoutMs)
+  const timeoutMs = runOptions.timeoutMs ?? extensionRuntimeLimits.timeoutMs;
+  if (
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs < 1 ||
+    timeoutMs > extensionRuntimeLimits.maxTimeoutMs
+  )
     throw Error("Extension timeout must be between 1 and 60,000 milliseconds.");
-  if (n.signal?.aborted) throw Error("Extension processing cancelled.");
-  o.used = true;
-  const d = new AbortController(),
-    u = () => d.abort();
-  n.signal?.addEventListener("abort", u, { once: true });
-  let l;
+  if (runOptions.signal?.aborted)
+    throw Error("Extension processing cancelled.");
+  reviewRecord.used = true;
+  const abortController = new AbortController(),
+    abortHandler = () => abortController.abort();
+  runOptions.signal?.addEventListener("abort", abortHandler, { once: true });
+  let timeoutHandle;
   try {
-    const p = new Promise((O, j) => {
-        (d.signal.addEventListener(
+    const timeoutPromise = new Promise((resolve, reject) => {
+        (abortController.signal.addEventListener(
           "abort",
-          () => j(Error("Extension processing cancelled or timed out.")),
+          () => reject(Error("Extension processing cancelled or timed out.")),
           { once: true },
         ),
-          (l = setTimeout(() => d.abort(), s)));
+          (timeoutHandle = setTimeout(
+            () => abortController.abort(),
+            timeoutMs,
+          )));
       }),
-      m = [];
-    let v = 0;
-    const g = async () => {
-      for (const request of r.requests) {
+      results = [];
+    let outputCellCount = 0;
+    const invokeRequests = async () => {
+      for (const request of review.requests) {
         if (
-          o.bookHash !== fingerprintCanonicalValue(workbook) ||
-          o.policyHash !== validateExtensionHostPolicy(workbook, t).hash()
+          reviewRecord.bookHash !== fingerprintCanonicalValue(workbook) ||
+          reviewRecord.policyHash !==
+            validateExtensionHostPolicy(workbook, options).hash()
         )
           throw Error(
             "Inputs or permissions changed during extension processing.",
           );
-        if (d.signal.aborted) throw Error("Extension processing cancelled.");
-        let j;
+        if (abortController.signal.aborted)
+          throw Error("Extension processing cancelled.");
+        let response;
         try {
-          j = await o.binding.invoke(
+          response = await reviewRecord.binding.invoke(
             structuredClone(request.invocation),
-            d.signal,
+            abortController.signal,
           );
         } catch {
           throw Error(
             "The extension adapter failed. No workbook changes were applied.",
           );
         }
-        if (d.signal.aborted) throw Error("Extension processing cancelled.");
+        if (abortController.signal.aborted)
+          throw Error("Extension processing cancelled.");
         if (
-          !j ||
-          Object.keys(j).sort().join("|") !== "revision|value" ||
-          typeof j.revision != "string" ||
-          !j.revision.trim() ||
-          j.revision.length > 200 ||
-          /[\u0000-\u001f\u007f]/.test(j.revision)
+          !response ||
+          Object.keys(response).sort().join("|") !== "revision|value" ||
+          typeof response.revision != "string" ||
+          !response.revision.trim() ||
+          response.revision.length > 200 ||
+          /[\u0000-\u001f\u007f]/.test(response.revision)
         )
           throw Error("The extension returned an invalid response envelope.");
-        const z = r.manifest.functions.find(
-            (D) =>
-              `${r.manifest.namespace}.${D.id}` ===
+        const functionDescriptor = review.manifest.functions.find(
+            (manifestFunction) =>
+              `${review.manifest.namespace}.${manifestFunction.id}` ===
               request.invocation.functionName,
           ),
-          V = validateExtensionValue(j.value, z.result);
+          validatedValue = validateExtensionValue(
+            response.value,
+            functionDescriptor.result,
+          );
         if (
-          ((v += Array.isArray(V)
-            ? V.length * V[0].length
-            : V && typeof V == "object"
-              ? Object.keys(V.fields).length
+          ((outputCellCount += Array.isArray(validatedValue)
+            ? validatedValue.length * validatedValue[0].length
+            : validatedValue && typeof validatedValue == "object"
+              ? Object.keys(validatedValue.fields).length
               : 1),
-          v > extensionRuntimeLimits.outputCells)
+          outputCellCount > extensionRuntimeLimits.outputCells)
         )
           throw Error("Extension results exceed the total output cell budget.");
-        m.push({
+        results.push({
           key: request.cacheKey,
           sheetId: request.sheetId,
           address: request.address,
           formula: request.formula,
           functionName: request.invocation.functionName,
           arguments: structuredClone(request.invocation.arguments),
-          manifestHash: hashExtensionManifest(r.manifest),
-          scopeHash: resolveExtensionSheetScope(workbook, o.binding),
-          result: V,
+          manifestHash: hashExtensionManifest(review.manifest),
+          scopeHash: resolveExtensionSheetScope(workbook, reviewRecord.binding),
+          result: validatedValue,
           calculatedAt: new Date().toISOString(),
-          providerRevision: j.revision,
+          providerRevision: response.revision,
         });
       }
-      return m;
+      return results;
     };
     if (
-      (await Promise.race([g(), p]),
-      o.bookHash !== fingerprintCanonicalValue(workbook) ||
-        o.policyHash !== validateExtensionHostPolicy(workbook, t).hash() ||
-        o.planHash !== fingerprintCanonicalValue(r))
+      (await Promise.race([invokeRequests(), timeoutPromise]),
+      reviewRecord.bookHash !== fingerprintCanonicalValue(workbook) ||
+        reviewRecord.policyHash !==
+          validateExtensionHostPolicy(workbook, options).hash() ||
+        reviewRecord.planHash !== fingerprintCanonicalValue(review))
     )
       throw Error("Inputs or permissions changed during extension processing.");
     const workbookInput = normalizeWorkbookInput(workbook),
-      y = structuredClone(workbookInput.extensions);
-    ((y.caches = y.caches.filter(
+      nextExtensions = structuredClone(workbookInput.extensions);
+    ((nextExtensions.caches = nextExtensions.caches.filter(
       (cach) =>
-        !m.some(
-          (j) =>
-            j.sheetId === cach.sheetId &&
-            j.address === cach.address &&
-            j.functionName === cach.functionName,
+        !results.some(
+          (resultRecord) =>
+            resultRecord.sheetId === cach.sheetId &&
+            resultRecord.address === cach.address &&
+            resultRecord.functionName === cach.functionName,
         ),
     )),
-      y.caches.push(...m),
-      (workbookInput.extensions = y));
-    const w = normalizeWorkbookInput(workbookInput),
-      E = withExtensionHostScope(w, a.extensions),
-      A = evaluateWorkbookFormulas(E),
+      nextExtensions.caches.push(...results),
+      (workbookInput.extensions = nextExtensions));
+    const candidateWorkbook = normalizeWorkbookInput(workbookInput),
+      scopedWorkbook = withExtensionHostScope(
+        candidateWorkbook,
+        hostPolicy.extensions,
+      ),
+      evaluatedWorkbook = evaluateWorkbookFormulas(scopedWorkbook),
       preview = [],
-      F = [];
-    for (const O of m) {
-      const j = A.getTypedValue(O.sheetId, O.address);
-      if (j.type === "error")
+      changedCells = [];
+    for (const cachedResult of results) {
+      const typedValue = evaluatedWorkbook.getTypedValue(
+        cachedResult.sheetId,
+        cachedResult.address,
+      );
+      if (typedValue.type === "error")
         throw Error(
           "The resulting formula has an error or obstructed array. No results were applied.",
         );
       if (
-        preview.some((V) => V.sheetId === O.sheetId && V.address === O.address)
+        preview.some(
+          (previewEntry) =>
+            previewEntry.sheetId === cachedResult.sheetId &&
+            previewEntry.address === cachedResult.address,
+        )
       )
         continue;
-      preview.push({ sheetId: O.sheetId, address: O.address, value: j.value });
-      const z = w.sheets.find((sheet) => sheet.id === O.sheetId).cells[
-        O.address
-      ];
-      F.push({ sheetId: O.sheetId, address: O.address, before: z, after: z });
+      preview.push({
+        sheetId: cachedResult.sheetId,
+        address: cachedResult.address,
+        value: typedValue.value,
+      });
+      const cell = candidateWorkbook.sheets.find(
+        (sheet) => sheet.id === cachedResult.sheetId,
+      ).cells[cachedResult.address];
+      changedCells.push({
+        sheetId: cachedResult.sheetId,
+        address: cachedResult.address,
+        before: cell,
+        after: cell,
+      });
     }
-    checkDataValidationBatch(E, F);
-    const I = {
-      extensionId: r.extensionId,
-      results: structuredClone(m),
+    checkDataValidationBatch(scopedWorkbook, changedCells);
+    const resultReview = {
+      extensionId: review.extensionId,
+      results: structuredClone(results),
       preview: preview,
       warning:
         "These are reviewed cached results, not a live service. Changed arguments require another approved run. Provider revision and entity source labels are host assertions, not proof of authenticity.",
     };
     return (
-      extensionResultCandidates.set(I, {
+      extensionResultCandidates.set(resultReview, {
         bookHash: fingerprintCanonicalValue(workbook),
-        policyHash: a.hash(),
-        planHash: fingerprintCanonicalValue(I),
-        candidate: w,
+        policyHash: hostPolicy.hash(),
+        planHash: fingerprintCanonicalValue(resultReview),
+        candidate: candidateWorkbook,
       }),
-      I
+      resultReview
     );
   } finally {
-    (clearTimeout(l), n.signal?.removeEventListener("abort", u), d.abort());
+    (clearTimeout(timeoutHandle),
+      runOptions.signal?.removeEventListener("abort", abortHandler),
+      abortController.abort());
   }
 }
-function applyReviewedExtensionResults(workbook, r, t = {}) {
-  const n = extensionResultCandidates.get(r);
-  if (!n) throw Error("Unknown or already applied extension results.");
+function applyReviewedExtensionResults(workbook, resultReview, options = {}) {
+  const candidateRecord = extensionResultCandidates.get(resultReview);
+  if (!candidateRecord)
+    throw Error("Unknown or already applied extension results.");
   if (
-    t.readOnly ||
-    n.bookHash !== fingerprintCanonicalValue(workbook) ||
-    n.policyHash !== validateExtensionHostPolicy(workbook, t).hash() ||
-    n.planHash !== fingerprintCanonicalValue(r)
+    options.readOnly ||
+    candidateRecord.bookHash !== fingerprintCanonicalValue(workbook) ||
+    candidateRecord.policyHash !==
+      validateExtensionHostPolicy(workbook, options).hash() ||
+    candidateRecord.planHash !== fingerprintCanonicalValue(resultReview)
   )
     throw Error(
       "Workbook, extension or permissions changed. Run and review again.",
     );
   return (
-    extensionResultCandidates.delete(r),
-    normalizeWorkbookInput(n.candidate)
+    extensionResultCandidates.delete(resultReview),
+    normalizeWorkbookInput(candidateRecord.candidate)
   );
 }
 const emptyExtensionList = [];
 function CustomFunctionReviewBanner({ workbook, extensions, onReview }) {
-  const n = ne.useMemo(() => {
+  const statusText = ne.useMemo(() => {
     try {
       const extensionCachedResult = resolveExtensionCachedResult(workbook, {
         extensions,
       });
       return extensionCachedResult.cells.length
-        ? `${extensionCachedResult.cells.length} custom-function cells · ${extensionCachedResult.cells.filter((cell) => cell.functions.some((s) => s.state !== "reviewed-cache")).length} need review. Extension results refresh only after approval.`
+        ? `${extensionCachedResult.cells.length} custom-function cells · ${extensionCachedResult.cells.filter((cell) => cell.functions.some((cellFunction) => cellFunction.state !== "reviewed-cache")).length} need review. Extension results refresh only after approval.`
         : null;
     } catch {
       return "Custom-function inventory needs review.";
     }
   }, [workbook, extensions]);
-  return n
+  return statusText
     ? i.jsxs("div", {
         className: "lg-workbook-link-status",
         role: "status",
         children: [
-          i.jsx("span", { children: n }),
+          i.jsx("span", { children: statusText }),
           i.jsx("button", {
             onClick: onReview,
             children: "Review custom functions",
@@ -330,26 +380,26 @@ function CustomFunctionReviewBanner({ workbook, extensions, onReview }) {
       })
     : null;
 }
-function AddInsAndCustomFunctionsDialog(e) {
-  const r = ne.useRef(null),
-    t = ne.useRef(e),
-    n = ne.useRef(null),
-    o = ne.useRef(0);
-  t.current = e;
-  const extensions = e.extensions ?? emptyExtensionList,
-    [s, d] = ne.useState(""),
-    [u, l] = ne.useState(null),
-    [c, h] = ne.useState(null),
-    [f, p] = ne.useState(null),
-    [m, v] = ne.useState(false),
-    [disabled, b] = ne.useState(false),
-    [y, w] = ne.useState(""),
-    [E, A] = ne.useState(""),
-    [k, F] = ne.useState(0),
-    I = ne.useMemo(() => {
+function AddInsAndCustomFunctionsDialog(props) {
+  const dialogRef = ne.useRef(null),
+    latestPropsRef = ne.useRef(props),
+    abortControllerRef = ne.useRef(null),
+    requestIdRef = ne.useRef(0);
+  latestPropsRef.current = props;
+  const extensions = props.extensions ?? emptyExtensionList,
+    [selectedExtensionId, setSelectedExtensionId] = ne.useState(""),
+    [configurationPreview, setConfigurationPreview] = ne.useState(null),
+    [inputReview, setInputReview] = ne.useState(null),
+    [resultReview, setResultReview] = ne.useState(null),
+    [isApproved, setIsApproved] = ne.useState(false),
+    [disabled, setDisabled] = ne.useState(false),
+    [actionError, setActionError] = ne.useState(""),
+    [statusMessage, setStatusMessage] = ne.useState(""),
+    [formulaPage, setFormulaPage] = ne.useState(0),
+    inventoryState = ne.useMemo(() => {
       try {
         return {
-          data: resolveExtensionCachedResult(e.workbook, {
+          data: resolveExtensionCachedResult(props.workbook, {
             extensions: extensions,
           }),
           error: "",
@@ -357,104 +407,146 @@ function AddInsAndCustomFunctionsDialog(e) {
       } catch (error) {
         return { data: null, error: error.message };
       }
-    }, [e.workbook, extensions]),
-    O = new Map(
-      (I.data?.available ?? []).map((W) => [W.manifest.id, W.manifest]),
+    }, [props.workbook, extensions]),
+    manifestById = new Map(
+      (inventoryState.data?.available ?? []).map((availableEntry) => [
+        availableEntry.manifest.id,
+        availableEntry.manifest,
+      ]),
     );
-  for (const W of I.data?.installed ?? []) O.set(W.manifest.id, W.manifest);
-  const extensionId = O.has(s) ? s : (O.keys().next().value ?? ""),
-    z = O.get(extensionId),
-    V = e.workbook.extensions?.installed.find(
-      (W) => W.manifest.id === extensionId,
+  for (const installedEntry of inventoryState.data?.installed ?? [])
+    manifestById.set(installedEntry.manifest.id, installedEntry.manifest);
+  const extensionId = manifestById.has(selectedExtensionId)
+      ? selectedExtensionId
+      : (manifestById.keys().next().value ?? ""),
+    selectedManifest = manifestById.get(extensionId),
+    installedExtension = props.workbook.extensions?.installed.find(
+      (installedRecord) => installedRecord.manifest.id === extensionId,
     ),
-    D = () => ({
-      extensions: t.current.extensions,
-      readOnly: t.current.readOnly,
-      allowedSheetIds: t.current.allowedSheetIds,
+    buildOptions = () => ({
+      extensions: latestPropsRef.current.extensions,
+      readOnly: latestPropsRef.current.readOnly,
+      allowedSheetIds: latestPropsRef.current.allowedSheetIds,
     }),
     onClick = () => {
-      (o.current++,
-        n.current?.abort(),
-        (n.current = null),
-        b(false),
-        h(null),
-        p(null),
-        l(null),
-        v(false));
+      (requestIdRef.current++,
+        abortControllerRef.current?.abort(),
+        (abortControllerRef.current = null),
+        setDisabled(false),
+        setInputReview(null),
+        setResultReview(null),
+        setConfigurationPreview(null),
+        setIsApproved(false));
     };
   (ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      r.current?.focus(),
+      dialogRef.current?.focus(),
       () => {
-        (o.current++,
-          n.current?.abort(),
+        (requestIdRef.current++,
+          abortControllerRef.current?.abort(),
           activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
     ne.useEffect(() => {
       onClick();
-    }, [e.workbook, extensions, e.readOnly, e.allowedSheetIds]));
-  const _ = (W) => {
-      (w(""), A(""));
+    }, [props.workbook, extensions, props.readOnly, props.allowedSheetIds]));
+  const runGuarded = (operation) => {
+      (setActionError(""), setStatusMessage(""));
       try {
-        W();
+        operation();
       } catch (error) {
-        w(error.message);
+        setActionError(error.message);
       }
     },
-    C = (action) =>
-      _(() => {
+    previewOperation = (action) =>
+      runGuarded(() => {
         (onClick(),
-          l(runExtensionOperation(e.workbook, extensionId, action, D())));
+          setConfigurationPreview(
+            runExtensionOperation(
+              props.workbook,
+              extensionId,
+              action,
+              buildOptions(),
+            ),
+          ));
       }),
-    T = () =>
-      _(() => {
-        (onClick(), h(buildExtensionCallReview(e.workbook, extensionId, D())));
+    reviewFunctionInputs = () =>
+      runGuarded(() => {
+        (onClick(),
+          setInputReview(
+            buildExtensionCallReview(
+              props.workbook,
+              extensionId,
+              buildOptions(),
+            ),
+          ));
       }),
-    N = async () => {
-      if (!c || !m) return;
-      const W = ++o.current,
-        K = new AbortController();
-      ((n.current = K), b(true), w(""));
+    runApprovedFunctions = async () => {
+      if (!inputReview || !isApproved) return;
+      const requestId = ++requestIdRef.current,
+        abortController = new AbortController();
+      ((abortControllerRef.current = abortController),
+        setDisabled(true),
+        setActionError(""));
       try {
-        const te = await runReviewedExtensionCalls(t.current.workbook, c, D(), {
-          approved: m,
-          signal: K.signal,
-        });
-        W === o.current && (p(te), h(null), v(false));
+        const reviewedResults = await runReviewedExtensionCalls(
+          latestPropsRef.current.workbook,
+          inputReview,
+          buildOptions(),
+          {
+            approved: isApproved,
+            signal: abortController.signal,
+          },
+        );
+        requestId === requestIdRef.current &&
+          (setResultReview(reviewedResults),
+          setInputReview(null),
+          setIsApproved(false));
       } catch (error) {
-        W === o.current && (w(error.message), h(null));
+        requestId === requestIdRef.current &&
+          (setActionError(error.message), setInputReview(null));
       } finally {
-        W === o.current && (b(false), (n.current = null));
+        requestId === requestIdRef.current &&
+          (setDisabled(false), (abortControllerRef.current = null));
       }
     },
-    R = () =>
-      _(() => {
-        const workbook = t.current.workbook,
-          K = u
-            ? applyExtensionPreview(workbook, u, D())
-            : f
-              ? applyReviewedExtensionResults(workbook, f, D())
+    applyReviewedChanges = () =>
+      runGuarded(() => {
+        const workbook = latestPropsRef.current.workbook,
+          nextWorkbook = configurationPreview
+            ? applyExtensionPreview(
+                workbook,
+                configurationPreview,
+                buildOptions(),
+              )
+            : resultReview
+              ? applyReviewedExtensionResults(
+                  workbook,
+                  resultReview,
+                  buildOptions(),
+                )
               : null;
-        K &&
-          (t.current.onWorkbookChange(
-            K,
-            u
-              ? `${u.action} custom-function extension`
+        nextWorkbook &&
+          (latestPropsRef.current.onWorkbookChange(
+            nextWorkbook,
+            configurationPreview
+              ? `${configurationPreview.action} custom-function extension`
               : "Apply reviewed custom-function results",
           ),
           onClick(),
-          A("Reviewed changes applied. Raw formulas are preserved."));
+          setStatusMessage(
+            "Reviewed changes applied. Raw formulas are preserved.",
+          ));
       }),
-    L = I.data?.cells ?? [],
-    $ = Math.max(1, Math.ceil(L.length / 10)),
-    U = Math.min(k, $ - 1);
+    formulaCells = inventoryState.data?.cells ?? [],
+    pageCount = Math.max(1, Math.ceil(formulaCells.length / 10)),
+    currentPage = Math.min(formulaPage, pageCount - 1);
   return i.jsx("div", {
     className: "lg-reports-overlay",
     children: i.jsxs("section", {
-      ref: r,
+      ref: dialogRef,
       className: "lg-reports-dialog lg-workbook-links lg-extensions",
       role: "dialog",
       "aria-modal": "true",
@@ -463,24 +555,26 @@ function AddInsAndCustomFunctionsDialog(e) {
       onKeyDown: (event) => {
         if (
           (event.key === "Escape" &&
-            (event.stopPropagation(), onClick(), e.onClose()),
+            (event.stopPropagation(), onClick(), props.onClose()),
           event.key === "Tab")
         ) {
-          const K = Array.from(
-              r.current.querySelectorAll(
+          const focusable = Array.from(
+              dialogRef.current.querySelectorAll(
                 'button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]',
               ),
             ),
-            te = K[0],
-            ae = K.at(-1);
+            firstFocusable = focusable[0],
+            lastFocusable = focusable.at(-1);
           event.shiftKey &&
-          (document.activeElement === te ||
-            document.activeElement === r.current)
-            ? (event.preventDefault(), ae == null || ae.focus())
+          (document.activeElement === firstFocusable ||
+            document.activeElement === dialogRef.current)
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              (document.activeElement === ae ||
-                document.activeElement === r.current) &&
-              (event.preventDefault(), te == null || te.focus());
+              (document.activeElement === lastFocusable ||
+                document.activeElement === dialogRef.current) &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -495,7 +589,7 @@ function AddInsAndCustomFunctionsDialog(e) {
             i.jsx("button", {
               "aria-label": "Close extensions",
               onClick: () => {
-                (onClick(), e.onClose());
+                (onClick(), props.onClose());
               },
               children: i.jsx(X, { size: 20 }),
             }),
@@ -510,41 +604,44 @@ function AddInsAndCustomFunctionsDialog(e) {
                 i.jsx("strong", { children: "Manual, reviewed execution" }),
                 i.jsxs("span", {
                   children: [
-                    I.data?.installed.length ?? 0,
+                    inventoryState.data?.installed.length ?? 0,
                     " installed extensions",
                   ],
                 }),
-                i.jsxs("span", { children: [L.length, " formula cells"] }),
+                i.jsxs("span", {
+                  children: [formulaCells.length, " formula cells"],
+                }),
               ],
             }),
             i.jsx("p", {
               children:
-                I.data?.policy ??
+                inventoryState.data?.policy ??
                 "Only host-approved adapters can process reviewed inputs.",
             }),
             i.jsx("p", {
               children:
                 "Office add-in, Python and R integrations use a host adapter. This component does not run those environments or install workbook-supplied code.",
             }),
-            e.readOnly &&
+            props.readOnly &&
               i.jsx("p", {
                 className: "lg-links-warning",
                 children:
                   "Read-only: inspection is available; configuration and execution are disabled.",
               }),
-            (y || I.error) &&
+            (actionError || inventoryState.error) &&
               i.jsx("p", {
                 role: "alert",
                 className: "lg-links-error",
-                children: y || I.error,
+                children: actionError || inventoryState.error,
               }),
-            E && i.jsx("p", { role: "status", children: E }),
+            statusMessage &&
+              i.jsx("p", { role: "status", children: statusMessage }),
             i.jsxs("section", {
               className: "lg-links-card",
               "aria-label": "Extension manifest",
               children: [
                 i.jsx("h3", { children: "1. Choose a sanctioned extension" }),
-                O.size
+                manifestById.size
                   ? i.jsxs(i.Fragment, {
                       children: [
                         i.jsxs("label", {
@@ -554,22 +651,28 @@ function AddInsAndCustomFunctionsDialog(e) {
                               value: extensionId,
                               disabled: disabled,
                               onChange: (event) => {
-                                (onClick(), d(event.target.value));
+                                (onClick(),
+                                  setSelectedExtensionId(event.target.value));
                               },
-                              children: [...O].map(([W, K]) =>
-                                i.jsxs(
-                                  "option",
-                                  {
-                                    value: W,
-                                    children: [K.label, " · ", K.version],
-                                  },
-                                  W,
-                                ),
+                              children: [...manifestById].map(
+                                ([manifestId, manifest]) =>
+                                  i.jsxs(
+                                    "option",
+                                    {
+                                      value: manifestId,
+                                      children: [
+                                        manifest.label,
+                                        " · ",
+                                        manifest.version,
+                                      ],
+                                    },
+                                    manifestId,
+                                  ),
                               ),
                             }),
                           ],
                         }),
-                        z &&
+                        selectedManifest &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsxs("dl", {
@@ -578,13 +681,20 @@ function AddInsAndCustomFunctionsDialog(e) {
                                     children: "Namespace / version",
                                   }),
                                   i.jsxs("dd", {
-                                    children: [z.namespace, " / ", z.version],
+                                    children: [
+                                      selectedManifest.namespace,
+                                      " / ",
+                                      selectedManifest.version,
+                                    ],
                                   }),
                                   i.jsx("dt", { children: "Runtime" }),
-                                  i.jsx("dd", { children: z.runtime }),
+                                  i.jsx("dd", {
+                                    children: selectedManifest.runtime,
+                                  }),
                                   i.jsx("dt", { children: "Permissions" }),
                                   i.jsx("dd", {
-                                    children: z.permissions.join(", "),
+                                    children:
+                                      selectedManifest.permissions.join(", "),
                                   }),
                                   i.jsx("dt", { children: "Recalculation" }),
                                   i.jsx("dd", {
@@ -593,8 +703,8 @@ function AddInsAndCustomFunctionsDialog(e) {
                                   }),
                                   i.jsx("dt", { children: "State" }),
                                   i.jsx("dd", {
-                                    children: V
-                                      ? V.enabled
+                                    children: installedExtension
+                                      ? installedExtension.enabled
                                         ? "Enabled"
                                         : "Disabled"
                                       : "Not installed",
@@ -608,7 +718,7 @@ function AddInsAndCustomFunctionsDialog(e) {
                                   }),
                                   i.jsx("pre", {
                                     children: JSON.stringify(
-                                      z.functions,
+                                      selectedManifest.functions,
                                       null,
                                       2,
                                     ),
@@ -619,27 +729,34 @@ function AddInsAndCustomFunctionsDialog(e) {
                                 className: "lg-links-actions",
                                 children: [
                                   i.jsx("button", {
-                                    disabled: e.readOnly || disabled,
-                                    onClick: () => C("install"),
-                                    children: V
+                                    disabled: props.readOnly || disabled,
+                                    onClick: () => previewOperation("install"),
+                                    children: installedExtension
                                       ? "Preview install / update"
                                       : "Preview installation",
                                   }),
-                                  V &&
+                                  installedExtension &&
                                     i.jsxs(i.Fragment, {
                                       children: [
                                         i.jsxs("button", {
-                                          disabled: e.readOnly || disabled,
+                                          disabled: props.readOnly || disabled,
                                           onClick: () =>
-                                            C(V.enabled ? "disable" : "enable"),
+                                            previewOperation(
+                                              installedExtension.enabled
+                                                ? "disable"
+                                                : "enable",
+                                            ),
                                           children: [
                                             "Preview ",
-                                            V.enabled ? "disable" : "enable",
+                                            installedExtension.enabled
+                                              ? "disable"
+                                              : "enable",
                                           ],
                                         }),
                                         i.jsx("button", {
-                                          disabled: e.readOnly || disabled,
-                                          onClick: () => C("remove"),
+                                          disabled: props.readOnly || disabled,
+                                          onClick: () =>
+                                            previewOperation("remove"),
                                           children: "Preview removal",
                                         }),
                                       ],
@@ -656,24 +773,26 @@ function AddInsAndCustomFunctionsDialog(e) {
                     }),
               ],
             }),
-            u &&
+            configurationPreview &&
               i.jsxs("section", {
                 className: "lg-links-confirm",
                 "aria-label": "Extension configuration preview",
                 children: [
-                  i.jsxs("h3", { children: ["Review ", u.action] }),
+                  i.jsxs("h3", {
+                    children: ["Review ", configurationPreview.action],
+                  }),
                   i.jsxs("p", {
                     children: [
-                      u.manifest.label,
+                      configurationPreview.manifest.label,
                       " · version ",
-                      u.manifest.version,
+                      configurationPreview.manifest.version,
                     ],
                   }),
-                  i.jsx("p", { children: u.warning }),
+                  i.jsx("p", { children: configurationPreview.warning }),
                   i.jsx("button", {
                     className: "lg-reports-primary",
-                    disabled: e.readOnly,
-                    onClick: R,
+                    disabled: props.readOnly,
+                    onClick: applyReviewedChanges,
                     children: "Apply reviewed configuration",
                   }),
                   i.jsx("button", {
@@ -693,21 +812,29 @@ function AddInsAndCustomFunctionsDialog(e) {
                     "Review every argument before allowing this host adapter to process it. Source workbooks and credentials are not included in the request.",
                 }),
                 i.jsx("button", {
-                  disabled: !V?.enabled || e.readOnly || disabled || !!I.error,
-                  onClick: T,
+                  disabled:
+                    !installedExtension?.enabled ||
+                    props.readOnly ||
+                    disabled ||
+                    !!inventoryState.error,
+                  onClick: reviewFunctionInputs,
                   children: "Review function inputs",
                 }),
               ],
             }),
-            c &&
+            inputReview &&
               i.jsxs("section", {
                 className: "lg-links-confirm",
                 "aria-label": "Extension input review",
                 children: [
                   i.jsxs("h3", {
-                    children: ["Inputs for ", c.requests.length, " calls"],
+                    children: [
+                      "Inputs for ",
+                      inputReview.requests.length,
+                      " calls",
+                    ],
                   }),
-                  i.jsx("p", { children: c.disclosure }),
+                  i.jsx("p", { children: inputReview.disclosure }),
                   i.jsx("div", {
                     className: "lg-links-table",
                     children: i.jsxs("table", {
@@ -722,14 +849,14 @@ function AddInsAndCustomFunctionsDialog(e) {
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: c.requests.map((request) =>
+                          children: inputReview.requests.map((request) =>
                             i.jsxs(
                               "tr",
                               {
                                 children: [
                                   i.jsxs("td", {
                                     children: [
-                                      e.workbook.sheets.find(
+                                      props.workbook.sheets.find(
                                         (sheet) => sheet.id === request.sheetId,
                                       )?.name,
                                       "!",
@@ -763,16 +890,17 @@ function AddInsAndCustomFunctionsDialog(e) {
                       i.jsx("input", {
                         type: "checkbox",
                         disabled: disabled,
-                        checked: m,
-                        onChange: (event) => v(event.target.checked),
+                        checked: isApproved,
+                        onChange: (event) =>
+                          setIsApproved(event.target.checked),
                       }),
                       "I approve sending these argument values to this host adapter.",
                     ],
                   }),
                   i.jsx("button", {
                     className: "lg-reports-primary",
-                    disabled: !m || disabled || e.readOnly,
-                    onClick: () => void N(),
+                    disabled: !isApproved || disabled || props.readOnly,
+                    onClick: () => void runApprovedFunctions(),
                     children: "Run approved functions",
                   }),
                   i.jsx("button", {
@@ -788,13 +916,13 @@ function AddInsAndCustomFunctionsDialog(e) {
                 role: "status",
                 children: "Processing approved inputs…",
               }),
-            f &&
+            resultReview &&
               i.jsxs("section", {
                 className: "lg-links-confirm",
                 "aria-label": "Extension result review",
                 children: [
                   i.jsx("h3", { children: "3. Review and apply results" }),
-                  i.jsx("p", { children: f.warning }),
+                  i.jsx("p", { children: resultReview.warning }),
                   i.jsx("div", {
                     className: "lg-links-table",
                     children: i.jsxs("table", {
@@ -811,7 +939,7 @@ function AddInsAndCustomFunctionsDialog(e) {
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: f.results.map((result) =>
+                          children: resultReview.results.map((result) =>
                             i.jsxs(
                               "tr",
                               {
@@ -846,18 +974,24 @@ function AddInsAndCustomFunctionsDialog(e) {
                   }),
                   i.jsx("h4", { children: "Calculated formula results" }),
                   i.jsx("ul", {
-                    children: f.preview.map((W) =>
+                    children: resultReview.preview.map((previewEntry) =>
                       i.jsxs(
                         "li",
-                        { children: [W.address, ": ", String(W.value)] },
-                        W.sheetId + W.address,
+                        {
+                          children: [
+                            previewEntry.address,
+                            ": ",
+                            String(previewEntry.value),
+                          ],
+                        },
+                        previewEntry.sheetId + previewEntry.address,
                       ),
                     ),
                   }),
                   i.jsx("button", {
                     className: "lg-reports-primary",
-                    disabled: e.readOnly,
-                    onClick: R,
+                    disabled: props.readOnly,
+                    onClick: applyReviewedChanges,
                     children: "Apply reviewed results",
                   }),
                   i.jsx("button", {
@@ -871,7 +1005,7 @@ function AddInsAndCustomFunctionsDialog(e) {
               "aria-label": "Custom function inventory",
               children: [
                 i.jsx("h3", { children: "Formula and cache inventory" }),
-                L.length
+                formulaCells.length
                   ? i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("div", {
@@ -894,8 +1028,12 @@ function AddInsAndCustomFunctionsDialog(e) {
                                 }),
                               }),
                               i.jsx("tbody", {
-                                children: L.slice(U * 10, U * 10 + 10).map(
-                                  (W) =>
+                                children: formulaCells
+                                  .slice(
+                                    currentPage * 10,
+                                    currentPage * 10 + 10,
+                                  )
+                                  .map((formulaCell) =>
                                     i.jsxs(
                                       "tr",
                                       {
@@ -904,44 +1042,45 @@ function AddInsAndCustomFunctionsDialog(e) {
                                             children: [
                                               i.jsxs("strong", {
                                                 children: [
-                                                  W.sheetName,
+                                                  formulaCell.sheetName,
                                                   "!",
-                                                  W.address,
+                                                  formulaCell.address,
                                                 ],
                                               }),
                                               i.jsx("pre", {
-                                                children: W.formula,
+                                                children: formulaCell.formula,
                                               }),
-                                              W.literal &&
+                                              formulaCell.literal &&
                                                 "Inert imported text",
                                             ],
                                           }),
                                           i.jsxs("td", {
                                             children: [
-                                              W.functions.map((K) =>
-                                                i.jsxs(
-                                                  "div",
-                                                  {
-                                                    children: [
-                                                      K.name,
-                                                      ": ",
-                                                      K.state,
-                                                    ],
-                                                  },
-                                                  K.name,
-                                                ),
+                                              formulaCell.functions.map(
+                                                (cellFunction) =>
+                                                  i.jsxs(
+                                                    "div",
+                                                    {
+                                                      children: [
+                                                        cellFunction.name,
+                                                        ": ",
+                                                        cellFunction.state,
+                                                      ],
+                                                    },
+                                                    cellFunction.name,
+                                                  ),
                                               ),
                                               i.jsx("strong", {
                                                 children: String(
-                                                  W.result.value,
+                                                  formulaCell.result.value,
                                                 ),
                                               }),
                                             ],
                                           }),
                                           i.jsxs("td", {
                                             children: [
-                                              W.cacheLabel,
-                                              W.caches.map((cach) =>
+                                              formulaCell.cacheLabel,
+                                              formulaCell.caches.map((cach) =>
                                                 i.jsxs(
                                                   "details",
                                                   {
@@ -970,7 +1109,7 @@ function AddInsAndCustomFunctionsDialog(e) {
                                                   cach.key,
                                                 ),
                                               ),
-                                              W.importedCache &&
+                                              formulaCell.importedCache &&
                                                 i.jsxs("details", {
                                                   children: [
                                                     i.jsx("summary", {
@@ -979,7 +1118,7 @@ function AddInsAndCustomFunctionsDialog(e) {
                                                     }),
                                                     i.jsx("pre", {
                                                       children: JSON.stringify(
-                                                        W.importedCache,
+                                                        formulaCell.importedCache,
                                                         null,
                                                         2,
                                                       ),
@@ -990,9 +1129,9 @@ function AddInsAndCustomFunctionsDialog(e) {
                                           }),
                                         ],
                                       },
-                                      W.sheetId + W.address,
+                                      formulaCell.sheetId + formulaCell.address,
                                     ),
-                                ),
+                                  ),
                               }),
                             ],
                           }),
@@ -1001,16 +1140,21 @@ function AddInsAndCustomFunctionsDialog(e) {
                           className: "lg-links-actions",
                           children: [
                             i.jsx("button", {
-                              disabled: U === 0,
-                              onClick: () => F(U - 1),
+                              disabled: currentPage === 0,
+                              onClick: () => setFormulaPage(currentPage - 1),
                               children: "Previous formula page",
                             }),
                             i.jsxs("span", {
-                              children: ["Page ", U + 1, " of ", $],
+                              children: [
+                                "Page ",
+                                currentPage + 1,
+                                " of ",
+                                pageCount,
+                              ],
                             }),
                             i.jsx("button", {
-                              disabled: U + 1 === $,
-                              onClick: () => F(U + 1),
+                              disabled: currentPage + 1 === pageCount,
+                              onClick: () => setFormulaPage(currentPage + 1),
                               children: "Next formula page",
                             }),
                           ],
@@ -1030,7 +1174,7 @@ function AddInsAndCustomFunctionsDialog(e) {
             }),
             i.jsx("button", {
               onClick: () => {
-                (onClick(), e.onClose());
+                (onClick(), props.onClose());
               },
               children: "Done",
             }),
@@ -1040,11 +1184,12 @@ function AddInsAndCustomFunctionsDialog(e) {
     }),
   });
 }
-function buildWorkbookLinkPolicy(workbook, r) {
-  if (r.readOnly !== undefined && typeof r.readOnly != "boolean")
+function buildWorkbookLinkPolicy(workbook, options) {
+  if (options.readOnly !== undefined && typeof options.readOnly != "boolean")
     throw Error("Read-only policy must be boolean.");
-  const sources = r.sources ?? [],
-    allowed = r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id);
+  const sources = options.sources ?? [],
+    allowed =
+      options.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id);
   if (
     !Array.isArray(sources) ||
     sources.length > workbookLinkLimits.sources ||
@@ -1068,7 +1213,9 @@ function buildWorkbookLinkPolicy(workbook, r) {
       throw Error("Invalid approved workbook identity or worksheet scope.");
   if (
     !Array.isArray(allowed) ||
-    allowed.some((o) => !workbook.sheets.some((sheet) => sheet.id === o))
+    allowed.some(
+      (sheetId) => !workbook.sheets.some((sheet) => sheet.id === sheetId),
+    )
   )
     throw Error("Invalid destination worksheet scope.");
   return {
@@ -1076,7 +1223,7 @@ function buildWorkbookLinkPolicy(workbook, r) {
     allowed: allowed,
     hash: () =>
       fingerprintCanonicalValue([
-        !!r.readOnly,
+        !!options.readOnly,
         allowed,
         sources.map((source) => [
           source.target,
@@ -1088,45 +1235,45 @@ function buildWorkbookLinkPolicy(workbook, r) {
   };
 }
 function collectWorkbookLinkFormulas(workbookInput) {
-  const r = [];
+  const linkFormulas = [];
   for (const sheet of workbookInput.sheets)
     for (const [address, cell] of getFormulaScanList(sheet.cells, "external")) {
       if (typeof cell.raw != "string" || !cell.raw.startsWith("=")) continue;
       const references = tokenizeExternalReferences(cell.raw),
-        s = rewriteExternalReferences(cell.raw, () => "0"),
-        d = rewriteFormulaReferences(
-          s,
+        zeroedFormula = rewriteExternalReferences(cell.raw, () => "0"),
+        rewrittenFormula = rewriteFormulaReferences(
+          zeroedFormula,
           workbookInput,
           sheet.id,
           address,
           false,
         );
       if (
-        ((references.length || d?.kind === "external") &&
-          r.push({
+        ((references.length || rewrittenFormula?.kind === "external") &&
+          linkFormulas.push({
             sheetId: sheet.id,
             sheetName: sheet.name,
             address: address,
             formula: cell.raw,
             literal: !!cell.literal,
             references: references,
-            ...(d?.kind === "external"
+            ...(rewrittenFormula?.kind === "external"
               ? {
                   unsupported:
                     "Unsupported external syntax. Static A1 cells and rectangles only; DDE, whole axes, external names and 3-D links remain blocked.",
                 }
               : {}),
           }),
-        r.length > workbookLinkLimits.formulas)
+        linkFormulas.length > workbookLinkLimits.formulas)
       )
         throw Error(
           `Workbook link review is limited to ${workbookLinkLimits.formulas} formula cells.`,
         );
     }
-  return r;
+  return linkFormulas;
 }
-function buildWorkbookLinkReview(workbook, r = {}) {
-  const workbookLinkPolicy = buildWorkbookLinkPolicy(workbook, r),
+function buildWorkbookLinkReview(workbook, options = {}) {
+  const workbookLinkPolicy = buildWorkbookLinkPolicy(workbook, options),
     workbookLinkFormulas = collectWorkbookLinkFormulas(workbook);
   return {
     links: [
@@ -1139,19 +1286,19 @@ function buildWorkbookLinkReview(workbook, r = {}) {
       const source = workbookLinkPolicy.sources.find(
           (source) => source.target === target,
         ),
-        u = workbook.workbookLinks?.sources.find(
+        cachedSource = workbook.workbookLinks?.sources.find(
           (source) => source.target === target,
         ),
         references = workbookLinkFormulas.flatMap((workbookLinkFormula) =>
           workbookLinkFormula.references
             .filter((reference) => reference.target === target)
-            .map((y) => ({
-              ...y,
+            .map((matchedReference) => ({
+              ...matchedReference,
               sheetId: workbookLinkFormula.sheetId,
               address: workbookLinkFormula.address,
             })),
         ),
-        c =
+        hasMissingWorksheet =
           source &&
           references.some(
             (reference) =>
@@ -1160,7 +1307,7 @@ function buildWorkbookLinkReview(workbook, r = {}) {
                   sheet.name.toLowerCase() === reference.sheet.toLowerCase(),
               ),
           ),
-        h =
+        hasUnauthorizedSheet =
           source &&
           references.some((reference) => {
             const sheet = source.workbook.sheets.find(
@@ -1173,23 +1320,24 @@ function buildWorkbookLinkReview(workbook, r = {}) {
                 ((sheet.hidden || sheet.veryHidden) && !source.includeHidden))
             );
           }),
-        f = source
-          ? c
+        linkStatus = source
+          ? hasMissingWorksheet
             ? "missing-worksheet"
-            : h
+            : hasUnauthorizedSheet
               ? "unauthorized-worksheet"
-              : u
-                ? u.sourceFingerprint !==
+              : cachedSource
+                ? cachedSource.sourceFingerprint !==
                   encodeWorkbookFingerprint(source.workbook)
                   ? "stale"
                   : references.some(
                         (reference) =>
-                          !u.sheets.find(
+                          !cachedSource.sheets.find(
                             (sheet) =>
                               sheet.name.toLowerCase() ===
                                 reference.sheet.toLowerCase() &&
                               parseExternalLinkRange(reference.range).every(
-                                (w) => Object.hasOwn(sheet.cells, w),
+                                (cellAddress) =>
+                                  Object.hasOwn(sheet.cells, cellAddress),
                               ),
                           ),
                       )
@@ -1202,13 +1350,13 @@ function buildWorkbookLinkReview(workbook, r = {}) {
         packageTarget: workbook.workbookLinks?.packageTargets?.find(
           (packageTarget) => packageTarget.key === target,
         )?.target,
-        status: f,
+        status: linkStatus,
         references: references,
-        lastResolvedRevision: u?.sourceRevision,
-        lastResolvedAt: u?.resolvedAt,
-        sourceName: u?.sourceName,
-        sourceFingerprint: u?.sourceFingerprint,
-        cached: !!u,
+        lastResolvedRevision: cachedSource?.sourceRevision,
+        lastResolvedAt: cachedSource?.resolvedAt,
+        sourceName: cachedSource?.sourceName,
+        sourceFingerprint: cachedSource?.sourceFingerprint,
+        cached: !!cachedSource,
       };
     }),
     cells: workbookLinkFormulas,
@@ -1220,8 +1368,8 @@ function buildWorkbookLinkReview(workbook, r = {}) {
   };
 }
 const workbookLinkPreviewRecords = new WeakMap();
-function resolveLinkedSourceCalculation(workbook, r, target, n) {
-  const source = buildWorkbookLinkPolicy(workbook, n).sources.find(
+function resolveLinkedSourceCalculation(workbook, references, target, options) {
+  const source = buildWorkbookLinkPolicy(workbook, options).sources.find(
     (source) => source.target === target,
   );
   if (!source)
@@ -1229,7 +1377,7 @@ function resolveLinkedSourceCalculation(workbook, r, target, n) {
       `Source ${target} is missing or not approved. Attach the exact source and approve its worksheets.`,
     );
   const workbookInput = normalizeWorkbookInput(source.workbook),
-    s = new Set(source.allowedSheetIds);
+    allowedSheetIdSet = new Set(source.allowedSheetIds);
   if (
     normalizeDatePolicy(workbookInput.datePolicy).dateSystem !==
     normalizeDatePolicy(workbook.datePolicy).dateSystem
@@ -1237,53 +1385,57 @@ function resolveLinkedSourceCalculation(workbook, r, target, n) {
     throw Error(
       "Source and destination date systems differ. Convert and review the source date system before linking.",
     );
-  const allowRead = (h) => {
-      const sheet = workbookInput.sheets.find((sheet) => sheet.id === h);
+  const allowRead = (sheetId) => {
+      const sheet = workbookInput.sheets.find((sheet) => sheet.id === sheetId);
       return (
         !!sheet &&
-        s.has(h) &&
+        allowedSheetIdSet.has(sheetId) &&
         (!(sheet.hidden || sheet.veryHidden) || !!source.includeHidden)
       );
     },
-    u = evaluateWorkbookFormulas(
+    evaluator = evaluateWorkbookFormulas(
       workbookInput,
       {},
       { allowRead: allowRead, allowName: () => true, step: () => {} },
     ),
     sheets = [];
-  let c = 0;
-  for (const h of r) {
-    const f = workbookInput.sheets.find(
-      (sheet) => sheet.name.toLowerCase() === h.sheet.toLowerCase(),
+  let cellCount = 0;
+  for (const reference of references) {
+    const sourceSheet = workbookInput.sheets.find(
+      (sheet) => sheet.name.toLowerCase() === reference.sheet.toLowerCase(),
     );
-    if (!f) throw Error(`Source worksheet ${h.sheet} is missing.`);
-    if (!allowRead(f.id))
-      throw Error(`Source worksheet ${h.sheet} is outside the approved scope.`);
-    let sheet = sheets.find((sheet) => sheet.id === f.id);
+    if (!sourceSheet)
+      throw Error(`Source worksheet ${reference.sheet} is missing.`);
+    if (!allowRead(sourceSheet.id))
+      throw Error(
+        `Source worksheet ${reference.sheet} is outside the approved scope.`,
+      );
+    let sheet = sheets.find((sheet) => sheet.id === sourceSheet.id);
     sheet ||
-      ((sheet = { id: f.id, name: f.name, cells: {} }), sheets.push(sheet));
-    for (const m of parseExternalLinkRange(h.range))
-      if (!Object.hasOwn(sheet.cells, m)) {
-        if (++c > workbookLinkLimits.cells)
+      ((sheet = { id: sourceSheet.id, name: sourceSheet.name, cells: {} }),
+      sheets.push(sheet));
+    for (const address of parseExternalLinkRange(reference.range))
+      if (!Object.hasOwn(sheet.cells, address)) {
+        if (++cellCount > workbookLinkLimits.cells)
           throw Error("External link refresh exceeds 5,000 source cells.");
-        const v = u.getTypedValue(f.id, m);
+        const typedValue = evaluator.getTypedValue(sourceSheet.id, address);
         if (
-          v.type === "error" &&
+          typedValue.type === "error" &&
           [
             "#BLOCKED!",
             "#LIMIT!",
             "#PENDING!",
             "#TIMEOUT!",
             "#CYCLE!",
-          ].includes(String(v.value))
+          ].includes(String(typedValue.value))
         )
           throw Error(
             "Source calculation is unavailable, unauthorized, cyclic or over its resource limit.",
           );
-        sheet.cells[m] = v;
+        sheet.cells[address] = typedValue;
       }
   }
-  if (u.getOperationalErrors().length)
+  if (evaluator.getOperationalErrors().length)
     throw Error(
       "A source calculation attempted an unavailable or unauthorized dependency.",
     );
@@ -1297,53 +1449,60 @@ function resolveLinkedSourceCalculation(workbook, r, target, n) {
     sheets: sheets,
   };
 }
-function assertLinkDestinationPublishable(e, r) {
-  const t = e.getTypedValue(r.sheetId, r.address);
-  if (t.type === "error" || e.getSpillRange(r.sheetId, r.address))
+function assertLinkDestinationPublishable(evaluator, destination) {
+  const typedValue = evaluator.getTypedValue(
+    destination.sheetId,
+    destination.address,
+  );
+  if (
+    typedValue.type === "error" ||
+    evaluator.getSpillRange(destination.sheetId, destination.address)
+  )
     throw Error(
-      `Cannot publish ${r.sheetName}!${r.address}: resolve its error or array result first.`,
+      `Cannot publish ${destination.sheetName}!${destination.address}: resolve its error or array result first.`,
     );
-  if (e.getOperationalErrors().length)
+  if (evaluator.getOperationalErrors().length)
     throw Error(
       "The destination calculation includes an unresolved or unavailable dependency.",
     );
-  return t;
+  return typedValue;
 }
-function previewWorkbookLinkOperation(workbook, r, t = {}) {
-  const workbookLinkPolicy = buildWorkbookLinkPolicy(workbook, t);
-  if (t.readOnly) throw Error("The workbook is read-only.");
-  if (!["refresh", "replace", "break"].includes(r.action))
+function previewWorkbookLinkOperation(workbook, operation, options = {}) {
+  const workbookLinkPolicy = buildWorkbookLinkPolicy(workbook, options);
+  if (options.readOnly) throw Error("The workbook is read-only.");
+  if (!["refresh", "replace", "break"].includes(operation.action))
     throw Error("Unknown link operation.");
   if (
-    (r.target !== undefined && workbookQualifierSchema.parse(r.target),
-    r.action !== "refresh" && !r.target)
+    (operation.target !== undefined &&
+      workbookQualifierSchema.parse(operation.target),
+    operation.action !== "refresh" && !operation.target)
   )
     throw Error("Choose a target workbook link.");
   if (
-    r.action === "replace" &&
-    (workbookQualifierSchema.parse(r.replacementTarget),
-    r.replacementTarget === r.target)
+    operation.action === "replace" &&
+    (workbookQualifierSchema.parse(operation.replacementTarget),
+    operation.replacementTarget === operation.target)
   )
     throw Error("Choose a different source qualifier.");
   const workbookLinkFormulas = collectWorkbookLinkFormulas(workbook),
-    a = workbookLinkFormulas.filter((workbookLinkFormula) =>
-      r.target
+    matchingFormulas = workbookLinkFormulas.filter((workbookLinkFormula) =>
+      operation.target
         ? workbookLinkFormula.references.some(
-            (reference) => reference.target === r.target,
+            (reference) => reference.target === operation.target,
           )
         : workbookLinkFormula.references.length ||
           workbookLinkFormula.unsupported,
     );
-  if (!a.length) throw Error("No matching workbook link cells.");
-  for (const p of a) {
-    if (p.unsupported) throw Error(p.unsupported);
-    if (!workbookLinkPolicy.allowed.includes(p.sheetId))
+  if (!matchingFormulas.length) throw Error("No matching workbook link cells.");
+  for (const linkFormula of matchingFormulas) {
+    if (linkFormula.unsupported) throw Error(linkFormula.unsupported);
+    if (!workbookLinkPolicy.allowed.includes(linkFormula.sheetId))
       throw Error("A destination worksheet is outside the host write scope.");
     if (
       (assertSheetUnprotected(
-        workbook.sheets.find((sheet) => sheet.id === p.sheetId),
+        workbook.sheets.find((sheet) => sheet.id === linkFormula.sheetId),
       ),
-      p.literal && !r.activateLiteral)
+      linkFormula.literal && !operation.activateLiteral)
     )
       throw Error(
         "Explicitly approve activation of inert imported formulas before resolving them.",
@@ -1353,41 +1512,51 @@ function previewWorkbookLinkOperation(workbook, r, t = {}) {
   workbookInput.workbookLinks = structuredClone(
     workbookInput.workbookLinks ?? { schemaVersion: 1, sources: [] },
   );
-  for (const p of a) {
-    const sheet = workbookInput.sheets.find((sheet) => sheet.id === p.sheetId);
-    ((sheet.cells[p.address] = {
-      ...sheet.cells[p.address],
+  for (const formulaToRewrite of matchingFormulas) {
+    const sheet = workbookInput.sheets.find(
+      (sheet) => sheet.id === formulaToRewrite.sheetId,
+    );
+    ((sheet.cells[formulaToRewrite.address] = {
+      ...sheet.cells[formulaToRewrite.address],
       raw:
-        r.action === "replace"
-          ? rewriteExternalReferences(p.formula, (v) =>
-              v.target === r.target
-                ? formatExternalSheetReference(
-                    r.replacementTarget,
-                    v.sheet,
-                    v.range,
-                  )
-                : undefined,
+        operation.action === "replace"
+          ? rewriteExternalReferences(
+              formulaToRewrite.formula,
+              (externalReference) =>
+                externalReference.target === operation.target
+                  ? formatExternalSheetReference(
+                      operation.replacementTarget,
+                      externalReference.sheet,
+                      externalReference.range,
+                    )
+                  : undefined,
             )
-          : p.formula,
+          : formulaToRewrite.formula,
     }),
-      delete sheet.cells[p.address].literal);
+      delete sheet.cells[formulaToRewrite.address].literal);
   }
-  if (r.action !== "break") {
-    const p = collectWorkbookLinkFormulas(workbookInput)
-        .filter((v) =>
-          a.some((g) => g.sheetId === v.sheetId && g.address === v.address),
+  if (operation.action !== "break") {
+    const changedReferences = collectWorkbookLinkFormulas(workbookInput)
+        .filter((collectedFormula) =>
+          matchingFormulas.some(
+            (matchingFormula) =>
+              matchingFormula.sheetId === collectedFormula.sheetId &&
+              matchingFormula.address === collectedFormula.address,
+          ),
         )
-        .flatMap((v) => v.references),
-      m = [...new Set(p.map((event) => event.target))];
-    for (const target of m) {
-      const g = collectWorkbookLinkFormulas(workbookInput)
-          .flatMap((y) => y.references)
+        .flatMap((affectedFormula) => affectedFormula.references),
+      uniqueTargets = [
+        ...new Set(changedReferences.map((event) => event.target)),
+      ];
+    for (const target of uniqueTargets) {
+      const targetReferences = collectWorkbookLinkFormulas(workbookInput)
+          .flatMap((candidateFormula) => candidateFormula.references)
           .filter((event) => event.target === target),
         linkedSourceCalculation = resolveLinkedSourceCalculation(
           workbook,
-          g,
+          targetReferences,
           target,
-          t,
+          options,
         );
       ((workbookInput.workbookLinks.sources =
         workbookInput.workbookLinks.sources.filter(
@@ -1395,38 +1564,42 @@ function previewWorkbookLinkOperation(workbook, r, t = {}) {
         )),
         workbookInput.workbookLinks.sources.push(linkedSourceCalculation));
     }
-  } else if (!r.acknowledgeCached)
+  } else if (!operation.acknowledgeCached)
     throw Error(
       "Acknowledge that breaking links keeps the previewed cached values and removes the complete formulas.",
     );
   workbookInput = normalizeWorkbookInput(workbookInput);
-  const d = new Set([
+  const readableSheetIds = new Set([
       ...workbookLinkPolicy.allowed,
       ...buildExternalLinkAliases(workbookInput).sheets.map(
         (sheet) => sheet.id,
       ),
     ]),
-    u = evaluateWorkbookFormulas(
+    evaluator = evaluateWorkbookFormulas(
       workbookInput,
       {},
-      { allowRead: (p) => d.has(p), step: () => {} },
+      { allowRead: (sheetId) => readableSheetIds.has(sheetId), step: () => {} },
     ),
-    cells = a.map((p) => {
-      const m = assertLinkDestinationPublishable(u, p);
+    cells = matchingFormulas.map((matchedFormula) => {
+      const typedValue = assertLinkDestinationPublishable(
+        evaluator,
+        matchedFormula,
+      );
       return {
-        sheetId: p.sheetId,
-        sheetName: p.sheetName,
-        address: p.address,
-        before: p.formula,
+        sheetId: matchedFormula.sheetId,
+        sheetName: matchedFormula.sheetName,
+        address: matchedFormula.address,
+        before: matchedFormula.formula,
         after:
-          r.action === "break"
-            ? m.value
-            : workbookInput.sheets.find((sheet) => sheet.id === p.sheetId)
-                .cells[p.address].raw,
-        result: m,
+          operation.action === "break"
+            ? typedValue.value
+            : workbookInput.sheets.find(
+                (sheet) => sheet.id === matchedFormula.sheetId,
+              ).cells[matchedFormula.address].raw,
+        result: typedValue,
       };
     }),
-    c = [];
+    cellChanges = [];
   for (const cell of cells) {
     const sheet = workbookInput.sheets.find(
         (sheet) => sheet.id === cell.sheetId,
@@ -1434,85 +1607,93 @@ function previewWorkbookLinkOperation(workbook, r, t = {}) {
       before = workbook.sheets.find((sheet) => sheet.id === cell.sheetId).cells[
         cell.address
       ];
-    (r.action === "break" &&
+    (operation.action === "break" &&
       (sheet.cells[cell.address] = {
         ...sheet.cells[cell.address],
         raw: cell.result.value,
         literal: typeof cell.result.value == "string",
       }),
-      c.push({
+      cellChanges.push({
         sheetId: sheet.id,
         address: cell.address,
         before: before,
         after: sheet.cells[cell.address],
       }));
   }
-  const h = new Set(
-    collectWorkbookLinkFormulas(workbookInput).flatMap((p) =>
-      p.references.map((reference) => reference.target),
+  const referencedTargets = new Set(
+    collectWorkbookLinkFormulas(workbookInput).flatMap((workbookFormula) =>
+      workbookFormula.references.map((reference) => reference.target),
     ),
   );
   ((workbookInput.workbookLinks = {
     ...workbookInput.workbookLinks,
     sources: workbookInput.workbookLinks.sources.filter((source) =>
-      h.has(source.target),
+      referencedTargets.has(source.target),
     ),
   }),
-    checkDataValidationBatch(workbookInput, c),
+    checkDataValidationBatch(workbookInput, cellChanges),
     (workbookInput = normalizeWorkbookInput(workbookInput)));
-  const f = {
-    request: structuredClone(r),
+  const preview = {
+    request: structuredClone(operation),
     cells: cells,
     sources: structuredClone(workbookInput.workbookLinks.sources),
     warning:
-      r.action === "break"
+      operation.action === "break"
         ? "Complete formulas are replaced with these scalar values, including any other references in those formulas. Undo can restore the prior workbook. Retained original files are unchanged."
         : "These are reviewed snapshots of approved workbooks, not live network connections. Future changes require another preview and refresh.",
   };
   return (
-    workbookLinkPreviewRecords.set(f, {
+    workbookLinkPreviewRecords.set(preview, {
       bookHash: fingerprintCanonicalValue(workbook),
       contextHash: workbookLinkPolicy.hash(),
-      planHash: fingerprintCanonicalValue(f),
+      planHash: fingerprintCanonicalValue(preview),
       candidate: workbookInput,
     }),
-    f
+    preview
   );
 }
-function applyWorkbookLinkPreview(workbook, r, t = {}) {
-  const n = workbookLinkPreviewRecords.get(r);
-  if (!n) throw Error("Unknown or already applied workbook link preview.");
-  if (t.readOnly) throw Error("The workbook is read-only.");
+function applyWorkbookLinkPreview(workbook, preview, options = {}) {
+  const previewRecord = workbookLinkPreviewRecords.get(preview);
+  if (!previewRecord)
+    throw Error("Unknown or already applied workbook link preview.");
+  if (options.readOnly) throw Error("The workbook is read-only.");
   if (
-    n.bookHash !== fingerprintCanonicalValue(workbook) ||
-    n.contextHash !== buildWorkbookLinkPolicy(workbook, t).hash() ||
-    n.planHash !== fingerprintCanonicalValue(r)
+    previewRecord.bookHash !== fingerprintCanonicalValue(workbook) ||
+    previewRecord.contextHash !==
+      buildWorkbookLinkPolicy(workbook, options).hash() ||
+    previewRecord.planHash !== fingerprintCanonicalValue(preview)
   )
     throw Error(
       "Workbook, source, review or permissions changed. Preview links again.",
     );
   return (
-    workbookLinkPreviewRecords.delete(r),
-    normalizeWorkbookInput(n.candidate)
+    workbookLinkPreviewRecords.delete(preview),
+    normalizeWorkbookInput(previewRecord.candidate)
   );
 }
 
 function assertSourceInspectionCurrent(inspection) {
-  const r = sourceInspectionRecords.get(inspection);
-  if (!r || r.signature !== JSON.stringify(inspection))
+  const inspectionRecord = sourceInspectionRecords.get(inspection);
+  if (
+    !inspectionRecord ||
+    inspectionRecord.signature !== JSON.stringify(inspection)
+  )
     throw Error(
       "The source inspection changed or is untrusted. Inspect the original again.",
     );
-  return r.bytes.slice();
+  return inspectionRecord.bytes.slice();
 }
 
-function assertFormatInspectionCurrent(e) {
-  const r = formatInspectionRecords.get(e);
-  if (!r || r.signature !== JSON.stringify(e))
+function assertFormatInspectionCurrent(inspection) {
+  const inspectionRecord = formatInspectionRecords.get(inspection);
+  if (
+    !inspectionRecord ||
+    inspectionRecord.signature !== JSON.stringify(inspection)
+  )
     throw Error(
       "The format inspection changed or is untrusted. Inspect the original again.",
     );
-  return r.bytes.slice();
+  return inspectionRecord.bytes.slice();
 }
 
 export {

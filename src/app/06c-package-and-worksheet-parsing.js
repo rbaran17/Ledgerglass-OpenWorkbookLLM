@@ -26,46 +26,51 @@ import Ox from "saxes";
 import { Unzip, UnzipInflate, strFromU8, strToU8, zipSync } from "fflate";
 
 /* From 04-cell-input-paste-and-fill.js */
-const formatCellAddress = (e, r) => `${columnIndexToLetters(r)}${e + 1}`;
+const formatCellAddress = (rowIndex, columnIndex) =>
+  `${columnIndexToLetters(columnIndex)}${rowIndex + 1}`;
 const maxExcelDateSerial = 2958465;
-function utcDateFromParts(e, r, t) {
-  const n = new Date(0);
-  return (n.setUTCHours(0, 0, 0, 0), n.setUTCFullYear(e, r, t), n);
+function utcDateFromParts(year, monthIndex, dayOfMonth) {
+  const date = new Date(0);
+  return (
+    date.setUTCHours(0, 0, 0, 0),
+    date.setUTCFullYear(year, monthIndex, dayOfMonth),
+    date
+  );
 }
 
 /* From 05-add-ins-and-custom-functions.js */
 const sourceInspectionRecords = new WeakMap();
-function recordSourceInspection(e, r, fileName) {
+function recordSourceInspection(sourceInspection, bytes, fileName) {
   if (
-    (validateExtractedSourceTables(e),
-    e.fileName !== fileName ||
-      e.byteLength !== r.length ||
-      e.sha256 !== sha256HexDigest(r))
+    (validateExtractedSourceTables(sourceInspection),
+    sourceInspection.fileName !== fileName ||
+      sourceInspection.byteLength !== bytes.length ||
+      sourceInspection.sha256 !== sha256HexDigest(bytes))
   )
     throw Error("Source inspection does not match its original.");
-  sourceInspectionRecords.set(e, {
-    signature: JSON.stringify(e),
-    bytes: r.slice(),
+  sourceInspectionRecords.set(sourceInspection, {
+    signature: JSON.stringify(sourceInspection),
+    bytes: bytes.slice(),
   });
 }
 const formatInspectionRecords = new WeakMap();
-function validateIsolatedFormatInspection(e, r, fileName) {
+function validateIsolatedFormatInspection(inspection, bytes, fileName) {
   if (
-    !e ||
-    e.schemaVersion !== 1 ||
-    e.fileName !== fileName ||
-    e.fileBytes !== r.length ||
-    e.sha256 !== sha256HexDigest(r) ||
-    !alternateFormatExtensions.includes(e.format) ||
-    !fileName.toLowerCase().endsWith("." + e.format) ||
-    e.execution !== "never" ||
-    !Array.isArray(e.parts) ||
-    e.parts.length > 2e3
+    !inspection ||
+    inspection.schemaVersion !== 1 ||
+    inspection.fileName !== fileName ||
+    inspection.fileBytes !== bytes.length ||
+    inspection.sha256 !== sha256HexDigest(bytes) ||
+    !alternateFormatExtensions.includes(inspection.format) ||
+    !fileName.toLowerCase().endsWith("." + inspection.format) ||
+    inspection.execution !== "never" ||
+    !Array.isArray(inspection.parts) ||
+    inspection.parts.length > 2e3
   )
     throw Error("Invalid isolated format inspection.");
-  formatInspectionRecords.set(e, {
-    signature: JSON.stringify(e),
-    bytes: r.slice(),
+  formatInspectionRecords.set(inspection, {
+    signature: JSON.stringify(inspection),
+    bytes: bytes.slice(),
   });
 }
 
@@ -83,31 +88,33 @@ const sanitizedMessagePatterns = excelMessagePatterns.map(
     expression: new RegExp(
       "^" +
         excelMessagePattern
-          .map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .map((patternPart) =>
+            patternPart.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          )
           .join("([\\s\\S]*?)") +
         "$",
     ),
   }),
 );
-function sanitizeFileMessage(e, r = 0) {
-  if (!(e.length > 4096 || r > 3)) {
-    if (unsupportedArrayFormulaReasons.has(e)) return e;
-    if (e.endsWith(excelRepairSuffix)) {
-      const t = sanitizeFileMessage(
-        e.slice(0, -excelRepairSuffix.length),
-        r + 1,
+function sanitizeFileMessage(message, depth = 0) {
+  if (!(message.length > 4096 || depth > 3)) {
+    if (unsupportedArrayFormulaReasons.has(message)) return message;
+    if (message.endsWith(excelRepairSuffix)) {
+      const sanitizedBody = sanitizeFileMessage(
+        message.slice(0, -excelRepairSuffix.length),
+        depth + 1,
       );
-      if (t) return t + excelRepairSuffix;
+      if (sanitizedBody) return sanitizedBody + excelRepairSuffix;
     }
     for (const { parts, expression } of sanitizedMessagePatterns) {
-      const o = expression.exec(e);
-      if (o)
+      const match = expression.exec(message);
+      if (match)
         return parts
           .map(
-            (part, s) =>
+            (part, partIndex) =>
               part +
-              (s < parts.length - 1
-                ? (sanitizeFileMessage(o[s + 1], r + 1) ??
+              (partIndex < parts.length - 1
+                ? (sanitizeFileMessage(match[partIndex + 1], depth + 1) ??
                   "[source detail omitted]")
                 : ""),
           )
@@ -128,236 +135,279 @@ const u1 = Object.freeze({
   nodeHeapMiB: 256,
   maxResultBytes: 100 * 1024 * 1024,
 });
-function fileByteLimitFor(operation, r) {
+function fileByteLimitFor(operation, fileName) {
   return operation === "source"
     ? 4 * 1024 * 1024
     : operation === "json"
       ? u1.maxConfigurationBytes
       : operation === "picture"
         ? u1.maxPictureBytes
-        : operation === "workbook" && /\.json$/i.test(r)
+        : operation === "workbook" && /\.json$/i.test(fileName)
           ? workbookLimits.maxNativeBytes
           : workbookLimits.maxFileBytes;
 }
-function assertXlsxExpansionLimit(e, size, t) {
+function assertXlsxExpansionLimit(compressedSize, size, expandedTotal) {
   if (
-    t > fileImportLimits.maxXlsxExpandedBytes ||
+    expandedTotal > fileImportLimits.maxXlsxExpandedBytes ||
     (size > fileImportLimits.xlsxRatioThresholdBytes &&
-      size / Math.max(e, 1) > fileImportLimits.maxXlsxExpansionRatio)
+      size / Math.max(compressedSize, 1) >
+        fileImportLimits.maxXlsxExpansionRatio)
   )
     throw new Error(
       "The XLSX archive exceeds the safe expansion limit (50 MB or 200:1 ratio).",
     );
 }
-function parseWorksheetCells(e, r, t = 0) {
-  const n = (c, h) =>
-      new RegExp(`(?:^|\\s)${h}\\s*=\\s*(["'])(.*?)\\1`).exec(c)?.[2],
-    o = e.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, "");
-  let a = 0,
-    s = 0,
-    d = -1,
-    u = t;
-  const l = (c) => {
+function parseWorksheetCells(xmlText, worksheetPath, initialCellCount = 0) {
+  const readAttribute = (attributeText, attributeName) =>
+      new RegExp(`(?:^|\\s)${attributeName}\\s*=\\s*(["'])(.*?)\\1`).exec(
+        attributeText,
+      )?.[2],
+    strippedXml = xmlText.replace(
+      /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g,
+      "",
+    );
+  let currentRow = 0,
+    previousRow = 0,
+    lastColumn = -1,
+    cellRecordCount = initialCellCount;
+  const stopImport = (message) => {
     throw new Error(
-      `Worksheet ${r}: ${c} Import stopped; no cells were truncated.`,
+      `Worksheet ${worksheetPath}: ${message} Import stopped; no cells were truncated.`,
     );
   };
-  for (const c of o.matchAll(
+  for (const match of strippedXml.matchAll(
     /<(\/?)(?:[\w.-]+:)?(dimension|row|c)\b([^>]*)>/g,
   )) {
-    const [, h, f, p] = c;
-    if (h) {
-      f === "row" && (a = 0);
+    const [, isClosingTag, tagName, attributes] = match;
+    if (isClosingTag) {
+      tagName === "row" && (currentRow = 0);
       continue;
     }
-    if (f === "dimension") {
-      const m = n(p, "ref");
-      m || l("The declared dimension has no valid cell range.");
+    if (tagName === "dimension") {
+      const dimensionRef = readAttribute(attributes, "ref");
+      dimensionRef ||
+        stopImport("The declared dimension has no valid cell range.");
       try {
-        parseRangeAddress(m);
+        parseRangeAddress(dimensionRef);
       } catch {
-        l(
-          `Declared dimension ${m} exceeds or violates the supported worksheet bounds.`,
+        stopImport(
+          `Declared dimension ${dimensionRef} exceeds or violates the supported worksheet bounds.`,
         );
       }
-    } else if (f === "row") {
-      const m = n(p, "r"),
-        v = Number(m);
-      ((!m || !/^[1-9]\d*$/.test(m) || v > fileImportLimits.maxRows) &&
-        l(
-          `Row ${m ?? "(missing)"} must be between 1 and ${fileImportLimits.maxRows}.`,
+    } else if (tagName === "row") {
+      const rowNumberText = readAttribute(attributes, "r"),
+        rowNumber = Number(rowNumberText);
+      ((!rowNumberText ||
+        !/^[1-9]\d*$/.test(rowNumberText) ||
+        rowNumber > fileImportLimits.maxRows) &&
+        stopImport(
+          `Row ${rowNumberText ?? "(missing)"} must be between 1 and ${fileImportLimits.maxRows}.`,
         ),
-        (a || v <= s) && l("Rows must have distinct, ascending row numbers."),
-        (s = v),
-        (a = /\/\s*$/.test(p) ? 0 : v),
-        (d = -1));
+        (currentRow || rowNumber <= previousRow) &&
+          stopImport("Rows must have distinct, ascending row numbers."),
+        (previousRow = rowNumber),
+        (currentRow = /\/\s*$/.test(attributes) ? 0 : rowNumber),
+        (lastColumn = -1));
     } else {
-      const m = n(p, "r");
-      (!m || !a) &&
-        l("Each cell must have an explicit address inside its source row.");
-      let v;
+      const cellAddress = readAttribute(attributes, "r");
+      (!cellAddress || !currentRow) &&
+        stopImport(
+          "Each cell must have an explicit address inside its source row.",
+        );
+      let cellPosition;
       try {
-        v = _t(m);
+        cellPosition = _t(cellAddress);
       } catch {
-        l(`Cell ${m} exceeds or violates the supported worksheet bounds.`);
+        stopImport(
+          `Cell ${cellAddress} exceeds or violates the supported worksheet bounds.`,
+        );
       }
-      ((v.row + 1 !== a || v.col <= d) &&
-        l(`Cell ${m} has a duplicate, unordered or mismatched row address.`),
-        (d = v.col),
-        ++u > fileImportLimits.maxXlsxCellRecords &&
-          l(
+      ((cellPosition.row + 1 !== currentRow ||
+        cellPosition.col <= lastColumn) &&
+        stopImport(
+          `Cell ${cellAddress} has a duplicate, unordered or mismatched row address.`,
+        ),
+        (lastColumn = cellPosition.col),
+        ++cellRecordCount > fileImportLimits.maxXlsxCellRecords &&
+          stopImport(
             `The XLSX exceeds ${fileImportLimits.maxXlsxCellRecords.toLocaleString("en-US")} source cell records, including explicit blank cells.`,
           ));
     }
   }
-  return u;
+  return cellRecordCount;
 }
 const excelRepairAdvice =
   "Open the original in Excel, repair it if needed, and save a clean, unencrypted XLSX copy.";
-const throwInvalidXlsx = (e) => {
-  throw Error(`${e} ${excelRepairAdvice}`);
+const throwInvalidXlsx = (message) => {
+  throw Error(`${message} ${excelRepairAdvice}`);
 };
-const crc32Table = new Uint32Array(256).map((e, r) => {
-  for (let t = 0; t < 8; t++) r = r & 1 ? 3988292384 ^ (r >>> 1) : r >>> 1;
-  return r >>> 0;
+const crc32Table = new Uint32Array(256).map((element, crcValue) => {
+  for (let bitIndex = 0; bitIndex < 8; bitIndex++)
+    crcValue = crcValue & 1 ? 3988292384 ^ (crcValue >>> 1) : crcValue >>> 1;
+  return crcValue >>> 0;
 });
-function computeCrc32(e, r) {
-  for (const t of r) e = crc32Table[(e ^ t) & 255] ^ (e >>> 8);
-  return e;
+function computeCrc32(crc, bytes) {
+  for (const byte of bytes) crc = crc32Table[(crc ^ byte) & 255] ^ (crc >>> 8);
+  return crc;
 }
-function inspectXlsxPackage(bytes, r = {}) {
+function inspectXlsxPackage(bytes, options = {}) {
   const zipDirectory = parseZipDirectory(bytes);
   return (
     (!zipDirectory.has("[Content_Types].xml") ||
       (!zipDirectory.has("xl/workbook.xml") &&
         !(
-          r.allowBinaryWorkbookInventory && zipDirectory.has("xl/workbook.bin")
+          options.allowBinaryWorkbookInventory &&
+          zipDirectory.has("xl/workbook.bin")
         ))) &&
       throwInvalidXlsx("This archive is not a supported Excel workbook."),
     zipDirectory
   );
 }
 function parseZipDirectory(bytes) {
-  const r = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   (bytes.length >= 8 &&
-    r.getUint32(0, true) === 3759263696 &&
-    r.getUint32(4, true) === 3776623009 &&
+    view.getUint32(0, true) === 3759263696 &&
+    view.getUint32(4, true) === 3776623009 &&
     throwInvalidXlsx(
       "Encrypted Office or legacy binary workbooks are unsupported. Remove the open password in the source application.",
     ),
-    (bytes.length < 22 || r.getUint32(0, true) !== 67324752) &&
+    (bytes.length < 22 || view.getUint32(0, true) !== 67324752) &&
       throwInvalidXlsx("This file is not a supported XLSX archive."));
-  let t = -1;
-  for (let p = bytes.length - 22; p >= Math.max(0, bytes.length - 65557); p--)
+  let endRecordOffset = -1;
+  for (
+    let scanOffset = bytes.length - 22;
+    scanOffset >= Math.max(0, bytes.length - 65557);
+    scanOffset--
+  )
     if (
-      r.getUint32(p, true) === 101010256 &&
-      p + 22 + r.getUint16(p + 20, true) === bytes.length
+      view.getUint32(scanOffset, true) === 101010256 &&
+      scanOffset + 22 + view.getUint16(scanOffset + 20, true) === bytes.length
     ) {
-      t = p;
+      endRecordOffset = scanOffset;
       break;
     }
-  t < 0 &&
+  endRecordOffset < 0 &&
     throwInvalidXlsx("The XLSX archive is incomplete or has trailing data.");
-  const n = r.getUint16(t + 10, true),
-    o = r.getUint32(t + 12, true),
-    a = r.getUint32(t + 16, true);
-  (r.getUint16(t + 4, true) ||
-    r.getUint16(t + 6, true) ||
-    n !== r.getUint16(t + 8, true) ||
-    n === 65535 ||
-    n > fileImportLimits.maxXlsxEntries ||
-    a + o !== t) &&
+  const entryCount = view.getUint16(endRecordOffset + 10, true),
+    centralDirectorySize = view.getUint32(endRecordOffset + 12, true),
+    centralDirectoryOffset = view.getUint32(endRecordOffset + 16, true);
+  (view.getUint16(endRecordOffset + 4, true) ||
+    view.getUint16(endRecordOffset + 6, true) ||
+    entryCount !== view.getUint16(endRecordOffset + 8, true) ||
+    entryCount === 65535 ||
+    entryCount > fileImportLimits.maxXlsxEntries ||
+    centralDirectoryOffset + centralDirectorySize !== endRecordOffset) &&
     throwInvalidXlsx(
       "Multi-volume, ZIP64 or oversized XLSX archives are not supported.",
     );
-  const s = new Map(),
-    d = new Set(),
-    u = [],
-    l = (p) => {
+  const entriesByPath = new Map(),
+    seenPaths = new Set(),
+    entryRanges = [],
+    decodePath = (pathBytes) => {
       try {
-        return new TextDecoder("utf-8", { fatal: true }).decode(p);
+        return new TextDecoder("utf-8", { fatal: true }).decode(pathBytes);
       } catch {
         return throwInvalidXlsx("Unsupported XLSX path encoding.");
       }
     };
-  let c = a,
-    h = 0;
-  for (let p = 0; p < n; p++) {
-    (c + 46 > t || r.getUint32(c, true) !== 33639248) &&
+  let recordOffset = centralDirectoryOffset,
+    expandedTotal = 0;
+  for (let entryIndex = 0; entryIndex < entryCount; entryIndex++) {
+    (recordOffset + 46 > endRecordOffset ||
+      view.getUint32(recordOffset, true) !== 33639248) &&
       throwInvalidXlsx("Invalid XLSX archive directory.");
-    const m = r.getUint16(c + 8, true),
-      v = r.getUint16(c + 10, true),
-      crc = r.getUint32(c + 16, true),
-      b = r.getUint32(c + 20, true),
-      size = r.getUint32(c + 24, true),
-      w = r.getUint16(c + 28, true),
-      E = r.getUint16(c + 30, true),
-      A = r.getUint16(c + 32, true),
-      start = r.getUint32(c + 42, true);
-    (m & 8257 &&
+    const generalFlags = view.getUint16(recordOffset + 8, true),
+      compressionMethod = view.getUint16(recordOffset + 10, true),
+      crc = view.getUint32(recordOffset + 16, true),
+      compressedSize = view.getUint32(recordOffset + 20, true),
+      size = view.getUint32(recordOffset + 24, true),
+      fileNameLength = view.getUint16(recordOffset + 28, true),
+      extraLength = view.getUint16(recordOffset + 30, true),
+      commentLength = view.getUint16(recordOffset + 32, true),
+      start = view.getUint32(recordOffset + 42, true);
+    (generalFlags & 8257 &&
       throwInvalidXlsx("Encrypted XLSX archive entries are unsupported."),
-      (m & -2063 ||
-        ![0, 8].includes(v) ||
-        [b, size, start].includes(4294967295) ||
-        r.getUint16(c + 34, true)) &&
+      (generalFlags & -2063 ||
+        ![0, 8].includes(compressionMethod) ||
+        [compressedSize, size, start].includes(4294967295) ||
+        view.getUint16(recordOffset + 34, true)) &&
         throwInvalidXlsx("Unsupported XLSX compression or ZIP64 metadata."),
-      (c + 46 + w + E + A > t ||
-        start + 30 > a ||
-        r.getUint32(start, true) !== 67324752) &&
+      (recordOffset + 46 + fileNameLength + extraLength + commentLength >
+        endRecordOffset ||
+        start + 30 > centralDirectoryOffset ||
+        view.getUint32(start, true) !== 67324752) &&
         throwInvalidXlsx("Invalid XLSX archive offsets."));
-    const F = l(bytes.subarray(c + 46, c + 46 + w));
-    ((!F ||
-      d.has(F.toLowerCase()) ||
-      /^[\/]/.test(F) ||
-      /[\\\x00-\x1f\x7f%:]/.test(F) ||
-      F.split("/").some(
-        (D, B, _) => D === ".." || D === "." || (!D && B < _.length - 1),
-      )) &&
+    const entryPath = decodePath(
+      bytes.subarray(recordOffset + 46, recordOffset + 46 + fileNameLength),
+    );
+    ((!entryPath ||
+      seenPaths.has(entryPath.toLowerCase()) ||
+      /^[\/]/.test(entryPath) ||
+      /[\\\x00-\x1f\x7f%:]/.test(entryPath) ||
+      entryPath
+        .split("/")
+        .some(
+          (segment, segmentIndex, segments) =>
+            segment === ".." ||
+            segment === "." ||
+            (!segment && segmentIndex < segments.length - 1),
+        )) &&
       throwInvalidXlsx("Unsafe or duplicate XLSX archive path."),
-      d.add(F.toLowerCase()));
-    const I = r.getUint16(start + 26, true),
-      O = r.getUint16(start + 28, true),
-      j = start + 30 + I + O,
-      z = j + b;
-    (z > a ||
-      r.getUint16(start + 6, true) !== m ||
-      r.getUint16(start + 8, true) !== v ||
-      l(bytes.subarray(start + 30, start + 30 + I)) !== F) &&
+      seenPaths.add(entryPath.toLowerCase()));
+    const localNameLength = view.getUint16(start + 26, true),
+      localExtraLength = view.getUint16(start + 28, true),
+      dataStart = start + 30 + localNameLength + localExtraLength,
+      dataEnd = dataStart + compressedSize;
+    (dataEnd > centralDirectoryOffset ||
+      view.getUint16(start + 6, true) !== generalFlags ||
+      view.getUint16(start + 8, true) !== compressionMethod ||
+      decodePath(bytes.subarray(start + 30, start + 30 + localNameLength)) !==
+        entryPath) &&
       throwInvalidXlsx(
         "XLSX local headers do not match the archive directory.",
       );
-    let end = z;
-    if (m & 8) {
-      const D = z + (z + 4 <= a && r.getUint32(z, true) === 134695760 ? 4 : 0);
-      ((D + 12 > a ||
-        r.getUint32(D, true) !== crc ||
-        r.getUint32(D + 4, true) !== b ||
-        r.getUint32(D + 8, true) !== size) &&
+    let end = dataEnd;
+    if (generalFlags & 8) {
+      const descriptorOffset =
+        dataEnd +
+        (dataEnd + 4 <= centralDirectoryOffset &&
+        view.getUint32(dataEnd, true) === 134695760
+          ? 4
+          : 0);
+      ((descriptorOffset + 12 > centralDirectoryOffset ||
+        view.getUint32(descriptorOffset, true) !== crc ||
+        view.getUint32(descriptorOffset + 4, true) !== compressedSize ||
+        view.getUint32(descriptorOffset + 8, true) !== size) &&
         throwInvalidXlsx("Invalid XLSX streaming data descriptor."),
-        (end = D + 12));
+        (end = descriptorOffset + 12));
     } else
-      (r.getUint32(start + 14, true) !== crc ||
-        r.getUint32(start + 18, true) !== b ||
-        r.getUint32(start + 22, true) !== size) &&
+      (view.getUint32(start + 14, true) !== crc ||
+        view.getUint32(start + 18, true) !== compressedSize ||
+        view.getUint32(start + 22, true) !== size) &&
         throwInvalidXlsx(
           "XLSX local sizes or checksum do not match the archive directory.",
         );
-    (v === 0 &&
-      b !== size &&
+    (compressionMethod === 0 &&
+      compressedSize !== size &&
       throwInvalidXlsx("Invalid stored XLSX entry size."),
-      u.push({ start: start, end: end }),
-      (h += size),
-      assertXlsxExpansionLimit(b, size, h),
-      s.set(F, { size: size, crc: crc }),
-      (c += 46 + w + E + A));
+      entryRanges.push({ start: start, end: end }),
+      (expandedTotal += size),
+      assertXlsxExpansionLimit(compressedSize, size, expandedTotal),
+      entriesByPath.set(entryPath, { size: size, crc: crc }),
+      (recordOffset += 46 + fileNameLength + extraLength + commentLength));
   }
   return (
-    u.sort((p, m) => p.start - m.start),
-    (c !== t ||
-      u.some((p, m) => p.start !== (m ? u[m - 1].end : 0)) ||
-      u.at(-1)?.end !== a) &&
+    entryRanges.sort(
+      (leftRange, rightRange) => leftRange.start - rightRange.start,
+    ),
+    (recordOffset !== endRecordOffset ||
+      entryRanges.some(
+        (range, rangeIndex) =>
+          range.start !== (rangeIndex ? entryRanges[rangeIndex - 1].end : 0),
+      ) ||
+      entryRanges.at(-1)?.end !== centralDirectoryOffset) &&
       throwInvalidXlsx("Overlapping or unlisted XLSX archive entries."),
-    s
+    entriesByPath
   );
 }
 const xlsxMainContentType =
@@ -378,179 +428,204 @@ const createWorkbookParseState = () => ({
   maxStyle: -1,
   emptyStringCaches: new Map(),
 });
-function resolveRelationshipTarget(e, r) {
-  let t;
+function resolveRelationshipTarget(sourcePartName, relationshipTarget) {
+  let decodedTarget;
   try {
-    t = decodeURIComponent(r);
+    decodedTarget = decodeURIComponent(relationshipTarget);
   } catch {
-    return throwInvalidXlsx(`Invalid relationship target in ${e}.`);
+    return throwInvalidXlsx(
+      `Invalid relationship target in ${sourcePartName}.`,
+    );
   }
-  /[\\\x00-\x1f\x7f:?#]/.test(t) &&
-    throwInvalidXlsx(`Unsafe internal relationship in ${e}.`);
-  const n =
-      e === "_rels/.rels"
+  /[\\\x00-\x1f\x7f:?#]/.test(decodedTarget) &&
+    throwInvalidXlsx(`Unsafe internal relationship in ${sourcePartName}.`);
+  const baseSegments =
+      sourcePartName === "_rels/.rels"
         ? []
-        : e
+        : sourcePartName
             .replace(/_rels\/[^/]+\.rels$/, "")
             .split("/")
             .filter(Boolean),
-    o = t.startsWith("/") ? [] : n;
-  for (const a of t.split("/"))
-    a === ".."
-      ? (o.length ||
-          throwInvalidXlsx(`Relationship escapes the XLSX package in ${e}.`),
-        o.pop())
-      : a && a !== "." && o.push(a);
-  return o.join("/");
+    resolvedSegments = decodedTarget.startsWith("/") ? [] : baseSegments;
+  for (const segment of decodedTarget.split("/"))
+    segment === ".."
+      ? (resolvedSegments.length ||
+          throwInvalidXlsx(
+            `Relationship escapes the XLSX package in ${sourcePartName}.`,
+          ),
+        resolvedSegments.pop())
+      : segment && segment !== "." && resolvedSegments.push(segment);
+  return resolvedSegments.join("/");
 }
-function parseWorksheetXml(e, r, t, workbookParseState) {
-  const o = new Ox.SaxesParser({ xmlns: true });
-  let a = 0,
-    s = 0;
-  const d = new Set(),
-    u = [];
-  let l;
-  const c = /^xl\/worksheets\/[^/]+\.xml$/.test(r);
-  (o.on("error", () => throwInvalidXlsx(`Malformed XML in ${r}.`)),
-    o.on("doctype", () =>
-      throwInvalidXlsx(`DTD/entity declarations are unsupported in ${r}.`),
-    ),
-    o.on("cdata", () =>
+function parseWorksheetXml(xmlText, partName, partNames, workbookParseState) {
+  const parser = new Ox.SaxesParser({ xmlns: true });
+  let elementDepth = 0,
+    elementCount = 0;
+  const seenDeclarations = new Set(),
+    openElementNames = [];
+  let currentCell;
+  const isWorksheetPart = /^xl\/worksheets\/[^/]+\.xml$/.test(partName);
+  (parser.on("error", () => throwInvalidXlsx(`Malformed XML in ${partName}.`)),
+    parser.on("doctype", () =>
       throwInvalidXlsx(
-        `CDATA content is unsupported in ${r}. Resave as standard XLSX text encoding.`,
+        `DTD/entity declarations are unsupported in ${partName}.`,
       ),
     ),
-    o.on("opentag", (h) => {
-      (++a > 128 || ++s > 1e6) &&
+    parser.on("cdata", () =>
+      throwInvalidXlsx(
+        `CDATA content is unsupported in ${partName}. Resave as standard XLSX text encoding.`,
+      ),
+    ),
+    parser.on("opentag", (startTag) => {
+      (++elementDepth > 128 || ++elementCount > 1e6) &&
         throwInvalidXlsx(
-          `XML complexity exceeds the supported budget in ${r}.`,
+          `XML complexity exceeds the supported budget in ${partName}.`,
         );
-      const f = (m) => h.attributes[m]?.value,
-        p = u.at(-1);
+      const readAttribute = (attributeName) =>
+          startTag.attributes[attributeName]?.value,
+        parentName = openElementNames.at(-1);
       if (
-        (u.push(h.local),
-        r === "xl/sharedStrings.xml" &&
-          h.local === "si" &&
+        (openElementNames.push(startTag.local),
+        partName === "xl/sharedStrings.xml" &&
+          startTag.local === "si" &&
           workbookParseState.strings++,
-        r === "xl/styles.xml" &&
-          h.local === "xf" &&
-          p === "cellXfs" &&
+        partName === "xl/styles.xml" &&
+          startTag.local === "xf" &&
+          parentName === "cellXfs" &&
           workbookParseState.styles++,
-        c && h.local === "c" && p === "row")
+        isWorksheetPart && startTag.local === "c" && parentName === "row")
       ) {
-        const m = f("t") ?? "n";
-        (["n", "s", "str", "inlineStr", "b", "e"].includes(m) ||
-          throwInvalidXlsx(`Unsupported cell type ${m} in ${r}.`),
-          (l = {
-            address: f("r") ?? "unknown cell",
-            type: m,
+        const cellType = readAttribute("t") ?? "n";
+        (["n", "s", "str", "inlineStr", "b", "e"].includes(cellType) ||
+          throwInvalidXlsx(`Unsupported cell type ${cellType} in ${partName}.`),
+          (currentCell = {
+            address: readAttribute("r") ?? "unknown cell",
+            type: cellType,
             value: "",
             inValue: false,
             formula: false,
           }));
-        const v = f("s");
-        v !== undefined &&
-          ((!/^\d+$/.test(v) || !Number.isSafeInteger(Number(v))) &&
-            throwInvalidXlsx(`Invalid cell style index in ${r}.`),
+        const styleIndex = readAttribute("s");
+        styleIndex !== undefined &&
+          ((!/^\d+$/.test(styleIndex) ||
+            !Number.isSafeInteger(Number(styleIndex))) &&
+            throwInvalidXlsx(`Invalid cell style index in ${partName}.`),
           (workbookParseState.maxStyle = Math.max(
             workbookParseState.maxStyle,
-            Number(v),
+            Number(styleIndex),
           )));
       }
       if (
-        (l &&
-          p === "c" &&
-          h.local === "v" &&
-          ((l.value = ""), (l.inValue = true)),
-        l &&
-          p === "c" &&
-          h.local === "f" &&
-          ((l.formula = true),
-          f("t") &&
-            !["normal", "shared", "array"].includes(f("t")) &&
+        (currentCell &&
+          parentName === "c" &&
+          startTag.local === "v" &&
+          ((currentCell.value = ""), (currentCell.inValue = true)),
+        currentCell &&
+          parentName === "c" &&
+          startTag.local === "f" &&
+          ((currentCell.formula = true),
+          readAttribute("t") &&
+            !["normal", "shared", "array"].includes(readAttribute("t")) &&
             throwInvalidXlsx(
-              `Unsupported formula kind at ${l.address} in ${r}. Convert data-table formulas to reviewed ordinary formulas or values first.`,
+              `Unsupported formula kind at ${currentCell.address} in ${partName}. Convert data-table formulas to reviewed ordinary formulas or values first.`,
             )),
-        c &&
+        isWorksheetPart &&
           ["sheetProtection", "autoFilter", "extLst", "hyperlinks"].includes(
-            h.local,
+            startTag.local,
           ) &&
           workbookParseState.warnings.add(
-            `Worksheet ${h.local} metadata was detected. Protection, filter criteria, interactive links and unsupported extensions are not preserved as editable Excel features.`,
+            `Worksheet ${startTag.local} metadata was detected. Protection, filter criteria, interactive links and unsupported extensions are not preserved as editable Excel features.`,
           ),
-        a === 1 &&
-          ((r === "[Content_Types].xml" &&
-            (h.local !== "Types" ||
-              h.uri !==
+        elementDepth === 1 &&
+          ((partName === "[Content_Types].xml" &&
+            (startTag.local !== "Types" ||
+              startTag.uri !==
                 "http://schemas.openxmlformats.org/package/2006/content-types")) ||
-            (r.endsWith(".rels") &&
-              (h.local !== "Relationships" ||
-                h.uri !== packageRelationshipsNamespace)) ||
-            (r === "xl/workbook.xml" &&
-              (h.local !== "workbook" ||
-                h.uri !== spreadsheetMainNamespace))) &&
+            (partName.endsWith(".rels") &&
+              (startTag.local !== "Relationships" ||
+                startTag.uri !== packageRelationshipsNamespace)) ||
+            (partName === "xl/workbook.xml" &&
+              (startTag.local !== "workbook" ||
+                startTag.uri !== spreadsheetMainNamespace))) &&
           throwInvalidXlsx(
-            `Unsupported XLSX package type or Strict XML namespace in ${r}. Save as standard Excel Workbook (.xlsx).`,
+            `Unsupported XLSX package type or Strict XML namespace in ${partName}. Save as standard Excel Workbook (.xlsx).`,
           ),
-        r === "[Content_Types].xml" && h.local === "Override")
+        partName === "[Content_Types].xml" && startTag.local === "Override")
       ) {
-        const m = f("PartName"),
-          v = f("ContentType");
-        ((!m || !v || d.has(m)) &&
+        const overridePartName = readAttribute("PartName"),
+          overrideContentType = readAttribute("ContentType");
+        ((!overridePartName ||
+          !overrideContentType ||
+          seenDeclarations.has(overridePartName)) &&
           throwInvalidXlsx(
             "Invalid or duplicate XLSX content type declaration.",
           ),
-          d.add(m),
-          /model\+data|dataModel/i.test(v) &&
+          seenDeclarations.add(overridePartName),
+          /model\+data|dataModel/i.test(overrideContentType) &&
             workbookParseState.warnings.add(
               "Imported Excel Data Model and DAX content is not executed or translated; model caches are historical and require independent review. Exact bytes remain only in the retained original.",
             ),
-          /macroEnabled|vbaProject|activeX|oleObject/i.test(v) &&
+          /macroEnabled|vbaProject|activeX|oleObject/i.test(
+            overrideContentType,
+          ) &&
             throwInvalidXlsx(
               "Macro-enabled or executable workbook content is unsupported; renaming a file does not convert its format.",
             ),
-          m === "/xl/workbook.xml" &&
-            (v !== xlsxMainContentType &&
+          overridePartName === "/xl/workbook.xml" &&
+            (overrideContentType !== xlsxMainContentType &&
               throwInvalidXlsx(
                 "Unsupported workbook content type. Templates and alternate formats must be saved as XLSX.",
               ),
             (workbookParseState.hasMainType = true)),
-          t.has(resolveRelationshipTarget("_rels/.rels", m)) ||
-            throwInvalidXlsx(`Missing XLSX part ${m}.`));
+          partNames.has(
+            resolveRelationshipTarget("_rels/.rels", overridePartName),
+          ) || throwInvalidXlsx(`Missing XLSX part ${overridePartName}.`));
       }
-      if (r.endsWith(".rels") && h.local === "Relationship") {
-        const m = f("Id"),
-          v = f("Target"),
-          g = f("Type"),
-          b = f("TargetMode");
+      if (partName.endsWith(".rels") && startTag.local === "Relationship") {
+        const relationshipId = readAttribute("Id"),
+          targetAttribute = readAttribute("Target"),
+          relationshipType = readAttribute("Type"),
+          targetMode = readAttribute("TargetMode");
         if (
-          ((!m ||
-            !v ||
-            !g ||
-            d.has(m) ||
-            (b && !["External", "Internal"].includes(b))) &&
-            throwInvalidXlsx(`Invalid or duplicate relationship in ${r}.`),
-          d.add(m),
-          /vbaProject|activeX|oleObject|attachedTemplate/i.test(g) &&
+          ((!relationshipId ||
+            !targetAttribute ||
+            !relationshipType ||
+            seenDeclarations.has(relationshipId) ||
+            (targetMode && !["External", "Internal"].includes(targetMode))) &&
+            throwInvalidXlsx(
+              `Invalid or duplicate relationship in ${partName}.`,
+            ),
+          seenDeclarations.add(relationshipId),
+          /vbaProject|activeX|oleObject|attachedTemplate/i.test(
+            relationshipType,
+          ) &&
             throwInvalidXlsx(
               "Executable or embedded-object relationships are unsupported.",
             ),
-          b === "External")
+          targetMode === "External")
         )
-          (g !== `${officeDocumentRelationshipPrefix}hyperlink` &&
-            g !== `${officeDocumentRelationshipPrefix}externalLinkPath` &&
-            throwInvalidXlsx(`Unsupported external relationship in ${r}.`),
+          (relationshipType !==
+            `${officeDocumentRelationshipPrefix}hyperlink` &&
+            relationshipType !==
+              `${officeDocumentRelationshipPrefix}externalLinkPath` &&
+            throwInvalidXlsx(
+              `Unsupported external relationship in ${partName}.`,
+            ),
             workbookParseState.warnings.add(
               "External hyperlinks/workbook links were found. No external target is fetched; interactive links and refresh connections are omitted.",
             ));
         else {
-          const relationshipTarget = resolveRelationshipTarget(r, v);
-          (t.has(relationshipTarget) ||
+          const relationshipTarget = resolveRelationshipTarget(
+            partName,
+            targetAttribute,
+          );
+          (partNames.has(relationshipTarget) ||
             throwInvalidXlsx(
-              `Missing relationship target ${relationshipTarget} in ${r}.`,
+              `Missing relationship target ${relationshipTarget} in ${partName}.`,
             ),
-            r === "_rels/.rels" &&
-              g === `${officeDocumentRelationshipPrefix}officeDocument` &&
+            partName === "_rels/.rels" &&
+              relationshipType ===
+                `${officeDocumentRelationshipPrefix}officeDocument` &&
               ((workbookParseState.hasOfficeDocument ||
                 relationshipTarget !== "xl/workbook.xml") &&
                 throwInvalidXlsx(
@@ -560,56 +635,65 @@ function parseWorksheetXml(e, r, t, workbookParseState) {
         }
       }
     }),
-    o.on("text", (h) => {
-      l?.inValue && (l.value += h);
+    parser.on("text", (textChunk) => {
+      currentCell?.inValue && (currentCell.value += textChunk);
     }),
-    o.on("closetag", (h) => {
-      if (l && h.local === "v") {
-        const value = l.value;
+    parser.on("closetag", (endTag) => {
+      if (currentCell && endTag.local === "v") {
+        const value = currentCell.value;
         if (
-          (l.type === "n" &&
+          (currentCell.type === "n" &&
             value !== "" &&
             (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value) ||
               !Number.isFinite(Number(value))) &&
-            throwInvalidXlsx(`Invalid numeric value at ${l.address} in ${r}.`),
-          l.type === "b" &&
+            throwInvalidXlsx(
+              `Invalid numeric value at ${currentCell.address} in ${partName}.`,
+            ),
+          currentCell.type === "b" &&
             !["0", "1"].includes(value) &&
             throwInvalidXlsx(
-              `Unsupported boolean value at ${l.address} in ${r}; save numeric Boolean encoding in a standard XLSX copy.`,
+              `Unsupported boolean value at ${currentCell.address} in ${partName}; save numeric Boolean encoding in a standard XLSX copy.`,
             ),
-          l.type === "s" &&
+          currentCell.type === "s" &&
             ((!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) &&
               throwInvalidXlsx(
-                `Invalid shared-string index at ${l.address} in ${r}.`,
+                `Invalid shared-string index at ${currentCell.address} in ${partName}.`,
               ),
             (workbookParseState.maxString = Math.max(
               workbookParseState.maxString,
               Number(value),
             ))),
-          l.type === "e" &&
+          currentCell.type === "e" &&
             !/^#(?:NULL!|DIV\/0!|VALUE!|REF!|NAME\?|NUM!|N\/A|SPILL!|CALC!|GETTING_DATA|CONNECT!|BLOCKED!|FIELD!|UNKNOWN!|BUSY!)$/.test(
               value,
             ) &&
             throwInvalidXlsx(
-              `Unsupported error value at ${l.address} in ${r}.`,
+              `Unsupported error value at ${currentCell.address} in ${partName}.`,
             ),
-          l.type === "e" &&
-            !l.formula &&
+          currentCell.type === "e" &&
+            !currentCell.formula &&
             workbookParseState.warnings.add(
               "Source constant error cells are flattened to displayed text. Error propagation from those cells is not preserved; review dependent calculations.",
             ),
-          l.type === "str" && l.formula && value === "")
+          currentCell.type === "str" && currentCell.formula && value === "")
         ) {
-          const p = workbookParseState.emptyStringCaches.get(r) ?? new Set();
-          (p.add(l.address), workbookParseState.emptyStringCaches.set(r, p));
+          const emptyStringAddresses =
+            workbookParseState.emptyStringCaches.get(partName) ?? new Set();
+          (emptyStringAddresses.add(currentCell.address),
+            workbookParseState.emptyStringCaches.set(
+              partName,
+              emptyStringAddresses,
+            ));
         }
-        l.inValue = false;
+        currentCell.inValue = false;
       }
-      (h.local === "c" && (l = undefined), u.pop(), a--);
+      (endTag.local === "c" && (currentCell = undefined),
+        openElementNames.pop(),
+        elementDepth--);
     }),
-    o.write(e).close());
+    parser.write(xmlText).close());
 }
-function validateWorkbookPackage(workbookParseState, r) {
+function validateWorkbookPackage(workbookParseState, partPaths) {
   ((!workbookParseState.hasMainType || !workbookParseState.hasOfficeDocument) &&
     throwInvalidXlsx(
       "Missing standard XLSX workbook content type or relationship.",
@@ -618,7 +702,7 @@ function validateWorkbookPackage(workbookParseState, r) {
       throwInvalidXlsx("A worksheet references a missing shared string."),
     workbookParseState.maxStyle >= workbookParseState.styles &&
       throwInvalidXlsx("A worksheet references a missing cell style."));
-  const t = [
+  const partWarningRules = [
     [
       /^xl\/(?:model|dataModel)\//i,
       "Excel Data Model / Power Pivot content is retained only in the original source and is not executed or translated. Relationships, DAX measures and model caches are unavailable; worksheet results are historical snapshots. Rebuild an explicit local Data Model from reviewed worksheet tables before relying on recalculated results.",
@@ -641,8 +725,10 @@ function validateWorkbookPackage(workbookParseState, r) {
       "Threaded discussions, people, slicers and timelines are omitted.",
     ],
   ];
-  for (const n of r)
-    for (const [o, a] of t) o.test(n) && workbookParseState.warnings.add(a);
+  for (const partPath of partPaths)
+    for (const [warningPattern, warningMessage] of partWarningRules)
+      warningPattern.test(partPath) &&
+        workbookParseState.warnings.add(warningMessage);
   return [...workbookParseState.warnings];
 }
 const templateConversionRoutes = Object.freeze(
@@ -681,224 +767,272 @@ function inspectAlternateWorkbookArchive(bytes) {
   if (bytes.length > workbookLimits.maxFileBytes)
     throw Error("Files must be 10 MB or smaller.");
   const zipDirectory = parseZipDirectory(bytes),
-    t = Object.create(null),
-    n = new Set();
-  let o = 0,
-    a;
-  const s = new Unzip((d) => {
-    if (!zipDirectory.has(d.name) || n.has(d.name)) {
-      a = Error("Alternate workbook archive directory mismatch.");
+    entriesByName = Object.create(null),
+    seenEntryNames = new Set();
+  let totalExpandedBytes = 0,
+    archiveError;
+  const unzipper = new Unzip((fileEntry) => {
+    if (
+      !zipDirectory.has(fileEntry.name) ||
+      seenEntryNames.has(fileEntry.name)
+    ) {
+      archiveError = Error("Alternate workbook archive directory mismatch.");
       return;
     }
-    n.add(d.name);
-    let u = 0,
-      l = -1;
-    const c = [];
-    ((d.ondata = (h, f, p) => {
-      if (!a) {
-        if (h) {
-          a = Error("Corrupt alternate workbook archive.");
+    seenEntryNames.add(fileEntry.name);
+    let entryByteCount = 0,
+      runningCrc = -1;
+    const dataChunks = [];
+    ((fileEntry.ondata = (chunkError, chunk, isFinalChunk) => {
+      if (!archiveError) {
+        if (chunkError) {
+          archiveError = Error("Corrupt alternate workbook archive.");
           return;
         }
         if (
-          ((u += f.length),
-          (o += f.length),
-          u > zipDirectory.get(d.name).size || o > 50 * 1024 * 1024)
+          ((entryByteCount += chunk.length),
+          (totalExpandedBytes += chunk.length),
+          entryByteCount > zipDirectory.get(fileEntry.name).size ||
+            totalExpandedBytes > 50 * 1024 * 1024)
         ) {
-          ((a = Error(
+          ((archiveError = Error(
             "Alternate workbook archive exceeds its expansion budget.",
           )),
-            d.terminate());
+            fileEntry.terminate());
           return;
         }
-        if (((l = computeCrc32(l, f)), c.push(f), p)) {
+        if (
+          ((runningCrc = computeCrc32(runningCrc, chunk)),
+          dataChunks.push(chunk),
+          isFinalChunk)
+        ) {
           if (
-            u !== zipDirectory.get(d.name).size ||
-            (l ^ -1) >>> 0 !== zipDirectory.get(d.name).crc
+            entryByteCount !== zipDirectory.get(fileEntry.name).size ||
+            (runningCrc ^ -1) >>> 0 !== zipDirectory.get(fileEntry.name).crc
           ) {
-            a = Error("Alternate workbook archive checksum mismatch.");
+            archiveError = Error(
+              "Alternate workbook archive checksum mismatch.",
+            );
             return;
           }
-          const m = new Uint8Array(u);
-          let v = 0;
-          for (const g of c) (m.set(g, v), (v += g.length));
-          t[d.name] = m;
+          const entryData = new Uint8Array(entryByteCount);
+          let copyOffset = 0;
+          for (const dataChunk of dataChunks)
+            (entryData.set(dataChunk, copyOffset),
+              (copyOffset += dataChunk.length));
+          entriesByName[fileEntry.name] = entryData;
         }
       }
     }),
-      d.start());
+      fileEntry.start());
   });
-  s.register(UnzipInflate);
+  unzipper.register(UnzipInflate);
   try {
-    s.push(bytes, true);
+    unzipper.push(bytes, true);
   } catch {
     throw Error("Unable to inspect corrupt alternate workbook archive.");
   }
-  if (a) throw a;
-  if (Object.keys(t).length !== zipDirectory.size)
+  if (archiveError) throw archiveError;
+  if (Object.keys(entriesByName).length !== zipDirectory.size)
     throw Error("Alternate workbook archive is incomplete.");
-  return t;
+  return entriesByName;
 }
-function parseAlternateWorkbookXml(e, r) {
-  const t = new TextDecoder("utf-8", { fatal: true }).decode(e);
+function parseAlternateWorkbookXml(xmlBytes, onElement) {
+  const xmlText = new TextDecoder("utf-8", { fatal: true }).decode(xmlBytes);
   if (
-    t.includes("\0") ||
-    /<\?xml[^>]*encoding\s*=\s*["'](?!utf-8|utf8)[^"']+/i.test(t)
+    xmlText.includes("\0") ||
+    /<\?xml[^>]*encoding\s*=\s*["'](?!utf-8|utf8)[^"']+/i.test(xmlText)
   )
     throw Error("Alternate workbook XML must use UTF-8.");
-  const n = new Ox.SaxesParser({ xmlns: true });
-  let o = 0,
-    a = 0;
-  (n.on("doctype", () => {
+  const parser = new Ox.SaxesParser({ xmlns: true });
+  let elementDepth = 0,
+    elementCount = 0;
+  (parser.on("doctype", () => {
     throw Error("Alternate workbook XML declarations are unsupported.");
   }),
-    n.on("opentag", (s) => {
-      if (++o > 128 || ++a > 1e6)
+    parser.on("opentag", (element) => {
+      if (++elementDepth > 128 || ++elementCount > 1e6)
         throw Error("Alternate workbook XML exceeds its inspection budget.");
-      r(s);
+      onElement(element);
     }),
-    n.on("closetag", () => {
-      o--;
+    parser.on("closetag", () => {
+      elementDepth--;
     }),
-    n.write(t).close());
+    parser.write(xmlText).close());
 }
-function readOpenDocumentPackage(e) {
-  const r = (u) =>
+function readOpenDocumentPackage(packageEntries) {
+  const readAttributes = (element) =>
     Object.fromEntries(
-      Object.values(u.attributes).map((attribute) => [
+      Object.values(element.attributes).map((attribute) => [
         attribute.local,
         attribute.value,
       ]),
     );
-  if (e.mimetype) {
+  if (packageEntries.mimetype) {
     if (
-      new TextDecoder().decode(e.mimetype) !==
+      new TextDecoder().decode(packageEntries.mimetype) !==
         "application/vnd.oasis.opendocument.spreadsheet" ||
-      !e["META-INF/manifest.xml"] ||
-      !e["content.xml"] ||
-      e["[Content_Types].xml"]
+      !packageEntries["META-INF/manifest.xml"] ||
+      !packageEntries["content.xml"] ||
+      packageEntries["[Content_Types].xml"]
     )
       throw Error("Unsupported or mismatched OpenDocument workbook identity.");
-    let u = false,
-      l = false;
+    let hasRootManifestEntry = false,
+      hasSpreadsheetBody = false;
     if (
-      (parseAlternateWorkbookXml(e["META-INF/manifest.xml"], (c) => {
-        const h = r(c);
-        if (c.uri === "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0") {
-          if (c.local === "encryption-data")
-            throw Error(
-              "Encrypted OpenDocument workbooks require an unencrypted XLSX conversion.",
-            );
-          c.local === "file-entry" &&
-            h["full-path"] === "/" &&
-            h["media-type"] ===
-              "application/vnd.oasis.opendocument.spreadsheet" &&
-            (u = true);
-        }
-      }),
-      parseAlternateWorkbookXml(e["content.xml"], (c) => {
-        c.local === "spreadsheet" &&
-          c.uri === "urn:oasis:names:tc:opendocument:xmlns:office:1.0" &&
-          (l = true);
-      }),
-      !u || !l)
+      (parseAlternateWorkbookXml(
+        packageEntries["META-INF/manifest.xml"],
+        (manifestElement) => {
+          const manifestAttributes = readAttributes(manifestElement);
+          if (
+            manifestElement.uri ===
+            "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
+          ) {
+            if (manifestElement.local === "encryption-data")
+              throw Error(
+                "Encrypted OpenDocument workbooks require an unencrypted XLSX conversion.",
+              );
+            manifestElement.local === "file-entry" &&
+              manifestAttributes["full-path"] === "/" &&
+              manifestAttributes["media-type"] ===
+                "application/vnd.oasis.opendocument.spreadsheet" &&
+              (hasRootManifestEntry = true);
+          }
+        },
+      ),
+      parseAlternateWorkbookXml(
+        packageEntries["content.xml"],
+        (contentElement) => {
+          contentElement.local === "spreadsheet" &&
+            contentElement.uri ===
+              "urn:oasis:names:tc:opendocument:xmlns:office:1.0" &&
+            (hasSpreadsheetBody = true);
+        },
+      ),
+      !hasRootManifestEntry || !hasSpreadsheetBody)
     )
       throw Error("Unsupported or mismatched OpenDocument workbook identity.");
     return "ods";
   }
-  if (!e["[Content_Types].xml"] || !e["_rels/.rels"])
+  if (!packageEntries["[Content_Types].xml"] || !packageEntries["_rels/.rels"])
     throw Error("Unsupported alternate workbook package identity.");
-  let t,
-    n = "",
-    o = 0;
-  const a = new Set();
-  parseAlternateWorkbookXml(e["[Content_Types].xml"], (u) => {
-    if (
-      u.uri !== "http://schemas.openxmlformats.org/package/2006/content-types"
-    )
-      throw Error("Unsupported alternate workbook content-type namespace.");
-    const l = r(u);
-    if (u.local === "Override") {
-      if (!l.PartName || a.has(l.PartName))
-        throw Error("Duplicate or missing alternate workbook content type.");
+  let workbookContentType,
+    workbookPartPath = "",
+    mainRelationshipCount = 0;
+  const seenPartNames = new Set();
+  parseAlternateWorkbookXml(
+    packageEntries["[Content_Types].xml"],
+    (contentTypeElement) => {
       if (
-        (a.add(l.PartName),
-        l.PartName === "/xl/workbook.xml" || l.PartName === "/xl/workbook.bin")
-      ) {
-        if (t) throw Error("Ambiguous alternate workbook identity.");
-        ((t = l.ContentType), (n = l.PartName.slice(1)));
+        contentTypeElement.uri !==
+        "http://schemas.openxmlformats.org/package/2006/content-types"
+      )
+        throw Error("Unsupported alternate workbook content-type namespace.");
+      const contentTypeAttributes = readAttributes(contentTypeElement);
+      if (contentTypeElement.local === "Override") {
+        if (
+          !contentTypeAttributes.PartName ||
+          seenPartNames.has(contentTypeAttributes.PartName)
+        )
+          throw Error("Duplicate or missing alternate workbook content type.");
+        if (
+          (seenPartNames.add(contentTypeAttributes.PartName),
+          contentTypeAttributes.PartName === "/xl/workbook.xml" ||
+            contentTypeAttributes.PartName === "/xl/workbook.bin")
+        ) {
+          if (workbookContentType)
+            throw Error("Ambiguous alternate workbook identity.");
+          ((workbookContentType = contentTypeAttributes.ContentType),
+            (workbookPartPath = contentTypeAttributes.PartName.slice(1)));
+        }
       }
-    }
-  });
-  const s = Object.entries(macroEnabledContentTypes).find(
-    ([, u]) => u === t,
+    },
+  );
+  const workbookExtension = Object.entries(macroEnabledContentTypes).find(
+    ([, knownContentType]) => knownContentType === workbookContentType,
   )?.[0];
   if (
-    !s ||
-    !e[n] ||
-    n !== (s === "xlsb" ? "xl/workbook.bin" : "xl/workbook.xml")
+    !workbookExtension ||
+    !packageEntries[workbookPartPath] ||
+    workbookPartPath !==
+      (workbookExtension === "xlsb" ? "xl/workbook.bin" : "xl/workbook.xml")
   )
     throw Error("Unsupported alternate workbook content type.");
   if (
-    (parseAlternateWorkbookXml(e["_rels/.rels"], (u) => {
-      const l = r(u);
-      if (
-        u.uri ===
-          "http://schemas.openxmlformats.org/package/2006/relationships" &&
-        u.local === "Relationship" &&
-        l.Type ===
-          "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
-      ) {
+    (parseAlternateWorkbookXml(
+      packageEntries["_rels/.rels"],
+      (relationshipElement) => {
+        const relationshipAttributes = readAttributes(relationshipElement);
         if (
-          l.TargetMode ||
-          resolveRelationshipTarget("_rels/.rels", l.Target) !== n
-        )
-          throw Error("Invalid alternate workbook main relationship.");
-        o++;
-      }
-    }),
-    s === "xlsb")
+          relationshipElement.uri ===
+            "http://schemas.openxmlformats.org/package/2006/relationships" &&
+          relationshipElement.local === "Relationship" &&
+          relationshipAttributes.Type ===
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+        ) {
+          if (
+            relationshipAttributes.TargetMode ||
+            resolveRelationshipTarget(
+              "_rels/.rels",
+              relationshipAttributes.Target,
+            ) !== workbookPartPath
+          )
+            throw Error("Invalid alternate workbook main relationship.");
+          mainRelationshipCount++;
+        }
+      },
+    ),
+    workbookExtension === "xlsb")
   ) {
-    const u = e[n];
-    if (u.length < 3 || u[0] !== 131 || u[1] !== 1 || u[2] !== 0)
+    const workbookBytes = packageEntries[workbookPartPath];
+    if (
+      workbookBytes.length < 3 ||
+      workbookBytes[0] !== 131 ||
+      workbookBytes[1] !== 1 ||
+      workbookBytes[2] !== 0
+    )
       throw Error(
         "Invalid binary workbook beginning record. Convert the original in its source application.",
       );
   } else {
-    let u = true;
-    parseAlternateWorkbookXml(e[n], (l) => {
-      if (
-        u &&
-        ((u = false),
-        l.local !== "workbook" ||
-          ![
-            "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-            "http://purl.oclc.org/ooxml/spreadsheetml/main",
-          ].includes(l.uri))
-      )
-        throw Error("Invalid alternate workbook XML identity.");
-    });
+    let isFirstElement = true;
+    parseAlternateWorkbookXml(
+      packageEntries[workbookPartPath],
+      (workbookElement) => {
+        if (
+          isFirstElement &&
+          ((isFirstElement = false),
+          workbookElement.local !== "workbook" ||
+            ![
+              "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+              "http://purl.oclc.org/ooxml/spreadsheetml/main",
+            ].includes(workbookElement.uri))
+        )
+          throw Error("Invalid alternate workbook XML identity.");
+      },
+    );
   }
-  if (o !== 1) throw Error("Invalid alternate workbook main relationship.");
-  return s;
+  if (mainRelationshipCount !== 1)
+    throw Error("Invalid alternate workbook main relationship.");
+  return workbookExtension;
 }
-function convertTemplateToXlsx(bytes, r, t) {
-  const n = inspectAlternateWorkbookArchive(bytes);
-  if (readOpenDocumentPackage(n) !== r)
+function convertTemplateToXlsx(bytes, sourceFormat, targetFormat) {
+  const archiveEntries = inspectAlternateWorkbookArchive(bytes);
+  if (readOpenDocumentPackage(archiveEntries) !== sourceFormat)
     throw Error(
       "The workbook content does not match the template conversion route.",
     );
   if (
-    ((n["[Content_Types].xml"] = strToU8(
-      strFromU8(n["[Content_Types].xml"]).replace(
-        macroEnabledContentTypes[r],
-        macroEnabledContentTypes[t],
+    ((archiveEntries["[Content_Types].xml"] = strToU8(
+      strFromU8(archiveEntries["[Content_Types].xml"]).replace(
+        macroEnabledContentTypes[sourceFormat],
+        macroEnabledContentTypes[targetFormat],
       ),
     )),
-    readOpenDocumentPackage(n) !== t)
+    readOpenDocumentPackage(archiveEntries) !== targetFormat)
   )
     throw Error("The template content type could not be converted safely.");
-  return zipSync(n);
+  return zipSync(archiveEntries);
 }
 
 /* From 08-xlsx-import-export-and-preservation.js */
@@ -909,66 +1043,72 @@ const customPropertiesContentType =
 const customXmlPropertiesContentType =
   "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
 const Dle = { scope: "workbook" };
-function parseXmlPartStrict(e, r, t, n) {
-  const o = new Ox.SaxesParser({ xmlns: true });
-  (o.on("opentag", r),
-    t && o.on("closetag", t),
-    n && o.on("text", n),
-    o.on("doctype", () => {
+function parseXmlPartStrict(xmlBytes, onOpenTag, onCloseTag, onText) {
+  const parser = new Ox.SaxesParser({ xmlns: true });
+  (parser.on("opentag", onOpenTag),
+    onCloseTag && parser.on("closetag", onCloseTag),
+    onText && parser.on("text", onText),
+    parser.on("doctype", () => {
       throw Error("DTD is not permitted in preservation metadata.");
     }),
-    o.write(strFromU8(e)).close());
+    parser.write(strFromU8(xmlBytes)).close());
 }
-function ownerPartForRelsPath(e) {
-  return e === "_rels/.rels"
+function ownerPartForRelsPath(relsPath) {
+  return relsPath === "_rels/.rels"
     ? ""
-    : e.replace(/(^|\/)\_rels\/([^/]+)\.rels$/, "$1$2");
+    : relsPath.replace(/(^|\/)\_rels\/([^/]+)\.rels$/, "$1$2");
 }
-function relationshipsPathFor(e) {
-  if (!e) return "_rels/.rels";
-  const r = e.lastIndexOf("/");
-  return `${e.slice(0, r + 1)}_rels/${e.slice(r + 1)}.rels`;
+function relationshipsPathFor(partPath) {
+  if (!partPath) return "_rels/.rels";
+  const lastSlashIndex = partPath.lastIndexOf("/");
+  return `${partPath.slice(0, lastSlashIndex + 1)}_rels/${partPath.slice(lastSlashIndex + 1)}.rels`;
 }
-function readPackageRelationships(e) {
+function readPackageRelationships(packageEntries) {
   const types = new Map(),
-    t = new Map(),
+    defaultContentTypes = new Map(),
     relationships = [],
     sheets = new Map();
-  parseXmlPartStrict(e["[Content_Types].xml"], (a) => {
-    (a.local === "Override" &&
-      types.set(
-        (a.attributes.PartName?.value ?? "").slice(1),
-        a.attributes.ContentType?.value ?? "",
-      ),
-      a.local === "Default" &&
-        t.set(
-          a.attributes.Extension?.value ?? "",
-          a.attributes.ContentType?.value ?? "",
-        ));
-  });
-  for (const [rels, s] of Object.entries(e))
+  parseXmlPartStrict(
+    packageEntries["[Content_Types].xml"],
+    (contentTypesElement) => {
+      (contentTypesElement.local === "Override" &&
+        types.set(
+          (contentTypesElement.attributes.PartName?.value ?? "").slice(1),
+          contentTypesElement.attributes.ContentType?.value ?? "",
+        ),
+        contentTypesElement.local === "Default" &&
+          defaultContentTypes.set(
+            contentTypesElement.attributes.Extension?.value ?? "",
+            contentTypesElement.attributes.ContentType?.value ?? "",
+          ));
+    },
+  );
+  for (const [rels, relsBytes] of Object.entries(packageEntries))
     rels.endsWith(".rels") &&
-      parseXmlPartStrict(s, (d) => {
-        if (d.local !== "Relationship") return;
-        const external = d.attributes.TargetMode?.value === "External",
-          l = d.attributes.Target?.value ?? "";
+      parseXmlPartStrict(relsBytes, (relationshipElement) => {
+        if (relationshipElement.local !== "Relationship") return;
+        const external =
+            relationshipElement.attributes.TargetMode?.value === "External",
+          targetValue = relationshipElement.attributes.Target?.value ?? "";
         relationships.push({
           owner: ownerPartForRelsPath(rels),
           rels: rels,
-          id: d.attributes.Id?.value ?? "",
-          type: d.attributes.Type?.value ?? "",
+          id: relationshipElement.attributes.Id?.value ?? "",
+          type: relationshipElement.attributes.Type?.value ?? "",
           external: external,
-          target: external ? l : resolveRelationshipTarget(rels, l),
+          target: external
+            ? targetValue
+            : resolveRelationshipTarget(rels, targetValue),
         });
       });
   return (
-    parseXmlPartStrict(e["xl/workbook.xml"], (a) => {
-      if (a.local === "sheet") {
+    parseXmlPartStrict(packageEntries["xl/workbook.xml"], (workbookElement) => {
+      if (workbookElement.local === "sheet") {
         const relationship = relationships.find(
           (relationship) =>
             relationship.owner === "xl/workbook.xml" &&
             relationship.id ===
-              Object.values(a.attributes).find(
+              Object.values(workbookElement.attributes).find(
                 (attribute) =>
                   attribute.local === "id" && attribute.uri === z2.slice(0, -1),
               )?.value,
@@ -976,25 +1116,27 @@ function readPackageRelationships(e) {
         relationship &&
           sheets.set(
             relationship.target,
-            a.attributes.name?.value ?? "Unknown worksheet",
+            workbookElement.attributes.name?.value ?? "Unknown worksheet",
           );
       }
     }),
     {
       relationships: relationships,
       sheets: sheets,
-      contentType: (a) =>
-        types.get(a) ?? t.get(a.split(".").at(-1)) ?? "undeclared",
+      contentType: (partPath) =>
+        types.get(partPath) ??
+        defaultContentTypes.get(partPath.split(".").at(-1)) ??
+        "undeclared",
       types: types,
     }
   );
 }
-function classifyPreservedPart(path, r) {
+function classifyPreservedPart(path, contentType) {
   return path.endsWith("/")
     ? "directory"
     : path === "[Content_Types].xml" || path.endsWith(".rels")
       ? "package relationships"
-      : /vba|macrosheet|activeX|embedding/i.test(path + r)
+      : /vba|macrosheet|activeX|embedding/i.test(path + contentType)
         ? "active content"
         : /^customXml\//.test(path)
           ? "custom XML"
@@ -1003,7 +1145,7 @@ function classifyPreservedPart(path, r) {
             : /^xl\/charts\//.test(path)
               ? "charts"
               : /^xl\/(?:model|dataModel)\//i.test(path) ||
-                  /model\+data|dataModel/i.test(r)
+                  /model\+data|dataModel/i.test(contentType)
                 ? "Excel Data Model"
                 : /^xl\/(pivotTables|pivotCache)\//.test(path)
                   ? "pivots"
@@ -1036,111 +1178,130 @@ function classifyPreservedPart(path, r) {
                                             ? "document properties"
                                             : "unknown part";
 }
-function F$(e, sha256) {
-  const packageRelationships = readPackageRelationships(e),
-    n = new Map(),
-    o = new Map();
+function F$(packageEntries, sha256) {
+  const packageRelationships = readPackageRelationships(packageEntries),
+    relationshipsByOwner = new Map(),
+    relationshipsByTarget = new Map();
   for (const relationship of packageRelationships.relationships)
-    (n.set(relationship.owner, [
-      ...(n.get(relationship.owner) ?? []),
+    (relationshipsByOwner.set(relationship.owner, [
+      ...(relationshipsByOwner.get(relationship.owner) ?? []),
       relationship,
     ]),
       relationship.external ||
-        o.set(relationship.target, [
-          ...(o.get(relationship.target) ?? []),
+        relationshipsByTarget.set(relationship.target, [
+          ...(relationshipsByTarget.get(relationship.target) ?? []),
           relationship,
         ]));
-  const a = new Map();
-  for (const [m, v] of packageRelationships.sheets) {
-    const g = [m],
-      b = new Set();
-    for (; g.length;) {
-      const y = g.pop();
-      if (b.has(y)) continue;
-      b.add(y);
-      const w = a.get(y) ?? new Set();
-      (w.add(v), a.set(y, w));
-      for (const E of n.get(y) ?? []) E.external || g.push(E.target);
+  const sheetsByPart = new Map();
+  for (const [sheetPartPath, sheetInfo] of packageRelationships.sheets) {
+    const pendingPartPaths = [sheetPartPath],
+      visitedParts = new Set();
+    for (; pendingPartPaths.length;) {
+      const partPath = pendingPartPaths.pop();
+      if (visitedParts.has(partPath)) continue;
+      visitedParts.add(partPath);
+      const partSheets = sheetsByPart.get(partPath) ?? new Set();
+      (partSheets.add(sheetInfo), sheetsByPart.set(partPath, partSheets));
+      for (const childRelationship of relationshipsByOwner.get(partPath) ?? [])
+        childRelationship.external ||
+          pendingPartPaths.push(childRelationship.target);
     }
   }
-  const s = new Set(),
-    d = new Map(),
-    u = Object.keys(e).filter(
-      (m) => m.startsWith("customXml/") && !m.endsWith("/"),
+  const opaqueParts = new Set(),
+    retentionReasons = new Map(),
+    customXmlPaths = Object.keys(packageEntries).filter(
+      (entryPath) =>
+        entryPath.startsWith("customXml/") && !entryPath.endsWith("/"),
     );
-  if (u.length) {
-    const m = new Set(u),
-      v = packageRelationships.relationships.filter(
+  if (customXmlPaths.length) {
+    const customXmlPathSet = new Set(customXmlPaths),
+      customXmlRelationships = packageRelationships.relationships.filter(
         (relationship) =>
-          m.has(relationship.owner) ||
-          (!relationship.external && m.has(relationship.target)),
+          customXmlPathSet.has(relationship.owner) ||
+          (!relationship.external && customXmlPathSet.has(relationship.target)),
       );
-    let g = !Object.keys(e).some((E) => /xmlMaps|singleXmlCells/i.test(E));
-    ((g &&= u.every(
-      (E) =>
-        E.endsWith(".rels") ||
-        (/\.xml$/.test(E) &&
+    let isPassiveCustomXml = !Object.keys(packageEntries).some((partName) =>
+      /xmlMaps|singleXmlCells/i.test(partName),
+    );
+    ((isPassiveCustomXml &&= customXmlPaths.every(
+      (customXmlPart) =>
+        customXmlPart.endsWith(".rels") ||
+        (/\.xml$/.test(customXmlPart) &&
           [
             "application/xml",
             "text/xml",
             customXmlPropertiesContentType,
-          ].includes(packageRelationships.contentType(E))),
+          ].includes(packageRelationships.contentType(customXmlPart))),
     )),
-      (g &&= v.every(
-        (E) =>
-          !E.external &&
-          ((E.owner === "xl/workbook.xml" &&
-            E.type === z2 + "customXml" &&
-            m.has(E.target)) ||
-            (m.has(E.owner) &&
-              m.has(E.target) &&
-              E.type === z2 + "customXmlProps")),
+      (isPassiveCustomXml &&= customXmlRelationships.every(
+        (customXmlLink) =>
+          !customXmlLink.external &&
+          ((customXmlLink.owner === "xl/workbook.xml" &&
+            customXmlLink.type === z2 + "customXml" &&
+            customXmlPathSet.has(customXmlLink.target)) ||
+            (customXmlPathSet.has(customXmlLink.owner) &&
+              customXmlPathSet.has(customXmlLink.target) &&
+              customXmlLink.type === z2 + "customXmlProps")),
       )),
-      (g &&= v.every((E) =>
-        E.owner === "xl/workbook.xml"
+      (isPassiveCustomXml &&= customXmlRelationships.every((xmlRelationship) =>
+        xmlRelationship.owner === "xl/workbook.xml"
           ? ["application/xml", "text/xml"].includes(
-              packageRelationships.contentType(E.target),
+              packageRelationships.contentType(xmlRelationship.target),
             )
-          : packageRelationships.contentType(E.owner) !==
+          : packageRelationships.contentType(xmlRelationship.owner) !==
               customXmlPropertiesContentType &&
-            packageRelationships.contentType(E.target) ===
+            packageRelationships.contentType(xmlRelationship.target) ===
               customXmlPropertiesContentType,
       )));
-    const b = v.filter((E) => E.owner === "xl/workbook.xml"),
-      y = new Set(),
-      w = b.map((event) => event.target);
-    for (; w.length;) {
-      const E = w.pop();
-      if (!y.has(E)) {
-        (y.add(E),
-          e[relationshipsPathFor(E)] && y.add(relationshipsPathFor(E)));
-        for (const A of n.get(E) ?? []) A.external || w.push(A.target);
+    const workbookRelationships = customXmlRelationships.filter(
+        (workbookRelationship) =>
+          workbookRelationship.owner === "xl/workbook.xml",
+      ),
+      reachableParts = new Set(),
+      pendingTargets = workbookRelationships.map((event) => event.target);
+    for (; pendingTargets.length;) {
+      const targetPath = pendingTargets.pop();
+      if (!reachableParts.has(targetPath)) {
+        (reachableParts.add(targetPath),
+          packageEntries[relationshipsPathFor(targetPath)] &&
+            reachableParts.add(relationshipsPathFor(targetPath)));
+        for (const outgoingRelationship of relationshipsByOwner.get(
+          targetPath,
+        ) ?? [])
+          outgoingRelationship.external ||
+            pendingTargets.push(outgoingRelationship.target);
       }
     }
-    g &&= b.length > 0 && u.every((E) => y.has(E));
-    for (const E of u)
-      g
-        ? s.add(E)
-        : d.set(
-            E,
+    isPassiveCustomXml &&=
+      workbookRelationships.length > 0 &&
+      customXmlPaths.every((xmlPartPath) => reachableParts.has(xmlPartPath));
+    for (const customXmlPath of customXmlPaths)
+      isPassiveCustomXml
+        ? opaqueParts.add(customXmlPath)
+        : retentionReasons.set(
+            customXmlPath,
             "Custom XML has bindings, unrecognized types, orphaned parts or relationships outside the passive metadata island. Retained only in the original.",
           );
   }
-  const l = "docProps/custom.xml";
-  if (e[l]) {
-    const m = o.get(l) ?? [];
-    let v =
-      packageRelationships.contentType(l) === customPropertiesContentType &&
-      m.length === 1 &&
-      m[0].owner === "" &&
-      m[0].type === z2 + "custom-properties" &&
-      !n.get(l)?.length;
-    (parseXmlPartStrict(e[l], (g) => {
-      (g.local === "property" && g.attributes.linkTarget && (v = false),
-        (g.uri ===
+  const customPropsPath = "docProps/custom.xml";
+  if (packageEntries[customPropsPath]) {
+    const customPropsRelationships =
+      relationshipsByTarget.get(customPropsPath) ?? [];
+    let isPassiveCustomProps =
+      packageRelationships.contentType(customPropsPath) ===
+        customPropertiesContentType &&
+      customPropsRelationships.length === 1 &&
+      customPropsRelationships[0].owner === "" &&
+      customPropsRelationships[0].type === z2 + "custom-properties" &&
+      !relationshipsByOwner.get(customPropsPath)?.length;
+    (parseXmlPartStrict(packageEntries[customPropsPath], (customPropsTag) => {
+      (customPropsTag.local === "property" &&
+        customPropsTag.attributes.linkTarget &&
+        (isPassiveCustomProps = false),
+        (customPropsTag.uri ===
           "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" &&
-          ["Properties", "property"].includes(g.local)) ||
-          (g.uri ===
+          ["Properties", "property"].includes(customPropsTag.local)) ||
+          (customPropsTag.uri ===
             "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes" &&
             [
               "lpwstr",
@@ -1164,33 +1325,34 @@ function F$(e, sha256) {
               "filetime",
               "empty",
               "null",
-            ].includes(g.local)) ||
-          (v = false));
+            ].includes(customPropsTag.local)) ||
+          (isPassiveCustomProps = false));
     }),
-      v
-        ? s.add(l)
-        : d.set(
-            l,
+      isPassiveCustomProps
+        ? opaqueParts.add(customPropsPath)
+        : retentionReasons.set(
+            customPropsPath,
             "Custom properties contain links, unsupported value types or relationships; retained only in the original.",
           ));
   }
-  const c = new Set();
-  if (e["xl/sharedStrings.xml"]) {
-    let m = -1;
-    parseXmlPartStrict(e["xl/sharedStrings.xml"], (v) => {
-      (v.local === "si" && m++, v.local === "r" && c.add(m));
+  const richTextStringIndexes = new Set();
+  if (packageEntries["xl/sharedStrings.xml"]) {
+    let currentStringIndex = -1;
+    parseXmlPartStrict(packageEntries["xl/sharedStrings.xml"], (xmlTag) => {
+      (xmlTag.local === "si" && currentStringIndex++,
+        xmlTag.local === "r" && richTextStringIndexes.add(currentStringIndex));
     });
   }
-  let h = 0;
-  const parts = Object.entries(e)
-    .sort(([m], [v]) => m.localeCompare(v))
-    .map(([path, v]) => {
+  let featureCount = 0;
+  const parts = Object.entries(packageEntries)
+    .sort(([leftPath], [rightPath]) => leftPath.localeCompare(rightPath))
+    .map(([path, partBytes]) => {
       const family = classifyPreservedPart(
           path,
           packageRelationships.contentType(path),
         ),
         locations = [
-          ...(a.get(
+          ...(sheetsByPart.get(
             path.endsWith(".rels") ? ownerPartForRelsPath(path) : path,
           ) ?? []),
         ].map((sheet) => ({
@@ -1241,17 +1403,17 @@ function F$(e, sha256) {
           ((disposition = "flattened"),
           (reason =
             "Supported worksheet pictures are re-encoded with their supported placement; orphaned images and chart assets are not carried over.")),
-        s.has(path) &&
+        opaqueParts.has(path) &&
           ((disposition = "preserved-opaque"),
           (reason =
             "Passive metadata snapshot copied byte-for-byte, without interpreting or refreshing its contents. Its original meaning may be stale after edits.")),
-        d.has(path) && (reason = d.get(path)),
+        retentionReasons.has(path) && (reason = retentionReasons.get(path)),
         family === "signatures" &&
           (reason =
             "Signatures cannot authenticate an edited workbook; retained only in the original file."));
       const features = [],
-        A = (feature, disposition, range, detail, j) => {
-          if (++h > xlsxInspectionLimits.maxDetails)
+        addFeature = (feature, disposition, range, detail, reasonOverride) => {
+          if (++featureCount > xlsxInspectionLimits.maxDetails)
             throw Error(
               "XLSX compatibility details exceed the 100,000-entry budget. Split the source workbook before importing.",
             );
@@ -1264,7 +1426,7 @@ function F$(e, sha256) {
               ...(detail ? { detail: detail } : {}),
             },
             reason:
-              j ??
+              reasonOverride ??
               (disposition === "editable"
                 ? "Supported subset is editable; review conversion notices for unsupported attributes."
                 : "This source feature is not preserved as an editable feature in the derived workbook."),
@@ -1278,40 +1440,64 @@ function F$(e, sha256) {
         family === "pivots" ||
         family === "charts"
       ) {
-        let k = "",
-          F = "",
-          I,
-          O = "",
-          j = false,
-          z = false,
-          V = "";
+        let cellRef = "",
+          cellType = "",
+          definedName,
+          formulaText = "",
+          isInFormula = false,
+          isInValue = false,
+          valueText = "";
         parseXmlPartStrict(
-          v,
-          (D) => {
-            const B = (_) => D.attributes[_]?.value;
-            (D.local === "c" &&
-              ((k = B("r") ?? ""),
-              (F = B("t") ?? ""),
-              F === "e" && A("error cell", "flattened", k)),
-              D.local === "v" && ((z = true), (V = "")),
-              D.local === "f" && ((j = true), (O = "")),
-              D.local === "definedName" &&
-                ((I = B("name")), A("defined name", "editable", undefined, I)),
-              D.local === "dataValidation" &&
-                A("data validation", "editable", B("sqref"), B("type")),
-              D.local === "conditionalFormatting" &&
-                A("conditional formatting", "editable", B("sqref")),
-              D.local === "mergeCell" &&
-                A("merged cells", "editable", B("ref")),
-              D.local === "table" &&
-                A("structured table", "editable", B("ref"), B("name")),
-              D.local === "location" && A("pivot output", "dropped", B("ref")),
-              D.local === "worksheetSource" &&
-                A("pivot source", "dropped", B("ref"), B("sheet")),
-              D.local === "r" &&
-                k &&
-                F === "inlineStr" &&
-                A("rich text", "flattened", k),
+          partBytes,
+          (openTag) => {
+            const readAttribute = (attributeName) =>
+              openTag.attributes[attributeName]?.value;
+            (openTag.local === "c" &&
+              ((cellRef = readAttribute("r") ?? ""),
+              (cellType = readAttribute("t") ?? ""),
+              cellType === "e" &&
+                addFeature("error cell", "flattened", cellRef)),
+              openTag.local === "v" && ((isInValue = true), (valueText = "")),
+              openTag.local === "f" &&
+                ((isInFormula = true), (formulaText = "")),
+              openTag.local === "definedName" &&
+                ((definedName = readAttribute("name")),
+                addFeature("defined name", "editable", undefined, definedName)),
+              openTag.local === "dataValidation" &&
+                addFeature(
+                  "data validation",
+                  "editable",
+                  readAttribute("sqref"),
+                  readAttribute("type"),
+                ),
+              openTag.local === "conditionalFormatting" &&
+                addFeature(
+                  "conditional formatting",
+                  "editable",
+                  readAttribute("sqref"),
+                ),
+              openTag.local === "mergeCell" &&
+                addFeature("merged cells", "editable", readAttribute("ref")),
+              openTag.local === "table" &&
+                addFeature(
+                  "structured table",
+                  "editable",
+                  readAttribute("ref"),
+                  readAttribute("name"),
+                ),
+              openTag.local === "location" &&
+                addFeature("pivot output", "dropped", readAttribute("ref")),
+              openTag.local === "worksheetSource" &&
+                addFeature(
+                  "pivot source",
+                  "dropped",
+                  readAttribute("ref"),
+                  readAttribute("sheet"),
+                ),
+              openTag.local === "r" &&
+                cellRef &&
+                cellType === "inlineStr" &&
+                addFeature("rich text", "flattened", cellRef),
               [
                 "sheetProtection",
                 "workbookProtection",
@@ -1328,49 +1514,55 @@ function F$(e, sha256) {
                 "timeline",
                 "sp",
                 "graphicFrame",
-              ].includes(D.local) &&
-                A(D.local, "dropped", B("ref"), B("name")));
+              ].includes(openTag.local) &&
+                addFeature(
+                  openTag.local,
+                  "dropped",
+                  readAttribute("ref"),
+                  readAttribute("name"),
+                ));
           },
-          (D) => {
-            (D.local === "v" &&
-              ((z = false),
-              k &&
-                F === "s" &&
-                c.has(Number(V)) &&
-                A("rich text", "flattened", k)),
-              D.local === "c" && (k = ""),
-              D.local === "f" &&
-                ((j = false),
+          (closeTag) => {
+            (closeTag.local === "v" &&
+              ((isInValue = false),
+              cellRef &&
+                cellType === "s" &&
+                richTextStringIndexes.has(Number(valueText)) &&
+                addFeature("rich text", "flattened", cellRef)),
+              closeTag.local === "c" && (cellRef = ""),
+              closeTag.local === "f" &&
+                ((isInFormula = false),
                 family === "charts"
-                  ? A(
+                  ? addFeature(
                       "chart source reference",
                       "dropped",
                       undefined,
-                      O.slice(0, 1024),
+                      formulaText.slice(0, 1024),
                     )
                   : /(?:\[|https?:|file:|WEBSERVICE|HYPERLINK|RTD|DDE|CALL\s*\(|EXEC\s*\()/i.test(
-                      O,
+                      formulaText,
                     ) &&
-                    A(
+                    addFeature(
                       "external/action formula",
                       "flattened",
-                      k,
+                      cellRef,
                       undefined,
                       "External/action references may be neutralized to literal text; the formula cache report provides the actual conversion outcome.",
                     )));
           },
-          (D) => {
-            (j && (O += D), z && (V += D));
+          (textChunk) => {
+            (isInFormula && (formulaText += textChunk),
+              isInValue && (valueText += textChunk));
           },
         );
       }
-      for (const k of n.get(path) ?? [])
-        k.external &&
-          A(
+      for (const partRelationship of relationshipsByOwner.get(path) ?? [])
+        partRelationship.external &&
+          addFeature(
             "external relationship",
             "dropped",
             undefined,
-            k.type.split("/").at(-1),
+            partRelationship.type.split("/").at(-1),
             "External target is never fetched or carried into the derived copy; its URI remains only in the original.",
           );
       return {
@@ -1378,8 +1570,8 @@ function F$(e, sha256) {
         contentType: path.endsWith("/")
           ? "directory"
           : packageRelationships.contentType(path),
-        bytes: v.length,
-        sha256: sha256HexDigest(v),
+        bytes: partBytes.length,
+        sha256: sha256HexDigest(partBytes),
         family: family,
         disposition: disposition,
         reason: reason,
@@ -1400,18 +1592,19 @@ function F$(e, sha256) {
     note: "All package entries are inventoried. Locations come from source relationships and XML; unresolved locations are explicit. Dispositions describe the derived copy, while all parts remain byte-exact in the retained original. Editable parts can also contain flattened or dropped features. No source part is executed or fetched.",
   });
 }
-function summarizePreservedParts(e) {
-  ((e.counts = {
+function summarizePreservedParts(summary) {
+  ((summary.counts = {
     editable: 0,
     "preserved-opaque": 0,
     flattened: 0,
     dropped: 0,
   }),
-    (e.opaqueBytes = 0));
-  for (const part of e.parts)
-    (e.counts[part.disposition]++,
-      part.disposition === "preserved-opaque" && (e.opaqueBytes += part.bytes));
-  return e;
+    (summary.opaqueBytes = 0));
+  for (const part of summary.parts)
+    (summary.counts[part.disposition]++,
+      part.disposition === "preserved-opaque" &&
+        (summary.opaqueBytes += part.bytes));
+  return summary;
 }
 const numericPrecisionPolicy = Object.freeze({
   storage: "IEEE-754 binary64",
@@ -1421,89 +1614,104 @@ const numericPrecisionPolicy = Object.freeze({
   display:
     "General displays 15 significant digits. Display precision does not round stored values or calculations.",
 });
-function validateXlsxNumericValue(e) {
-  const r = /^[+-]?(\d+\.?\d*|\.\d+)(?:e([+-]?\d+))?$/i.exec(e.trim());
-  if (!r) return;
-  const t = r[1].replace(".", "").replace(/^0+/, "").replace(/0+$/, ""),
-    n = Number(e);
-  if (!Number.isFinite(n)) return "outside the finite numeric range";
-  if (t && (n === 0 || Math.abs(n) < 22250738585072014e-324))
+function validateXlsxNumericValue(rawValue) {
+  const numericMatch = /^[+-]?(\d+\.?\d*|\.\d+)(?:e([+-]?\d+))?$/i.exec(
+    rawValue.trim(),
+  );
+  if (!numericMatch) return;
+  const significantDigits = numericMatch[1]
+      .replace(".", "")
+      .replace(/^0+/, "")
+      .replace(/0+$/, ""),
+    numericValue = Number(rawValue);
+  if (!Number.isFinite(numericValue)) return "outside the finite numeric range";
+  if (
+    significantDigits &&
+    (numericValue === 0 || Math.abs(numericValue) < 22250738585072014e-324)
+  )
     return "below Excel's normal floating-point range";
-  if (t.length > 15) return "more than 15 significant digits";
-  if (Number.isInteger(n) && !Number.isSafeInteger(n))
+  if (significantDigits.length > 15) return "more than 15 significant digits";
+  if (Number.isInteger(numericValue) && !Number.isSafeInteger(numericValue))
     return "outside the exact integer range";
 }
-function scanXlsxNumericTokens(e) {
-  const r = new Map(),
-    t = new Ox.SaxesParser({ xmlns: true });
-  let n = "",
-    o = "",
-    a = "",
-    s = false;
-  t.on("opentag", (u) => {
-    u.local === "c"
-      ? ((n = String(u.attributes.r?.value ?? "")),
-        (o = String(u.attributes.t?.value ?? "n")))
-      : u.local === "v" && n && ((s = true), (a = ""));
+function scanXlsxNumericTokens(xmlText) {
+  const numericTokens = new Map(),
+    parser = new Ox.SaxesParser({ xmlns: true });
+  let cellAddress = "",
+    cellType = "",
+    valueText = "",
+    isInValue = false;
+  parser.on("opentag", (openTag) => {
+    openTag.local === "c"
+      ? ((cellAddress = String(openTag.attributes.r?.value ?? "")),
+        (cellType = String(openTag.attributes.t?.value ?? "n")))
+      : openTag.local === "v" &&
+        cellAddress &&
+        ((isInValue = true), (valueText = ""));
   });
-  const d = (u) => {
-    if (s && ((a += u), a.length > 1024))
+  const collectText = (textChunk) => {
+    if (isInValue && ((valueText += textChunk), valueText.length > 1024))
       throw Error("An XLSX numeric token exceeds 1,024 characters.");
   };
   return (
-    t.on("text", d),
-    t.on("cdata", d),
-    t.on("closetag", (u) => {
-      if (u.local === "v") {
-        if (o === "n" && a.trim()) {
-          const l = a.trim();
+    parser.on("text", collectText),
+    parser.on("cdata", collectText),
+    parser.on("closetag", (closeTag) => {
+      if (closeTag.local === "v") {
+        if (cellType === "n" && valueText.trim()) {
+          const numericText = valueText.trim();
           if (
-            !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(l) ||
-            !Number.isFinite(Number(l))
+            !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(numericText) ||
+            !Number.isFinite(Number(numericText))
           )
-            throw Error(`Invalid finite numeric value at ${n}.`);
-          r.set(n, l);
+            throw Error(`Invalid finite numeric value at ${cellAddress}.`);
+          numericTokens.set(cellAddress, numericText);
         }
-        s = false;
-      } else u.local === "c" && (n = "");
+        isInValue = false;
+      } else closeTag.local === "c" && (cellAddress = "");
     }),
-    t.write(e).close(),
-    r
+    parser.write(xmlText).close(),
+    numericTokens
   );
 }
-const formatRangeCornerCells = (e) => {
-  const rangeAddress = parseRangeAddress(e);
+const formatRangeCornerCells = (rangeText) => {
+  const rangeAddress = parseRangeAddress(rangeText);
   return `${formatCellAddress(rangeAddress.firstRow, rangeAddress.firstCol)}:${formatCellAddress(rangeAddress.lastRow, rangeAddress.lastCol)}`;
 };
-function parseXlsxDataValidations(e) {
-  const r = [];
-  for (const t of e.matchAll(
+function parseXlsxDataValidations(xmlText) {
+  const validations = [];
+  for (const validationMatch of xmlText.matchAll(
     /<(?:\w+:)?dataValidation\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?dataValidation>)/g,
   )) {
-    const n = (d) =>
-        new RegExp("\\b" + d + `=["\\']([^"\\']*)["\\']`).exec(t[1])?.[1],
-      o = (n("sqref") ?? "").trim().split(/\s+/).filter(Boolean);
-    if (!o.length) continue;
-    const anchor = formatRangeCornerCells(o[0]).split(":")[0];
-    if (r.length + o.length > 1e3)
+    const readAttribute = (attributeName) =>
+        new RegExp("\\b" + attributeName + `=["\\']([^"\\']*)["\\']`).exec(
+          validationMatch[1],
+        )?.[1],
+      sqrefRanges = (readAttribute("sqref") ?? "")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    if (!sqrefRanges.length) continue;
+    const anchor = formatRangeCornerCells(sqrefRanges[0]).split(":")[0];
+    if (validations.length + sqrefRanges.length > 1e3)
       throw Error(
         "XLSX has more than 1,000 validation areas; narrow the source rules before import.",
       );
     const operands = [
-      ...(t[2] ?? "").matchAll(
+      ...(validationMatch[2] ?? "").matchAll(
         /<(?:\w+:)?formula[12]\b[^>]*>([\s\S]*?)<\/(?:\w+:)?formula[12]>/g,
       ),
-    ].map((d) => d[1].trim());
-    for (const d of o)
-      r.push({
-        range: formatRangeCornerCells(d),
+    ].map((operandMatch) => operandMatch[1].trim());
+    for (const sqrefRange of sqrefRanges)
+      validations.push({
+        range: formatRangeCornerCells(sqrefRange),
         anchor: anchor,
         operands: operands,
-        dropdown: !["1", "true"].includes(n("showDropDown") ?? "0"),
-        alert: ["1", "true"].includes(n("showErrorMessage") ?? "0"),
+        dropdown: !["1", "true"].includes(readAttribute("showDropDown") ?? "0"),
+        alert: ["1", "true"].includes(readAttribute("showErrorMessage") ?? "0"),
       });
   }
-  return r;
+  return validations;
 }
 const dataValidationOperators = {
   between: "between",
@@ -1515,34 +1723,41 @@ const dataValidationOperators = {
   equal: "equal",
   notEqual: "notEqual",
 };
-const isExternalReferenceFormula = (e) => {
-  const r = stripFormulaStringLiterals(e).replace(/"(?:[^"]|"")*"/g, '""');
+const isExternalReferenceFormula = (formula) => {
+  const sanitizedFormula = stripFormulaStringLiterals(formula).replace(
+    /"(?:[^"]|"")*"/g,
+    '""',
+  );
   return (
-    /[\[\]|]/.test(r) ||
-    /(?:https?:|file:|javascript:|data:|\\\\)/i.test(r) ||
+    /[\[\]|]/.test(sanitizedFormula) ||
+    /(?:https?:|file:|javascript:|data:|\\\\)/i.test(sanitizedFormula) ||
     /\b(?:WEBSERVICE|HYPERLINK|IMAGE|RTD|DDE|CALL|EXEC|REGISTER(?:\.ID)?|RUN|SQL\.REQUEST|STOCKHISTORY)\s*\(/i.test(
-      r.replace(/'(?:[^']|'')*'(?=\s*!)/g, "Sheet"),
+      sanitizedFormula.replace(/'(?:[^']|'')*'(?=\s*!)/g, "Sheet"),
     )
   );
 };
-const quoteFormulaString = (e) => '"' + e.replace(/"/g, '""') + '"';
-function buildContainsTextFormula(e, cellAddress) {
+const quoteFormulaString = (literalText) =>
+  '"' + literalText.replace(/"/g, '""') + '"';
+function buildContainsTextFormula(searchText, cellAddress) {
   return (
     "ISNUMBER(FIND(LOWER(" +
-    quoteFormulaString(e) +
+    quoteFormulaString(searchText) +
     "),LOWER(" +
     cellAddress +
     '&"")))'
   );
 }
-function Wle(e, r) {
-  const rangeAddress = parseRangeAddress(r),
+function Wle(ruleType, rangeRef) {
+  const rangeAddress = parseRangeAddress(rangeRef),
     cellAddress = formatCellAddress(
       rangeAddress.firstRow,
       rangeAddress.firstCol,
     ),
-    o = formatRangeCornerCells(r).replace(/([A-Z]+)(\d+)/g, "$$$1$$$2"),
-    a =
+    absoluteRange = formatRangeCornerCells(rangeRef).replace(
+      /([A-Z]+)(\d+)/g,
+      "$$$1$$$2",
+    ),
+    criteriaCell =
       "SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(" +
       cellAddress +
       ',"~","~~"),"*","~*"),"?","~?")';
@@ -1550,11 +1765,11 @@ function Wle(e, r) {
     "AND(LEN(" +
     cellAddress +
     ")>0,COUNTIF(" +
-    o +
+    absoluteRange +
     ',"="&' +
-    a +
+    criteriaCell +
     ")" +
-    (e === "duplicate" ? ">1" : "=1") +
+    (ruleType === "duplicate" ? ">1" : "=1") +
     ")"
   );
 }
@@ -1562,104 +1777,123 @@ function Hle(raw) {
   if (raw === null || raw === "") return true;
   if (typeof raw == "number") return Number.isFinite(raw);
   if (typeof raw != "string") return false;
-  const r = raw.trim() !== "" && Number.isFinite(Number(raw));
+  const isNumericString = raw.trim() !== "" && Number.isFinite(Number(raw));
   return !(
     /[^\x20-\x7e]/.test(raw) ||
     /^#(?:NULL!|DIV\/0!|VALUE!|REF!|NAME\?|NUM!|N\/A|ERROR!|CYCLE!|SPILL!|CALC!|LIMIT!|BLOCKED!)/.test(
       raw,
     ) ||
     raw.replace(/[~*?]/g, "~~").length > 254 ||
-    (r && String(Number(raw)) !== raw) ||
-    (!r && /^[\s+-]*\d/.test(raw))
+    (isNumericString && String(Number(raw)) !== raw) ||
+    (!isNumericString && /^[\s+-]*\d/.test(raw))
   );
 }
-function validateConditionalFormatRules(e) {
-  const r = {},
-    t = new Set();
-  for (const s of e.matchAll(/<(?:\w+:)?cfRule\b([^>]*)>/g)) {
-    const d = /\bpriority=["']([^"']*)["']/.exec(s[1])?.[1],
-      u = /\bstopIfTrue=["']([^"']+)["']/.exec(s[1])?.[1];
-    if (d === undefined && /\bid=["']/.test(s[1])) continue;
-    const l = Number(d);
-    if (!d || !/^\d+$/.test(d) || !Number.isSafeInteger(l) || l < 1 || t.has(l))
+function validateConditionalFormatRules(xmlText) {
+  const stopIfTrueByPriority = {},
+    seenPriorities = new Set();
+  for (const ruleMatch of xmlText.matchAll(/<(?:\w+:)?cfRule\b([^>]*)>/g)) {
+    const priorityText = /\bpriority=["']([^"']*)["']/.exec(ruleMatch[1])?.[1],
+      stopIfTrueText = /\bstopIfTrue=["']([^"']+)["']/.exec(ruleMatch[1])?.[1];
+    if (priorityText === undefined && /\bid=["']/.test(ruleMatch[1])) continue;
+    const priority = Number(priorityText);
+    if (
+      !priorityText ||
+      !/^\d+$/.test(priorityText) ||
+      !Number.isSafeInteger(priority) ||
+      priority < 1 ||
+      seenPriorities.has(priority)
+    )
       throw Error("Invalid or duplicate conditional-format priority.");
-    if ((t.add(l), d && u !== undefined)) {
-      if (!["1", "0", "true", "false"].includes(u))
+    if (
+      (seenPriorities.add(priority),
+      priorityText && stopIfTrueText !== undefined)
+    ) {
+      if (!["1", "0", "true", "false"].includes(stopIfTrueText))
         throw Error("Invalid conditional-format stop flag.");
-      r[String(l)] = u === "1" || u === "true";
+      stopIfTrueByPriority[String(priority)] =
+        stopIfTrueText === "1" || stopIfTrueText === "true";
     }
   }
-  for (const s of e.matchAll(/<(?:\w+:)?cfvo\b([^>]*)>/g)) {
-    const d = /\bgte=["']([^"']*)["']/.exec(s[1])?.[1];
-    if (d !== undefined && d !== "1" && d !== "true")
+  for (const cfvoMatch of xmlText.matchAll(/<(?:\w+:)?cfvo\b([^>]*)>/g)) {
+    const gteText = /\bgte=["']([^"']*)["']/.exec(cfvoMatch[1])?.[1];
+    if (gteText !== undefined && gteText !== "1" && gteText !== "true")
       throw Error(
         "Strict or malformed conditional icon thresholds are not supported. Use inclusive thresholds or native JSON.",
       );
   }
-  return r;
+  return stopIfTrueByPriority;
 }
-function parseCalculationProperties(e) {
-  let r = {
+function parseCalculationProperties(xmlText) {
+  let calculationProperties = {
     mode: "auto",
     iterative: false,
     maxIterations: null,
     maxChange: null,
   };
-  const t = new Ox.SaxesParser({ xmlns: true });
-  let n = false;
+  const parser = new Ox.SaxesParser({ xmlns: true });
+  let hasCalculationProperties = false;
   return (
-    t.on("opentag", (o) => {
-      if (o.local !== "calcPr" || !/spreadsheetml/.test(o.uri)) return;
-      if (n)
+    parser.on("opentag", (tag) => {
+      if (tag.local !== "calcPr" || !/spreadsheetml/.test(tag.uri)) return;
+      if (hasCalculationProperties)
         throw Error(
           "Duplicate XLSX calculation properties. Repair the source workbook.",
         );
-      n = true;
-      const a = (h) => {
-          const f = o.attributes[h];
-          return f && typeof f != "string" ? f.value : f;
+      hasCalculationProperties = true;
+      const readAttribute = (attributeName) => {
+          const attribute = tag.attributes[attributeName];
+          return attribute && typeof attribute != "string"
+            ? attribute.value
+            : attribute;
         },
-        mode = a("calcMode") ?? "auto",
-        d = a("iterate"),
-        u = a("iterateCount"),
-        l = a("iterateDelta"),
-        c = a("fullPrecision");
+        mode = readAttribute("calcMode") ?? "auto",
+        iterateValue = readAttribute("iterate"),
+        iterateCount = readAttribute("iterateCount"),
+        iterateDelta = readAttribute("iterateDelta"),
+        fullPrecisionValue = readAttribute("fullPrecision");
       if (
         !["auto", "autoNoTable", "manual"].includes(mode) ||
-        (c !== undefined && !["true", "false", "1", "0"].includes(c)) ||
-        (d !== undefined && !["true", "false", "1", "0"].includes(d)) ||
-        (u !== undefined &&
-          (!/^\d+$/.test(u) ||
-            !Number.isSafeInteger(Number(u)) ||
-            Number(u) < 1)) ||
-        (l !== undefined &&
-          (!l.trim() || !Number.isFinite(Number(l)) || Number(l) < 0))
+        (fullPrecisionValue !== undefined &&
+          !["true", "false", "1", "0"].includes(fullPrecisionValue)) ||
+        (iterateValue !== undefined &&
+          !["true", "false", "1", "0"].includes(iterateValue)) ||
+        (iterateCount !== undefined &&
+          (!/^\d+$/.test(iterateCount) ||
+            !Number.isSafeInteger(Number(iterateCount)) ||
+            Number(iterateCount) < 1)) ||
+        (iterateDelta !== undefined &&
+          (!iterateDelta.trim() ||
+            !Number.isFinite(Number(iterateDelta)) ||
+            Number(iterateDelta) < 0))
       )
         throw Error(
           "Invalid XLSX calculation properties. Repair the source workbook.",
         );
-      r = {
+      calculationProperties = {
         mode: mode,
-        iterative: d === "true" || d === "1",
-        maxIterations: u === undefined ? null : Number(u),
-        maxChange: l === undefined ? null : Number(l),
-        ...(c === undefined
+        iterative: iterateValue === "true" || iterateValue === "1",
+        maxIterations: iterateCount === undefined ? null : Number(iterateCount),
+        maxChange: iterateDelta === undefined ? null : Number(iterateDelta),
+        ...(fullPrecisionValue === undefined
           ? {}
-          : { fullPrecision: c === "true" || c === "1" }),
+          : {
+              fullPrecision:
+                fullPrecisionValue === "true" || fullPrecisionValue === "1",
+            }),
       };
     }),
-    t.on("doctype", () => {
+    parser.on("doctype", () => {
       throw Error("XLSX calculation properties cannot contain a DTD.");
     }),
-    t.write(e).close(),
-    r
+    parser.write(xmlText).close(),
+    calculationProperties
   );
 }
 function flattenEmbeddedObjectItems(workbook) {
-  return (workbook.embeddedObjectInventories ?? []).flatMap((r) =>
-    r.items.map((item) => ({
-      sourceFile: r.fileName,
-      sourceSha256: r.sourceSha256,
+  return (workbook.embeddedObjectInventories ?? []).flatMap((inventory) =>
+    inventory.items.map((item) => ({
+      sourceFile: inventory.fileName,
+      sourceSha256: inventory.sourceSha256,
       path: item.path,
       kind: item.kind,
       bytes: item.bytes,
@@ -1753,26 +1987,29 @@ const delimitedColumnTypes = [
   "boolean",
   "date",
 ];
-const byteCharacterTable = Array.from({ length: 256 }, (e, r) =>
-  String.fromCharCode(r),
+const byteCharacterTable = Array.from({ length: 256 }, (e, byteValue) =>
+  String.fromCharCode(byteValue),
 );
 [
   8364, 129, 8218, 402, 8222, 8230, 8224, 8225, 710, 8240, 352, 8249, 338, 141,
   381, 143, 144, 8216, 8217, 8220, 8221, 8226, 8211, 8212, 732, 8482, 353, 8250,
   339, 157, 382, 376,
-].forEach((e, r) => (byteCharacterTable[128 + r] = String.fromCharCode(e)));
-const recordDelimitedIssue = (e, record, column, n, o) => {
-  (e.issueCount++,
-    e.issues.length < 100 &&
-      e.issues.push({
+].forEach(
+  (codePoint, offset) =>
+    (byteCharacterTable[128 + offset] = String.fromCharCode(codePoint)),
+);
+const recordDelimitedIssue = (report, record, column, message, value) => {
+  (report.issueCount++,
+    report.issues.length < 100 &&
+      report.issues.push({
         record: record,
         column: column,
-        message: n,
-        ...(o !== undefined ? { value: o.slice(0, 200) } : {}),
+        message: message,
+        ...(value !== undefined ? { value: value.slice(0, 200) } : {}),
       }));
 };
 const recordDelimitedChange = (
-  e,
+  report,
   record,
   column,
   address,
@@ -1780,8 +2017,8 @@ const recordDelimitedChange = (
   before,
   after,
 ) => {
-  (e.changeCount++,
-    e.changes.push({
+  (report.changeCount++,
+    report.changes.push({
       record: record,
       column: column,
       address: address,
@@ -1790,13 +2027,13 @@ const recordDelimitedChange = (
       after: after,
     }));
 };
-function normalizeDelimitedOptions(e = {}) {
-  const r = {
+function normalizeDelimitedOptions(options = {}) {
+  const normalized = {
     ...delimitedImportDefaults,
-    ...e,
-    columns: { ...(e.columns ?? {}) },
+    ...options,
+    columns: { ...(options.columns ?? {}) },
   };
-  for (const [t, n] of Object.entries({
+  for (const [settingName, allowedValues] of Object.entries({
     delimiter: ["auto", ",", ";", "	", "|"],
     encoding: ["auto", "utf-8", "utf-16le", "utf-16be", "windows-1252"],
     quote: ['"', "'", "none"],
@@ -1814,27 +2051,35 @@ function normalizeDelimitedOptions(e = {}) {
     dateOrder: ["ymd", "dmy", "mdy"],
     empty: ["blank", "text"],
   }))
-    if (!n.includes(String(r[t])))
-      throw Error(`Unsupported delimited ${t} setting.`);
-  if (typeof r.hasHeader != "boolean" || typeof r.trim != "boolean")
+    if (!allowedValues.includes(String(normalized[settingName])))
+      throw Error(`Unsupported delimited ${settingName} setting.`);
+  if (
+    typeof normalized.hasHeader != "boolean" ||
+    typeof normalized.trim != "boolean"
+  )
     throw Error("Header and whitespace controls must be boolean.");
-  if (r.decimal === r.grouping)
+  if (normalized.decimal === normalized.grouping)
     throw Error("Decimal and grouping separators must differ.");
-  for (const [t, n] of Object.entries(r.columns))
+  for (const [columnIndex, columnType] of Object.entries(normalized.columns))
     if (
-      !/^(0|[1-9]\d*)$/.test(t) ||
-      Number(t) >= workbookLimits.maxCols ||
-      !delimitedColumnTypes.includes(n)
+      !/^(0|[1-9]\d*)$/.test(columnIndex) ||
+      Number(columnIndex) >= workbookLimits.maxCols ||
+      !delimitedColumnTypes.includes(columnType)
     )
       throw Error("Invalid column type selection.");
-  return r;
+  return normalized;
 }
-function buildDelimitedImportReport(direction, fileName, t, delimitedOptions) {
+function buildDelimitedImportReport(
+  direction,
+  fileName,
+  fileBytes,
+  delimitedOptions,
+) {
   return {
     schemaVersion: 1,
     direction: direction,
     fileName: fileName,
-    fileBytes: t,
+    fileBytes: fileBytes,
     options: delimitedOptions,
     records: 0,
     columns: 0,
@@ -1853,75 +2098,82 @@ function buildDelimitedImportReport(direction, fileName, t, delimitedOptions) {
     safeExportPolicy: "apostrophe-prefix-formula-like-text",
   };
 }
-const escapeRegExpSource = (e) => e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegExpSource = (text) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function parseDelimitedNumber(raw, delimitedOptions) {
-  const t =
+  const groupingSeparator =
       delimitedOptions.grouping === "none" ? "" : delimitedOptions.grouping,
-    n = t ? `(?:\\d+|\\d{1,3}(?:${escapeRegExpSource(t)}\\d{3})+)` : "\\d+";
+    integerPattern = groupingSeparator
+      ? `(?:\\d+|\\d{1,3}(?:${escapeRegExpSource(groupingSeparator)}\\d{3})+)`
+      : "\\d+";
   if (
     !new RegExp(
-      `^[+-]?(?:${n}(?:${escapeRegExpSource(delimitedOptions.decimal)}\\d*)?|${escapeRegExpSource(delimitedOptions.decimal)}\\d+)(?:[eE][+-]?\\d+)?$`,
+      `^[+-]?(?:${integerPattern}(?:${escapeRegExpSource(delimitedOptions.decimal)}\\d*)?|${escapeRegExpSource(delimitedOptions.decimal)}\\d+)(?:[eE][+-]?\\d+)?$`,
     ).test(raw)
   )
     throw Error("Invalid number for the selected decimal/grouping separators.");
-  const a = (t ? raw.split(t).join("") : raw).replace(
-      delimitedOptions.decimal,
-      ".",
-    ),
-    s = a
+  const normalizedText = (
+      groupingSeparator ? raw.split(groupingSeparator).join("") : raw
+    ).replace(delimitedOptions.decimal, "."),
+    significantDigits = normalizedText
       .split(/[eE]/)[0]
       .replace(/[^0-9]/g, "")
       .replace(/^0+/, "")
       .replace(/0+$/, "").length,
-    d = Number(a);
+    numericValue = Number(normalizedText);
   if (
-    !Number.isFinite(d) ||
-    s > 15 ||
-    (d === 0 && /[1-9]/.test(a.split(/[eE]/)[0]))
+    !Number.isFinite(numericValue) ||
+    significantDigits > 15 ||
+    (numericValue === 0 && /[1-9]/.test(normalizedText.split(/[eE]/)[0]))
   )
     throw Error(
       "Number is outside supported precision/range; select Text to retain every digit.",
     );
-  return d;
+  return numericValue;
 }
 const maxXlsxExpandedByteLimit = fileImportLimits.maxXlsxExpandedBytes;
 const xlsxExchangeSupportNotice =
   "XLSX exchange supports cell values, formulas, common formats, supported fonts/strike/alignment/indent/per-edge borders, notes, hidden sheets, column widths, explicit row heights, worksheet default dimensions, bounded hidden rows/columns, frozen rows and columns, basic tables, safe merges, supported validation/conditional-format rules, PNG/JPEG pictures, repeated print titles, full-axis manual print breaks and page setup. XLSX processes at most 100,000 hidden rows per workbook; native JSON keeps larger visibility intervals compactly. Workbook and worksheet-scoped defined names, constant/formula definitions and supported name comments are preserved. Unsupported name attributes are reported; unsafe or malformed definitions stop import/export. Enhanced number formats export supported masks; locale, scaling labels, duration/date-system and accounting alignment fidelity may differ, and enhanced format metadata remains native JSON only. Reusable calculated-column rules are native JSON only; XLSX imports retain supported cell formulas but do not infer rules for future appends. Editable outline groups, threaded discussions and interactive hyperlink metadata remain native-JSON features; XLSX retains only collapsed outline visibility. Native pivot/query refresh definitions, charts/shapes, filters, split panes, default-hidden-row settings, password protection and other unsupported Excel metadata are not preserved. External or executable formulas are converted to literal text on import and export. Keep the original workbook; use native JSON for a lossless application backup.";
-const isExternalActionFormula = (e) =>
+const isExternalActionFormula = (formulaText) =>
   /[\[\]|]/.test(
-    stripFormulaStringLiterals(e).replace(/"(?:[^"]|"")*"/g, '""'),
+    stripFormulaStringLiterals(formulaText).replace(/"(?:[^"]|"")*"/g, '""'),
   ) ||
-  /(?:https?:|file:|javascript:|data:|\\\\)/i.test(e) ||
+  /(?:https?:|file:|javascript:|data:|\\\\)/i.test(formulaText) ||
   /\b(?:_xlfn\.)?(?:WEBSERVICE|HYPERLINK|IMAGE|RTD|DDE|CALL|EXEC|REGISTER(?:\.ID)?|RUN|SQL\.REQUEST|STOCKHISTORY)\s*\(/i.test(
-    e,
+    formulaText,
   );
-function getXmlAttribute(e, r) {
-  return new RegExp("(?:^|\\s)" + r + `\\s*=\\s*(["'])([\\s\\S]*?)\\1`).exec(
-    e,
-  )?.[2];
+function getXmlAttribute(xmlText, attributeName) {
+  return new RegExp(
+    "(?:^|\\s)" + attributeName + `\\s*=\\s*(["'])([\\s\\S]*?)\\1`,
+  ).exec(xmlText)?.[2];
 }
-function resolvePackagePartPath(e) {
-  const r = [];
-  for (const t of (e.startsWith("/") ? e.slice(1) : "xl/" + e).split("/"))
-    t === ".." ? r.pop() : t !== "." && r.push(t);
-  return r.join("/");
+function resolvePackagePartPath(partPath) {
+  const segments = [];
+  for (const segment of (partPath.startsWith("/")
+    ? partPath.slice(1)
+    : "xl/" + partPath
+  ).split("/"))
+    segment === ".."
+      ? segments.pop()
+      : segment !== "." && segments.push(segment);
+  return segments.join("/");
 }
-const decodeXmlEntities = (e) =>
-  e.replace(/&(?:amp|lt|gt|quot|apos|#\d+|#x[a-f\d]+);/gi, (r) =>
-    r === "&amp;"
+const decodeXmlEntities = (text) =>
+  text.replace(/&(?:amp|lt|gt|quot|apos|#\d+|#x[a-f\d]+);/gi, (entity) =>
+    entity === "&amp;"
       ? "&"
-      : r === "&lt;"
+      : entity === "&lt;"
         ? "<"
-        : r === "&gt;"
+        : entity === "&gt;"
           ? ">"
-          : r === "&quot;"
+          : entity === "&quot;"
             ? '"'
-            : r === "&apos;"
+            : entity === "&apos;"
               ? "'"
               : String.fromCodePoint(
                   Number.parseInt(
-                    r.slice(r[2]?.toLowerCase() === "x" ? 3 : 2, -1),
-                    r[2]?.toLowerCase() === "x" ? 16 : 10,
+                    entity.slice(entity[2]?.toLowerCase() === "x" ? 3 : 2, -1),
+                    entity[2]?.toLowerCase() === "x" ? 16 : 10,
                   ),
                 ),
   );
@@ -1950,47 +2202,54 @@ function throwDateSeriesRangeError() {
     "Date series must stay between 1899-12-31 and 9999-12-31.",
   );
 }
-function dateToExcelSerial(e) {
-  const r = (e.getTime() - excelEpochUtc) / s$,
-    t = r >= 60 ? r + 1 : r;
+function dateToExcelSerial(date) {
+  const rawSerial = (date.getTime() - excelEpochUtc) / s$,
+    serial = rawSerial >= 60 ? rawSerial + 1 : rawSerial;
   return (
-    (!Number.isSafeInteger(t) || t < 0 || t > maxExcelDateSerial) &&
+    (!Number.isSafeInteger(serial) ||
+      serial < 0 ||
+      serial > maxExcelDateSerial) &&
       throwDateSeriesRangeError(),
-    t
+    serial
   );
 }
-function parseSeriesSeedDate(e, r = "1900") {
-  if (typeof e == "number")
+function parseSeriesSeedDate(seedValue, dateSystem = "1900") {
+  if (typeof seedValue == "number")
     return (
-      (!Number.isSafeInteger(e) || e < 0 || e > dateSystemMaxSerial(r)) &&
+      (!Number.isSafeInteger(seedValue) ||
+        seedValue < 0 ||
+        seedValue > dateSystemMaxSerial(dateSystem)) &&
         throwWorkbookError(
-          `Date values must be whole Excel ${r} serials between 0 and ${dateSystemMaxSerial(r)}.`,
+          `Date values must be whole Excel ${dateSystem} serials between 0 and ${dateSystemMaxSerial(dateSystem)}.`,
         ),
-      e
+      seedValue
     );
   if (
-    ((typeof e != "string" || !/^\d{4}-\d{2}-\d{2}$/.test(e)) &&
+    ((typeof seedValue != "string" || !/^\d{4}-\d{2}-\d{2}$/.test(seedValue)) &&
       throwWorkbookError(
         "Enter a date as YYYY-MM-DD or a whole Excel date serial.",
       ),
-    e === "1900-02-29" && r === "1900")
+    seedValue === "1900-02-29" && dateSystem === "1900")
   )
     return 60;
-  const [t, n, o] = e.split("-").map(Number),
-    a = utcDateFromParts(t, n - 1, o);
+  const [year, month, day] = seedValue.split("-").map(Number),
+    utcDate = utcDateFromParts(year, month - 1, day);
   return (
-    (a.getUTCFullYear() !== t ||
-      a.getUTCMonth() !== n - 1 ||
-      a.getUTCDate() !== o) &&
+    (utcDate.getUTCFullYear() !== year ||
+      utcDate.getUTCMonth() !== month - 1 ||
+      utcDate.getUTCDate() !== day) &&
       throwWorkbookError("The series date is not a valid calendar date."),
-    parseSeriesSeedDate(dateToExcelSerial(a) - dateSystemSerialOffset(r), r)
+    parseSeriesSeedDate(
+      dateToExcelSerial(utcDate) - dateSystemSerialOffset(dateSystem),
+      dateSystem,
+    )
   );
 }
 
 /* From 07-file-import-and-worker-dispatch.js */
 class FileProcessingError extends Error {
-  constructor(r, t = fileProcessingErrorMessages[r]) {
-    (super(t), (this.code = r), (this.name = "FileProcessingError"));
+  constructor(code, message = fileProcessingErrorMessages[code]) {
+    (super(message), (this.code = code), (this.name = "FileProcessingError"));
   }
 }
 function toFileProcessingError(error) {
@@ -2000,31 +2259,34 @@ function toFileProcessingError(error) {
       sanitizeFileMessage(error.message) ??
         fileProcessingErrorMessages[error.code],
     );
-  const r = error instanceof Error ? error.message : "",
-    t =
+  const message = error instanceof Error ? error.message : "",
+    code =
       /exceed|budget|limit|too (?:large|many)|at most|smaller|depth|nesting/i.test(
-        r,
+        message,
       )
         ? "FILE_LIMIT"
         : /macro|active.?content|activex|executable|unsafe|document type|doctype|entity|dangerous|DDE/i.test(
-              r,
+              message,
             )
           ? "FILE_ACTIVE"
           : "FILE_INVALID";
   return new FileProcessingError(
-    t,
-    sanitizeFileMessage(r) ?? fileProcessingErrorMessages[t],
+    code,
+    sanitizeFileMessage(message) ?? fileProcessingErrorMessages[code],
   );
 }
-function assertImportFileAllowed(operation, r, t) {
+function assertImportFileAllowed(operation, fileName, fileBytes) {
   if (
-    typeof r != "string" ||
-    !r.length ||
-    r.length > 255 ||
-    /[\\/\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(r)
+    typeof fileName != "string" ||
+    !fileName.length ||
+    fileName.length > 255 ||
+    /[\\/\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(fileName)
   )
     throw new FileProcessingError("FILE_TYPE");
-  if (operation === "workbook" && /\.(xlsm|xlsb|xls|xltm|xlam)$/i.test(r))
+  if (
+    operation === "workbook" &&
+    /\.(xlsm|xlsb|xls|xltm|xlam)$/i.test(fileName)
+  )
     throw new FileProcessingError(
       "FILE_TYPE",
       "Legacy or macro-enabled Excel formats are not supported. Save as XLSX, CSV or native JSON.",
@@ -2038,51 +2300,65 @@ function assertImportFileAllowed(operation, r, t) {
       automation: /\.(bas|vba|cls|ts|osts|xlsm|xlam|xltm|xlsx|xltx|xls|xlsb)$/i,
       json: /\.json$/i,
       picture: /\.(png|jpe?g)$/i,
-    }[operation]?.test(operation === "picture" ? r.trim() : r)
+    }[operation]?.test(operation === "picture" ? fileName.trim() : fileName)
   )
     throw new FileProcessingError("FILE_TYPE");
-  if (!Number.isSafeInteger(t) || t < 0 || t > fileByteLimitFor(operation, r))
+  if (
+    !Number.isSafeInteger(fileBytes) ||
+    fileBytes < 0 ||
+    fileBytes > fileByteLimitFor(operation, fileName)
+  )
     throw new FileProcessingError(
       "FILE_LIMIT",
-      fileByteLimitFor(operation, r) === workbookLimits.maxNativeBytes
+      fileByteLimitFor(operation, fileName) === workbookLimits.maxNativeBytes
         ? "Native workbook exceeds the 50 MB import limit."
-        : fileByteLimitFor(operation, r) === workbookLimits.maxFileBytes
+        : fileByteLimitFor(operation, fileName) === workbookLimits.maxFileBytes
           ? "Files must be 10 MB or smaller."
           : undefined,
     );
 }
 
 /* From 08-xlsx-import-export-and-preservation.js */
-function parseDelimitedDateText(raw, dateOrder, t = "1900") {
-  const n =
+function parseDelimitedDateText(raw, dateOrder, dateSystem = "1900") {
+  const dateMatch =
     /^(\d{1,4})([-/])(\d{1,2})\2(\d{1,4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(
       raw,
     );
-  if (!n)
+  if (!dateMatch)
     throw Error(
       "Date must match the selected year/month/day order, optionally HH:mm:ss.",
     );
-  const o = [n[1], n[3], n[4]],
-    [a, s, d] =
+  const rawParts = [dateMatch[1], dateMatch[3], dateMatch[4]],
+    [year, month, day] =
       dateOrder === "ymd"
-        ? o
+        ? rawParts
         : dateOrder === "dmy"
-          ? [o[2], o[1], o[0]]
-          : [o[2], o[0], o[1]];
-  if (a.length !== 4) throw Error("Dates require a four-digit year.");
-  const u = Number(n[5] ?? 0),
-    l = Number(n[6] ?? 0),
-    c = Number(n[7] ?? 0);
-  if (u > 23 || l > 59 || c > 59) throw Error("Invalid date/time component.");
+          ? [rawParts[2], rawParts[1], rawParts[0]]
+          : [rawParts[2], rawParts[0], rawParts[1]];
+  if (year.length !== 4) throw Error("Dates require a four-digit year.");
+  const hours = Number(dateMatch[5] ?? 0),
+    minutes = Number(dateMatch[6] ?? 0),
+    seconds = Number(dateMatch[7] ?? 0);
+  if (hours > 23 || minutes > 59 || seconds > 59)
+    throw Error("Invalid date/time component.");
   return (
-    parseSeriesSeedDate(`${a}-${s.padStart(2, "0")}-${d.padStart(2, "0")}`, t) +
-    (u * 3600 + l * 60 + c) / 86400
+    parseSeriesSeedDate(
+      `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`,
+      dateSystem,
+    ) +
+    (hours * 3600 + minutes * 60 + seconds) / 86400
   );
 }
-function parseDelimitedCellValue(e, r, delimitedOptions, n = "1900") {
-  if (e === "") return { raw: delimitedOptions.empty === "text" ? "" : null };
-  const raw = delimitedOptions.trim ? e.trim() : e;
-  if (r === "auto") {
+function parseDelimitedCellValue(
+  cellText,
+  columnType,
+  delimitedOptions,
+  dateSystem = "1900",
+) {
+  if (cellText === "")
+    return { raw: delimitedOptions.empty === "text" ? "" : null };
+  const raw = delimitedOptions.trim ? cellText.trim() : cellText;
+  if (columnType === "auto") {
     if (
       /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(raw) &&
       raw.split(/[eE]/)[0].replace(/[^0-9]/g, "").length <= 15 &&
@@ -2094,21 +2370,21 @@ function parseDelimitedCellValue(e, r, delimitedOptions, n = "1900") {
       } catch {}
     return { raw: raw, ...(raw.startsWith("=") ? { literal: true } : {}) };
   }
-  if (r === "text")
+  if (columnType === "text")
     return { raw: raw, ...(raw.startsWith("=") ? { literal: true } : {}) };
-  if (r === "date")
+  if (columnType === "date")
     return {
-      raw: parseDelimitedDateText(raw, delimitedOptions.dateOrder, n),
+      raw: parseDelimitedDateText(raw, delimitedOptions.dateOrder, dateSystem),
       format: "date",
       numFmt: /[ T]\d\d:/.test(raw) ? "yyyy-mm-dd hh:mm:ss" : "yyyy-mm-dd",
     };
-  if (r === "boolean") {
+  if (columnType === "boolean") {
     if (/^(true|false)$/i.test(raw))
       return { raw: raw.toLowerCase() === "true" };
     throw Error("Boolean values must be TRUE or FALSE (case-insensitive).");
   }
   const delimitedNumber = parseDelimitedNumber(raw, delimitedOptions);
-  if (r === "integer" && !Number.isSafeInteger(delimitedNumber))
+  if (columnType === "integer" && !Number.isSafeInteger(delimitedNumber))
     throw Error("Integer column requires a safe whole number.");
   return { raw: delimitedNumber };
 }

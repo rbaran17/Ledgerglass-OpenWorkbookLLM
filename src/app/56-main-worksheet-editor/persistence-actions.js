@@ -44,14 +44,14 @@ function createPersistenceActions({
           : "Calculation refreshed. Source cells and audit history are unchanged.",
       ));
   }
-  function reportSaveStatus(fe, Oe, Be) {
+  function reportSaveStatus(saveStatus, workbook, message) {
     try {
       viewAndSelectionActions.notifyHostCallback("save-state", () =>
         setSaveAbortControllerRef.current?.({
-          status: fe,
-          workbookId: Oe.id,
-          revision: Oe.revision,
-          ...(Be ? { message: Be } : {}),
+          status: saveStatus,
+          workbookId: workbook.id,
+          revision: workbook.revision,
+          ...(message ? { message: message } : {}),
         }),
       );
     } catch {
@@ -60,89 +60,104 @@ function createPersistenceActions({
       );
     }
   }
-  function reportSaveError(fe) {
-    const Oe =
-        fe instanceof WorkbookRevisionConflictError
-          ? fe
+  function reportSaveError(error) {
+    const normalizedError =
+        error instanceof WorkbookRevisionConflictError
+          ? error
           : new WorkbookRevisionConflictError(
               "unavailable",
               "The storage adapter is unavailable. The workbook could not be saved.",
             ),
-      Be =
-        Oe instanceof WorkbookRevisionConflictError && Oe.code === "conflict"
-          ? Oe
-          : (persistenceState.persistenceSessionRef.current.conflict ?? Oe);
-    (Be instanceof WorkbookRevisionConflictError &&
-      Be.code === "conflict" &&
-      (persistenceState.persistenceSessionRef.current.conflict = Be),
-      persistenceState.setPersistenceError(Be),
+      reportedError =
+        normalizedError instanceof WorkbookRevisionConflictError &&
+        normalizedError.code === "conflict"
+          ? normalizedError
+          : (persistenceState.persistenceSessionRef.current.conflict ??
+            normalizedError);
+    (reportedError instanceof WorkbookRevisionConflictError &&
+      reportedError.code === "conflict" &&
+      (persistenceState.persistenceSessionRef.current.conflict = reportedError),
+      persistenceState.setPersistenceError(reportedError),
       operationStatusState.setStatusNotice(""),
       (persistenceState.persistenceMessageRef.current =
-        Be.message +
+        reportedError.message +
         " Changes remain in this editor. Export JSON to keep a copy."),
       operationStatusState.setErrorNotice(
         persistenceState.persistenceMessageRef.current,
       ),
       reportSaveStatus(
-        Be instanceof WorkbookRevisionConflictError && Be.code === "conflict"
+        reportedError instanceof WorkbookRevisionConflictError &&
+          reportedError.code === "conflict"
           ? "conflict"
           : "error",
         latestEditStateRef.current.book,
-        Be.message,
+        reportedError.message,
       ));
   }
-  function enqueueSaveOperation(fe) {
-    const Oe = persistenceState.persistenceSessionRef.current;
-    if (Oe.controllers.size >= 20) {
-      const gt = new WorkbookRevisionConflictError(
+  function enqueueSaveOperation(saveOperation) {
+    const persistenceSession = persistenceState.persistenceSessionRef.current;
+    if (persistenceSession.controllers.size >= 20) {
+      const limitError = new WorkbookRevisionConflictError(
         "limit",
         "Twenty saves are already waiting. Your latest changes remain in this editor; retry saving after the pending saves finish, or export your work.",
       );
-      throw (reportSaveError(gt), gt);
+      throw (reportSaveError(limitError), limitError);
     }
-    const Be = new AbortController();
-    Oe.controllers.add(Be);
-    const Ue = () => {
+    const abortController = new AbortController();
+    persistenceSession.controllers.add(abortController);
+    const runSaveOperation = () => {
         if (
-          !Oe.active ||
-          Oe !== persistenceState.persistenceSessionRef.current ||
-          Be.signal.aborted ||
+          !persistenceSession.active ||
+          persistenceSession !==
+            persistenceState.persistenceSessionRef.current ||
+          abortController.signal.aborted ||
           !isEditableRef.current
         )
           throw new WorkbookRevisionConflictError(
             "unavailable",
             "The save was cancelled because this editor or its access changed.",
           );
-        if (Oe.conflict) throw Oe.conflict;
-        if (Oe.stalled)
+        if (persistenceSession.conflict) throw persistenceSession.conflict;
+        if (persistenceSession.stalled)
           throw new WorkbookRevisionConflictError(
             "unavailable",
             "A previous save is still unresolved. Wait for it to finish, then retry or export your local changes.",
           );
-        return fe(Be.signal);
+        return saveOperation(abortController.signal);
       },
-      Xe = (gt) => {
+      handleSaveFailure = (saveError) => {
         throw (
-          Oe.controllers.delete(Be),
-          Oe.active &&
-            Oe === persistenceState.persistenceSessionRef.current &&
-            (persistenceState.setPendingSaveCount(Oe.controllers.size),
-            Oe.controllers.size || (Oe.stalled = false),
-            reportSaveError(gt)),
-          gt
+          persistenceSession.controllers.delete(abortController),
+          persistenceSession.active &&
+            persistenceSession ===
+              persistenceState.persistenceSessionRef.current &&
+            (persistenceState.setPendingSaveCount(
+              persistenceSession.controllers.size,
+            ),
+            persistenceSession.controllers.size ||
+              (persistenceSession.stalled = false),
+            reportSaveError(saveError)),
+          saveError
         );
       };
     try {
-      const gt = Oe.tail ? Oe.tail.then(Ue) : Ue();
-      if (!isPromiseLike(gt)) return (Oe.controllers.delete(Be), gt);
-      persistenceState.setPendingSaveCount(Oe.controllers.size);
-      const Nt = setTimeout(() => {
+      const saveResult = persistenceSession.tail
+        ? persistenceSession.tail.then(runSaveOperation)
+        : runSaveOperation();
+      if (!isPromiseLike(saveResult))
+        return (
+          persistenceSession.controllers.delete(abortController),
+          saveResult
+        );
+      persistenceState.setPendingSaveCount(persistenceSession.controllers.size);
+      const stallTimer = setTimeout(() => {
           if (
-            !Oe.active ||
-            Oe !== persistenceState.persistenceSessionRef.current
+            !persistenceSession.active ||
+            persistenceSession !==
+              persistenceState.persistenceSessionRef.current
           )
             return;
-          ((Oe.stalled = true),
+          ((persistenceSession.stalled = true),
             activeReliabilityMonitor
               .start("persistence", "save")
               .finish("failed", "timeout"),
@@ -153,52 +168,62 @@ function createPersistenceActions({
               ),
             ));
         }, saveWarningDelayMs),
-        wt = gt.then(
-          (rr) => (
-            clearTimeout(Nt),
-            Oe.controllers.delete(Be),
-            Oe.active &&
-              Oe === persistenceState.persistenceSessionRef.current &&
-              (persistenceState.setPendingSaveCount(Oe.controllers.size),
-              Oe.controllers.size || (Oe.stalled = false)),
-            rr
+        savePromise = saveResult.then(
+          (savedResult) => (
+            clearTimeout(stallTimer),
+            persistenceSession.controllers.delete(abortController),
+            persistenceSession.active &&
+              persistenceSession ===
+                persistenceState.persistenceSessionRef.current &&
+              (persistenceState.setPendingSaveCount(
+                persistenceSession.controllers.size,
+              ),
+              persistenceSession.controllers.size ||
+                (persistenceSession.stalled = false)),
+            savedResult
           ),
-          (rr) => (clearTimeout(Nt), Xe(rr)),
+          (saveFailure) => (
+            clearTimeout(stallTimer),
+            handleSaveFailure(saveFailure)
+          ),
         ),
-        jt = wt.then(
+        settledPromise = savePromise.then(
           () => {},
           () => {},
         );
       return (
-        (Oe.tail = jt),
-        jt.then(() => {
-          Oe.tail === jt && (Oe.tail = undefined);
+        (persistenceSession.tail = settledPromise),
+        settledPromise.then(() => {
+          persistenceSession.tail === settledPromise &&
+            (persistenceSession.tail = undefined);
         }),
-        wt
+        savePromise
       );
     } catch (error) {
-      return Xe(error);
+      return handleSaveFailure(error);
     }
   }
-  function acknowledgeSavedWorkbook(fe, Oe) {
+  function acknowledgeSavedWorkbook(savedRecord, persistenceSession) {
     if (
-      !Oe.active ||
-      Oe !== persistenceState.persistenceSessionRef.current ||
-      ((persistenceState.persistedWorkbookRecordRef.current = fe),
-      persistenceState.setPersistedWorkbookRecord(fe),
-      !isEditableRef.current || Oe.conflict)
+      !persistenceSession.active ||
+      persistenceSession !== persistenceState.persistenceSessionRef.current ||
+      ((persistenceState.persistedWorkbookRecordRef.current = savedRecord),
+      persistenceState.setPersistedWorkbookRecord(savedRecord),
+      !isEditableRef.current || persistenceSession.conflict)
     )
-      return fe;
+      return savedRecord;
     if (
-      fe.workbook === latestEditStateRef.current.book ||
-      JSON.stringify(fe.workbook) ===
+      savedRecord.workbook === latestEditStateRef.current.book ||
+      JSON.stringify(savedRecord.workbook) ===
         JSON.stringify(latestEditStateRef.current.book)
     ) {
       persistenceState.setPersistenceError(null);
-      const Be = persistenceState.persistenceMessageRef.current;
-      (operationStatusState.setErrorNotice((Ue) => (Ue === Be ? "" : Ue)),
+      const persistenceMessage = persistenceState.persistenceMessageRef.current;
+      (operationStatusState.setErrorNotice((previousNotice) =>
+        previousNotice === persistenceMessage ? "" : previousNotice,
+      ),
         (persistenceState.persistenceMessageRef.current = null),
-        Oe.stalled &&
+        persistenceSession.stalled &&
           activeReliabilityMonitor
             .start("persistence", "save")
             .finish("recovered"),
@@ -209,9 +234,9 @@ function createPersistenceActions({
               ? "Saved to the application"
               : "Changes kept in this session",
         ),
-        reportSaveStatus("saved", fe.workbook));
+        reportSaveStatus("saved", savedRecord.workbook));
     }
-    return fe;
+    return savedRecord;
   }
   function recoverLocalWorkbook() {
     if (!(
@@ -220,7 +245,7 @@ function createPersistenceActions({
     ))
       try {
         const book = latestEditStateRef.current.book,
-          Oe = viewAndSelectionActions.buildWorkbookViewState(book),
+          viewState = viewAndSelectionActions.buildWorkbookViewState(book),
           recoverableCheckpoint = findRecoverableCheckpoint(
             workbookPersistence,
             book,
@@ -237,53 +262,55 @@ function createPersistenceActions({
           return;
         }
         if (!persistenceState.isWorkbookLoadedRef.current) {
-          const Xe = workbookPersistence.load();
-          if (Xe)
+          const loadedRecord = workbookPersistence.load();
+          if (loadedRecord)
             throw new WorkbookRevisionConflictError(
               "conflict",
               "Saved data is available again. Compare it before replacing your local changes.",
-              Xe.guard,
+              loadedRecord.guard,
             );
           persistenceState.isWorkbookLoadedRef.current = true;
         }
-        const Ue = persistWorkbookSnapshot(book, Oe);
-        isPromiseLike(Ue) && Ue.catch(() => {});
+        const savePromise = persistWorkbookSnapshot(book, viewState);
+        isPromiseLike(savePromise) && savePromise.catch(() => {});
       } catch (error) {
         reportSaveError(error);
       }
   }
   function persistWorkbookSnapshot(
-    fe,
-    Oe = viewAndSelectionActions.buildWorkbookViewState(fe),
+    workbook,
+    viewState = viewAndSelectionActions.buildWorkbookViewState(workbook),
   ) {
     if (!persistenceState.isWorkbookLoadedRef.current) {
-      const gt = new WorkbookRevisionConflictError(
+      const corruptError = new WorkbookRevisionConflictError(
         "corrupt",
         "Saved data needs recovery before this session can overwrite it.",
       );
-      throw (reportSaveError(gt), gt);
+      throw (reportSaveError(corruptError), corruptError);
     }
-    const Be = workbookStore || persistenceKey ? structuredClone(fe) : fe,
-      Ue = structuredClone(Oe),
-      Xe = persistenceState.persistenceSessionRef.current;
+    const workbookCopy =
+        workbookStore || persistenceKey ? structuredClone(workbook) : workbook,
+      viewStateCopy = structuredClone(viewState),
+      persistenceSession = persistenceState.persistenceSessionRef.current;
     return (
-      reportSaveStatus("saving", Be),
+      reportSaveStatus("saving", workbookCopy),
       enqueueSaveOperation((signal) =>
         chainMaybePromise(
           workbookPersistence.save(
-            Be,
-            Ue,
+            workbookCopy,
+            viewStateCopy,
             persistenceState.persistedWorkbookRecordRef.current?.guard ?? null,
             {
               allowIdentityChange: !!(
                 persistenceState.persistedWorkbookRecordRef.current &&
                 persistenceState.persistedWorkbookRecordRef.current.workbook
-                  .id !== Be.id
+                  .id !== workbookCopy.id
               ),
               signal: signal,
             },
           ),
-          (wt) => acknowledgeSavedWorkbook(wt, Xe),
+          (savedRecord) =>
+            acknowledgeSavedWorkbook(savedRecord, persistenceSession),
         ),
       )
     );
@@ -297,24 +324,30 @@ function createPersistenceActions({
         " - local changes.json",
     );
   }
-  function reloadSavedWorkbook(fe) {
-    const Oe = workbookPersistence.load();
-    if (!Oe || JSON.stringify(Oe.guard) !== JSON.stringify(fe.guard))
+  function reloadSavedWorkbook(expectedRecord) {
+    const loadedRecord = workbookPersistence.load();
+    if (
+      !loadedRecord ||
+      JSON.stringify(loadedRecord.guard) !==
+        JSON.stringify(expectedRecord.guard)
+    )
       throw new Error(
         "The saved version changed again. Refresh the comparison before reloading.",
       );
-    const Be = persistenceState.persistenceSessionRef.current;
-    Be.active = false;
-    for (const controller of Be.controllers) controller.abort();
+    const previousSession = persistenceState.persistenceSessionRef.current;
+    previousSession.active = false;
+    for (const controller of previousSession.controllers) controller.abort();
     ((persistenceState.persistenceSessionRef.current = {
       active: true,
       controllers: new Set(),
     }),
       persistenceState.saveAbortControllerRef.current?.abort(),
-      (persistenceState.persistedWorkbookRecordRef.current = Oe),
-      persistenceState.setPersistedWorkbookRecord(Oe),
-      (latestEditStateRef.current.book = Oe.workbook),
-      setWorkbookSnapshot(buildCanonicalWorkbookSnapshot(Oe.workbook)),
+      (persistenceState.persistedWorkbookRecordRef.current = loadedRecord),
+      persistenceState.setPersistedWorkbookRecord(loadedRecord),
+      (latestEditStateRef.current.book = loadedRecord.workbook),
+      setWorkbookSnapshot(
+        buildCanonicalWorkbookSnapshot(loadedRecord.workbook),
+      ),
       (formulaEntryState.activeCellEditRef.current = null),
       formulaEntryState.setCellEditState(null),
       setUndoStack([]),
@@ -322,7 +355,7 @@ function createPersistenceActions({
       assistantState.setAssistantProposal(null),
       assistantState.setAnswerCitations(null),
       auditState.setAuditAnalysisResult(null),
-      viewAndSelectionActions.applyWorkbookView(Oe.view),
+      viewAndSelectionActions.applyWorkbookView(loadedRecord.view),
       persistenceState.setIsSaveConflictDialogOpen(false),
       persistenceState.setPersistenceError(null),
       operationStatusState.setErrorNotice(""),
@@ -331,69 +364,87 @@ function createPersistenceActions({
       ));
     try {
       viewAndSelectionActions.notifyHostCallback("change", () =>
-        onChange?.(Oe.workbook),
+        onChange?.(loadedRecord.workbook),
       );
     } catch {
       operationStatusState.setErrorNotice(
         "The host could not acknowledge the reloaded workbook.",
       );
     }
-    reportSaveStatus("saved", Oe.workbook);
+    reportSaveStatus("saved", loadedRecord.workbook);
   }
-  function commitWorkbookChange(fe, Oe = true, Be = false, Ue, Xe = false, gt) {
+  function commitWorkbookChange(
+    nextWorkbook,
+    shouldRecordUndo = true,
+    shouldBypassLock = false,
+    persistedRecord,
+    Xe = false,
+    sheetId,
+  ) {
     if (
       readOnly ||
       ((isEditingLocked || latestEditStateRef.current.readOnly) &&
-        !Be &&
+        !shouldBypassLock &&
         !(
           Xe &&
-          gt &&
+          sheetId &&
           latestEditStateRef.current.book.sheets.some(
-            (sheet) => sheet.id === gt && !sheet.protection?.enabled,
+            (sheet) => sheet.id === sheetId && !sheet.protection?.enabled,
           )
         ))
     )
       throw new Error("This workbook is read-only.");
     if (!(
-      !Ue &&
-      (fe === latestEditStateRef.current.book ||
-        (fe.revision === latestEditStateRef.current.book.revision &&
-          JSON.stringify(fe) ===
+      !persistedRecord &&
+      (nextWorkbook === latestEditStateRef.current.book ||
+        (nextWorkbook.revision === latestEditStateRef.current.book.revision &&
+          JSON.stringify(nextWorkbook) ===
             JSON.stringify(latestEditStateRef.current.book)))
     )) {
       if (
-        (Ue || persistenceState.saveAbortControllerRef.current?.abort(),
-        (fe = buildCanonicalWorkbookSnapshot(
-          Ue || Xe ? fe : touchWorkbookModifiedAt(fe),
+        (persistedRecord ||
+          persistenceState.saveAbortControllerRef.current?.abort(),
+        (nextWorkbook = buildCanonicalWorkbookSnapshot(
+          persistedRecord || Xe
+            ? nextWorkbook
+            : touchWorkbookModifiedAt(nextWorkbook),
         )),
-        onBeforeChange?.(fe, latestEditStateRef.current.book),
-        Oe)
+        onBeforeChange?.(nextWorkbook, latestEditStateRef.current.book),
+        shouldRecordUndo)
       ) {
         const book = latestEditStateRef.current.book;
-        (setUndoStack((jt) => [...jt.slice(-49), book]), setRedoStack([]));
+        (setUndoStack((previousUndoStack) => [
+          ...previousUndoStack.slice(-49),
+          book,
+        ]),
+          setRedoStack([]));
       }
       if (
-        (carryCalculatorRecordForward(latestEditStateRef.current.book, fe),
-        (latestEditStateRef.current.book = fe),
-        setWorkbookSnapshot(fe),
+        (carryCalculatorRecordForward(
+          latestEditStateRef.current.book,
+          nextWorkbook,
+        ),
+        (latestEditStateRef.current.book = nextWorkbook),
+        setWorkbookSnapshot(nextWorkbook),
         assistantState.setAssistantProposal(null),
         assistantState.setAnswerCitations(null),
         auditState.setAuditAnalysisResult(null),
         operationStatusState.setErrorNotice(""),
-        Ue)
+        persistedRecord)
       )
-        ((persistenceState.persistedWorkbookRecordRef.current = Ue),
-          persistenceState.setPersistedWorkbookRecord(Ue));
+        ((persistenceState.persistedWorkbookRecordRef.current =
+          persistedRecord),
+          persistenceState.setPersistedWorkbookRecord(persistedRecord));
       else
         try {
-          const wt = persistWorkbookSnapshot(fe);
-          isPromiseLike(wt) && wt.catch(() => {});
+          const savePromise = persistWorkbookSnapshot(nextWorkbook);
+          isPromiseLike(savePromise) && savePromise.catch(() => {});
         } catch (error) {
           reportSaveError(error);
         }
       try {
         viewAndSelectionActions.notifyHostCallback("change", () =>
-          onChange?.(fe),
+          onChange?.(nextWorkbook),
         );
       } catch {
         operationStatusState.setErrorNotice(

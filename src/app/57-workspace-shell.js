@@ -37,29 +37,30 @@ import { WorkbookSyncBoundary } from "./56-main-worksheet-editor.js";
 
 const legacyEmbeddedDemoKey = "embedded-excel-demo-v1",
   embeddedDemoActiveDocumentKey = "embedded-excel-demo-v2:active-document",
-  buildEmbeddedDemoKey = (e) => `embedded-excel-demo-v2:${e}`,
+  buildEmbeddedDemoKey = (documentKind) =>
+    `embedded-excel-demo-v2:${documentKind}`,
   workspaceDocumentKinds = ["ledger", "draft"],
   workspaceDocumentLabels = {
     ledger: "General ledger",
     draft: "Draft workbook",
   };
 function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
-  const o = ne.useRef(null);
+  const menuRef = ne.useRef(null);
   return (
     ne.useEffect(() => {
-      const a = (event) => {
-        o.current?.open &&
+      const handlePointerDown = (event) => {
+        menuRef.current?.open &&
           event.target instanceof Node &&
-          !o.current.contains(event.target) &&
-          (o.current.open = false);
+          !menuRef.current.contains(event.target) &&
+          (menuRef.current.open = false);
       };
       return (
-        document.addEventListener("pointerdown", a),
-        () => document.removeEventListener("pointerdown", a)
+        document.addEventListener("pointerdown", handlePointerDown),
+        () => document.removeEventListener("pointerdown", handlePointerDown)
       );
     }, []),
     i.jsxs("details", {
-      ref: o,
+      ref: menuRef,
       className: `emb-header-menu ${className}`,
       onKeyDown: (event) => {
         event.key === "Escape" &&
@@ -81,8 +82,8 @@ function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
           "aria-label": label,
           onClick: (event) => {
             event.target.closest("button") &&
-              (o.current && (o.current.open = false),
-              o.current?.querySelector("summary")?.focus());
+              (menuRef.current && (menuRef.current.open = false),
+              menuRef.current?.querySelector("summary")?.focus());
           },
           children,
         }),
@@ -91,7 +92,7 @@ function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
   );
 }
 function restoreSavedWorkspaceDocuments() {
-  const e = {
+  const defaultWorkspace = {
     version: 1,
     activeDocument: "ledger",
     documents: {
@@ -100,18 +101,18 @@ function restoreSavedWorkspaceDocuments() {
     },
   };
   try {
-    const r = localStorage.getItem(legacyEmbeddedDemoKey);
-    if (!r) return e;
-    const t = JSON.parse(r);
+    const storedValue = localStorage.getItem(legacyEmbeddedDemoKey);
+    if (!storedValue) return defaultWorkspace;
+    const storedWorkspace = JSON.parse(storedValue);
     if (
-      t.version !== 1 ||
-      !t.documents ||
-      !workspaceDocumentKinds.includes(t.activeDocument) ||
-      (t.versionStores !== undefined &&
-        (!t.versionStores ||
-          typeof t.versionStores != "object" ||
-          Array.isArray(t.versionStores) ||
-          !Object.values(t.versionStores).every(
+      storedWorkspace.version !== 1 ||
+      !storedWorkspace.documents ||
+      !workspaceDocumentKinds.includes(storedWorkspace.activeDocument) ||
+      (storedWorkspace.versionStores !== undefined &&
+        (!storedWorkspace.versionStores ||
+          typeof storedWorkspace.versionStores != "object" ||
+          Array.isArray(storedWorkspace.versionStores) ||
+          !Object.values(storedWorkspace.versionStores).every(
             (versionStore) => typeof versionStore == "string",
           )))
     )
@@ -119,217 +120,275 @@ function restoreSavedWorkspaceDocuments() {
     return {
       version: 1,
       legacy: true,
-      activeDocument: t.activeDocument,
+      activeDocument: storedWorkspace.activeDocument,
       documents: {
-        ledger: normalizeWorkbookInput(t.documents.ledger),
-        draft: normalizeWorkbookInput(t.documents.draft),
+        ledger: normalizeWorkbookInput(storedWorkspace.documents.ledger),
+        draft: normalizeWorkbookInput(storedWorkspace.documents.draft),
       },
-      versionStores: t.versionStores ?? {},
+      versionStores: storedWorkspace.versionStores ?? {},
     };
   } catch {
     return {
-      ...e,
+      ...defaultWorkspace,
       restoreProblem:
         "Saved workbooks could not be restored. Changes are kept in this tab. Use File → Save as Excel to keep a copy.",
     };
   }
 }
-function persistWorkspaceDocumentVersion(e, workspaceDocumentKind) {
-  const t = e.documents[workspaceDocumentKind];
-  let n = e.versionStores?.[workspaceDocumentKind] ?? JSON.stringify(t);
+function persistWorkspaceDocumentVersion(workspace, workspaceDocumentKind) {
+  const workbook = workspace.documents[workspaceDocumentKind];
+  let versionStore =
+    workspace.versionStores?.[workspaceDocumentKind] ??
+    JSON.stringify(workbook);
   const localWorkbookStore = createLocalWorkbookStore(
       {
-        getItem: () => n,
-        setItem: (d, u) => {
-          n = u;
+        getItem: () => versionStore,
+        setItem: (storageKey, serializedValue) => {
+          versionStore = serializedValue;
         },
       },
       buildEmbeddedDemoKey(workspaceDocumentKind),
     ),
-    a = localWorkbookStore.load();
+    loadedState = localWorkbookStore.load();
   return (
-    JSON.stringify(a.workbook) !== JSON.stringify(t) &&
-      localWorkbookStore.save(t, a.view, a.guard),
-    n
+    JSON.stringify(loadedState.workbook) !== JSON.stringify(workbook) &&
+      localWorkbookStore.save(workbook, loadedState.view, loadedState.guard),
+    versionStore
   );
 }
-function createWorkspaceDocumentStore(e, workspaceDocumentKind) {
-  let t = null;
+function createWorkspaceDocumentStore(workspace, workspaceDocumentKind) {
+  let storedVersion = null;
   try {
-    t = persistWorkspaceDocumentVersion(e, workspaceDocumentKind);
+    storedVersion = persistWorkspaceDocumentVersion(
+      workspace,
+      workspaceDocumentKind,
+    );
   } catch {}
   return createLocalWorkbookStore(
     {
-      getItem: () => t,
-      setItem: (n, o) => {
-        t = o;
+      getItem: () => storedVersion,
+      setItem: (storageKey, serializedValue) => {
+        storedVersion = serializedValue;
       },
     },
     buildEmbeddedDemoKey(workspaceDocumentKind),
   );
 }
-async function recoverSavedWorkspaceDocuments(e) {
-  const r = await Promise.all(
+async function recoverSavedWorkspaceDocuments(restoredWorkspace) {
+  const results = await Promise.all(
     workspaceDocumentKinds.map(async (workspaceDocumentKind) => {
       const embeddedDemoKey = buildEmbeddedDemoKey(workspaceDocumentKind),
         store = saveWorkbookWithLock(
           {
-            getItem: (a) => localStorage.getItem(a),
-            setItem: (a, s) => localStorage.setItem(a, s),
+            getItem: (storageKey) => localStorage.getItem(storageKey),
+            setItem: (writeKey, serializedValue) =>
+              localStorage.setItem(writeKey, serializedValue),
           },
           embeddedDemoKey,
         );
       try {
-        if (e.legacy && localStorage.getItem(embeddedDemoKey) === null) {
+        if (
+          restoredWorkspace.legacy &&
+          localStorage.getItem(embeddedDemoKey) === null
+        ) {
           if (!navigator.locks)
             throw new Error(
               "This browser cannot coordinate safe workbook saves between tabs.",
             );
-          const s = new AbortController(),
-            d = setTimeout(() => s.abort(), 5e3);
+          const abortController = new AbortController(),
+            abortTimer = setTimeout(() => abortController.abort(), 5e3);
           try {
             await navigator.locks.request(
               workbookLockName(embeddedDemoKey),
-              { mode: "exclusive", signal: s.signal },
-              (u) => {
+              { mode: "exclusive", signal: abortController.signal },
+              (lock) => {
                 if (
-                  s.signal.aborted ||
-                  !u ||
-                  u.mode !== "exclusive" ||
-                  u.name !== workbookLockName(embeddedDemoKey)
+                  abortController.signal.aborted ||
+                  !lock ||
+                  lock.mode !== "exclusive" ||
+                  lock.name !== workbookLockName(embeddedDemoKey)
                 )
                   throw new Error(
                     "Safe workbook recovery could not acquire its document lock.",
                   );
                 if (localStorage.getItem(embeddedDemoKey) !== null) return;
-                const l = restoreSavedWorkspaceDocuments();
-                if (l.restoreProblem || !l.legacy)
+                const freshWorkspace = restoreSavedWorkspaceDocuments();
+                if (freshWorkspace.restoreProblem || !freshWorkspace.legacy)
                   throw new Error(
                     "The original saved workspace changed during recovery.",
                   );
                 localStorage.setItem(
                   embeddedDemoKey,
-                  persistWorkspaceDocumentVersion(l, workspaceDocumentKind),
+                  persistWorkspaceDocumentVersion(
+                    freshWorkspace,
+                    workspaceDocumentKind,
+                  ),
                 );
               },
             );
           } finally {
-            clearTimeout(d);
+            clearTimeout(abortTimer);
           }
         }
-        const a = store.load();
-        if (!a && e.restoreProblem) throw new Error(e.restoreProblem);
+        const loadResult = store.load();
+        if (!loadResult && restoredWorkspace.restoreProblem)
+          throw new Error(restoredWorkspace.restoreProblem);
         return {
           id: workspaceDocumentKind,
           store: store,
-          workbook: a?.workbook ?? e.documents[workspaceDocumentKind],
+          workbook:
+            loadResult?.workbook ??
+            restoredWorkspace.documents[workspaceDocumentKind],
           problem: "",
         };
       } catch (error) {
         const problem = `${error instanceof Error ? error.message : "Saved workbooks could not be restored."} Original saved data is preserved. Changes are kept in this tab; export a copy to keep them.`;
         return {
           id: workspaceDocumentKind,
-          store: createWorkspaceDocumentStore(e, workspaceDocumentKind),
-          workbook: e.documents[workspaceDocumentKind],
+          store: createWorkspaceDocumentStore(
+            restoredWorkspace,
+            workspaceDocumentKind,
+          ),
+          workbook: restoredWorkspace.documents[workspaceDocumentKind],
           problem: problem,
         };
       }
     }),
   );
   return {
-    documents: Object.fromEntries(r.map(({ id, workbook }) => [id, workbook])),
-    stores: Object.fromEntries(r.map(({ id, store }) => [id, store])),
-    problems: Object.fromEntries(r.map(({ id, problem }) => [id, problem])),
+    documents: Object.fromEntries(
+      results.map(({ id: documentKind, workbook }) => [documentKind, workbook]),
+    ),
+    stores: Object.fromEntries(
+      results.map(({ id: storeDocumentKind, store }) => [
+        storeDocumentKind,
+        store,
+      ]),
+    ),
+    problems: Object.fromEntries(
+      results.map(({ id: problemDocumentKind, problem }) => [
+        problemDocumentKind,
+        problem,
+      ]),
+    ),
   };
 }
 function EmbeddedWorkbookWorkspace() {
-  const [e] = ne.useState(restoreSavedWorkspaceDocuments),
-    [r, t] = ne.useState(e.documents),
-    [n, o] = ne.useState(null),
-    [a, s] = ne.useState(() => {
+  const [savedWorkspace] = ne.useState(restoreSavedWorkspaceDocuments),
+    [documents, setDocuments] = ne.useState(savedWorkspace.documents),
+    [recoveryResult, setRecoveryResult] = ne.useState(null),
+    [activeDocument, setActiveDocument] = ne.useState(() => {
       try {
-        const R = sessionStorage.getItem(embeddedDemoActiveDocumentKey);
-        if (workspaceDocumentKinds.includes(R)) return R;
+        const storedActiveDocument = sessionStorage.getItem(
+          embeddedDemoActiveDocumentKey,
+        );
+        if (workspaceDocumentKinds.includes(storedActiveDocument))
+          return storedActiveDocument;
       } catch {}
-      return e.activeDocument;
+      return savedWorkspace.activeDocument;
     }),
-    [d, u] = ne.useState([a]),
-    [l, c] = ne.useState({}),
-    h = ne.useMemo(
+    [openedDocuments, setOpenedDocuments] = ne.useState([activeDocument]),
+    [persistenceStates, setPersistenceStates] = ne.useState({}),
+    documentHandlers = ne.useMemo(
       () =>
         Object.fromEntries(
           workspaceDocumentKinds.map((workspaceDocumentKind) => [
             workspaceDocumentKind,
             {
-              onChange: (L) => t(($) => ({ ...$, [workspaceDocumentKind]: L })),
-              onWorkbookLoaded: (L) =>
-                t(($) => ({ ...$, [workspaceDocumentKind]: L })),
-              onSelectionChange: (L) =>
-                F(($) => ({ ...$, [workspaceDocumentKind]: L })),
-              onPersistenceStateChange: (L) =>
-                c(($) => ({ ...$, [workspaceDocumentKind]: L })),
+              onChange: (nextWorkbook) =>
+                setDocuments((previousDocuments) => ({
+                  ...previousDocuments,
+                  [workspaceDocumentKind]: nextWorkbook,
+                })),
+              onWorkbookLoaded: (loadedWorkbook) =>
+                setDocuments((documentsBeforeLoad) => ({
+                  ...documentsBeforeLoad,
+                  [workspaceDocumentKind]: loadedWorkbook,
+                })),
+              onSelectionChange: (nextSelection) =>
+                setSelections((previousSelections) => ({
+                  ...previousSelections,
+                  [workspaceDocumentKind]: nextSelection,
+                })),
+              onPersistenceStateChange: (nextPersistenceState) =>
+                setPersistenceStates((previousPersistenceStates) => ({
+                  ...previousPersistenceStates,
+                  [workspaceDocumentKind]: nextPersistenceState,
+                })),
             },
           ]),
         ),
       [],
     ),
-    [f, p] = ne.useState(true),
-    [m, v] = ne.useState(false),
-    [g, b] = ne.useState(true),
-    [y, w] = ne.useState(""),
-    [E, A] = ne.useState(false),
-    [k, F] = ne.useState({}),
-    I = l[a],
-    O =
-      n?.problems[a] ||
-      (I?.status === "error" || I?.status === "conflict"
-        ? (I.message ??
+    [isWorkbookWindowOpen, setIsWorkbookWindowOpen] = ne.useState(true),
+    [isWorkbookWindowExpanded, setIsWorkbookWindowExpanded] =
+      ne.useState(false),
+    [isDocumentBrowserOpen, setIsDocumentBrowserOpen] = ne.useState(true),
+    [documentFilter, setDocumentFilter] = ne.useState(""),
+    [isAboutOpen, setIsAboutOpen] = ne.useState(false),
+    [selections, setSelections] = ne.useState({}),
+    activePersistence = persistenceStates[activeDocument],
+    activeProblem =
+      recoveryResult?.problems[activeDocument] ||
+      (activePersistence?.status === "error" ||
+      activePersistence?.status === "conflict"
+        ? (activePersistence.message ??
           "The workbook could not be saved. Changes remain in this tab.")
         : ""),
-    j = !O && I?.status === "saved",
+    isSaved = !activeProblem && activePersistence?.status === "saved",
     adapter = ne.useMemo(() => buildLocalDemoProposal(), []),
-    workbook = r[a],
-    D = k[a]
-      ? workbook.sheets.find((sheet) => sheet.id === k[a].sheetId)
+    workbook = documents[activeDocument],
+    activeSheet = selections[activeDocument]
+      ? workbook.sheets.find(
+          (sheet) => sheet.id === selections[activeDocument].sheetId,
+        )
       : workbook.sheets.find((sheet) => !sheet.hidden),
-    B = k[a]?.range ?? "A1",
-    _ = `${D?.name ?? "Sheet1"}!${B}`,
-    C = workspaceDocumentKinds.filter((workspaceDocumentKind) =>
-      `${workspaceDocumentLabels[workspaceDocumentKind]} ${r[workspaceDocumentKind].name}`
-        .toLowerCase()
-        .includes(y.toLowerCase()),
+    activeRange = selections[activeDocument]?.range ?? "A1",
+    activeAddress = `${activeSheet?.name ?? "Sheet1"}!${activeRange}`,
+    filteredDocumentKinds = workspaceDocumentKinds.filter(
+      (workspaceDocumentKind) =>
+        `${workspaceDocumentLabels[workspaceDocumentKind]} ${documents[workspaceDocumentKind].name}`
+          .toLowerCase()
+          .includes(documentFilter.toLowerCase()),
     );
   (ne.useEffect(() => {
-    let R = true;
+    let isMounted = true;
     return (
-      recoverSavedWorkspaceDocuments(e).then((L) => {
-        R && (t(L.documents), o(L));
+      recoverSavedWorkspaceDocuments(savedWorkspace).then((recovered) => {
+        isMounted &&
+          (setDocuments(recovered.documents), setRecoveryResult(recovered));
       }),
       () => {
-        R = false;
+        isMounted = false;
       }
     );
-  }, [e]),
+  }, [savedWorkspace]),
     ne.useEffect(() => {
       try {
-        sessionStorage.setItem(embeddedDemoActiveDocumentKey, a);
+        sessionStorage.setItem(embeddedDemoActiveDocumentKey, activeDocument);
       } catch {}
-    }, [a]),
+    }, [activeDocument]),
     ne.useEffect(() => {
-      if (!E) return;
-      const R = (event) => {
-        event.key === "Escape" && A(false);
+      if (!isAboutOpen) return;
+      const handleEscapeKey = (event) => {
+        event.key === "Escape" && setIsAboutOpen(false);
       };
       return (
-        document.addEventListener("keydown", R),
-        () => document.removeEventListener("keydown", R)
+        document.addEventListener("keydown", handleEscapeKey),
+        () => document.removeEventListener("keydown", handleEscapeKey)
       );
-    }, [E]));
-  const T = (R) => {
-    (u((L) => (L.includes(R) ? L : [...L, R])), s(R), p(true));
+    }, [isAboutOpen]));
+  const openDocument = (nextDocumentKind) => {
+    (setOpenedDocuments((previousOpened) =>
+      previousOpened.includes(nextDocumentKind)
+        ? previousOpened
+        : [...previousOpened, nextDocumentKind],
+    ),
+      setActiveDocument(nextDocumentKind),
+      setIsWorkbookWindowOpen(true));
   };
   return i.jsxs("div", {
-    className: `embedded-demo ${g ? "" : "emb-documents-hidden"} ${m && f ? "emb-is-expanded" : ""}`,
+    className: `embedded-demo ${isDocumentBrowserOpen ? "" : "emb-documents-hidden"} ${isWorkbookWindowExpanded && isWorkbookWindowOpen ? "emb-is-expanded" : ""}`,
     children: [
       i.jsxs("header", {
         className: "emb-topbar",
@@ -387,7 +446,7 @@ function EmbeddedWorkbookWorkspace() {
                 type: "button",
                 "aria-label": "About embedded workbook",
                 title: "About this example",
-                onClick: () => A(true),
+                onClick: () => setIsAboutOpen(true),
                 children: i.jsx(Info, { size: 17 }),
               }),
               i.jsxs(EmbeddedHeaderMenu, {
@@ -396,25 +455,25 @@ function EmbeddedWorkbookWorkspace() {
                 children: [
                   i.jsx("h2", { children: "Workspace notifications" }),
                   i.jsxs("div", {
-                    className: `emb-notification ${O ? "emb-notification-warning" : ""}`,
+                    className: `emb-notification ${activeProblem ? "emb-notification-warning" : ""}`,
                     children: [
-                      O
+                      activeProblem
                         ? i.jsx(Info, { size: 19 })
                         : i.jsx(Check, { size: 19 }),
                       i.jsxs("div", {
                         children: [
                           i.jsx("strong", {
-                            children: O
+                            children: activeProblem
                               ? "Workbook needs attention"
-                              : j
+                              : isSaved
                                 ? "Your workbook is saved"
                                 : "Saving your workbook",
                           }),
                           i.jsx("p", {
                             children:
-                              O ||
-                              (j
-                                ? `${workspaceDocumentLabels[a]} is saved in this browser.`
+                              activeProblem ||
+                              (isSaved
+                                ? `${workspaceDocumentLabels[activeDocument]} is saved in this browser.`
                                 : "Changes are being saved in this browser."),
                           }),
                         ],
@@ -456,7 +515,7 @@ function EmbeddedWorkbookWorkspace() {
                   }),
                   i.jsxs("button", {
                     type: "button",
-                    onClick: () => A(true),
+                    onClick: () => setIsAboutOpen(true),
                     children: [
                       i.jsx(Info, { size: 16 }),
                       "About this workspace",
@@ -483,7 +542,7 @@ function EmbeddedWorkbookWorkspace() {
                   "button",
                   {
                     type: "button",
-                    onClick: () => T(workspaceDocumentKind),
+                    onClick: () => openDocument(workspaceDocumentKind),
                     children: [
                       i.jsx(FileSpreadsheet, { size: 18 }),
                       workspaceDocumentLabels[workspaceDocumentKind],
@@ -495,11 +554,14 @@ function EmbeddedWorkbookWorkspace() {
               i.jsxs("button", {
                 type: "button",
                 "aria-label": "Toggle document browser",
-                "aria-pressed": g,
-                onClick: () => b((R) => !R),
+                "aria-pressed": isDocumentBrowserOpen,
+                onClick: () =>
+                  setIsDocumentBrowserOpen(
+                    (isPreviouslyOpen) => !isPreviouslyOpen,
+                  ),
                 children: [
                   i.jsx(FolderClosed, { size: 18 }),
-                  g ? "Hide" : "Show",
+                  isDocumentBrowserOpen ? "Hide" : "Show",
                   " document browser",
                 ],
               }),
@@ -531,7 +593,7 @@ function EmbeddedWorkbookWorkspace() {
       i.jsxs("aside", {
         className: "emb-documents",
         "aria-label": "Engagement documents",
-        hidden: !g,
+        hidden: !isDocumentBrowserOpen,
         children: [
           i.jsxs("div", {
             className: "emb-engagement-heading",
@@ -556,7 +618,7 @@ function EmbeddedWorkbookWorkspace() {
                 type: "button",
                 "aria-label": "Hide document browser",
                 title: "Hide document browser",
-                onClick: () => b(false),
+                onClick: () => setIsDocumentBrowserOpen(false),
                 children: i.jsx(PanelLeftClose, { size: 15 }),
               }),
             ],
@@ -569,8 +631,8 @@ function EmbeddedWorkbookWorkspace() {
                 type: "search",
                 "aria-label": "Search workpapers",
                 placeholder: "Find a workpaper",
-                value: y,
-                onChange: (event) => w(event.target.value),
+                value: documentFilter,
+                onChange: (event) => setDocumentFilter(event.target.value),
               }),
             ],
           }),
@@ -586,15 +648,18 @@ function EmbeddedWorkbookWorkspace() {
           i.jsxs("div", {
             className: "emb-document-list",
             children: [
-              C.map((R) =>
+              filteredDocumentKinds.map((documentKind) =>
                 i.jsxs(
                   "button",
                   {
                     type: "button",
-                    className: `emb-document ${a === R && f ? "emb-document-active" : ""}`,
-                    "aria-label": `Open ${workspaceDocumentLabels[R]}`,
-                    "aria-current": a === R && f ? "page" : undefined,
-                    onClick: () => T(R),
+                    className: `emb-document ${activeDocument === documentKind && isWorkbookWindowOpen ? "emb-document-active" : ""}`,
+                    "aria-label": `Open ${workspaceDocumentLabels[documentKind]}`,
+                    "aria-current":
+                      activeDocument === documentKind && isWorkbookWindowOpen
+                        ? "page"
+                        : undefined,
+                    onClick: () => openDocument(documentKind),
                     children: [
                       i.jsx("div", {
                         className: "emb-document-icon",
@@ -603,28 +668,28 @@ function EmbeddedWorkbookWorkspace() {
                       i.jsxs("div", {
                         children: [
                           i.jsx("strong", {
-                            children: workspaceDocumentLabels[R],
+                            children: workspaceDocumentLabels[documentKind],
                           }),
                           i.jsx("span", {
                             children:
-                              R === "ledger"
+                              documentKind === "ledger"
                                 ? "Synthetic audit example"
                                 : "Your working file",
                           }),
                         ],
                       }),
-                      a === R &&
-                        f &&
+                      activeDocument === documentKind &&
+                        isWorkbookWindowOpen &&
                         i.jsx("span", { className: "emb-document-current" }),
                     ],
                   },
-                  R,
+                  documentKind,
                 ),
               ),
-              C.length === 0 &&
+              filteredDocumentKinds.length === 0 &&
                 i.jsxs("p", {
                   className: "emb-no-documents",
-                  children: ["No workpapers match “", y, "”."],
+                  children: ["No workpapers match “", documentFilter, "”."],
                 }),
             ],
           }),
@@ -638,13 +703,13 @@ function EmbeddedWorkbookWorkspace() {
                 ],
               }),
               i.jsx("p", {
-                children: O
+                children: activeProblem
                   ? "Changes are kept in this tab. Export a copy to keep them."
                   : "Workbook changes are saved in this browser.",
               }),
               i.jsxs("button", {
                 type: "button",
-                onClick: () => A(true),
+                onClick: () => setIsAboutOpen(true),
                 children: [
                   "About this example",
                   i.jsx(ArrowUpRight, { size: 12 }),
@@ -675,11 +740,11 @@ function EmbeddedWorkbookWorkspace() {
               i.jsxs("div", {
                 className: "emb-heading-actions",
                 children: [
-                  !g &&
+                  !isDocumentBrowserOpen &&
                     i.jsxs("button", {
                       type: "button",
                       className: "emb-show-documents",
-                      onClick: () => b(true),
+                      onClick: () => setIsDocumentBrowserOpen(true),
                       children: [
                         i.jsx(PanelLeftOpen, { size: 16 }),
                         i.jsx("span", { children: "Documents" }),
@@ -705,9 +770,12 @@ function EmbeddedWorkbookWorkspace() {
                 {
                   type: "button",
                   className:
-                    a === workspaceDocumentKind && f ? "emb-mobile-active" : "",
+                    activeDocument === workspaceDocumentKind &&
+                    isWorkbookWindowOpen
+                      ? "emb-mobile-active"
+                      : "",
                   "aria-label": `Open ${workspaceDocumentLabels[workspaceDocumentKind]}`,
-                  onClick: () => T(workspaceDocumentKind),
+                  onClick: () => openDocument(workspaceDocumentKind),
                   children: [
                     i.jsx(FileSpreadsheet, { size: 14 }),
                     workspaceDocumentLabels[workspaceDocumentKind],
@@ -717,21 +785,21 @@ function EmbeddedWorkbookWorkspace() {
               ),
             ),
           }),
-          O &&
+          activeProblem &&
             i.jsxs("div", {
               className: "emb-save-warning",
               role: "status",
               "aria-label": "Workspace save status",
               children: [
                 i.jsx(Info, { size: 15 }),
-                i.jsx("span", { children: O }),
+                i.jsx("span", { children: activeProblem }),
               ],
             }),
           i.jsxs("section", {
-            className: `emb-workbook-window ${m ? "emb-window-expanded" : ""}`,
+            className: `emb-workbook-window ${isWorkbookWindowExpanded ? "emb-window-expanded" : ""}`,
             "aria-label": "Embedded workbook window",
-            hidden: !f,
-            style: f ? undefined : { display: "none" },
+            hidden: !isWorkbookWindowOpen,
+            style: isWorkbookWindowOpen ? undefined : { display: "none" },
             children: [
               i.jsxs("div", {
                 className: "emb-window-titlebar",
@@ -746,7 +814,7 @@ function EmbeddedWorkbookWorkspace() {
                       i.jsxs("div", {
                         children: [
                           i.jsx("strong", {
-                            children: workspaceDocumentLabels[a],
+                            children: workspaceDocumentLabels[activeDocument],
                           }),
                           i.jsx("span", { children: workbook.name }),
                         ],
@@ -761,16 +829,16 @@ function EmbeddedWorkbookWorkspace() {
                     className: "emb-window-actions",
                     children: [
                       i.jsxs("span", {
-                        className: `emb-save-state ${O ? "emb-save-state-warning" : ""}`,
+                        className: `emb-save-state ${activeProblem ? "emb-save-state-warning" : ""}`,
                         role: "status",
                         children: [
-                          j
+                          isSaved
                             ? i.jsx(Check, { size: 13 })
                             : i.jsx("span", { className: "emb-save-dot" }),
                           i.jsx("span", {
-                            children: O
+                            children: activeProblem
                               ? "Kept in this tab"
-                              : j
+                              : isSaved
                                 ? "Saved in this browser"
                                 : "Saving…",
                           }),
@@ -779,14 +847,17 @@ function EmbeddedWorkbookWorkspace() {
                       i.jsx("span", { className: "emb-window-action-divider" }),
                       i.jsx("button", {
                         type: "button",
-                        "aria-label": m
+                        "aria-label": isWorkbookWindowExpanded
                           ? "Restore workbook window"
                           : "Expand workbook window",
-                        title: m
+                        title: isWorkbookWindowExpanded
                           ? "Restore workbook window"
                           : "Expand workbook window",
-                        onClick: () => v((R) => !R),
-                        children: m
+                        onClick: () =>
+                          setIsWorkbookWindowExpanded(
+                            (isPreviouslyExpanded) => !isPreviouslyExpanded,
+                          ),
+                        children: isWorkbookWindowExpanded
                           ? i.jsx(Minimize2, { size: 16 })
                           : i.jsx(Maximize2, { size: 16 }),
                       }),
@@ -795,7 +866,8 @@ function EmbeddedWorkbookWorkspace() {
                         "aria-label": "Close workbook window",
                         title: "Close workbook window",
                         onClick: () => {
-                          (p(false), v(false));
+                          (setIsWorkbookWindowOpen(false),
+                            setIsWorkbookWindowExpanded(false));
                         },
                         children: i.jsx(X, { size: 17 }),
                       }),
@@ -803,30 +875,36 @@ function EmbeddedWorkbookWorkspace() {
                   }),
                 ],
               }),
-              !n &&
+              !recoveryResult &&
                 i.jsx("div", {
                   className: "emb-editor",
                   role: "status",
                   children: "Opening saved workbooks…",
                 }),
-              n &&
-                d.map((R) =>
+              recoveryResult &&
+                openedDocuments.map((openedDocumentKind) =>
                   i.jsx(
                     "div",
                     {
                       className: "emb-editor",
-                      hidden: R !== a,
-                      style: R !== a ? { display: "none" } : undefined,
+                      hidden: openedDocumentKind !== activeDocument,
+                      style:
+                        openedDocumentKind !== activeDocument
+                          ? { display: "none" }
+                          : undefined,
                       children: i.jsx(WorkbookSyncBoundary, {
-                        initialWorkbook: n.documents[R],
-                        ...h[R],
+                        initialWorkbook:
+                          recoveryResult.documents[openedDocumentKind],
+                        ...documentHandlers[openedDocumentKind],
                         actor: "Example preparer",
                         adapter: adapter,
-                        workbookStore: n.stores[R],
-                        workbookStorePersistent: !n.problems[R],
+                        workbookStore:
+                          recoveryResult.stores[openedDocumentKind],
+                        workbookStorePersistent:
+                          !recoveryResult.problems[openedDocumentKind],
                       }),
                     },
-                    R,
+                    openedDocumentKind,
                   ),
                 ),
               i.jsxs("div", {
@@ -842,8 +920,8 @@ function EmbeddedWorkbookWorkspace() {
                       }),
                       i.jsx("span", {
                         className: "emb-host-citation",
-                        title: `${workspaceDocumentLabels[a]} · ${_}`,
-                        children: _,
+                        title: `${workspaceDocumentLabels[activeDocument]} · ${activeAddress}`,
+                        children: activeAddress,
                       }),
                     ],
                   }),
@@ -864,7 +942,7 @@ function EmbeddedWorkbookWorkspace() {
               }),
             ],
           }),
-          !f &&
+          !isWorkbookWindowOpen &&
             i.jsxs("section", {
               className: "emb-empty-window",
               "aria-label": "Closed workbook",
@@ -883,11 +961,11 @@ function EmbeddedWorkbookWorkspace() {
                 }),
                 i.jsxs("button", {
                   type: "button",
-                  onClick: () => p(true),
+                  onClick: () => setIsWorkbookWindowOpen(true),
                   children: [
                     i.jsx(FolderOpen, { size: 16 }),
                     "Reopen ",
-                    workspaceDocumentLabels[a],
+                    workspaceDocumentLabels[activeDocument],
                   ],
                 }),
               ],
@@ -912,10 +990,10 @@ function EmbeddedWorkbookWorkspace() {
           }),
         ],
       }),
-      E &&
+      isAboutOpen &&
         i.jsx("div", {
           className: "emb-modal-backdrop",
-          onClick: () => A(false),
+          onClick: () => setIsAboutOpen(false),
           children: i.jsxs("section", {
             className: "emb-info-dialog",
             role: "dialog",
@@ -924,17 +1002,17 @@ function EmbeddedWorkbookWorkspace() {
             onClick: (event) => event.stopPropagation(),
             onKeyDown: (event) => {
               if (event.key !== "Tab") return;
-              const L = Array.from(
+              const focusableButtons = Array.from(
                   event.currentTarget.querySelectorAll("button:not(:disabled)"),
                 ),
-                $ = L[0],
-                U = L.at(-1);
+                firstButton = focusableButtons[0],
+                lastButton = focusableButtons.at(-1);
               (event.shiftKey &&
-                document.activeElement === $ &&
-                (event.preventDefault(), U?.focus()),
+                document.activeElement === firstButton &&
+                (event.preventDefault(), lastButton?.focus()),
                 !event.shiftKey &&
-                  document.activeElement === U &&
-                  (event.preventDefault(), $?.focus()));
+                  document.activeElement === lastButton &&
+                  (event.preventDefault(), firstButton?.focus()));
             },
             children: [
               i.jsx("button", {
@@ -942,7 +1020,7 @@ function EmbeddedWorkbookWorkspace() {
                 className: "emb-info-close",
                 "aria-label": "Close example details",
                 autoFocus: true,
-                onClick: () => A(false),
+                onClick: () => setIsAboutOpen(false),
                 children: i.jsx(X, { size: 18 }),
               }),
               i.jsx("div", {
@@ -970,7 +1048,7 @@ function EmbeddedWorkbookWorkspace() {
                 children: [
                   i.jsx(Check, { size: 16 }),
                   i.jsx("span", {
-                    children: O
+                    children: activeProblem
                       ? "Changes are kept in this tab while browser storage is unavailable."
                       : "Changes are saved in this browser by the host application.",
                   }),
@@ -999,7 +1077,7 @@ function EmbeddedWorkbookWorkspace() {
               i.jsxs("button", {
                 type: "button",
                 className: "emb-info-return",
-                onClick: () => A(false),
+                onClick: () => setIsAboutOpen(false),
                 children: [
                   i.jsx(ArrowLeft, { size: 15 }),
                   "Back to workpapers",

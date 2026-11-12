@@ -52,21 +52,26 @@ import {
   shiftFormulaReferences,
 } from "./03-workbook-model.js";
 
-const formatRangeAddress = (e, r, t, n) => {
-  const cellAddress = formatCellAddress(e, r),
-    a = formatCellAddress(e + t - 1, r + n - 1);
-  return cellAddress === a ? cellAddress : `${cellAddress}:${a}`;
+const formatRangeAddress = (firstRow, firstCol, rowCount, colCount) => {
+  const cellAddress = formatCellAddress(firstRow, firstCol),
+    endCellAddress = formatCellAddress(
+      firstRow + rowCount - 1,
+      firstCol + colCount - 1,
+    );
+  return cellAddress === endCellAddress
+    ? cellAddress
+    : `${cellAddress}:${endCellAddress}`;
 };
-function eI(e) {
+function eI(value) {
   return (
-    e &&
-      typeof e == "object" &&
-      (Object.values(e).forEach(eI), Object.freeze(e)),
-    e
+    value &&
+      typeof value == "object" &&
+      (Object.values(value).forEach(eI), Object.freeze(value)),
+    value
   );
 }
-function stripCellDecorations(e) {
-  const cellRecordInput = normalizeCellRecordInput(e ?? { raw: null });
+function stripCellDecorations(cell) {
+  const cellRecordInput = normalizeCellRecordInput(cell ?? { raw: null });
   return (
     delete cellRecordInput.note,
     delete cellRecordInput.tickmark,
@@ -81,19 +86,21 @@ function withRawCellValue(raw, cell) {
     literal: typeof raw == "string" && raw.startsWith("=") ? true : undefined,
   };
 }
-function mergeCellDecorations(fillCellPatches, r) {
+function mergeCellDecorations(fillCellPatches, decorations) {
   return {
     ...fillCellPatches,
-    ...(r?.note !== undefined ? { note: r.note } : {}),
-    ...(r?.hyperlink !== undefined
-      ? { hyperlink: structuredClone(r.hyperlink) }
+    ...(decorations?.note !== undefined ? { note: decorations.note } : {}),
+    ...(decorations?.hyperlink !== undefined
+      ? { hyperlink: structuredClone(decorations.hyperlink) }
       : {}),
-    ...(r?.tickmark !== undefined ? { tickmark: r.tickmark } : {}),
+    ...(decorations?.tickmark !== undefined
+      ? { tickmark: decorations.tickmark }
+      : {}),
   };
 }
-function cellContentsMatch(e, cell) {
+function cellContentsMatch(existingCell, cell) {
   return (
-    JSON.stringify(normalizeCellRecordInput(e ?? { raw: null })) ===
+    JSON.stringify(normalizeCellRecordInput(existingCell ?? { raw: null })) ===
     JSON.stringify(normalizeCellRecordInput(cell))
   );
 }
@@ -127,19 +134,21 @@ function validateClipboardSnapshot(sheet) {
   (rangeAddress.lastRow - rangeAddress.firstRow + 1 !== sheet.rowCount ||
     rangeAddress.lastCol - rangeAddress.firstCol + 1 !== sheet.colCount) &&
     throwWorkbookError("Clipboard dimensions do not match its source range.");
-  const cells = sheet.cells.map((cell, o) => {
+  const cells = sheet.cells.map((cell, cellIndex) => {
     (!isPlainObjectValue(cell) ||
-      cell.rowOffset !== Math.floor(o / sheet.colCount) ||
-      cell.colOffset !== o % sheet.colCount) &&
+      cell.rowOffset !== Math.floor(cellIndex / sheet.colCount) ||
+      cell.colOffset !== cellIndex % sheet.colCount) &&
       throwWorkbookError(
         "Clipboard cells must form a complete row-major rectangle.",
       );
-    const a = stripCellDecorations(normalizeCellRecordInput(cell.cell)),
+    const strippedCell = stripCellDecorations(
+        normalizeCellRecordInput(cell.cell),
+      ),
       raw = normalizeCellRecordInput({ raw: cell.value }).raw;
     return {
       rowOffset: cell.rowOffset,
       colOffset: cell.colOffset,
-      cell: a,
+      cell: strippedCell,
       value: raw,
     };
   });
@@ -186,16 +195,16 @@ function buildClipboardSnapshot(
         }).raw;
       let cell = stripCellDecorations(sheetOrThrow.cells[cellAddress]);
       if (cell.raw === null && raw !== null) {
-        const m = workbookWithSettings.getSpillAnchor(
+        const spillAnchor = workbookWithSettings.getSpillAnchor(
           sourceSheetId,
           cellAddress,
         );
-        if (m && m !== cellAddress) {
-          const v = _t(m);
-          (v.row < rangeAddress.firstRow ||
-            v.row > rangeAddress.lastRow ||
-            v.col < rangeAddress.firstCol ||
-            v.col > rangeAddress.lastCol) &&
+        if (spillAnchor && spillAnchor !== cellAddress) {
+          const anchorPosition = _t(spillAnchor);
+          (anchorPosition.row < rangeAddress.firstRow ||
+            anchorPosition.row > rangeAddress.lastRow ||
+            anchorPosition.col < rangeAddress.firstCol ||
+            anchorPosition.col > rangeAddress.lastCol) &&
             (cell = withRawCellValue(raw, cell));
         }
       }
@@ -224,29 +233,31 @@ function buildClipboardSnapshot(
 }
 function buildCellChangePreview(
   workbook,
-  r,
-  t,
+  requestedPatches,
+  previewDetails,
   readOnly,
   deferValidationWarnings = false,
 ) {
   (assertWorkbookWritable(readOnly),
-    assertSheetUnprotected(findSheetOrThrow(workbook, t.targetSheetId)),
-    r.length > workbookLimits.maxPatches &&
+    assertSheetUnprotected(
+      findSheetOrThrow(workbook, previewDetails.targetSheetId),
+    ),
+    requestedPatches.length > workbookLimits.maxPatches &&
       throwWorkbookError(
         "A fill or paste operation may change at most 500 cells.",
       ));
-  const patches = r.map((patch) => ({
+  const patches = requestedPatches.map((patch) => ({
     sheetId: patch.sheetId,
     address: patch.address,
     cell: normalizeCellRecordInput(patch.cell),
   }));
-  let s;
+  let previewWorkbook;
   try {
-    s = applyCellPatchTransaction(
+    previewWorkbook = applyCellPatchTransaction(
       workbook,
       patches,
       "Preview",
-      t.summary.slice(0, 200),
+      previewDetails.summary.slice(0, 200),
     );
   } catch (error) {
     if (
@@ -255,20 +266,20 @@ function buildCellChangePreview(
       error.issues.some((issue) => issue.style === "stop")
     )
       throw error;
-    s = applyCellPatchTransaction(
+    previewWorkbook = applyCellPatchTransaction(
       workbook,
       patches,
       "Preview",
-      t.summary.slice(0, 200),
+      previewDetails.summary.slice(0, 200),
       {
         validationApproval: assertNoStopValidationIssues(error),
       },
     );
   }
   const previewPatches =
-      s === workbook
+      previewWorkbook === workbook
         ? []
-        : s.events.at(-1).changes.map((change) => ({
+        : previewWorkbook.events.at(-1).changes.map((change) => ({
             sheetId: change.sheetId,
             address: change.address,
             cell: normalizeCellRecordInput(change.after ?? { raw: null }),
@@ -276,7 +287,7 @@ function buildCellChangePreview(
     count = previewPatches.length,
     dependentCount = Math.max(0, count - patches.length);
   return eI({
-    ...t,
+    ...previewDetails,
     workbookId: workbook.id,
     revision: workbook.revision,
     patches: patches,
@@ -284,15 +295,15 @@ function buildCellChangePreview(
     count: count,
     dependentCount: dependentCount,
     summary:
-      t.summary +
+      previewDetails.summary +
       (dependentCount
         ? ` Includes ${dependentCount} dependent cell changes.`
         : ""),
     snapshotGuard: JSON.stringify(workbook),
   });
 }
-function applyCellChangePreview(workbook, plan, t = {}) {
-  (assertWorkbookWritable(t.readOnly),
+function applyCellChangePreview(workbook, plan, options = {}) {
+  (assertWorkbookWritable(options.readOnly),
     (!plan ||
       plan.workbookId !== workbook.id ||
       plan.revision !== workbook.revision ||
@@ -301,38 +312,51 @@ function applyCellChangePreview(workbook, plan, t = {}) {
         "The workbook changed after this preview. Create a new preview before applying it.",
       ),
     assertSheetUnprotected(findSheetOrThrow(workbook, plan.targetSheetId)));
-  const n = applyCellPatchTransaction(
+  const appliedWorkbook = applyCellPatchTransaction(
     workbook,
     plan.patches,
-    t.actor ?? "Preparer",
+    options.actor ?? "Preparer",
     plan.summary.slice(0, 200),
   );
-  return n === workbook
+  return appliedWorkbook === workbook
     ? workbook
-    : { ...n, revision: workbook.revision, events: workbook.events };
+    : {
+        ...appliedWorkbook,
+        revision: workbook.revision,
+        events: workbook.events,
+      };
 }
-function buildPastePreview(workbook, sheetId, t, n, o = {}) {
-  const sheet = validateClipboardSnapshot(n),
+function buildPastePreview(
+  workbook,
+  sheetId,
+  targetRange,
+  clipboardInput,
+  pasteOptions = {},
+) {
+  const sheet = validateClipboardSnapshot(clipboardInput),
     sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-    rangeAddress = parseRangeAddress(t),
-    u = parseRangeAddress(sheet.sourceRange),
-    l = o.mode ?? "all",
-    c = o.operation ?? "none";
-  ((!["all", "values", "formulas", "formats"].includes(l) ||
-    !["none", "add", "subtract", "multiply", "divide"].includes(c)) &&
+    rangeAddress = parseRangeAddress(targetRange),
+    sourceRangeAddress = parseRangeAddress(sheet.sourceRange),
+    pasteMode = pasteOptions.mode ?? "all",
+    pasteOperation = pasteOptions.operation ?? "none";
+  ((!["all", "values", "formulas", "formats"].includes(pasteMode) ||
+    !["none", "add", "subtract", "multiply", "divide"].includes(
+      pasteOperation,
+    )) &&
     throwWorkbookError(
       "Choose a supported paste mode and arithmetic operation.",
     ),
-    [o.transpose, o.skipBlanks].some(
-      (k) => k !== undefined && typeof k != "boolean",
+    [pasteOptions.transpose, pasteOptions.skipBlanks].some(
+      (optionValue) =>
+        optionValue !== undefined && typeof optionValue != "boolean",
     ) && throwWorkbookError("Transpose and skip blanks must be boolean."),
-    c !== "none" &&
-      (l === "formats" || l === "formulas") &&
+    pasteOperation !== "none" &&
+      (pasteMode === "formats" || pasteMode === "formulas") &&
       throwWorkbookError(
         "Arithmetic paste requires All or Values mode; its results are numeric values.",
       ),
     sheet.sourceWorkbookId !== workbook.id &&
-      (l === "all" || l === "formulas") &&
+      (pasteMode === "all" || pasteMode === "formulas") &&
       sheet.cells.some(
         (cell) =>
           typeof cell.cell.raw == "string" &&
@@ -342,142 +366,177 @@ function buildPastePreview(workbook, sheetId, t, n, o = {}) {
       throwWorkbookError(
         "Use Values paste for formulas copied from a different workbook.",
       ));
-  const h = o.transpose ? sheet.colCount : sheet.rowCount,
-    f = o.transpose ? sheet.rowCount : sheet.colCount,
-    p =
+  const tileRowCount = pasteOptions.transpose ? sheet.colCount : sheet.rowCount,
+    tileColCount = pasteOptions.transpose ? sheet.rowCount : sheet.colCount,
+    isSingleCellTarget =
       rangeAddress.firstRow === rangeAddress.lastRow &&
       rangeAddress.firstCol === rangeAddress.lastCol,
-    m = p ? h : rangeAddress.lastRow - rangeAddress.firstRow + 1,
-    v = p ? f : rangeAddress.lastCol - rangeAddress.firstCol + 1;
-  ((m % h || v % f) &&
+    targetRowCount = isSingleCellTarget
+      ? tileRowCount
+      : rangeAddress.lastRow - rangeAddress.firstRow + 1,
+    targetColCount = isSingleCellTarget
+      ? tileColCount
+      : rangeAddress.lastCol - rangeAddress.firstCol + 1;
+  ((targetRowCount % tileRowCount || targetColCount % tileColCount) &&
     throwWorkbookError(
       "The target rectangle must be a whole multiple of the copied rows and columns.",
     ),
-    m * v > workbookLimits.maxPatches &&
+    targetRowCount * targetColCount > workbookLimits.maxPatches &&
       throwWorkbookError("Paste into at most 500 target cells."),
-    (rangeAddress.firstRow + m > sheetOrThrow.rowCount ||
-      rangeAddress.firstCol + v > sheetOrThrow.colCount) &&
+    (rangeAddress.firstRow + targetRowCount > sheetOrThrow.rowCount ||
+      rangeAddress.firstCol + targetColCount > sheetOrThrow.colCount) &&
       throwWorkbookError(
         "The pasted cells would exceed the worksheet boundary.",
       ));
-  const g = formatRangeAddress(
+  const normalizedTargetRange = formatRangeAddress(
       rangeAddress.firstRow,
       rangeAddress.firstCol,
-      m,
-      v,
+      targetRowCount,
+      targetColCount,
     ),
-    b = rangeAddress.firstRow + m - 1,
-    y = rangeAddress.firstCol + v - 1;
-  for (const k of sheetOrThrow.merges ?? []) {
-    const F = parseRangeAddress(k);
-    rangeAddress.firstRow <= F.lastRow &&
-      b >= F.firstRow &&
-      rangeAddress.firstCol <= F.lastCol &&
-      y >= F.firstCol &&
+    targetLastRow = rangeAddress.firstRow + targetRowCount - 1,
+    targetLastCol = rangeAddress.firstCol + targetColCount - 1;
+  for (const mergeRange of sheetOrThrow.merges ?? []) {
+    const mergeRangeAddress = parseRangeAddress(mergeRange);
+    rangeAddress.firstRow <= mergeRangeAddress.lastRow &&
+      targetLastRow >= mergeRangeAddress.firstRow &&
+      rangeAddress.firstCol <= mergeRangeAddress.lastCol &&
+      targetLastCol >= mergeRangeAddress.firstCol &&
       !(
-        m * v === 1 &&
-        rangeAddress.firstRow === F.firstRow &&
-        rangeAddress.firstCol === F.firstCol
+        targetRowCount * targetColCount === 1 &&
+        rangeAddress.firstRow === mergeRangeAddress.firstRow &&
+        rangeAddress.firstCol === mergeRangeAddress.firstCol
       ) &&
       throwWorkbookError(
         "Unmerge the target area before pasting a block of cells or editing a covered cell.",
       );
   }
-  const w = [],
+  const patches = [],
     workbookWithSettings = calculateWorkbookWithSettings(workbook);
   let skippedBlanks = 0;
-  for (let k = 0; k < m; k++)
-    for (let F = 0; F < v; F++) {
-      const I = o.transpose ? F % f : k % h,
-        O = o.transpose ? k % h : F % f,
-        j = sheet.cells[I * sheet.colCount + O],
-        z = (j.cell.raw === null && j.value === null) || j.cell.raw === "";
-      if (o.skipBlanks && z) {
+  for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset++)
+    for (let colOffset = 0; colOffset < targetColCount; colOffset++) {
+      const sourceRowOffset = pasteOptions.transpose
+          ? colOffset % tileColCount
+          : rowOffset % tileRowCount,
+        sourceColOffset = pasteOptions.transpose
+          ? rowOffset % tileRowCount
+          : colOffset % tileColCount,
+        sourceEntry =
+          sheet.cells[sourceRowOffset * sheet.colCount + sourceColOffset],
+        isBlankSource =
+          (sourceEntry.cell.raw === null && sourceEntry.value === null) ||
+          sourceEntry.cell.raw === "";
+      if (pasteOptions.skipBlanks && isBlankSource) {
         skippedBlanks++;
         continue;
       }
       const cellAddress = formatCellAddress(
-          rangeAddress.firstRow + k,
-          rangeAddress.firstCol + F,
+          rangeAddress.firstRow + rowOffset,
+          rangeAddress.firstCol + colOffset,
         ),
-        D = sheetOrThrow.cells[cellAddress];
-      let cell = stripCellDecorations(j.cell);
+        existingCell = sheetOrThrow.cells[cellAddress];
+      let cell = stripCellDecorations(sourceEntry.cell);
       typeof cell.raw == "string" &&
         cell.raw.startsWith("=") &&
         !cell.literal &&
         (cell.raw = shiftFormulaReferences(
           cell.raw,
-          rangeAddress.firstRow + k - u.firstRow - I,
-          rangeAddress.firstCol + F - u.firstCol - O,
+          rangeAddress.firstRow +
+            rowOffset -
+            sourceRangeAddress.firstRow -
+            sourceRowOffset,
+          rangeAddress.firstCol +
+            colOffset -
+            sourceRangeAddress.firstCol -
+            sourceColOffset,
         ));
-      let _;
-      if (l === "all") _ = mergeCellDecorations(cell, D);
-      else if (l === "formulas")
-        _ = { ...(D ?? { raw: null }), raw: cell.raw, literal: cell.literal };
-      else if (l === "values")
-        _ = withRawCellValue(j.value, { ...(D ?? { raw: null }) });
+      let pastedCell;
+      if (pasteMode === "all")
+        pastedCell = mergeCellDecorations(cell, existingCell);
+      else if (pasteMode === "formulas")
+        pastedCell = {
+          ...(existingCell ?? { raw: null }),
+          raw: cell.raw,
+          literal: cell.literal,
+        };
+      else if (pasteMode === "values")
+        pastedCell = withRawCellValue(sourceEntry.value, {
+          ...(existingCell ?? { raw: null }),
+        });
       else {
-        _ = { ...(D ?? { raw: null }) };
-        for (const C of ["style", "format", "numFmt", "numberFormat"])
-          delete _[C];
-        (cell.style !== undefined && (_.style = cell.style),
-          cell.format !== undefined && (_.format = cell.format),
-          cell.numFmt !== undefined && (_.numFmt = cell.numFmt),
+        pastedCell = { ...(existingCell ?? { raw: null }) };
+        for (const formatKey of ["style", "format", "numFmt", "numberFormat"])
+          delete pastedCell[formatKey];
+        (cell.style !== undefined && (pastedCell.style = cell.style),
+          cell.format !== undefined && (pastedCell.format = cell.format),
+          cell.numFmt !== undefined && (pastedCell.numFmt = cell.numFmt),
           cell.numberFormat !== undefined &&
-            (_.numberFormat = structuredClone(cell.numberFormat)));
+            (pastedCell.numberFormat = structuredClone(cell.numberFormat)));
       }
-      if ((assertNamedStyleBindingCurrent(workbook, _.style), c !== "none")) {
-        const C = j.value === null || j.value === "" ? 0 : j.value,
-          T = workbookWithSettings(sheetId, cellAddress),
-          N = T === null || T === "" ? 0 : T;
-        ((typeof C != "number" ||
-          !Number.isFinite(C) ||
-          typeof N != "number" ||
-          !Number.isFinite(N)) &&
+      if (
+        (assertNamedStyleBindingCurrent(workbook, pastedCell.style),
+        pasteOperation !== "none")
+      ) {
+        const sourceOperand =
+            sourceEntry.value === null || sourceEntry.value === ""
+              ? 0
+              : sourceEntry.value,
+          targetValue = workbookWithSettings(sheetId, cellAddress),
+          targetOperand =
+            targetValue === null || targetValue === "" ? 0 : targetValue;
+        ((typeof sourceOperand != "number" ||
+          !Number.isFinite(sourceOperand) ||
+          typeof targetOperand != "number" ||
+          !Number.isFinite(targetOperand)) &&
           throwWorkbookError(
             `Arithmetic paste requires numbers or blanks at ${cellAddress}.`,
           ),
-          c === "divide" &&
-            C === 0 &&
+          pasteOperation === "divide" &&
+            sourceOperand === 0 &&
             throwWorkbookError(
               `Arithmetic paste would divide by zero at ${cellAddress}.`,
             ));
         const raw =
-          c === "add"
-            ? N + C
-            : c === "subtract"
-              ? N - C
-              : c === "multiply"
-                ? N * C
-                : N / C;
+          pasteOperation === "add"
+            ? targetOperand + sourceOperand
+            : pasteOperation === "subtract"
+              ? targetOperand - sourceOperand
+              : pasteOperation === "multiply"
+                ? targetOperand * sourceOperand
+                : targetOperand / sourceOperand;
         (Number.isFinite(raw) ||
           throwWorkbookError(
             `Arithmetic paste would overflow at ${cellAddress}.`,
           ),
-          (_ = { ..._, raw: raw }),
-          delete _.literal);
+          (pastedCell = { ...pastedCell, raw: raw }),
+          delete pastedCell.literal);
       }
-      ((_ = normalizeCellRecordInput(_)),
-        cellContentsMatch(D, _) ||
-          w.push({ sheetId: sheetId, address: cellAddress, cell: _ }));
+      ((pastedCell = normalizeCellRecordInput(pastedCell)),
+        cellContentsMatch(existingCell, pastedCell) ||
+          patches.push({
+            sheetId: sheetId,
+            address: cellAddress,
+            cell: pastedCell,
+          }));
     }
   return buildCellChangePreview(
     workbook,
-    w,
+    patches,
     {
       targetSheetId: sheetId,
-      targetRange: g,
-      targetCount: m * v,
+      targetRange: normalizedTargetRange,
+      targetCount: targetRowCount * targetColCount,
       sourceRange: sheet.sourceRange,
       skippedBlanks: skippedBlanks,
-      summary: `Paste ${l}${o.transpose ? " transposed" : ""}${c !== "none" ? ` (${c})` : ""} into ${g}.`,
+      summary: `Paste ${pasteMode}${pasteOptions.transpose ? " transposed" : ""}${pasteOperation !== "none" ? ` (${pasteOperation})` : ""} into ${normalizedTargetRange}.`,
     },
-    o.readOnly,
-    o.deferValidationWarnings,
+    pasteOptions.readOnly,
+    pasteOptions.deferValidationWarnings,
   );
 }
-function applyCellPreview(workbook, plan, t = {}) {
-  return applyCellChangePreview(workbook, plan, t);
+function applyCellPreview(workbook, plan, options = {}) {
+  return applyCellChangePreview(workbook, plan, options);
 }
 
 function validateFillDirection(direction) {
@@ -487,83 +546,104 @@ function validateFillDirection(direction) {
     direction
   );
 }
-function formatRangeBoundsAddress(e) {
-  const rangeAddress = parseRangeAddress(e),
+function formatRangeBoundsAddress(rangeText) {
+  const rangeAddress = parseRangeAddress(rangeText),
     cellAddress = formatCellAddress(
       rangeAddress.firstRow,
       rangeAddress.firstCol,
     ),
-    n = formatCellAddress(rangeAddress.lastRow, rangeAddress.lastCol);
-  return cellAddress === n ? cellAddress : `${cellAddress}:${n}`;
+    lastCellAddress = formatCellAddress(
+      rangeAddress.lastRow,
+      rangeAddress.lastCol,
+    );
+  return cellAddress === lastCellAddress
+    ? cellAddress
+    : `${cellAddress}:${lastCellAddress}`;
 }
 
-function cellContentsDiffer(e, cellRecordInput) {
+function cellContentsDiffer(existingCell, cellRecordInput) {
   return (
-    JSON.stringify(normalizeCellRecordInput(e ?? { raw: null })) !==
+    JSON.stringify(normalizeCellRecordInput(existingCell ?? { raw: null })) !==
     JSON.stringify(normalizeCellRecordInput(cellRecordInput))
   );
 }
 function buildFillCellPatches(
   sheetOrThrow,
-  r,
+  cellAddress,
   workbookWithSettings,
   rangeAddress,
 ) {
-  const cell = stripCellDecorations(sheetOrThrow.cells[r]);
+  const cell = stripCellDecorations(sheetOrThrow.cells[cellAddress]);
   if (cell.raw !== null) return cell;
-  const a = workbookWithSettings(sheetOrThrow.id, r);
-  if (a === null) return cell;
-  const s = workbookWithSettings.getSpillAnchor(sheetOrThrow.id, r);
-  if (s && s !== r) {
-    const d = _t(s);
-    (d.row < rangeAddress.firstRow ||
-      d.row > rangeAddress.lastRow ||
-      d.col < rangeAddress.firstCol ||
-      d.col > rangeAddress.lastCol) &&
-      ((cell.raw = a),
-      typeof a == "string" && a.startsWith("=") && (cell.literal = true));
+  const calculatedValue = workbookWithSettings(sheetOrThrow.id, cellAddress);
+  if (calculatedValue === null) return cell;
+  const spillAnchor = workbookWithSettings.getSpillAnchor(
+    sheetOrThrow.id,
+    cellAddress,
+  );
+  if (spillAnchor && spillAnchor !== cellAddress) {
+    const anchorPosition = _t(spillAnchor);
+    (anchorPosition.row < rangeAddress.firstRow ||
+      anchorPosition.row > rangeAddress.lastRow ||
+      anchorPosition.col < rangeAddress.firstCol ||
+      anchorPosition.col > rangeAddress.lastCol) &&
+      ((cell.raw = calculatedValue),
+      typeof calculatedValue == "string" &&
+        calculatedValue.startsWith("=") &&
+        (cell.literal = true));
   }
   return cell;
 }
-function assertFillTargetUnmerged(workbook, sheetId, t) {
+function assertFillTargetUnmerged(workbook, sheetId, targetAddresses) {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId);
-  for (const o of sheetOrThrow.merges ?? []) {
-    const rangeAddress = parseRangeAddress(o);
-    t.some((s) => {
-      const d = _t(s);
+  for (const mergeRange of sheetOrThrow.merges ?? []) {
+    const rangeAddress = parseRangeAddress(mergeRange);
+    targetAddresses.some((targetAddress) => {
+      const targetPosition = _t(targetAddress);
       return (
-        d.row >= rangeAddress.firstRow &&
-        d.row <= rangeAddress.lastRow &&
-        d.col >= rangeAddress.firstCol &&
-        d.col <= rangeAddress.lastCol &&
-        (d.row !== rangeAddress.firstRow || d.col !== rangeAddress.firstCol)
+        targetPosition.row >= rangeAddress.firstRow &&
+        targetPosition.row <= rangeAddress.lastRow &&
+        targetPosition.col >= rangeAddress.firstCol &&
+        targetPosition.col <= rangeAddress.lastCol &&
+        (targetPosition.row !== rangeAddress.firstRow ||
+          targetPosition.col !== rangeAddress.firstCol)
       );
     }) &&
       throwWorkbookError("Unmerge covered target cells before filling them.");
   }
 }
-function buildFillPreview(workbook, sheetId, t, n, o = {}) {
-  const direction = validateFillDirection(n),
+function buildFillPreview(
+  workbook,
+  sheetId,
+  targetRange,
+  directionInput,
+  options = {},
+) {
+  const direction = validateFillDirection(directionInput),
     sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-    rangeAddress = parseRangeAddress(t);
+    rangeAddress = parseRangeAddress(targetRange);
   (rangeAddress.lastRow >= sheetOrThrow.rowCount ||
     rangeAddress.lastCol >= sheetOrThrow.colCount) &&
     throwWorkbookError("The fill range exceeds the worksheet.");
-  const u = direction === "down" || direction === "up",
-    l = rangeAddress.lastRow - rangeAddress.firstRow + 1,
-    c = rangeAddress.lastCol - rangeAddress.firstCol + 1,
-    h = u ? (l - 1) * c : (c - 1) * l;
-  h > workbookLimits.maxPatches &&
+  const isVertical = direction === "down" || direction === "up",
+    rangeRowCount = rangeAddress.lastRow - rangeAddress.firstRow + 1,
+    rangeColCount = rangeAddress.lastCol - rangeAddress.firstCol + 1,
+    destinationCount = isVertical
+      ? (rangeRowCount - 1) * rangeColCount
+      : (rangeColCount - 1) * rangeRowCount;
+  destinationCount > workbookLimits.maxPatches &&
     throwWorkbookError("Fill at most 500 destination cells.");
-  const f = direction === "up" ? rangeAddress.lastRow : rangeAddress.firstRow,
-    p = direction === "left" ? rangeAddress.lastCol : rangeAddress.firstCol,
-    m = [],
-    v = [],
+  const sourceRow =
+      direction === "up" ? rangeAddress.lastRow : rangeAddress.firstRow,
+    sourceCol =
+      direction === "left" ? rangeAddress.lastCol : rangeAddress.firstCol,
+    patches = [],
+    targetAddresses = [],
     workbookWithSettings = calculateWorkbookWithSettings(workbook),
-    b = u
-      ? { ...rangeAddress, firstRow: f, lastRow: f }
-      : { ...rangeAddress, firstCol: p, lastCol: p };
-  if (h)
+    sourceRangeAddress = isVertical
+      ? { ...rangeAddress, firstRow: sourceRow, lastRow: sourceRow }
+      : { ...rangeAddress, firstCol: sourceCol, lastCol: sourceCol };
+  if (destinationCount)
     for (
       let firstRow = rangeAddress.firstRow;
       firstRow <= rangeAddress.lastRow;
@@ -574,24 +654,25 @@ function buildFillPreview(workbook, sheetId, t, n, o = {}) {
         firstCol <= rangeAddress.lastCol;
         firstCol++
       ) {
-        if (u ? firstRow === f : firstCol === p) continue;
-        const E = u ? f : firstRow,
-          A = u ? firstCol : p,
+        if (isVertical ? firstRow === sourceRow : firstCol === sourceCol)
+          continue;
+        const sourceRowIndex = isVertical ? sourceRow : firstRow,
+          sourceColIndex = isVertical ? firstCol : sourceCol,
           cellAddress = formatCellAddress(firstRow, firstCol);
-        v.push(cellAddress);
+        targetAddresses.push(cellAddress);
         const fillCellPatches = buildFillCellPatches(
           sheetOrThrow,
-          formatCellAddress(E, A),
+          formatCellAddress(sourceRowIndex, sourceColIndex),
           workbookWithSettings,
-          b,
+          sourceRangeAddress,
         );
         typeof fillCellPatches.raw == "string" &&
           fillCellPatches.raw.startsWith("=") &&
           !fillCellPatches.literal &&
           (fillCellPatches.raw = shiftFormulaReferences(
             fillCellPatches.raw,
-            firstRow - E,
-            firstCol - A,
+            firstRow - sourceRowIndex,
+            firstCol - sourceColIndex,
           ));
         const cellRecordInput = normalizeCellRecordInput(
           mergeCellDecorations(
@@ -600,178 +681,225 @@ function buildFillPreview(workbook, sheetId, t, n, o = {}) {
           ),
         );
         cellContentsDiffer(sheetOrThrow.cells[cellAddress], cellRecordInput) &&
-          m.push({
+          patches.push({
             sheetId: sheetId,
             address: cellAddress,
             cell: cellRecordInput,
           });
       }
   return (
-    assertFillTargetUnmerged(workbook, sheetId, v),
+    assertFillTargetUnmerged(workbook, sheetId, targetAddresses),
     buildCellChangePreview(
       workbook,
-      m,
+      patches,
       {
         targetSheetId: sheetId,
-        targetRange: formatRangeBoundsAddress(t),
-        targetCount: h,
-        generatedCount: h,
+        targetRange: formatRangeBoundsAddress(targetRange),
+        targetCount: destinationCount,
+        generatedCount: destinationCount,
         direction: direction,
-        summary: `Fill ${direction} within ${formatRangeBoundsAddress(t)}.`,
+        summary: `Fill ${direction} within ${formatRangeBoundsAddress(targetRange)}.`,
       },
-      o.readOnly,
+      options.readOnly,
     )
   );
 }
 
-function excelSerialToDate(e) {
-  return new Date(excelEpochUtc + (e > 60 ? e - 1 : e) * s$);
+function excelSerialToDate(serial) {
+  return new Date(excelEpochUtc + (serial > 60 ? serial - 1 : serial) * s$);
 }
 
-function stepSeriesDateSerial(e, r, t, n) {
+function stepSeriesDateSerial(seedSerial, step, dateUnit, monthPolicy) {
   if (
-    (Number.isSafeInteger(r) ||
+    (Number.isSafeInteger(step) ||
       throwWorkbookError("The date step exceeds safe integer limits."),
-    !r)
+    !step)
   )
-    return e;
-  if (t === "day") {
-    const c = e + r;
+    return seedSerial;
+  if (dateUnit === "day") {
+    const shiftedSerial = seedSerial + step;
     return (
-      (c < 0 || c > maxExcelDateSerial) && throwDateSeriesRangeError(),
-      parseSeriesSeedDate(c)
+      (shiftedSerial < 0 || shiftedSerial > maxExcelDateSerial) &&
+        throwDateSeriesRangeError(),
+      parseSeriesSeedDate(shiftedSerial)
     );
   }
-  e === 60 &&
+  seedSerial === 60 &&
     throwWorkbookError(
       "Calendar and weekday series require a real calendar seed; use Days for the fictitious 1900-02-29 serial.",
     );
-  const o = excelSerialToDate(e);
-  if (t === "weekday") {
-    const c = Math.sign(r);
-    let h = Math.abs(r);
-    if (o.getUTCDay() === 0 || o.getUTCDay() === 6) {
-      do o.setUTCDate(o.getUTCDate() + c);
-      while ([0, 6].includes(o.getUTCDay()));
-      h--;
+  const seedDate = excelSerialToDate(seedSerial);
+  if (dateUnit === "weekday") {
+    const stepSign = Math.sign(step);
+    let remainingSteps = Math.abs(step);
+    if (seedDate.getUTCDay() === 0 || seedDate.getUTCDay() === 6) {
+      do seedDate.setUTCDate(seedDate.getUTCDate() + stepSign);
+      while ([0, 6].includes(seedDate.getUTCDay()));
+      remainingSteps--;
     }
-    for (o.setUTCDate(o.getUTCDate() + c * Math.floor(h / 5) * 7), h %= 5; h;)
-      (o.setUTCDate(o.getUTCDate() + c), [0, 6].includes(o.getUTCDay()) || h--);
-    return dateToExcelSerial(o);
+    for (
+      seedDate.setUTCDate(
+        seedDate.getUTCDate() + stepSign * Math.floor(remainingSteps / 5) * 7,
+      ),
+        remainingSteps %= 5;
+      remainingSteps;
+    )
+      (seedDate.setUTCDate(seedDate.getUTCDate() + stepSign),
+        [0, 6].includes(seedDate.getUTCDay()) || remainingSteps--);
+    return dateToExcelSerial(seedDate);
   }
-  const a = o.getUTCMonth() + r * (t === "year" ? 12 : 1),
-    s = o.getUTCFullYear() + Math.floor(a / 12),
-    d = ((a % 12) + 12) % 12;
-  (!Number.isSafeInteger(a) || s < 1899 || s > 9999) &&
+  const totalMonths =
+      seedDate.getUTCMonth() + step * (dateUnit === "year" ? 12 : 1),
+    targetYear = seedDate.getUTCFullYear() + Math.floor(totalMonths / 12),
+    targetMonthIndex = ((totalMonths % 12) + 12) % 12;
+  (!Number.isSafeInteger(totalMonths) ||
+    targetYear < 1899 ||
+    targetYear > 9999) &&
     throwDateSeriesRangeError();
-  const u = utcDateFromParts(s, d + 1, 0).getUTCDate(),
-    l = n === "endOfMonth" ? u : Math.min(o.getUTCDate(), u);
-  return dateToExcelSerial(utcDateFromParts(s, d, l));
-}
-function Nae(e, r, t, n, o) {
-  const a =
-    stepSeriesDateSerial(e + dateSystemSerialOffset(o), r, t, n) -
-    dateSystemSerialOffset(o);
-  return (
-    (a < 0 || a > dateSystemMaxSerial(o)) && throwDateSeriesRangeError(),
-    a
+  const daysInMonth = utcDateFromParts(
+      targetYear,
+      targetMonthIndex + 1,
+      0,
+    ).getUTCDate(),
+    targetDay =
+      monthPolicy === "endOfMonth"
+        ? daysInMonth
+        : Math.min(seedDate.getUTCDate(), daysInMonth);
+  return dateToExcelSerial(
+    utcDateFromParts(targetYear, targetMonthIndex, targetDay),
   );
 }
-function buildSeriesPreview(workbook, sheetId, range, n) {
-  const direction = validateFillDirection(n.direction),
+function Nae(seedSerial, stepAmount, dateUnit, monthPolicy, dateSystem) {
+  const resultSerial =
+    stepSeriesDateSerial(
+      seedSerial + dateSystemSerialOffset(dateSystem),
+      stepAmount,
+      dateUnit,
+      monthPolicy,
+    ) - dateSystemSerialOffset(dateSystem);
+  return (
+    (resultSerial < 0 || resultSerial > dateSystemMaxSerial(dateSystem)) &&
+      throwDateSeriesRangeError(),
+    resultSerial
+  );
+}
+function buildSeriesPreview(workbook, sheetId, range, seriesOptions) {
+  const direction = validateFillDirection(seriesOptions.direction),
     sheetOrThrow = findSheetOrThrow(workbook, sheetId),
     rangeAddress = parseRangeAddress(range),
-    d = direction === "down" || direction === "up";
-  (["number", "date"].includes(n.kind) ||
+    isVertical = direction === "down" || direction === "up";
+  (["number", "date"].includes(seriesOptions.kind) ||
     throwWorkbookError("Choose a numeric or date series."),
-    ((d && rangeAddress.firstCol !== rangeAddress.lastCol) ||
-      (!d && rangeAddress.firstRow !== rangeAddress.lastRow)) &&
+    ((isVertical && rangeAddress.firstCol !== rangeAddress.lastCol) ||
+      (!isVertical && rangeAddress.firstRow !== rangeAddress.lastRow)) &&
       throwWorkbookError(
         "Select one column for vertical series or one row for horizontal series.",
       ),
     (rangeAddress.lastRow >= sheetOrThrow.rowCount ||
       rangeAddress.lastCol >= sheetOrThrow.colCount) &&
       throwWorkbookError("The series range exceeds the worksheet."));
-  const targetCount = d
+  const targetCount = isVertical
     ? rangeAddress.lastRow - rangeAddress.firstRow + 1
     : rangeAddress.lastCol - rangeAddress.firstCol + 1;
   targetCount > workbookLimits.maxPatches &&
     throwWorkbookError("A series may contain at most 500 target cells.");
-  const l = direction === "up" ? rangeAddress.lastRow : rangeAddress.firstRow,
-    c = direction === "left" ? rangeAddress.lastCol : rangeAddress.firstCol,
-    cellAddress = formatCellAddress(l, c),
-    f = stripCellDecorations(sheetOrThrow.cells[cellAddress]),
-    p = n.step ?? 1;
-  (typeof p != "number" ||
-    !Number.isFinite(p) ||
-    p === 0 ||
-    (n.kind === "date" && !Number.isSafeInteger(p))) &&
+  const seedRow =
+      direction === "up" ? rangeAddress.lastRow : rangeAddress.firstRow,
+    seedCol =
+      direction === "left" ? rangeAddress.lastCol : rangeAddress.firstCol,
+    cellAddress = formatCellAddress(seedRow, seedCol),
+    seedCell = stripCellDecorations(sheetOrThrow.cells[cellAddress]),
+    step = seriesOptions.step ?? 1;
+  (typeof step != "number" ||
+    !Number.isFinite(step) ||
+    step === 0 ||
+    (seriesOptions.kind === "date" && !Number.isSafeInteger(step))) &&
     throwWorkbookError(
       "Series step must be a nonzero finite number; date steps must be whole numbers.",
     );
-  const m = n.dateUnit ?? "day",
-    v = n.monthPolicy ?? "preserveDay";
-  (!["day", "weekday", "month", "year"].includes(m) ||
-    !["preserveDay", "endOfMonth"].includes(v)) &&
+  const dateUnit = seriesOptions.dateUnit ?? "day",
+    monthPolicy = seriesOptions.monthPolicy ?? "preserveDay";
+  (!["day", "weekday", "month", "year"].includes(dateUnit) ||
+    !["preserveDay", "endOfMonth"].includes(monthPolicy)) &&
     throwWorkbookError("Choose a supported date unit and month policy.");
-  const g =
-    n.start ?? calculateWorkbookWithSettings(workbook)(sheetId, cellAddress);
-  typeof g != "number" &&
-    typeof g != "string" &&
+  const rawStart =
+    seriesOptions.start ??
+    calculateWorkbookWithSettings(workbook)(sheetId, cellAddress);
+  typeof rawStart != "number" &&
+    typeof rawStart != "string" &&
     throwWorkbookError(
       "The directional seed must contain a number or date, or supply a start value.",
     );
-  const b =
-      n.kind === "date"
-        ? parseSeriesSeedDate(g, workbook.datePolicy?.dateSystem)
-        : typeof g == "number" && Number.isFinite(g)
-          ? g
+  const startValue =
+      seriesOptions.kind === "date"
+        ? parseSeriesSeedDate(rawStart, workbook.datePolicy?.dateSystem)
+        : typeof rawStart == "number" && Number.isFinite(rawStart)
+          ? rawStart
           : throwWorkbookError(
               "Numeric series require a finite numeric start value.",
             ),
-    y =
-      n.stop === undefined
+    stopValue =
+      seriesOptions.stop === undefined
         ? undefined
-        : n.kind === "date"
-          ? parseSeriesSeedDate(n.stop, workbook.datePolicy?.dateSystem)
-          : typeof n.stop == "number" && Number.isFinite(n.stop)
-            ? n.stop
+        : seriesOptions.kind === "date"
+          ? parseSeriesSeedDate(
+              seriesOptions.stop,
+              workbook.datePolicy?.dateSystem,
+            )
+          : typeof seriesOptions.stop == "number" &&
+              Number.isFinite(seriesOptions.stop)
+            ? seriesOptions.stop
             : throwWorkbookError(
                 "Numeric series require a finite numeric stop value.",
               );
-  y !== undefined &&
-    ((p > 0 && y < b) || (p < 0 && y > b)) &&
+  stopValue !== undefined &&
+    ((step > 0 && stopValue < startValue) ||
+      (step < 0 && stopValue > startValue)) &&
     throwWorkbookError("The stop value is opposite the series step direction.");
-  const w = [],
-    E = [];
+  const patches = [],
+    targetAddresses = [];
   let generatedCount = 0;
-  for (let O = 0; O < targetCount; O++) {
+  for (let valueIndex = 0; valueIndex < targetCount; valueIndex++) {
     let raw;
     try {
       raw =
-        n.kind === "date"
-          ? Nae(b, O * p, m, v, workbook.datePolicy?.dateSystem ?? "1900")
-          : b + O * p;
+        seriesOptions.kind === "date"
+          ? Nae(
+              startValue,
+              valueIndex * step,
+              dateUnit,
+              monthPolicy,
+              workbook.datePolicy?.dateSystem ?? "1900",
+            )
+          : startValue + valueIndex * step;
     } catch (error) {
-      if (y !== undefined && O > 0 && error instanceof DateSeriesRangeError)
+      if (
+        stopValue !== undefined &&
+        valueIndex > 0 &&
+        error instanceof DateSeriesRangeError
+      )
         break;
       throw error;
     }
-    if (y !== undefined && (p > 0 ? raw > y : raw < y)) break;
+    if (
+      stopValue !== undefined &&
+      (step > 0 ? raw > stopValue : raw < stopValue)
+    )
+      break;
     Number.isFinite(raw) ||
       throwWorkbookError("The numeric series would overflow.");
     const cellAddress = formatCellAddress(
-      l + (d ? O * (direction === "up" ? -1 : 1) : 0),
-      c + (d ? 0 : O * (direction === "left" ? -1 : 1)),
+      seedRow + (isVertical ? valueIndex * (direction === "up" ? -1 : 1) : 0),
+      seedCol + (isVertical ? 0 : valueIndex * (direction === "left" ? -1 : 1)),
     );
-    (E.push(cellAddress), generatedCount++);
+    (targetAddresses.push(cellAddress), generatedCount++);
     const cellRecordInput = normalizeCellRecordInput(
       mergeCellDecorations(
         {
-          ...f,
+          ...seedCell,
           raw: raw,
           literal: undefined,
-          ...(n.kind === "date"
+          ...(seriesOptions.kind === "date"
             ? { format: "date", numFmt: "yyyy-mm-dd", numberFormat: undefined }
             : {}),
         },
@@ -779,22 +907,26 @@ function buildSeriesPreview(workbook, sheetId, range, n) {
       ),
     );
     cellContentsDiffer(sheetOrThrow.cells[cellAddress], cellRecordInput) &&
-      w.push({ sheetId: sheetId, address: cellAddress, cell: cellRecordInput });
+      patches.push({
+        sheetId: sheetId,
+        address: cellAddress,
+        cell: cellRecordInput,
+      });
   }
   return (
-    assertFillTargetUnmerged(workbook, sheetId, E),
+    assertFillTargetUnmerged(workbook, sheetId, targetAddresses),
     buildCellChangePreview(
       workbook,
-      w,
+      patches,
       {
         targetSheetId: sheetId,
         targetRange: formatRangeBoundsAddress(range),
         targetCount: targetCount,
         generatedCount: generatedCount,
         direction: direction,
-        summary: `Fill ${n.kind === "date" ? `${m} date` : "numeric"} series ${direction} in ${formatRangeBoundsAddress(range)} (${generatedCount} values).`,
+        summary: `Fill ${seriesOptions.kind === "date" ? `${dateUnit} date` : "numeric"} series ${direction} in ${formatRangeBoundsAddress(range)} (${generatedCount} values).`,
       },
-      n.readOnly,
+      seriesOptions.readOnly,
     )
   );
 }
@@ -804,85 +936,88 @@ function buildFillHandlePreview(
   sheetId,
   sourceRange,
   targetRange,
-  o = {},
+  options = {},
 ) {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
     rangeAddress = parseRangeAddress(sourceRange),
-    d = parseRangeAddress(targetRange),
-    u = o.mode ?? "copy";
-  (["copy", "series"].includes(u) ||
+    targetAddress = parseRangeAddress(targetRange),
+    fillMode = options.mode ?? "copy";
+  (["copy", "series"].includes(fillMode) ||
     throwWorkbookError("Choose Copy or Series for the fill handle."),
-    (rangeAddress.firstRow < d.firstRow ||
-      rangeAddress.lastRow > d.lastRow ||
-      rangeAddress.firstCol < d.firstCol ||
-      rangeAddress.lastCol > d.lastCol) &&
+    (rangeAddress.firstRow < targetAddress.firstRow ||
+      rangeAddress.lastRow > targetAddress.lastRow ||
+      rangeAddress.firstCol < targetAddress.firstCol ||
+      rangeAddress.lastCol > targetAddress.lastCol) &&
       throwWorkbookError(
         "The fill-handle target must contain the complete source range.",
       ),
-    (d.lastRow >= sheetOrThrow.rowCount ||
-      d.lastCol >= sheetOrThrow.colCount) &&
+    (targetAddress.lastRow >= sheetOrThrow.rowCount ||
+      targetAddress.lastCol >= sheetOrThrow.colCount) &&
       throwWorkbookError("The fill-handle target exceeds the worksheet."));
-  const l = rangeAddress.lastRow - rangeAddress.firstRow + 1,
-    c = rangeAddress.lastCol - rangeAddress.firstCol + 1,
-    h =
-      rangeAddress.firstCol === d.firstCol &&
-      rangeAddress.lastCol === d.lastCol,
-    f =
-      rangeAddress.firstRow === d.firstRow &&
-      rangeAddress.lastRow === d.lastRow;
-  !h &&
-    !f &&
+  const sourceRowCount = rangeAddress.lastRow - rangeAddress.firstRow + 1,
+    sourceColCount = rangeAddress.lastCol - rangeAddress.firstCol + 1,
+    isVerticalFill =
+      rangeAddress.firstCol === targetAddress.firstCol &&
+      rangeAddress.lastCol === targetAddress.lastCol,
+    isHorizontalFill =
+      rangeAddress.firstRow === targetAddress.firstRow &&
+      rangeAddress.lastRow === targetAddress.lastRow;
+  !isVerticalFill &&
+    !isHorizontalFill &&
     throwWorkbookError(
       "Extend the fill handle along one axis while keeping the other source dimension unchanged.",
     );
-  const p = (d.lastRow - d.firstRow + 1) * (d.lastCol - d.firstCol + 1) - l * c;
-  p > workbookLimits.maxPatches &&
+  const extensionCellCount =
+    (targetAddress.lastRow - targetAddress.firstRow + 1) *
+      (targetAddress.lastCol - targetAddress.firstCol + 1) -
+    sourceRowCount * sourceColCount;
+  extensionCellCount > workbookLimits.maxPatches &&
     throwWorkbookError("The fill handle may extend into at most 500 cells.");
-  const direction = h
-      ? d.firstRow < rangeAddress.firstRow
+  const direction = isVerticalFill
+      ? targetAddress.firstRow < rangeAddress.firstRow
         ? "up"
         : "down"
-      : d.firstCol < rangeAddress.firstCol
+      : targetAddress.firstCol < rangeAddress.firstCol
         ? "left"
         : "right",
-    v = [],
-    g = [],
+    cellChanges = [],
+    targetCellAddresses = [],
     workbookWithSettings = calculateWorkbookWithSettings(workbook);
-  let y = 0,
-    w = 0;
-  if (u === "series") {
-    (h && l === 2 && c === 1) ||
-      (f && l === 1 && c === 2) ||
+  let seriesStartValue = 0,
+    seriesStep = 0;
+  if (fillMode === "series") {
+    (isVerticalFill && sourceRowCount === 2 && sourceColCount === 1) ||
+      (isHorizontalFill && sourceRowCount === 1 && sourceColCount === 2) ||
       throwWorkbookError(
         "Series handle fill requires exactly two seed cells in the extension's row or column.",
       );
-    const k = workbookWithSettings(
+    const firstSeedValue = workbookWithSettings(
         sheetId,
         formatCellAddress(rangeAddress.firstRow, rangeAddress.firstCol),
       ),
-      F = workbookWithSettings(
+      lastSeedValue = workbookWithSettings(
         sheetId,
         formatCellAddress(rangeAddress.lastRow, rangeAddress.lastCol),
       );
-    ((typeof k != "number" ||
-      !Number.isFinite(k) ||
-      typeof F != "number" ||
-      !Number.isFinite(F) ||
-      !Number.isFinite(F - k)) &&
+    ((typeof firstSeedValue != "number" ||
+      !Number.isFinite(firstSeedValue) ||
+      typeof lastSeedValue != "number" ||
+      !Number.isFinite(lastSeedValue) ||
+      !Number.isFinite(lastSeedValue - firstSeedValue)) &&
       throwWorkbookError(
         "Series handle seeds must evaluate to finite numbers.",
       ),
-      (y = k),
-      (w = F - k));
+      (seriesStartValue = firstSeedValue),
+      (seriesStep = lastSeedValue - firstSeedValue));
   }
-  const E = (k, F) => ((k % F) + F) % F;
-  function* A() {
-    if (h)
-      for (const [k, F] of [
-        [d.firstRow, rangeAddress.firstRow - 1],
-        [rangeAddress.lastRow + 1, d.lastRow],
+  const wrapIndex = (index, count) => ((index % count) + count) % count;
+  function* extensionCells() {
+    if (isVerticalFill)
+      for (const [rowSegmentStart, rowSegmentEnd] of [
+        [targetAddress.firstRow, rangeAddress.firstRow - 1],
+        [rangeAddress.lastRow + 1, targetAddress.lastRow],
       ])
-        for (let row = k; row <= F; row++)
+        for (let row = rowSegmentStart; row <= rowSegmentEnd; row++)
           for (
             let firstCol = rangeAddress.firstCol;
             firstCol <= rangeAddress.lastCol;
@@ -895,36 +1030,42 @@ function buildFillHandlePreview(
         firstRow <= rangeAddress.lastRow;
         firstRow++
       )
-        for (const [F, I] of [
-          [d.firstCol, rangeAddress.firstCol - 1],
-          [rangeAddress.lastCol + 1, d.lastCol],
+        for (const [colSegmentStart, colSegmentEnd] of [
+          [targetAddress.firstCol, rangeAddress.firstCol - 1],
+          [rangeAddress.lastCol + 1, targetAddress.lastCol],
         ])
-          for (let col = F; col <= I; col++) yield { row: firstRow, col: col };
+          for (let col = colSegmentStart; col <= colSegmentEnd; col++)
+            yield { row: firstRow, col: col };
   }
-  if (p)
-    for (const { row, col } of A()) {
-      const I =
-          u === "series"
+  if (extensionCellCount)
+    for (const { row, col } of extensionCells()) {
+      const sourceRow =
+          fillMode === "series"
             ? rangeAddress.firstRow
-            : rangeAddress.firstRow + E(row - rangeAddress.firstRow, l),
-        O =
-          u === "series"
+            : rangeAddress.firstRow +
+              wrapIndex(row - rangeAddress.firstRow, sourceRowCount),
+        sourceCol =
+          fillMode === "series"
             ? rangeAddress.firstCol
-            : rangeAddress.firstCol + E(col - rangeAddress.firstCol, c),
+            : rangeAddress.firstCol +
+              wrapIndex(col - rangeAddress.firstCol, sourceColCount),
         fillCellPatches = buildFillCellPatches(
           sheetOrThrow,
-          formatCellAddress(I, O),
+          formatCellAddress(sourceRow, sourceCol),
           workbookWithSettings,
           rangeAddress,
         ),
         cellAddress = formatCellAddress(row, col);
-      if (u === "series") {
-        const D =
-          y +
-          (h ? row - rangeAddress.firstRow : col - rangeAddress.firstCol) * w;
-        (Number.isFinite(D) ||
+      if (fillMode === "series") {
+        const seriesValue =
+          seriesStartValue +
+          (isVerticalFill
+            ? row - rangeAddress.firstRow
+            : col - rangeAddress.firstCol) *
+            seriesStep;
+        (Number.isFinite(seriesValue) ||
           throwWorkbookError("The handle series would overflow."),
-          (fillCellPatches.raw = D),
+          (fillCellPatches.raw = seriesValue),
           delete fillCellPatches.literal);
       } else
         typeof fillCellPatches.raw == "string" &&
@@ -932,47 +1073,48 @@ function buildFillHandlePreview(
           !fillCellPatches.literal &&
           (fillCellPatches.raw = shiftFormulaReferences(
             fillCellPatches.raw,
-            row - I,
-            col - O,
+            row - sourceRow,
+            col - sourceCol,
           ));
       const cellRecordInput = normalizeCellRecordInput(
         mergeCellDecorations(fillCellPatches, sheetOrThrow.cells[cellAddress]),
       );
-      (g.push(cellAddress),
+      (targetCellAddresses.push(cellAddress),
         cellContentsDiffer(sheetOrThrow.cells[cellAddress], cellRecordInput) &&
-          v.push({
+          cellChanges.push({
             sheetId: sheetId,
             address: cellAddress,
             cell: cellRecordInput,
           }));
     }
   return (
-    assertFillTargetUnmerged(workbook, sheetId, g),
+    assertFillTargetUnmerged(workbook, sheetId, targetCellAddresses),
     buildCellChangePreview(
       workbook,
-      v,
+      cellChanges,
       {
         targetSheetId: sheetId,
         targetRange: formatRangeBoundsAddress(targetRange),
-        targetCount: p,
-        generatedCount: p,
+        targetCount: extensionCellCount,
+        generatedCount: extensionCellCount,
         direction: direction,
-        summary: `Fill handle ${u} from ${formatRangeBoundsAddress(sourceRange)} into ${formatRangeBoundsAddress(targetRange)} (${p} extension cells).`,
+        summary: `Fill handle ${fillMode} from ${formatRangeBoundsAddress(sourceRange)} into ${formatRangeBoundsAddress(targetRange)} (${extensionCellCount} extension cells).`,
       },
-      o.readOnly,
+      options.readOnly,
     )
   );
 }
-function parseDateCellEntry(e, r, t = "1900") {
-  if (typeof e != "string") throw new Error("Cell entry must be text.");
-  const cell = r ? structuredClone(r) : { raw: null };
-  if (((cell.literal = e.startsWith("'")), cell.literal)) cell.raw = e.slice(1);
-  else if (/^\d{4}-\d{2}-\d{2}$/.test(e)) {
+function parseDateCellEntry(entryText, existingCell, dateSystem = "1900") {
+  if (typeof entryText != "string") throw new Error("Cell entry must be text.");
+  const cell = existingCell ? structuredClone(existingCell) : { raw: null };
+  if (((cell.literal = entryText.startsWith("'")), cell.literal))
+    cell.raw = entryText.slice(1);
+  else if (/^\d{4}-\d{2}-\d{2}$/.test(entryText)) {
     try {
-      cell.raw = parseSeriesSeedDate(e, t);
+      cell.raw = parseSeriesSeedDate(entryText, dateSystem);
     } catch {
       throw new Error(
-        `Enter a valid YYYY-MM-DD date between ${t === "1904" ? "1904-01-01" : "1899-12-31"} and 9999-12-31, or begin with an apostrophe to keep the entry as text.${t === "1900" ? " Excel's compatibility date 1900-02-29 represents serial 60." : ""}`,
+        `Enter a valid YYYY-MM-DD date between ${dateSystem === "1904" ? "1904-01-01" : "1899-12-31"} and 9999-12-31, or begin with an apostrophe to keep the entry as text.${dateSystem === "1900" ? " Excel's compatibility date 1900-02-29 represents serial 60." : ""}`,
       );
     }
     ((cell.format = "date"),
@@ -982,18 +1124,18 @@ function parseDateCellEntry(e, r, t = "1900") {
         locale: "en-US",
         pattern: "yyyy-mm-dd",
       }));
-  } else cell.raw = parseRawCellEntry(e);
+  } else cell.raw = parseRawCellEntry(entryText);
   return normalizeCellRecordInput(cell);
 }
-function parseRawCellEntry(e) {
-  return e === ""
+function parseRawCellEntry(entryText) {
+  return entryText === ""
     ? null
-    : /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(e) &&
-        e.replace(/[-.]/g, "").length <= 15
-      ? Number(e)
-      : /^(TRUE|FALSE)$/i.test(e)
-        ? e.toUpperCase() === "TRUE"
-        : e;
+    : /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(entryText) &&
+        entryText.replace(/[-.]/g, "").length <= 15
+      ? Number(entryText)
+      : /^(TRUE|FALSE)$/i.test(entryText)
+        ? entryText.toUpperCase() === "TRUE"
+        : entryText;
 }
 const supportedWorkbookLocales = ["en-US", "en-GB", "de-DE", "fr-FR"];
 function resolveWorkbookLocale(locale) {
@@ -1002,65 +1144,80 @@ function resolveWorkbookLocale(locale) {
     throw new Error("Choose a supported workbook interface locale.");
   return locale;
 }
-function formatNumberForLocale(e, entryLocale, useGrouping = true) {
+function formatNumberForLocale(numberValue, entryLocale, useGrouping = true) {
   return new Intl.NumberFormat(entryLocale, {
     useGrouping: useGrouping,
     maximumSignificantDigits: 15,
-  }).format(e);
+  }).format(numberValue);
 }
-function parseLocalizedCellEntry(e, cell, t = "1900", locale) {
+function parseLocalizedCellEntry(entryText, cell, dateSystem = "1900", locale) {
   if (
     (resolveWorkbookLocale(locale),
     typeof cell?.raw == "number" &&
-      e === localizeDecimalPoint(cell.raw, locale))
+      entryText === localizeDecimalPoint(cell.raw, locale))
   )
     return normalizeCellRecordInput(structuredClone(cell));
-  if (!locale || /^[=']/.test(e) || /^\d{4}-\d{2}-\d{2}$/.test(e))
-    return parseDateCellEntry(e, cell, t);
-  const o = locale === "de-DE" || locale === "fr-FR" ? "," : ".",
-    a =
+  if (
+    !locale ||
+    /^[=']/.test(entryText) ||
+    /^\d{4}-\d{2}-\d{2}$/.test(entryText)
+  )
+    return parseDateCellEntry(entryText, cell, dateSystem);
+  const decimalSeparator = locale === "de-DE" || locale === "fr-FR" ? "," : ".",
+    groupSeparator =
       locale === "de-DE" ? "." : locale === "fr-FR" ? "[ \\u00a0\\u202f]" : ",",
-    s = (l) => l.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-    d = `(?:[1-9]\\d{0,2}(?:${locale === "fr-FR" ? a : s(a)}\\d{3})+)`;
-  if (new RegExp(`^-?(?:0|[1-9]\\d*|${d})(?:${s(o)}\\d+)?$`).test(e)) {
-    const l = e
+    escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    thousandsGroupPattern = `(?:[1-9]\\d{0,2}(?:${locale === "fr-FR" ? groupSeparator : escapeRegExp(groupSeparator)}\\d{3})+)`;
+  if (
+    new RegExp(
+      `^-?(?:0|[1-9]\\d*|${thousandsGroupPattern})(?:${escapeRegExp(decimalSeparator)}\\d+)?$`,
+    ).test(entryText)
+  ) {
+    const normalizedNumberText = entryText
       .replace(
-        locale === "fr-FR" ? /[ \u00a0\u202f]/g : new RegExp(s(a), "g"),
+        locale === "fr-FR"
+          ? /[ \u00a0\u202f]/g
+          : new RegExp(escapeRegExp(groupSeparator), "g"),
         "",
       )
-      .replace(o, ".");
-    return parseDateCellEntry(l, cell, t);
+      .replace(decimalSeparator, ".");
+    return parseDateCellEntry(normalizedNumberText, cell, dateSystem);
   }
-  return locale === "de-DE" && /^(WAHR|FALSCH)$/i.test(e)
-    ? parseDateCellEntry(e.toUpperCase() === "WAHR" ? "TRUE" : "FALSE", cell, t)
-    : locale === "fr-FR" && /^(VRAI|FAUX)$/i.test(e)
+  return locale === "de-DE" && /^(WAHR|FALSCH)$/i.test(entryText)
+    ? parseDateCellEntry(
+        entryText.toUpperCase() === "WAHR" ? "TRUE" : "FALSE",
+        cell,
+        dateSystem,
+      )
+    : locale === "fr-FR" && /^(VRAI|FAUX)$/i.test(entryText)
       ? parseDateCellEntry(
-          e.toUpperCase() === "VRAI" ? "TRUE" : "FALSE",
+          entryText.toUpperCase() === "VRAI" ? "TRUE" : "FALSE",
           cell,
-          t,
+          dateSystem,
         )
-      : /^-?[\d., \u00a0\u202f]+$/.test(e) && /[.,]/.test(e)
-        ? parseDateCellEntry("'" + e, cell, t)
-        : parseDateCellEntry(e, cell, t);
+      : /^-?[\d., \u00a0\u202f]+$/.test(entryText) && /[.,]/.test(entryText)
+        ? parseDateCellEntry("'" + entryText, cell, dateSystem)
+        : parseDateCellEntry(entryText, cell, dateSystem);
 }
 function formatCellEntryForEdit(cell, entryLocale) {
   return typeof cell?.raw == "number" && entryLocale
     ? localizeDecimalPoint(cell.raw, entryLocale)
     : `${cell?.literal && typeof cell.raw == "string" ? "'" : ""}${String(cell?.raw ?? "")}`;
 }
-function localizeDecimalPoint(e, entryLocale) {
-  return Number.isFinite(e)
+function localizeDecimalPoint(numberValue, entryLocale) {
+  return Number.isFinite(numberValue)
     ? entryLocale === "de-DE" || entryLocale === "fr-FR"
-      ? String(e).replace(".", ",")
-      : String(e)
+      ? String(numberValue).replace(".", ",")
+      : String(numberValue)
     : "";
 }
-function validateLocalizedNumberEntry(e, r, locale) {
-  let n = e.trim();
+function validateLocalizedNumberEntry(entryText, fieldLabel, locale) {
+  let numberText = entryText.trim();
   {
     resolveWorkbookLocale(locale);
-    const o = locale === "de-DE" || locale === "fr-FR" ? "," : ".",
-      a =
+    const decimalSeparator =
+        locale === "de-DE" || locale === "fr-FR" ? "," : ".",
+      groupSeparatorPattern =
         locale === "de-DE"
           ? "\\."
           : locale === "fr-FR"
@@ -1068,45 +1225,52 @@ function validateLocalizedNumberEntry(e, r, locale) {
             : ",";
     if (
       !new RegExp(
-        `^[+-]?(?:(?:\\d+|[1-9]\\d{0,2}(?:${a}\\d{3})+)(?:${o === "." ? "\\." : ","}\\d*)?|${o === "." ? "\\." : ","}\\d+)(?:[eE][+-]?\\d+)?$`,
-      ).test(n)
+        `^[+-]?(?:(?:\\d+|[1-9]\\d{0,2}(?:${groupSeparatorPattern}\\d{3})+)(?:${decimalSeparator === "." ? "\\." : ","}\\d*)?|${decimalSeparator === "." ? "\\." : ","}\\d+)(?:[eE][+-]?\\d+)?$`,
+      ).test(numberText)
     )
       throw new Error(
-        `${r} must be a finite number in the selected numeric locale.`,
+        `${fieldLabel} must be a finite number in the selected numeric locale.`,
       );
-    n = n.replace(new RegExp(a, "g"), "").replace(o, ".");
+    numberText = numberText
+      .replace(new RegExp(groupSeparatorPattern, "g"), "")
+      .replace(decimalSeparator, ".");
   }
-  if (!n || !Number.isFinite(Number(n)))
-    throw new Error(`${r} must be a finite number.`);
-  return Number(n);
+  if (!numberText || !Number.isFinite(Number(numberText)))
+    throw new Error(`${fieldLabel} must be a finite number.`);
+  return Number(numberText);
 }
-function formatLocalizedNumberDisplay(e, cell, t = "1900", entryLocale) {
+function formatLocalizedNumberDisplay(
+  numberValue,
+  cell,
+  dateSystem = "1900",
+  entryLocale,
+) {
   return !entryLocale ||
-    typeof e != "number" ||
+    typeof numberValue != "number" ||
     cell?.numberFormat ||
     cell?.numFmt ||
     cell?.format === "date"
-    ? formatNumberWithPattern(e, cell, t)
-    : Number.isFinite(e)
+    ? formatNumberWithPattern(numberValue, cell, dateSystem)
+    : Number.isFinite(numberValue)
       ? cell?.format === "currency"
         ? new Intl.NumberFormat(entryLocale, {
             style: "currency",
             currency: "USD",
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
-          }).format(e)
+          }).format(numberValue)
         : cell?.format === "percent"
           ? new Intl.NumberFormat(entryLocale, {
               style: "percent",
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
-            }).format(e)
+            }).format(numberValue)
           : cell?.format === "number"
             ? new Intl.NumberFormat(entryLocale, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
-              }).format(e)
-            : formatNumberForLocale(e, entryLocale, false)
+              }).format(numberValue)
+            : formatNumberForLocale(numberValue, entryLocale, false)
       : "#NUM!";
 }
 const germanWorkbookMessages = {
@@ -1446,55 +1610,65 @@ const germanWorkbookMessages = {
   };
 function resolveWorkbookMessages(options = {}) {
   const workbookLocale = resolveWorkbookLocale(options.locale),
-    t = {
+    messages = {
       ...(workbookLocale === "de-DE" ? germanWorkbookStatusMessages : {}),
       ...options.messages,
     },
-    n = (d) => (Object.hasOwn(t, d) ? d : d.trim()),
-    o = (d) => [...new Set(d.match(/\{\w+\}/g) ?? [])].sort().join("|"),
-    a = (d) =>
-      Object.hasOwn(t, n(d)) &&
-      typeof t[n(d)] == "string" &&
-      t[n(d)].trim().length > 0 &&
-      o(d) === o(t[n(d)]),
-    s = (d) =>
-      a(d)
-        ? n(d) === d
-          ? t[d]
-          : `${d.match(/^\s*/)?.[0] ?? ""}${t[n(d)]}${d.match(/\s*$/)?.[0] ?? ""}`
-        : d;
+    resolveMessageKey = (key) =>
+      Object.hasOwn(messages, key) ? key : key.trim(),
+    placeholderSignature = (messageText) =>
+      [...new Set(messageText.match(/\{\w+\}/g) ?? [])].sort().join("|"),
+    hasTranslation = (candidateText) =>
+      Object.hasOwn(messages, resolveMessageKey(candidateText)) &&
+      typeof messages[resolveMessageKey(candidateText)] == "string" &&
+      messages[resolveMessageKey(candidateText)].trim().length > 0 &&
+      placeholderSignature(candidateText) ===
+        placeholderSignature(messages[resolveMessageKey(candidateText)]),
+    translateText = (sourceText) =>
+      hasTranslation(sourceText)
+        ? resolveMessageKey(sourceText) === sourceText
+          ? messages[sourceText]
+          : `${sourceText.match(/^\s*/)?.[0] ?? ""}${messages[resolveMessageKey(sourceText)]}${sourceText.match(/\s*$/)?.[0] ?? ""}`
+        : sourceText;
   return {
     locale: workbookLocale,
     entryLocale: options.locale,
-    text: s,
-    language: (d) => (a(d) ? workbookLocale : "en"),
-    message: (d, u) =>
-      s(d).replace(/\{(\w+)\}/g, (l, c) =>
-        Object.hasOwn(u, c) ? String(u[c]) : l,
+    text: translateText,
+    language: (text) => (hasTranslation(text) ? workbookLocale : "en"),
+    message: (messageTemplate, placeholderValues) =>
+      translateText(messageTemplate).replace(
+        /\{(\w+)\}/g,
+        (placeholder, placeholderName) =>
+          Object.hasOwn(placeholderValues, placeholderName)
+            ? String(placeholderValues[placeholderName])
+            : placeholder,
       ),
   };
 }
 const WorkbookMessagesContext = ne.createContext(resolveWorkbookMessages());
 function WorkbookMessagesProvider({ options, children }) {
-  const t = ne.useMemo(
+  const workbookMessages = ne.useMemo(
     () => resolveWorkbookMessages(options),
     [options?.locale, options?.messages],
   );
-  return i.jsx(WorkbookMessagesContext.Provider, { value: t, children });
+  return i.jsx(WorkbookMessagesContext.Provider, {
+    value: workbookMessages,
+    children,
+  });
 }
 const useWorkbookMessages = () => ne.useContext(WorkbookMessagesContext);
 function LocalizedText({ children }) {
   const workbookMessages = useWorkbookMessages(),
-    t = ne.Children.toArray(children);
-  if (!t.every((o) => typeof o == "string"))
+    childItems = ne.Children.toArray(children);
+  if (!childItems.every((child) => typeof child == "string"))
     return i.jsx(i.Fragment, { children });
-  const n = t.join("");
+  const text = childItems.join("");
   return workbookMessages.locale.startsWith("en") &&
-    workbookMessages.text(n) === n
+    workbookMessages.text(text) === text
     ? i.jsx(i.Fragment, { children })
     : i.jsx("span", {
-        lang: workbookMessages.language(n),
-        children: workbookMessages.text(n),
+        lang: workbookMessages.language(text),
+        children: workbookMessages.text(text),
       });
 }
 function LocalizedNumberField({
@@ -1508,87 +1682,99 @@ function LocalizedNumberField({
   onBlur,
   onKeyDown,
   className,
-  ...c
+  ...restProps
 }) {
   const workbookMessages = useWorkbookMessages(),
-    f = ne.useId(),
-    [p, m] = ne.useState(() =>
+    inputId = ne.useId(),
+    [displayText, setDisplayText] = ne.useState(() =>
       value === "" || value === undefined
         ? ""
         : localizeDecimalPoint(Number(value), workbookMessages.entryLocale),
     ),
-    [v, g] = ne.useState(false),
-    [b, y] = ne.useState(false),
-    w = ne.useRef(workbookMessages.entryLocale),
-    E = ne.useRef(undefined),
-    A = min === undefined ? undefined : Number(min),
-    k = max === undefined ? undefined : Number(max),
-    F = (V) => {
-      if (!V.trim() && allowEmpty) return;
-      const D = validateLocalizedNumberEntry(V, "Value", w.current);
-      if ((A !== undefined && D < A) || (k !== undefined && D > k))
+    [isFocused, setIsFocused] = ne.useState(false),
+    [hasBlurred, setHasBlurred] = ne.useState(false),
+    entryLocaleRef = ne.useRef(workbookMessages.entryLocale),
+    lastEmittedValueRef = ne.useRef(undefined),
+    minNumber = min === undefined ? undefined : Number(min),
+    maxNumber = max === undefined ? undefined : Number(max),
+    parseInputValue = (inputText) => {
+      if (!inputText.trim() && allowEmpty) return;
+      const parsedValue = validateLocalizedNumberEntry(
+        inputText,
+        "Value",
+        entryLocaleRef.current,
+      );
+      if (
+        (minNumber !== undefined && parsedValue < minNumber) ||
+        (maxNumber !== undefined && parsedValue > maxNumber)
+      )
         throw Error("bounds");
-      return D;
+      return parsedValue;
     };
-  let I,
-    O = "";
+  let currentNumber,
+    errorMessage = "";
   try {
-    I = F(p);
+    currentNumber = parseInputValue(displayText);
   } catch (error) {
-    O =
+    errorMessage =
       error instanceof Error && error.message === "bounds"
         ? workbookMessages.message("Enter a number from {min} to {max}.", {
             min:
-              A === undefined
+              minNumber === undefined
                 ? "−∞"
-                : localizeDecimalPoint(A, workbookMessages.entryLocale),
+                : localizeDecimalPoint(minNumber, workbookMessages.entryLocale),
             max:
-              k === undefined
+              maxNumber === undefined
                 ? "∞"
-                : localizeDecimalPoint(k, workbookMessages.entryLocale),
+                : localizeDecimalPoint(maxNumber, workbookMessages.entryLocale),
           })
         : workbookMessages.text(
             "Enter a valid number using the selected locale.",
           );
   }
   (ne.useLayoutEffect(() => {
-    const V = value === "" || value === undefined ? "" : String(Number(value));
-    (E.current !== undefined &&
-      (V === E.current || (V === "" && E.current === "NaN"))) ||
-      ((w.current = workbookMessages.entryLocale),
-      m(
+    const valueString =
+      value === "" || value === undefined ? "" : String(Number(value));
+    (lastEmittedValueRef.current !== undefined &&
+      (valueString === lastEmittedValueRef.current ||
+        (valueString === "" && lastEmittedValueRef.current === "NaN"))) ||
+      ((entryLocaleRef.current = workbookMessages.entryLocale),
+      setDisplayText(
         value === "" || value === undefined
           ? ""
           : localizeDecimalPoint(Number(value), workbookMessages.entryLocale),
       ),
-      y(false));
+      setHasBlurred(false));
   }, [value]),
     ne.useLayoutEffect(() => {
-      v ||
-        O ||
-        ((w.current = workbookMessages.entryLocale),
-        m(
-          I === undefined
+      isFocused ||
+        errorMessage ||
+        ((entryLocaleRef.current = workbookMessages.entryLocale),
+        setDisplayText(
+          currentNumber === undefined
             ? ""
-            : localizeDecimalPoint(I, workbookMessages.entryLocale),
+            : localizeDecimalPoint(currentNumber, workbookMessages.entryLocale),
         ));
-    }, [workbookMessages.entryLocale, v]));
-  const j = (V) => {
-      m(V);
-      let D;
+    }, [workbookMessages.entryLocale, isFocused]));
+  const handleTextChange = (nextText) => {
+      setDisplayText(nextText);
+      let emittedValue;
       try {
-        const B = F(V);
-        D = B === undefined ? "" : String(B);
+        const parsedNumber = parseInputValue(nextText);
+        emittedValue = parsedNumber === undefined ? "" : String(parsedNumber);
       } catch {
-        D = "NaN";
+        emittedValue = "NaN";
       }
-      ((E.current = D), onValueChange(D));
+      ((lastEmittedValueRef.current = emittedValue),
+        onValueChange(emittedValue));
     },
-    z =
+    describedByIds =
       [
-        c["aria-describedby"],
-        O ? `${f}-error` : null,
-        v && w.current !== workbookMessages.entryLocale ? `${f}-locale` : null,
+        restProps["aria-describedby"],
+        errorMessage ? `${inputId}-error` : null,
+        isFocused && entryLocaleRef.current !== workbookMessages.entryLocale
+          ? `${inputId}-locale`
+          : null,
       ]
         .filter(Boolean)
         .join(" ") || undefined;
@@ -1596,67 +1782,75 @@ function LocalizedNumberField({
     className: "lg-number-field",
     children: [
       i.jsx("input", {
-        ...c,
+        ...restProps,
         className,
         type: "text",
         inputMode: "decimal",
         role: "spinbutton",
-        value: p,
-        "aria-valuenow": I,
-        "aria-valuemin": A,
-        "aria-valuemax": k,
-        "aria-valuetext": p || undefined,
-        "aria-invalid": !!O || undefined,
-        "aria-describedby": z,
-        onChange: (event) => j(event.target.value),
-        onFocus: (V) => {
-          (O || (w.current = workbookMessages.entryLocale),
-            g(true),
-            onFocus?.(V));
+        value: displayText,
+        "aria-valuenow": currentNumber,
+        "aria-valuemin": minNumber,
+        "aria-valuemax": maxNumber,
+        "aria-valuetext": displayText || undefined,
+        "aria-invalid": !!errorMessage || undefined,
+        "aria-describedby": describedByIds,
+        onChange: (event) => handleTextChange(event.target.value),
+        onFocus: (focusEvent) => {
+          (errorMessage ||
+            (entryLocaleRef.current = workbookMessages.entryLocale),
+            setIsFocused(true),
+            onFocus?.(focusEvent));
         },
-        onBlur: (V) => {
-          (y(true), g(false), onBlur?.(V));
+        onBlur: (blurEvent) => {
+          (setHasBlurred(true), setIsFocused(false), onBlur?.(blurEvent));
         },
-        onKeyDown: (V) => {
+        onKeyDown: (keyEvent) => {
           if (
-            (onKeyDown?.(V),
+            (onKeyDown?.(keyEvent),
             !(
-              V.defaultPrevented ||
-              c.readOnly ||
-              c.disabled ||
-              V.nativeEvent.isComposing ||
-              V.altKey ||
-              V.metaKey ||
-              V.ctrlKey
+              keyEvent.defaultPrevented ||
+              restProps.readOnly ||
+              restProps.disabled ||
+              keyEvent.nativeEvent.isComposing ||
+              keyEvent.altKey ||
+              keyEvent.metaKey ||
+              keyEvent.ctrlKey
             ) &&
-              (V.key === "ArrowUp" || V.key === "ArrowDown"))
+              (keyEvent.key === "ArrowUp" || keyEvent.key === "ArrowDown"))
           ) {
-            V.preventDefault();
-            const D = step === undefined || step === "any" ? 1 : Number(step);
-            if (!Number.isFinite(D) || D <= 0) return;
-            const B = Math.min(
-              k ?? 1 / 0,
+            keyEvent.preventDefault();
+            const stepSize =
+              step === undefined || step === "any" ? 1 : Number(step);
+            if (!Number.isFinite(stepSize) || stepSize <= 0) return;
+            const nextValue = Math.min(
+              maxNumber ?? 1 / 0,
               Math.max(
-                A ?? -1 / 0,
-                (I ?? A ?? 0) + (V.key === "ArrowUp" ? D : -D),
+                minNumber ?? -1 / 0,
+                (currentNumber ?? minNumber ?? 0) +
+                  (keyEvent.key === "ArrowUp" ? stepSize : -stepSize),
               ),
             );
-            Number.isFinite(B) &&
-              j(localizeDecimalPoint(Number(B.toPrecision(15)), w.current));
+            Number.isFinite(nextValue) &&
+              handleTextChange(
+                localizeDecimalPoint(
+                  Number(nextValue.toPrecision(15)),
+                  entryLocaleRef.current,
+                ),
+              );
           }
         },
       }),
-      O &&
+      errorMessage &&
         i.jsx("span", {
-          id: `${f}-error`,
-          className: b ? "lg-number-error" : "lg-sr-only",
-          role: b ? "status" : undefined,
-          children: O,
+          id: `${inputId}-error`,
+          className: hasBlurred ? "lg-number-error" : "lg-sr-only",
+          role: hasBlurred ? "status" : undefined,
+          children: errorMessage,
         }),
-      v &&
-        w.current !== workbookMessages.entryLocale &&
+      isFocused &&
+        entryLocaleRef.current !== workbookMessages.entryLocale &&
         i.jsx("span", {
-          id: `${f}-locale`,
+          id: `${inputId}-locale`,
           className: "lg-number-error",
           children: workbookMessages.text(
             "The current edit keeps its original numeric locale until you apply or cancel it.",
@@ -1671,170 +1865,226 @@ const createEmptyAssistantConversation = () => ({
   messages: [],
   attachments: [],
 });
-function findOpenFormulaQuote(e, index) {
-  let t = "";
-  for (let n = 1; n < index; n++) {
-    const o = e[n];
-    if (t && o === t && e[n + 1] === t) {
-      n++;
+function findOpenFormulaQuote(formulaText, index) {
+  let openQuote = "";
+  for (let charIndex = 1; charIndex < index; charIndex++) {
+    const currentChar = formulaText[charIndex];
+    if (
+      openQuote &&
+      currentChar === openQuote &&
+      formulaText[charIndex + 1] === openQuote
+    ) {
+      charIndex++;
       continue;
     }
-    o === t ? (t = "") : !t && (o === '"' || o === "'") && (t = o);
+    currentChar === openQuote
+      ? (openQuote = "")
+      : !openQuote &&
+        (currentChar === '"' || currentChar === "'") &&
+        (openQuote = currentChar);
   }
-  return t;
+  return openQuote;
 }
 const formulaReferencePattern =
   /(?:'(?:[^']|'')+'!|[A-Za-z_][A-Za-z0-9_.]*!)?(?:\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?|\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}|\$?[1-9]\d*:\$?[1-9]\d*)/g;
-function findFormulaReferenceSpan(e, start, end = start) {
-  if (!(!e.startsWith("=") || start < 1 || end < start || end > e.length)) {
-    for (const n of e.matchAll(formulaReferencePattern)) {
-      const index = n.index,
-        a = index + n[0].length;
+function findFormulaReferenceSpan(formulaText, start, end = start) {
+  if (!(
+    !formulaText.startsWith("=") ||
+    start < 1 ||
+    end < start ||
+    end > formulaText.length
+  )) {
+    for (const match of formulaText.matchAll(formulaReferencePattern)) {
+      const index = match.index,
+        matchEnd = index + match[0].length;
       if (
         !(
-          findOpenFormulaQuote(e, index) ||
-          /[\w.\[!]/.test(e[index - 1] ?? "") ||
-          /[\w.\](]/.test(e[a] ?? "")
+          findOpenFormulaQuote(formulaText, index) ||
+          /[\w.\[!]/.test(formulaText[index - 1] ?? "") ||
+          /[\w.\](]/.test(formulaText[matchEnd] ?? "")
         ) &&
         start >= index &&
-        end <= a
+        end <= matchEnd
       )
-        return { start: index, end: a };
+        return { start: index, end: matchEnd };
     }
-    if (!findOpenFormulaQuote(e, start)) {
+    if (!findOpenFormulaQuote(formulaText, start)) {
       if (end > start) return { start: start, end: end };
-      if (/[=(:,;+\-*/^&<>]$/.test(e.slice(0, start).trimEnd()))
+      if (/[=(:,;+\-*/^&<>]$/.test(formulaText.slice(0, start).trimEnd()))
         return { start: start, end: end };
     }
   }
 }
-function replaceFormulaReferenceSpan(e, r, range, n) {
-  const o = n === undefined ? range : `'${n.replaceAll("'", "''")}'!${range}`;
+function replaceFormulaReferenceSpan(formulaText, span, range, sheetName) {
+  const referenceText =
+    sheetName === undefined
+      ? range
+      : `'${sheetName.replaceAll("'", "''")}'!${range}`;
   return {
-    value: e.slice(0, r.start) + o + e.slice(r.end),
-    span: { start: r.start, end: r.start + o.length },
+    value:
+      formulaText.slice(0, span.start) +
+      referenceText +
+      formulaText.slice(span.end),
+    span: { start: span.start, end: span.start + referenceText.length },
   };
 }
-function $ae(e, start, end = start) {
-  const formulaReferenceSpan = findFormulaReferenceSpan(e, start, end);
+function $ae(formulaText, start, end = start) {
+  const formulaReferenceSpan = findFormulaReferenceSpan(
+    formulaText,
+    start,
+    end,
+  );
   if (
     !formulaReferenceSpan ||
     formulaReferenceSpan.start === formulaReferenceSpan.end
   )
     return;
-  const o = e.slice(formulaReferenceSpan.start, formulaReferenceSpan.end),
-    a = o.lastIndexOf("!"),
-    s = o.slice(0, a + 1),
-    d = o.slice(a + 1),
-    u = /^(\$?)[A-Za-z]+(\$?)\d+/.exec(d);
-  if (!u) {
-    if (!/^(?:\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}|\$?\d+:\$?\d+)$/.test(d))
+  const referenceText = formulaText.slice(
+      formulaReferenceSpan.start,
+      formulaReferenceSpan.end,
+    ),
+    bangIndex = referenceText.lastIndexOf("!"),
+    sheetPrefix = referenceText.slice(0, bangIndex + 1),
+    localAddress = referenceText.slice(bangIndex + 1),
+    cellMatch = /^(\$?)[A-Za-z]+(\$?)\d+/.exec(localAddress);
+  if (!cellMatch) {
+    if (
+      !/^(?:\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}|\$?\d+:\$?\d+)$/.test(
+        localAddress,
+      )
+    )
       return;
-    const f = d.startsWith("$"),
-      p =
-        s +
-        d
+    const isAbsoluteStart = localAddress.startsWith("$"),
+      wholeAxisReference =
+        sheetPrefix +
+        localAddress
           .split(":")
-          .map((m) => (f ? m.replace(/^\$/, "") : "$" + m.replace(/^\$/, "")))
+          .map((rangePart) =>
+            isAbsoluteStart
+              ? rangePart.replace(/^\$/, "")
+              : "$" + rangePart.replace(/^\$/, ""),
+          )
           .join(":");
     return {
       value:
-        e.slice(0, formulaReferenceSpan.start) +
-        p +
-        e.slice(formulaReferenceSpan.end),
+        formulaText.slice(0, formulaReferenceSpan.start) +
+        wholeAxisReference +
+        formulaText.slice(formulaReferenceSpan.end),
       span: {
         start: formulaReferenceSpan.start,
-        end: formulaReferenceSpan.start + p.length,
+        end: formulaReferenceSpan.start + wholeAxisReference.length,
       },
     };
   }
-  const l = !u[1] && !u[2] ? 1 : u[1] && u[2] ? 2 : !u[1] && u[2] ? 3 : 0,
-    c = d.replace(
+  const anchorMode =
+      !cellMatch[1] && !cellMatch[2]
+        ? 1
+        : cellMatch[1] && cellMatch[2]
+          ? 2
+          : !cellMatch[1] && cellMatch[2]
+            ? 3
+            : 0,
+    toggledAddress = localAddress.replace(
       /\$?([A-Za-z]+)\$?(\d+)/g,
-      (f, p, m) =>
-        `${l === 1 || l === 3 ? "$" : ""}${p}${l === 1 || l === 2 ? "$" : ""}${m}`,
+      (f, columnLetters, rowDigits) =>
+        `${anchorMode === 1 || anchorMode === 3 ? "$" : ""}${columnLetters}${anchorMode === 1 || anchorMode === 2 ? "$" : ""}${rowDigits}`,
     ),
-    h = s + c;
+    toggledReference = sheetPrefix + toggledAddress;
   return {
     value:
-      e.slice(0, formulaReferenceSpan.start) +
-      h +
-      e.slice(formulaReferenceSpan.end),
+      formulaText.slice(0, formulaReferenceSpan.start) +
+      toggledReference +
+      formulaText.slice(formulaReferenceSpan.end),
     span: {
       start: formulaReferenceSpan.start,
-      end: formulaReferenceSpan.start + h.length,
+      end: formulaReferenceSpan.start + toggledReference.length,
     },
   };
 }
-function autoCloseFormulaParens(e) {
-  if (!e.startsWith("=")) return e;
-  let r = "",
-    t = 0,
-    n = 0;
-  for (let o = 1; o < e.length; o++) {
-    const a = e[o];
-    if (r) {
-      a === r && (e[o + 1] === r ? o++ : (r = ""));
+function autoCloseFormulaParens(formulaText) {
+  if (!formulaText.startsWith("=")) return formulaText;
+  let openQuote = "",
+    parenDepth = 0,
+    bracketDepth = 0;
+  for (let charIndex = 1; charIndex < formulaText.length; charIndex++) {
+    const character = formulaText[charIndex];
+    if (openQuote) {
+      character === openQuote &&
+        (formulaText[charIndex + 1] === openQuote
+          ? charIndex++
+          : (openQuote = ""));
       continue;
     }
     if (
-      (a === '"' || a === "'"
-        ? (r = a)
-        : a === "["
-          ? n++
-          : a === "]"
-            ? n--
-            : !n && a === "("
-              ? t++
-              : !n && a === ")" && t--,
-      t < 0 || n < 0)
+      (character === '"' || character === "'"
+        ? (openQuote = character)
+        : character === "["
+          ? bracketDepth++
+          : character === "]"
+            ? bracketDepth--
+            : !bracketDepth && character === "("
+              ? parenDepth++
+              : !bracketDepth && character === ")" && parenDepth--,
+      parenDepth < 0 || bracketDepth < 0)
     )
-      return e;
+      return formulaText;
   }
-  return !r && !n && t > 0 && t <= 64 && /[\w\])"%]$/.test(e.trimEnd())
-    ? e + ")".repeat(t)
-    : e;
+  return !openQuote &&
+    !bracketDepth &&
+    parenDepth > 0 &&
+    parenDepth <= 64 &&
+    /[\w\])"%]$/.test(formulaText.trimEnd())
+    ? formulaText + ")".repeat(parenDepth)
+    : formulaText;
 }
 const formulaScanCache = new WeakMap();
-function getFormulaScanList(cells, r) {
-  const t = isDeepFrozenValue(cells);
-  let n = t ? formulaScanCache.get(cells) : undefined;
-  if (!n) {
-    n = { calls: [], external: [] };
-    for (const o in cells) {
-      const cell = cells[o];
+function getFormulaScanList(cells, listKind) {
+  const isFrozenCells = isDeepFrozenValue(cells);
+  let scanList = isFrozenCells ? formulaScanCache.get(cells) : undefined;
+  if (!scanList) {
+    scanList = { calls: [], external: [] };
+    for (const address in cells) {
+      const cell = cells[address];
       typeof cell.raw != "string" ||
         !cell.raw.startsWith("=") ||
-        (cell.raw.includes("(") && n.calls.push([o, cell]),
-        /[\[|\\]|https?:|file:/i.test(cell.raw) && n.external.push([o, cell]));
+        (cell.raw.includes("(") && scanList.calls.push([address, cell]),
+        /[\[|\\]|https?:|file:/i.test(cell.raw) &&
+          scanList.external.push([address, cell]));
     }
-    t && formulaScanCache.set(cells, n);
+    isFrozenCells && formulaScanCache.set(cells, scanList);
   }
-  return n[r];
+  return scanList[listKind];
 }
 const objectIdRegistry = new WeakMap();
 let objectIdCounter = 0;
 function getStableObjectId(invoke) {
-  let r = objectIdRegistry.get(invoke);
-  return (r || ((r = ++objectIdCounter), objectIdRegistry.set(invoke, r)), r);
+  let objectId = objectIdRegistry.get(invoke);
+  return (
+    objectId ||
+      ((objectId = ++objectIdCounter), objectIdRegistry.set(invoke, objectId)),
+    objectId
+  );
 }
-function validateExtensionHostPolicy(workbook, r) {
-  const extensions = r.extensions ?? [],
-    allowed = r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id);
-  if (r.readOnly !== undefined && typeof r.readOnly != "boolean")
+function validateExtensionHostPolicy(workbook, policy) {
+  const extensions = policy.extensions ?? [],
+    allowed =
+      policy.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id);
+  if (policy.readOnly !== undefined && typeof policy.readOnly != "boolean")
     throw Error("Read-only policy must be boolean.");
   if (
     !Array.isArray(extensions) ||
     extensions.length > extensionRuntimeLimits.extensions ||
     !Array.isArray(allowed) ||
-    allowed.some((a) => !workbook.sheets.some((sheet) => sheet.id === a))
+    allowed.some(
+      (allowedId) => !workbook.sheets.some((sheet) => sheet.id === allowedId),
+    )
   )
     throw Error("Invalid extension host scope.");
-  const o = new Set();
+  const seenExtensionIds = new Set();
   for (const extension of extensions) {
-    const s = validateExtensionManifest(extension.manifest);
+    const validatedManifest = validateExtensionManifest(extension.manifest);
     if (
-      o.has(s.id) ||
+      seenExtensionIds.has(validatedManifest.id) ||
       typeof extension.invoke != "function" ||
       !Array.isArray(extension.allowedSheetIds) ||
       extension.allowedSheetIds.some(
@@ -1843,20 +2093,21 @@ function validateExtensionHostPolicy(workbook, r) {
       ) ||
       !Array.isArray(extension.grantedPermissions) ||
       extension.grantedPermissions.some(
-        (grantedPermission) => !s.permissions.includes(grantedPermission),
+        (grantedPermission) =>
+          !validatedManifest.permissions.includes(grantedPermission),
       ) ||
       (extension.includeHidden !== undefined &&
         typeof extension.includeHidden != "boolean")
     )
       throw Error("Invalid host extension registration.");
-    o.add(s.id);
+    seenExtensionIds.add(validatedManifest.id);
   }
   return {
     extensions: extensions,
     allowed: allowed,
     hash: () =>
       fingerprintCanonicalValue([
-        !!r.readOnly,
+        !!policy.readOnly,
         allowed,
         extensions.map((extension) => [
           hashExtensionManifest(extension.manifest),
@@ -1868,78 +2119,96 @@ function validateExtensionHostPolicy(workbook, r) {
       ]),
   };
 }
-const resolveExtensionSheetScope = (workbook, r) =>
+const resolveExtensionSheetScope = (workbook, extensionEntry) =>
   fingerprintCanonicalValue([
-    r.grantedPermissions,
-    [...r.allowedSheetIds].sort().map((t) => {
-      const sheet = workbook.sheets.find((sheet) => sheet.id === t);
-      return [t, !!sheet.hidden, !!sheet.veryHidden];
+    extensionEntry.grantedPermissions,
+    [...extensionEntry.allowedSheetIds].sort().map((sheetId) => {
+      const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+      return [sheetId, !!sheet.hidden, !!sheet.veryHidden];
     }),
-    !!r.includeHidden,
+    !!extensionEntry.includeHidden,
   ]);
-function buildExtensionHostScope(workbook, r) {
-  return validateExtensionHostPolicy(workbook, r)
+function buildExtensionHostScope(workbook, hostPolicy) {
+  return validateExtensionHostPolicy(workbook, hostPolicy)
     .extensions.filter((extension) =>
       extension.manifest.permissions.every((permission) =>
         extension.grantedPermissions.includes(permission),
       ),
     )
-    .map((t) => ({
-      id: t.manifest.id,
-      manifestHash: hashExtensionManifest(t.manifest),
-      scopeHash: resolveExtensionSheetScope(workbook, t),
-      sheetIds: t.allowedSheetIds.filter((allowedSheetId) => {
+    .map((hostExtension) => ({
+      id: hostExtension.manifest.id,
+      manifestHash: hashExtensionManifest(hostExtension.manifest),
+      scopeHash: resolveExtensionSheetScope(workbook, hostExtension),
+      sheetIds: hostExtension.allowedSheetIds.filter((allowedSheetId) => {
         const sheet = workbook.sheets.find(
           (sheet) => sheet.id === allowedSheetId,
         );
-        return !(sheet.hidden || sheet.veryHidden) || !!t.includeHidden;
+        return (
+          !(sheet.hidden || sheet.veryHidden) || !!hostExtension.includeHidden
+        );
       }),
     }));
 }
 function withExtensionHostScope(workbook, extensions = []) {
-  const t = { ...workbook };
+  const scopedWorkbook = { ...workbook };
   return (
     setExtensionCacheEntries(
-      t,
+      scopedWorkbook,
       buildExtensionHostScope(workbook, { extensions: extensions }),
     ),
-    isDeepFrozenValue(workbook) ? deepFreezeValue(t) : t
+    isDeepFrozenValue(workbook)
+      ? deepFreezeValue(scopedWorkbook)
+      : scopedWorkbook
   );
 }
-function assertExtensionWriteScope(workbook, r, t) {
-  if (t.readOnly) throw Error("The workbook is read-only.");
+function assertExtensionWriteScope(workbook, sheetIds, hostPolicy) {
+  if (hostPolicy.readOnly) throw Error("The workbook is read-only.");
   if (workbook.structureProtection?.enabled)
     throw Error("Workbook structure is protected.");
-  const n = validateExtensionHostPolicy(workbook, t);
-  for (const a of r) {
-    if (!n.allowed.includes(a))
+  const validatedPolicy = validateExtensionHostPolicy(workbook, hostPolicy);
+  for (const sheetId of sheetIds) {
+    if (!validatedPolicy.allowed.includes(sheetId))
       throw Error("An extension destination is outside the host write scope.");
-    assertSheetUnprotected(workbook.sheets.find((sheet) => sheet.id === a));
+    assertSheetUnprotected(
+      workbook.sheets.find((sheet) => sheet.id === sheetId),
+    );
   }
 }
 function reviewExtensionFormulas(workbook) {
-  const r = new Set(builtinFunctionNames),
-    t = new Set((workbook.definedNames ?? []).map((o) => o.name.toUpperCase())),
-    n = [];
+  const builtinNames = new Set(builtinFunctionNames),
+    definedNameSet = new Set(
+      (workbook.definedNames ?? []).map((definedName) =>
+        definedName.name.toUpperCase(),
+      ),
+    ),
+    reviews = [];
   for (const sheet of workbook.sheets)
     for (const [address, cell] of getFormulaScanList(sheet.cells, "calls")) {
       if (typeof cell.raw != "string" || !cell.raw.startsWith("=")) continue;
       const calls = [],
-        u = (l, nested = false) => {
-          for (const h of l) {
-            if ((h.kind === "group" && u(h.body, nested), h.kind !== "call"))
+        collectCalls = (tokens, nested = false) => {
+          for (const token of tokens) {
+            if (
+              (token.kind === "group" && collectCalls(token.body, nested),
+              token.kind !== "call")
+            )
               continue;
-            const callee = h.callee;
-            let p = false;
+            const callee = token.callee;
+            let isCustomCall = false;
             if (callee.kind === "symbol" && !callee.qualifier) {
-              const m = callee.name.replace(/^_xlfn\./i, "").toUpperCase();
-              ((p = !r.has(m) && !t.has(m) && !["LET", "LAMBDA"].includes(m)),
-                p &&
+              const functionName = callee.name
+                .replace(/^_xlfn\./i, "")
+                .toUpperCase();
+              ((isCustomCall =
+                !builtinNames.has(functionName) &&
+                !definedNameSet.has(functionName) &&
+                !["LET", "LAMBDA"].includes(functionName)),
+                isCustomCall &&
                   calls.push({
-                    name: m,
-                    start: h.start,
-                    end: h.end,
-                    arguments: h.args.map((arg) =>
+                    name: functionName,
+                    start: token.start,
+                    end: token.end,
+                    arguments: token.args.map((arg) =>
                       arg.length
                         ? cell.raw
                             .toString()
@@ -1949,17 +2218,19 @@ function reviewExtensionFormulas(workbook) {
                     nested: nested,
                   }));
             }
-            h.args.forEach((arg) => u(arg, nested || p));
+            token.args.forEach((arg) =>
+              collectCalls(arg, nested || isCustomCall),
+            );
           }
         };
       try {
-        u(tokenizeFormulaText(cell.raw));
+        collectCalls(tokenizeFormulaText(cell.raw));
       } catch {
         continue;
       }
       if (
         (calls.length &&
-          n.push({
+          reviews.push({
             sheetId: sheet.id,
             sheetName: sheet.name,
             address: address,
@@ -1967,211 +2238,253 @@ function reviewExtensionFormulas(workbook) {
             literal: !!cell.literal,
             calls: calls,
           }),
-        n.length > extensionRuntimeLimits.calls)
+        reviews.length > extensionRuntimeLimits.calls)
       )
         throw Error("Extension review exceeds 100 formula cells.");
     }
-  return n;
+  return reviews;
 }
-function requireApprovedExtension(workbook, extensionId, t) {
-  const n = workbook.extensions?.installed.find(
-    (s) => s.manifest.id === extensionId,
+function requireApprovedExtension(workbook, extensionId, hostPolicy) {
+  const installedEntry = workbook.extensions?.installed.find(
+    (entry) => entry.manifest.id === extensionId,
   );
-  if (!n || !n.enabled) throw Error("The extension is missing or disabled.");
-  const extension = validateExtensionHostPolicy(workbook, t).extensions.find(
-    (extension) => extension.manifest.id === extensionId,
-  );
+  if (!installedEntry || !installedEntry.enabled)
+    throw Error("The extension is missing or disabled.");
+  const extension = validateExtensionHostPolicy(
+    workbook,
+    hostPolicy,
+  ).extensions.find((extension) => extension.manifest.id === extensionId);
   if (
     !extension ||
     hashExtensionManifest(extension.manifest) !==
-      hashExtensionManifest(n.manifest)
+      hashExtensionManifest(installedEntry.manifest)
   )
     throw Error(
       "An approved adapter with the exact extension version and manifest is unavailable.",
     );
   if (
-    !n.manifest.permissions.every((permission) =>
+    !installedEntry.manifest.permissions.every((permission) =>
       extension.grantedPermissions.includes(permission),
     )
   )
     throw Error("The host has not granted all declared extension permissions.");
   return extension;
 }
-function evaluateExtensionFunctionCall(workbook, r, call, binding) {
-  const o = binding.manifest.functions.find(
-    (s) => `${binding.manifest.namespace}.${s.id}` === call.name,
+function evaluateExtensionFunctionCall(workbook, formulaCell, call, binding) {
+  const functionSpec = binding.manifest.functions.find(
+    (declaredFunction) =>
+      `${binding.manifest.namespace}.${declaredFunction.id}` === call.name,
   );
-  if (!o || o.parameters.length !== call.arguments.length)
+  if (!functionSpec || functionSpec.parameters.length !== call.arguments.length)
     throw Error(
       "Custom function arguments do not match the declared signature.",
     );
-  if (call.nested || /\b(?:LET|LAMBDA)\s*\(/i.test(r.formula))
+  if (call.nested || /\b(?:LET|LAMBDA)\s*\(/i.test(formulaCell.formula))
     throw Error(
       "Nested custom calls and custom calls inside LET/LAMBDA require separate worksheet cells.",
     );
-  const allowRead = (s) => {
-    const sheet = workbook.sheets.find((sheet) => sheet.id === s);
+  const allowRead = (sheetId) => {
+    const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
     return (
       !!sheet &&
-      binding.allowedSheetIds.includes(s) &&
+      binding.allowedSheetIds.includes(sheetId) &&
       (!(sheet.hidden || sheet.veryHidden) || !!binding.includeHidden)
     );
   };
-  if (!allowRead(r.sheetId))
+  if (!allowRead(formulaCell.sheetId))
     throw Error(
       "The extension formula is outside its approved worksheet scope.",
     );
-  return call.arguments.map((argument, d) => {
+  return call.arguments.map((argument, parameterIndex) => {
     if (!argument.trim()) throw Error("Extension arguments cannot be omitted.");
-    const schema = o.parameters[d].schema,
-      l =
+    const schema = functionSpec.parameters[parameterIndex].schema,
+      referenceMatch =
         /^(?:(?:'((?:[^']|'')+)'|([A-Za-z_][A-Za-z0-9_ ]*))!)?(\$?[A-Za-z]{1,3}\$?[1-9]\d*)(?::(\$?[A-Za-z]{1,3}\$?[1-9]\d*))?$/.exec(
           argument.trim(),
         );
-    if (l) {
-      const g = l[1]?.replace(/''/g, "'") ?? l[2],
-        b = g
+    if (referenceMatch) {
+      const sheetName =
+          referenceMatch[1]?.replace(/''/g, "'") ?? referenceMatch[2],
+        targetSheet = sheetName
           ? workbook.sheets.find(
-              (sheet) => sheet.name.toLowerCase() === g.toLowerCase(),
+              (sheet) => sheet.name.toLowerCase() === sheetName.toLowerCase(),
             )
-          : workbook.sheets.find((sheet) => sheet.id === r.sheetId);
-      if (!b || !allowRead(b.id))
+          : workbook.sheets.find((sheet) => sheet.id === formulaCell.sheetId);
+      if (!targetSheet || !allowRead(targetSheet.id))
         throw Error(
           "An extension input worksheet is unavailable or unauthorized.",
         );
-      const rangeAddress = parseRangeAddress(l[3] + (l[4] ? ":" + l[4] : "")),
-        w = rangeAddress.lastRow - rangeAddress.firstRow + 1,
-        E = rangeAddress.lastCol - rangeAddress.firstCol + 1;
+      const rangeAddress = parseRangeAddress(
+          referenceMatch[3] +
+            (referenceMatch[4] ? ":" + referenceMatch[4] : ""),
+        ),
+        rowCount = rangeAddress.lastRow - rangeAddress.firstRow + 1,
+        columnCount = rangeAddress.lastCol - rangeAddress.firstCol + 1;
       if (
-        w * E > extensionRuntimeLimits.inputCells ||
-        (schema.type !== "matrix" && w * E !== 1)
+        rowCount * columnCount > extensionRuntimeLimits.inputCells ||
+        (schema.type !== "matrix" && rowCount * columnCount !== 1)
       )
         throw Error(
           "The extension input range exceeds its declared scalar/cell budget.",
         );
-      const A = evaluateWorkbookFormulas(
+      const inputEvaluation = evaluateWorkbookFormulas(
           workbook,
           {},
           { allowRead: allowRead, allowName: () => true, step: () => {} },
         ),
-        k = Array.from({ length: w }, (F, I) =>
-          Array.from({ length: E }, (O, j) => {
-            const z = A.getTypedValue(
-              b.id,
-              `${columnIndexToLetters(rangeAddress.firstCol + j)}${rangeAddress.firstRow + I + 1}`,
+        inputMatrix = Array.from({ length: rowCount }, (F, rowOffset) =>
+          Array.from({ length: columnCount }, (O, columnOffset) => {
+            const inputTypedValue = inputEvaluation.getTypedValue(
+              targetSheet.id,
+              `${columnIndexToLetters(rangeAddress.firstCol + columnOffset)}${rangeAddress.firstRow + rowOffset + 1}`,
             );
-            if (z.type === "error")
+            if (inputTypedValue.type === "error")
               throw Error(
                 "An extension input contains an unavailable calculation.",
               );
-            return z.value;
+            return inputTypedValue.value;
           }),
         );
-      if (A.getOperationalErrors().length)
+      if (inputEvaluation.getOperationalErrors().length)
         throw Error("An extension input attempted an unauthorized dependency.");
       return validateExtensionValue(
-        schema.type === "matrix" ? k : k[0][0],
+        schema.type === "matrix" ? inputMatrix : inputMatrix[0][0],
         schema,
       );
     }
     if (schema.type === "matrix")
       throw Error("Matrix parameters require a static worksheet range.");
-    const c = {
+    const argumentWorkbook = {
       ...workbook,
       sheets: workbook.sheets.map((sheet) =>
-        sheet.id === r.sheetId
+        sheet.id === formulaCell.sheetId
           ? {
               ...sheet,
-              cells: { ...sheet.cells, [r.address]: { raw: "=" + argument } },
+              cells: {
+                ...sheet.cells,
+                [formulaCell.address]: { raw: "=" + argument },
+              },
             }
           : sheet,
       ),
     };
-    setExtensionCacheEntries(c, getExtensionCacheEntries(workbook));
-    const h = evaluateWorkbookFormulas(
-        c,
+    setExtensionCacheEntries(
+      argumentWorkbook,
+      getExtensionCacheEntries(workbook),
+    );
+    const argumentEvaluation = evaluateWorkbookFormulas(
+        argumentWorkbook,
         {},
         { allowRead: allowRead, allowName: () => true, step: () => {} },
       ),
-      f = h.getTypedValue(r.sheetId, r.address);
-    if (f.type === "error" || h.getOperationalErrors().length)
+      argumentTypedValue = argumentEvaluation.getTypedValue(
+        formulaCell.sheetId,
+        formulaCell.address,
+      );
+    if (
+      argumentTypedValue.type === "error" ||
+      argumentEvaluation.getOperationalErrors().length
+    )
       throw Error(
         "An extension input is erroneous, stale, unauthorized or over its calculation limit.",
       );
-    let value = f.value;
-    if (h.getSpillRange(r.sheetId, r.address))
+    let value = argumentTypedValue.value;
+    if (
+      argumentEvaluation.getSpillRange(formulaCell.sheetId, formulaCell.address)
+    )
       throw Error("Scalar extension arguments cannot contain arrays.");
     return validateExtensionValue(value, schema);
   });
 }
-function resolveExtensionCachedResult(workbook, r = {}) {
-  const t = validateExtensionHostPolicy(workbook, r),
-    n = reviewExtensionFormulas(workbook),
-    o = n.length ? withExtensionHostScope(workbook, t.extensions) : workbook,
-    a = n.length ? evaluateWorkbookFormulas(o) : undefined,
-    cells = n.map((u) => {
-      const l = a.getTypedValue(u.sheetId, u.address),
-        caches = (workbook.extensions?.caches ?? []).filter(
-          (v) => v.sheetId === u.sheetId && v.address === u.address,
+function resolveExtensionCachedResult(workbook, hostPolicyInput = {}) {
+  const validatedPolicy = validateExtensionHostPolicy(
+      workbook,
+      hostPolicyInput,
+    ),
+    formulaReviews = reviewExtensionFormulas(workbook),
+    evaluationWorkbook = formulaReviews.length
+      ? withExtensionHostScope(workbook, validatedPolicy.extensions)
+      : workbook,
+    evaluation = formulaReviews.length
+      ? evaluateWorkbookFormulas(evaluationWorkbook)
+      : undefined,
+    cells = formulaReviews.map((formulaReview) => {
+      const typedResult = evaluation.getTypedValue(
+          formulaReview.sheetId,
+          formulaReview.address,
         ),
-        functions = u.calls.map((call) => {
-          const g = listInstalledExtensionFunctions(workbook).find(
-            (y) => y.name === call.name,
+        caches = (workbook.extensions?.caches ?? []).filter(
+          (cacheEntry) =>
+            cacheEntry.sheetId === formulaReview.sheetId &&
+            cacheEntry.address === formulaReview.address,
+        ),
+        functions = formulaReview.calls.map((call) => {
+          const installedFunction = listInstalledExtensionFunctions(
+            workbook,
+          ).find(
+            (installedFunctionItem) => installedFunctionItem.name === call.name,
           );
-          let b = "unavailable";
+          let functionState = "unavailable";
           if (
-            g &&
-            ((b = g.entry.enabled
-              ? buildExtensionHostScope(workbook, r).some(
-                  (y) =>
-                    y.id === g.entry.manifest.id &&
-                    y.manifestHash ===
-                      hashExtensionManifest(g.entry.manifest) &&
-                    y.sheetIds.includes(u.sheetId),
+            installedFunction &&
+            ((functionState = installedFunction.entry.enabled
+              ? buildExtensionHostScope(workbook, hostPolicyInput).some(
+                  (hostScopeEntry) =>
+                    hostScopeEntry.id === installedFunction.entry.manifest.id &&
+                    hostScopeEntry.manifestHash ===
+                      hashExtensionManifest(installedFunction.entry.manifest) &&
+                    hostScopeEntry.sheetIds.includes(formulaReview.sheetId),
                 )
                 ? "needs-refresh"
                 : "unavailable"
               : "disabled"),
-            b === "needs-refresh")
+            functionState === "needs-refresh")
           )
             try {
               const binding = requireApprovedExtension(
                   workbook,
-                  g.entry.manifest.id,
-                  r,
+                  installedFunction.entry.manifest.id,
+                  hostPolicyInput,
                 ),
-                w = evaluateExtensionFunctionCall(o, u, call, binding),
-                E = fingerprintExtensionCall(
-                  u.sheetId,
-                  u.address,
-                  u.formula,
+                argumentValues = evaluateExtensionFunctionCall(
+                  evaluationWorkbook,
+                  formulaReview,
+                  call,
+                  binding,
+                ),
+                cacheKey = fingerprintExtensionCall(
+                  formulaReview.sheetId,
+                  formulaReview.address,
+                  formulaReview.formula,
                   call.name,
-                  w,
-                  hashExtensionManifest(g.entry.manifest),
+                  argumentValues,
+                  hashExtensionManifest(installedFunction.entry.manifest),
                 );
               caches.some(
                 (cach) =>
-                  cach.key === E &&
+                  cach.key === cacheKey &&
                   cach.scopeHash ===
                     resolveExtensionSheetScope(workbook, binding),
-              ) && (b = "reviewed-cache");
+              ) && (functionState = "reviewed-cache");
             } catch {}
-          return { name: call.name, state: b };
+          return { name: call.name, state: functionState };
         });
       return {
-        ...u,
+        ...formulaReview,
         importedCache: workbook.importedCalculationCaches?.entries.find(
           (entry) =>
-            entry.sheetId === u.sheetId &&
-            entry.address === u.address &&
-            entry.formula === u.formula,
+            entry.sheetId === formulaReview.sheetId &&
+            entry.address === formulaReview.address &&
+            entry.formula === formulaReview.formula,
         )?.cache,
         functions: functions,
-        result: l,
+        result: typedResult,
         caches: caches,
         cacheLabel: caches.length
-          ? l.type === "error" ||
-            functions.some((v) => v.state !== "reviewed-cache")
+          ? typedResult.type === "error" ||
+            functions.some(
+              (functionEntry) => functionEntry.state !== "reviewed-cache",
+            )
             ? "Historical cached result — stale or unavailable"
             : "Reviewed cached result — manual refresh"
           : "No retained result",
@@ -2180,7 +2493,7 @@ function resolveExtensionCachedResult(workbook, r = {}) {
   return {
     installed: workbook.extensions?.installed ?? [],
     cells: cells,
-    available: t.extensions.map((extension) => ({
+    available: validatedPolicy.extensions.map((extension) => ({
       manifest: extension.manifest,
       fullyGranted: extension.manifest.permissions.every((permission) =>
         extension.grantedPermissions.includes(permission),
@@ -2191,25 +2504,34 @@ function resolveExtensionCachedResult(workbook, r = {}) {
   };
 }
 const tT = new WeakMap();
-function runExtensionOperation(workbook, extensionId, action, n = {}) {
-  const o = validateExtensionHostPolicy(workbook, n),
-    a = workbook.extensions?.installed.find(
-      (m) => m.manifest.id === extensionId,
+function runExtensionOperation(
+  workbook,
+  extensionId,
+  action,
+  hostPolicyInput = {},
+) {
+  const validatedPolicy = validateExtensionHostPolicy(
+      workbook,
+      hostPolicyInput,
     ),
-    extension = o.extensions.find(
+    installedEntry = workbook.extensions?.installed.find(
+      (entry) => entry.manifest.id === extensionId,
+    ),
+    extension = validatedPolicy.extensions.find(
       (extension) => extension.manifest.id === extensionId,
     );
   if (!["install", "enable", "disable", "remove"].includes(action))
     throw Error("Unknown extension operation.");
-  const d = action === "install" ? extension?.manifest : a?.manifest;
-  if (!d) throw Error("The requested extension is unavailable.");
+  const targetManifest =
+    action === "install" ? extension?.manifest : installedEntry?.manifest;
+  if (!targetManifest) throw Error("The requested extension is unavailable.");
   if (
-    (validateExtensionManifest(d),
+    (validateExtensionManifest(targetManifest),
     ["install", "enable"].includes(action) &&
       (!extension ||
         hashExtensionManifest(extension.manifest) !==
-          hashExtensionManifest(d) ||
-        !d.permissions.every((permission) =>
+          hashExtensionManifest(targetManifest) ||
+        !targetManifest.permissions.every((permission) =>
           extension.grantedPermissions.includes(permission),
         )))
   )
@@ -2217,73 +2539,87 @@ function runExtensionOperation(workbook, extensionId, action, n = {}) {
       "The host has not approved this exact manifest and all of its permissions.",
     );
   if (
-    d.functions.some(
-      (m) =>
-        builtinFunctionNames.includes(`${d.namespace}.${m.id}`) ||
+    targetManifest.functions.some(
+      (functionSpec) =>
+        builtinFunctionNames.includes(
+          `${targetManifest.namespace}.${functionSpec.id}`,
+        ) ||
         (workbook.definedNames ?? []).some(
-          (v) => v.name.toUpperCase() === `${d.namespace}.${m.id}`,
+          (definedName) =>
+            definedName.name.toUpperCase() ===
+            `${targetManifest.namespace}.${functionSpec.id}`,
         ),
     )
   )
     throw Error(
       "Extension functions cannot shadow built-ins or defined names.",
     );
-  const u = reviewExtensionFormulas(workbook).filter((m) =>
-    m.calls.some((call) => call.name.startsWith(d.namespace + ".")),
+  const affectedReviews = reviewExtensionFormulas(workbook).filter(
+    (formulaReview) =>
+      formulaReview.calls.some((call) =>
+        call.name.startsWith(targetManifest.namespace + "."),
+      ),
   );
   assertExtensionWriteScope(
     workbook,
-    u.map((m) => m.sheetId),
-    n,
+    affectedReviews.map((reviewItem) => reviewItem.sheetId),
+    hostPolicyInput,
   );
   const workbookInput = normalizeWorkbookInput(workbook),
-    c = structuredClone(
+    extensionsState = structuredClone(
       workbookInput.extensions ?? {
         schemaVersion: 1,
         installed: [],
         caches: [],
       },
     );
-  ((c.installed = c.installed.filter((m) => m.manifest.id !== extensionId)),
+  ((extensionsState.installed = extensionsState.installed.filter(
+    (installedItem) => installedItem.manifest.id !== extensionId,
+  )),
     action !== "remove" &&
-      c.installed.push({
-        manifest: validateExtensionManifest(d),
+      extensionsState.installed.push({
+        manifest: validateExtensionManifest(targetManifest),
         enabled: action !== "disable",
       }),
     (action === "remove" || action === "install") &&
-      (c.caches = c.caches.filter(
-        (cach) => !cach.functionName.startsWith(d.namespace + "."),
+      (extensionsState.caches = extensionsState.caches.filter(
+        (cach) => !cach.functionName.startsWith(targetManifest.namespace + "."),
       )),
-    (workbookInput.extensions = c));
-  const h = normalizeWorkbookInput(workbookInput),
-    f = {
+    (workbookInput.extensions = extensionsState));
+  const normalizedWorkbook = normalizeWorkbookInput(workbookInput),
+    operationPlan = {
       extensionId: extensionId,
       action: action,
-      manifest: structuredClone(d),
+      manifest: structuredClone(targetManifest),
       warning:
         "Raw formulas are preserved. Disabling retains labeled historical results; installing/upgrading or removing clears this extension’s caches. Execution requires a separate argument review.",
     };
   return (
-    tT.set(f, {
+    tT.set(operationPlan, {
       bookHash: fingerprintCanonicalValue(workbook),
-      policyHash: o.hash(),
-      planHash: fingerprintCanonicalValue(f),
-      candidate: h,
+      policyHash: validatedPolicy.hash(),
+      planHash: fingerprintCanonicalValue(operationPlan),
+      candidate: normalizedWorkbook,
     }),
-    f
+    operationPlan
   );
 }
-function applyExtensionPreview(workbook, r, t = {}) {
-  const n = tT.get(r);
-  if (!n) throw Error("Unknown or already applied extension preview.");
+function applyExtensionPreview(workbook, operationPlan, hostPolicyInput = {}) {
+  const previewRecord = tT.get(operationPlan);
+  if (!previewRecord)
+    throw Error("Unknown or already applied extension preview.");
   if (
-    t.readOnly ||
-    n.bookHash !== fingerprintCanonicalValue(workbook) ||
-    n.policyHash !== validateExtensionHostPolicy(workbook, t).hash() ||
-    n.planHash !== fingerprintCanonicalValue(r)
+    hostPolicyInput.readOnly ||
+    previewRecord.bookHash !== fingerprintCanonicalValue(workbook) ||
+    previewRecord.policyHash !==
+      validateExtensionHostPolicy(workbook, hostPolicyInput).hash() ||
+    previewRecord.planHash !== fingerprintCanonicalValue(operationPlan)
   )
     throw Error("Workbook, extension or permissions changed. Preview again.");
-  return (tT.delete(r), normalizeWorkbookInput(n.candidate));
+  return (
+    tT.delete(operationPlan),
+    normalizeWorkbookInput(previewRecord.candidate)
+  );
 }
 const k$ = new WeakMap();
 

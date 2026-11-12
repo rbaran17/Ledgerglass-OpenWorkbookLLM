@@ -26,155 +26,194 @@ import {
   fetchSourceCatalog,
 } from "./54-workbook-save-conflicts.js";
 
-function ExternalSourceBatchRefreshPanel(e) {
+function ExternalSourceBatchRefreshPanel(props) {
   const workbookMessages = useWorkbookMessages(),
-    t = ne.useId(),
-    n = ne.useRef(null),
-    o = ne.useRef(e);
-  o.current = e;
-  const a = e.workbook.sheets.filter(
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    latestProps = ne.useRef(props);
+  latestProps.current = props;
+  const connectedSheets = props.workbook.sheets.filter(
       (sheet) =>
         sheet.externalConnection &&
         !sheet.hidden &&
         !sheet.veryHidden &&
-        (!e.allowedSheetIds || e.allowedSheetIds.includes(sheet.id)),
+        (!props.allowedSheetIds || props.allowedSheetIds.includes(sheet.id)),
     ),
-    [s, d] = ne.useState(
-      a.filter((T) => !T.protection?.enabled).map((T) => T.id),
+    [selectedSheetIds, setSelectedSheetIds] = ne.useState(
+      connectedSheets
+        .filter((unprotectedSheet) => !unprotectedSheet.protection?.enabled)
+        .map((candidateSheet) => candidateSheet.id),
     ),
-    [u, l] = ne.useState(null),
-    [disabled, h] = ne.useState(false),
-    [f, p] = ne.useState(""),
-    [m, v] = ne.useState(""),
-    [g, b] = ne.useState(""),
-    [y, w] = ne.useState(""),
-    [E, A] = ne.useState(0),
-    k = ne.useRef(null);
+    [previewState, setPreviewState] = ne.useState(null),
+    [disabled, setDisabled] = ne.useState(false),
+    [statusMessage, setStatusMessage] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [progressMessage, setProgressMessage] = ne.useState(""),
+    [reviewSheetId, setReviewSheetId] = ne.useState(""),
+    [rowPageIndex, setRowPageIndex] = ne.useState(0),
+    rowsSectionRef = ne.useRef(null);
   ne.useEffect(() => {
-    k.current?.focus();
-  }, [y]);
-  const F = ne.useRef(true),
-    I = ne.useRef(null),
-    scope = JSON.stringify([e.readOnly, e.allowedSheetIds]),
-    j = ne.useMemo(
-      () => fingerprintCanonicalValue([e.workbook.id, e.workbook.sheets]),
-      [e.workbook],
+    rowsSectionRef.current?.focus();
+  }, [reviewSheetId]);
+  const isMountedRef = ne.useRef(true),
+    refreshControllerRef = ne.useRef(null),
+    scope = JSON.stringify([props.readOnly, props.allowedSheetIds]),
+    workbookFingerprint = ne.useMemo(
+      () =>
+        fingerprintCanonicalValue([props.workbook.id, props.workbook.sheets]),
+      [props.workbook],
     ),
-    z =
-      u &&
-      (u.book === e.workbook || (!u.result.plan && u.contentHash === j)) &&
-      u.adapter === e.adapter &&
-      u.scope === scope
-        ? u.result
+    reviewResult =
+      previewState &&
+      (previewState.book === props.workbook ||
+        (!previewState.result.plan &&
+          previewState.contentHash === workbookFingerprint)) &&
+      previewState.adapter === props.adapter &&
+      previewState.scope === scope
+        ? previewState.result
         : undefined;
   (ne.useEffect(() => {
-    F.current = true;
+    isMountedRef.current = true;
     const activeElement = document.activeElement;
     return (
-      n.current?.querySelector("button")?.focus(),
+      dialogRef.current?.querySelector("button")?.focus(),
       () => {
-        ((F.current = false),
-          I.current?.abort(),
+        ((isMountedRef.current = false),
+          refreshControllerRef.current?.abort(),
           activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
     ne.useEffect(() => {
-      (I.current?.abort(),
-        d((N) =>
-          N.filter((R) => a.some((L) => L.id === R && !L.protection?.enabled)),
+      (refreshControllerRef.current?.abort(),
+        setSelectedSheetIds((previousSelectedIds) =>
+          previousSelectedIds.filter((sheetId) =>
+            connectedSheets.some(
+              (matchingSheet) =>
+                matchingSheet.id === sheetId &&
+                !matchingSheet.protection?.enabled,
+            ),
+          ),
         ),
-        l((N) =>
-          N &&
-          (N.book === e.workbook || (!N.result.plan && N.contentHash === j)) &&
-          N.adapter === e.adapter &&
-          N.scope === scope
-            ? N
+        setPreviewState((previousPreviewState) =>
+          previousPreviewState &&
+          (previousPreviewState.book === props.workbook ||
+            (!previousPreviewState.result.plan &&
+              previousPreviewState.contentHash === workbookFingerprint)) &&
+          previousPreviewState.adapter === props.adapter &&
+          previousPreviewState.scope === scope
+            ? previousPreviewState
             : null,
         ));
-    }, [e.workbook, e.adapter, scope]));
+    }, [props.workbook, props.adapter, scope]));
   function onClick() {
-    (I.current?.abort(), e.onClose());
+    (refreshControllerRef.current?.abort(), props.onClose());
   }
-  async function D(T = false) {
-    if (I.current || !e.adapter || e.readOnly || !s.length || (T && !z?.plan))
+  async function runBatchRefresh(shouldApply = false) {
+    if (
+      refreshControllerRef.current ||
+      !props.adapter ||
+      props.readOnly ||
+      !selectedSheetIds.length ||
+      (shouldApply && !reviewResult?.plan)
+    )
       return;
-    const N = e,
-      adapter = e.adapter,
-      L = new AbortController(),
-      $ = () =>
-        F.current &&
-        o.current.workbook === N.workbook &&
-        o.current.adapter === adapter &&
-        JSON.stringify([o.current.readOnly, o.current.allowedSheetIds]) ===
-          scope;
-    ((I.current = L),
-      h(true),
-      v(""),
-      p(""),
-      w(""),
-      b(
+    const propsAtStart = props,
+      adapter = props.adapter,
+      refreshController = new AbortController(),
+      isCurrentRun = () =>
+        isMountedRef.current &&
+        latestProps.current.workbook === propsAtStart.workbook &&
+        latestProps.current.adapter === adapter &&
+        JSON.stringify([
+          latestProps.current.readOnly,
+          latestProps.current.allowedSheetIds,
+        ]) === scope;
+    ((refreshControllerRef.current = refreshController),
+      setDisabled(true),
+      setErrorMessage(""),
+      setStatusMessage(""),
+      setReviewSheetId(""),
+      setProgressMessage(
         workbookMessages.text(
-          T
+          shouldApply
             ? "Checking access for every source…"
             : "Preparing refresh previews…",
         ),
       ));
-    const U = {
-      readOnly: e.readOnly,
-      allowedSheetIds: e.allowedSheetIds,
-      signal: L.signal,
-      reliability: e.reliability,
+    const refreshOptions = {
+      readOnly: props.readOnly,
+      allowedSheetIds: props.allowedSheetIds,
+      signal: refreshController.signal,
+      reliability: props.reliability,
     };
     try {
-      if (T) {
-        const Q = await G2e(adapter, z.plan, U);
-        if (!$()) return;
-        if (L.signal.aborted) throw new ExternalSourceError("cancelled");
-        const X = applySourceGrantPlans(N.workbook, z.plan, Q, U);
-        (N.onWorkbookChange(X, "Refresh all external sources"),
-          l(null),
-          p(
+      if (shouldApply) {
+        const grantResults = await G2e(
+          adapter,
+          reviewResult.plan,
+          refreshOptions,
+        );
+        if (!isCurrentRun()) return;
+        if (refreshController.signal.aborted)
+          throw new ExternalSourceError("cancelled");
+        const nextWorkbook = applySourceGrantPlans(
+          propsAtStart.workbook,
+          reviewResult.plan,
+          grantResults,
+          refreshOptions,
+        );
+        (propsAtStart.onWorkbookChange(
+          nextWorkbook,
+          "Refresh all external sources",
+        ),
+          setPreviewState(null),
+          setStatusMessage(
             workbookMessages.text(
               "All reviewed connections were refreshed together. Undo restores the complete previous batch.",
             ),
           ));
       } else {
-        const Q = await runSourceRefreshBatch(N.workbook, adapter, s, {
-          ...U,
-          onProgress: (completed, total) => {
-            $() &&
-              b(
-                workbookMessages.message(
-                  "Reviewed {completed} of {total} connections.",
-                  {
-                    completed: completed,
-                    total: total,
-                  },
-                ),
-              );
+        const batchResult = await runSourceRefreshBatch(
+          propsAtStart.workbook,
+          adapter,
+          selectedSheetIds,
+          {
+            ...refreshOptions,
+            onProgress: (completed, total) => {
+              isCurrentRun() &&
+                setProgressMessage(
+                  workbookMessages.message(
+                    "Reviewed {completed} of {total} connections.",
+                    {
+                      completed: completed,
+                      total: total,
+                    },
+                  ),
+                );
+            },
           },
-        });
-        if (!$()) return;
-        let workbook = N.workbook;
-        for (const entry of Q.entries) {
-          const code = entry.error ?? Q.error;
+        );
+        if (!isCurrentRun()) return;
+        let workbook = propsAtStart.workbook;
+        for (const entry of batchResult.entries) {
+          const code = entry.error ?? batchResult.error;
           code &&
             (workbook = normalizeExternalSourceState(
               workbook,
               entry.sheetId,
               entry.sourceId,
               code,
-              U,
+              refreshOptions,
             ));
         }
-        (workbook !== N.workbook &&
-          N.onWorkbookChange(
+        (workbook !== propsAtStart.workbook &&
+          propsAtStart.onWorkbookChange(
             workbook,
             "External source batch failed; previous data retained",
           ),
-          l({
-            result: Q,
+          setPreviewState({
+            result: batchResult,
             book: workbook,
             contentHash: fingerprintCanonicalValue([
               workbook.id,
@@ -183,60 +222,75 @@ function ExternalSourceBatchRefreshPanel(e) {
             adapter: adapter,
             scope: scope,
           }),
-          Q.plan ||
-            v(
+          batchResult.plan ||
+            setErrorMessage(
               workbookMessages.text(
                 "The batch is not ready. No source values were replaced. Resolve the failed connections, or select fewer connections and preview again.",
               ),
             ));
       }
     } catch (error) {
-      if (!$()) return;
-      const X = isExternalSourceError(error);
-      (v(X.message), l(null));
-      let workbook = N.workbook;
-      for (const q of s) {
-        const W = N.workbook.sheets.find((sheet) => sheet.id === q)
-          ?.externalConnection?.source.id;
-        W &&
-          (workbook = normalizeExternalSourceState(workbook, q, W, X.code, U));
+      if (!isCurrentRun()) return;
+      const sourceError = isExternalSourceError(error);
+      (setErrorMessage(sourceError.message), setPreviewState(null));
+      let workbook = propsAtStart.workbook;
+      for (const selectedSheetId of selectedSheetIds) {
+        const sourceId = propsAtStart.workbook.sheets.find(
+          (sheet) => sheet.id === selectedSheetId,
+        )?.externalConnection?.source.id;
+        sourceId &&
+          (workbook = normalizeExternalSourceState(
+            workbook,
+            selectedSheetId,
+            sourceId,
+            sourceError.code,
+            refreshOptions,
+          ));
       }
-      if (workbook !== N.workbook)
+      if (workbook !== propsAtStart.workbook)
         try {
-          N.onWorkbookChange(
+          propsAtStart.onWorkbookChange(
             workbook,
             "External source batch failed; previous data retained",
           );
         } catch {}
     } finally {
-      I.current === L && ((I.current = null), F.current && h(false));
+      refreshControllerRef.current === refreshController &&
+        ((refreshControllerRef.current = null),
+        isMountedRef.current && setDisabled(false));
     }
   }
-  const B = z?.entries.find((entry) => entry.sheetId === y)?.snapshot;
+  const reviewSnapshot = reviewResult?.entries.find(
+    (entry) => entry.sheetId === reviewSheetId,
+  )?.snapshot;
   return i.jsx("div", {
     className: "lg-modal-backdrop",
     children: i.jsxs("section", {
-      ref: n,
+      ref: dialogRef,
       className: "lg-external-sources",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": t,
+      "aria-labelledby": titleId,
       onKeyDown: (event) => {
-        var N, R;
+        var lastFocusable, firstFocusable;
         if (
           (event.key === "Escape" && (event.stopPropagation(), onClick()),
           event.key === "Tab")
         ) {
-          const L = [
+          const focusableElements = [
             ...event.currentTarget.querySelectorAll(
               'button:not(:disabled),input:not(:disabled),[tabindex="0"]',
             ),
-          ].filter(($) => !$.closest("[hidden]"));
-          event.shiftKey && document.activeElement === L[0]
-            ? (event.preventDefault(), (N = L.at(-1)) == null || N.focus())
+          ].filter((element) => !element.closest("[hidden]"));
+          event.shiftKey && document.activeElement === focusableElements[0]
+            ? (event.preventDefault(),
+              (lastFocusable = focusableElements.at(-1)) == null ||
+                lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === L.at(-1) &&
-              (event.preventDefault(), (R = L[0]) == null || R.focus());
+              document.activeElement === focusableElements.at(-1) &&
+              (event.preventDefault(),
+              (firstFocusable = focusableElements[0]) == null ||
+                firstFocusable.focus());
         }
       },
       children: [
@@ -251,7 +305,7 @@ function ExternalSourceBatchRefreshPanel(e) {
                   }),
                 }),
                 i.jsx("h2", {
-                  id: t,
+                  id: titleId,
                   children: i.jsx(LocalizedText, { children: "Refresh All" }),
                 }),
                 i.jsx("p", {
@@ -283,56 +337,61 @@ function ExternalSourceBatchRefreshPanel(e) {
             }),
             i.jsxs("fieldset", {
               className: "lg-source-batch-list",
-              disabled: disabled || !!e.readOnly,
+              disabled: disabled || !!props.readOnly,
               children: [
                 i.jsx("legend", {
                   children: i.jsx(LocalizedText, {
                     children: "Connections to refresh",
                   }),
                 }),
-                a.map((T) =>
+                connectedSheets.map((connectedSheet) =>
                   i.jsxs(
                     "label",
                     {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          checked: s.includes(T.id),
-                          disabled: !!T.protection?.enabled,
+                          checked: selectedSheetIds.includes(connectedSheet.id),
+                          disabled: !!connectedSheet.protection?.enabled,
                           onChange: (event) => {
-                            (d(($) =>
+                            (setSelectedSheetIds((currentSelectedIds) =>
                               event.target.checked
-                                ? [...$, T.id]
-                                : $.filter((U) => U !== T.id),
+                                ? [...currentSelectedIds, connectedSheet.id]
+                                : currentSelectedIds.filter(
+                                    (selectedId) =>
+                                      selectedId !== connectedSheet.id,
+                                  ),
                             ),
-                              l(null),
-                              v(""),
-                              p(""),
-                              w(""));
+                              setPreviewState(null),
+                              setErrorMessage(""),
+                              setStatusMessage(""),
+                              setReviewSheetId(""));
                           },
                         }),
                         i.jsxs("span", {
                           children: [
-                            i.jsx("strong", { children: T.name }),
+                            i.jsx("strong", { children: connectedSheet.name }),
                             " ·",
                             " ",
-                            T.externalConnection.source.label,
-                            T.protection?.enabled
+                            connectedSheet.externalConnection.source.label,
+                            connectedSheet.protection?.enabled
                               ? ` · ${workbookMessages.text("Protected")}`
                               : "",
                             i.jsxs("small", {
                               children: [
-                                T.externalConnection.source.id,
+                                connectedSheet.externalConnection.source.id,
                                 " ·",
                                 " ",
-                                T.externalConnection.lastSuccess.rows,
+                                connectedSheet.externalConnection.lastSuccess
+                                  .rows,
                                 " ",
                                 workbookMessages.text("records"),
                                 " ·",
                                 " ",
-                                T.externalConnection.lastSuccess.at,
-                                T.externalConnection.lastAttempt.outcome !==
-                                "succeeded"
+                                connectedSheet.externalConnection.lastSuccess
+                                  .at,
+                                connectedSheet.externalConnection.lastAttempt
+                                  .outcome !== "succeeded"
                                   ? ` · ${workbookMessages.text("Stale source data")}`
                                   : "",
                               ],
@@ -341,10 +400,10 @@ function ExternalSourceBatchRefreshPanel(e) {
                         }),
                       ],
                     },
-                    T.id,
+                    connectedSheet.id,
                   ),
                 ),
-                !a.length &&
+                !connectedSheets.length &&
                   i.jsx("p", {
                     children: i.jsx(LocalizedText, {
                       children: "No connected worksheets are available.",
@@ -352,38 +411,39 @@ function ExternalSourceBatchRefreshPanel(e) {
                   }),
               ],
             }),
-            m &&
+            errorMessage &&
               i.jsx("p", {
                 role: "alert",
                 className: "lg-source-error",
-                children: m,
+                children: errorMessage,
               }),
-            f && i.jsx("p", { role: "status", children: f }),
+            statusMessage &&
+              i.jsx("p", { role: "status", children: statusMessage }),
             disabled &&
               i.jsxs("p", {
                 role: "status",
                 children: [
-                  g,
+                  progressMessage,
                   " ",
                   i.jsx("button", {
                     type: "button",
-                    onClick: () => I.current?.abort(),
+                    onClick: () => refreshControllerRef.current?.abort(),
                     children: i.jsx(LocalizedText, {
                       children: "Cancel refresh",
                     }),
                   }),
                 ],
               }),
-            z &&
+            reviewResult &&
               i.jsx("section", {
                 "aria-label": workbookMessages.text("Refresh All results"),
                 className: "lg-source-preview",
-                children: z.entries.map((entry) => {
-                  const sheet = e.workbook.sheets.find(
+                children: reviewResult.entries.map((entry) => {
+                  const sheet = props.workbook.sheets.find(
                       (sheet) => sheet.id === entry.sheetId,
                     ),
                     lastSuccess = sheet.externalConnection.lastSuccess,
-                    L = entry.error ?? z.error;
+                    errorCode = entry.error ?? reviewResult.error;
                   return i.jsxs(
                     "article",
                     {
@@ -395,7 +455,7 @@ function ExternalSourceBatchRefreshPanel(e) {
                             " ·",
                             " ",
                             workbookMessages.text(
-                              L ? "Not ready" : "Ready for review",
+                              errorCode ? "Not ready" : "Ready for review",
                             ),
                           ],
                         }),
@@ -406,14 +466,14 @@ function ExternalSourceBatchRefreshPanel(e) {
                             sheet.externalConnection.source.kind,
                           ],
                         }),
-                        L &&
+                        errorCode &&
                           i.jsx("p", {
                             children: isExternalSourceError(
-                              new ExternalSourceError(L),
+                              new ExternalSourceError(errorCode),
                             ).message,
                           }),
                         entry.snapshot &&
-                          !L &&
+                          !errorCode &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsxs("p", {
@@ -458,15 +518,17 @@ function ExternalSourceBatchRefreshPanel(e) {
                                           "New total",
                                           "Change",
                                           "Numbers / blanks",
-                                        ].map(($) =>
+                                        ].map((headerLabel) =>
                                           i.jsx(
                                             "th",
                                             {
                                               scope: "col",
                                               children:
-                                                workbookMessages.text($),
+                                                workbookMessages.text(
+                                                  headerLabel,
+                                                ),
                                             },
-                                            $,
+                                            headerLabel,
                                           ),
                                         ),
                                       }),
@@ -474,11 +536,12 @@ function ExternalSourceBatchRefreshPanel(e) {
                                     i.jsx("tbody", {
                                       children: computeSourceControlTotals(
                                         entry.snapshot,
-                                      ).map(($) => {
-                                        const U =
+                                      ).map((controlTotal) => {
+                                        const previousTotal =
                                           lastSuccess.controls.find(
                                             (control) =>
-                                              control.field === $.field,
+                                              control.field ===
+                                              controlTotal.field,
                                           )?.sum ?? 0;
                                         return i.jsxs(
                                           "tr",
@@ -486,23 +549,29 @@ function ExternalSourceBatchRefreshPanel(e) {
                                             children: [
                                               i.jsx("th", {
                                                 scope: "row",
-                                                children: $.field,
+                                                children: controlTotal.field,
                                               }),
-                                              i.jsx("td", { children: U }),
-                                              i.jsx("td", { children: $.sum }),
                                               i.jsx("td", {
-                                                children: $.sum - U,
+                                                children: previousTotal,
+                                              }),
+                                              i.jsx("td", {
+                                                children: controlTotal.sum,
+                                              }),
+                                              i.jsx("td", {
+                                                children:
+                                                  controlTotal.sum -
+                                                  previousTotal,
                                               }),
                                               i.jsxs("td", {
                                                 children: [
-                                                  $.numeric,
+                                                  controlTotal.numeric,
                                                   " / ",
-                                                  $.blanks,
+                                                  controlTotal.blanks,
                                                 ],
                                               }),
                                             ],
                                           },
-                                          $.field,
+                                          controlTotal.field,
                                         );
                                       }),
                                     }),
@@ -513,7 +582,8 @@ function ExternalSourceBatchRefreshPanel(e) {
                                 type: "button",
                                 disabled: disabled,
                                 onClick: () => {
-                                  (w(entry.sheetId), A(0));
+                                  (setReviewSheetId(entry.sheetId),
+                                    setRowPageIndex(0));
                                 },
                                 children: workbookMessages.message(
                                   "Review rows for {sheet}",
@@ -530,15 +600,16 @@ function ExternalSourceBatchRefreshPanel(e) {
                   );
                 }),
               }),
-            B &&
+            reviewSnapshot &&
               i.jsxs("section", {
-                ref: k,
+                ref: rowsSectionRef,
                 tabIndex: -1,
                 "aria-label": workbookMessages.text("Batch source rows"),
                 children: [
                   i.jsx("h3", {
-                    children: e.workbook.sheets.find((sheet) => sheet.id === y)
-                      ?.name,
+                    children: props.workbook.sheets.find(
+                      (sheet) => sheet.id === reviewSheetId,
+                    )?.name,
                   }),
                   i.jsx("div", {
                     className: "lg-source-scroll",
@@ -547,44 +618,45 @@ function ExternalSourceBatchRefreshPanel(e) {
                       children: [
                         i.jsx("thead", {
                           children: i.jsx("tr", {
-                            children: B.source.columns.map((column) =>
-                              i.jsxs(
-                                "th",
-                                {
-                                  scope: "col",
-                                  children: [
-                                    column.name,
-                                    " (",
-                                    column.type,
-                                    ")",
-                                  ],
-                                },
-                                column.name,
-                              ),
+                            children: reviewSnapshot.source.columns.map(
+                              (column) =>
+                                i.jsxs(
+                                  "th",
+                                  {
+                                    scope: "col",
+                                    children: [
+                                      column.name,
+                                      " (",
+                                      column.type,
+                                      ")",
+                                    ],
+                                  },
+                                  column.name,
+                                ),
                             ),
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: B.rows
-                            .slice(E * 25, (E + 1) * 25)
-                            .map((T, N) =>
+                          children: reviewSnapshot.rows
+                            .slice(rowPageIndex * 25, (rowPageIndex + 1) * 25)
+                            .map((row, rowIndex) =>
                               i.jsx(
                                 "tr",
                                 {
-                                  children: T.map((R, L) =>
+                                  children: row.map((cell, cellIndex) =>
                                     i.jsx(
                                       "td",
                                       {
                                         children:
-                                          R === null
+                                          cell === null
                                             ? workbookMessages.text("(blank)")
-                                            : String(R),
+                                            : String(cell),
                                       },
-                                      L,
+                                      cellIndex,
                                     ),
                                   ),
                                 },
-                                N,
+                                rowIndex,
                               ),
                             ),
                         }),
@@ -596,8 +668,11 @@ function ExternalSourceBatchRefreshPanel(e) {
                     children: [
                       i.jsx("button", {
                         type: "button",
-                        disabled: E === 0,
-                        onClick: () => A((T) => T - 1),
+                        disabled: rowPageIndex === 0,
+                        onClick: () =>
+                          setRowPageIndex(
+                            (previousPageIndex) => previousPageIndex - 1,
+                          ),
                         children: i.jsx(LocalizedText, {
                           children: "Previous records",
                         }),
@@ -606,15 +681,22 @@ function ExternalSourceBatchRefreshPanel(e) {
                         children: workbookMessages.message(
                           "Page {page} of {pages}",
                           {
-                            page: E + 1,
-                            pages: Math.max(1, Math.ceil(B.rows.length / 25)),
+                            page: rowPageIndex + 1,
+                            pages: Math.max(
+                              1,
+                              Math.ceil(reviewSnapshot.rows.length / 25),
+                            ),
                           },
                         ),
                       }),
                       i.jsx("button", {
                         type: "button",
-                        disabled: (E + 1) * 25 >= B.rows.length,
-                        onClick: () => A((T) => T + 1),
+                        disabled:
+                          (rowPageIndex + 1) * 25 >= reviewSnapshot.rows.length,
+                        onClick: () =>
+                          setRowPageIndex(
+                            (currentPageIndex) => currentPageIndex + 1,
+                          ),
                         children: i.jsx(LocalizedText, {
                           children: "Next records",
                         }),
@@ -635,8 +717,12 @@ function ExternalSourceBatchRefreshPanel(e) {
             }),
             i.jsx("button", {
               type: "button",
-              disabled: disabled || !!e.readOnly || !e.adapter || !s.length,
-              onClick: () => void D(),
+              disabled:
+                disabled ||
+                !!props.readOnly ||
+                !props.adapter ||
+                !selectedSheetIds.length,
+              onClick: () => void runBatchRefresh(),
               children: i.jsx(LocalizedText, {
                 children: "Preview selected connections",
               }),
@@ -644,8 +730,8 @@ function ExternalSourceBatchRefreshPanel(e) {
             i.jsx("button", {
               type: "button",
               className: "primary",
-              disabled: disabled || !!e.readOnly || !z?.plan,
-              onClick: () => void D(true),
+              disabled: disabled || !!props.readOnly || !reviewResult?.plan,
+              onClick: () => void runBatchRefresh(true),
               children: i.jsx(LocalizedText, {
                 children: "Apply all reviewed refreshes",
               }),
@@ -658,11 +744,11 @@ function ExternalSourceBatchRefreshPanel(e) {
 }
 function ExternalSourceStatusPanel({ workbook, sheetId, onReview }) {
   const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
-    o = sheet?.externalConnection;
-  if (!sheet || !o) return null;
-  let a = true;
+    connection = sheet?.externalConnection;
+  if (!sheet || !connection) return null;
+  let hasLocalChanges = true;
   try {
-    a = snapshotSheetContent(sheet) !== o.outputHash;
+    hasLocalChanges = snapshotSheetContent(sheet) !== connection.outputHash;
   } catch {}
   return i.jsxs("div", {
     className: "lg-source-status",
@@ -671,24 +757,24 @@ function ExternalSourceStatusPanel({ workbook, sheetId, onReview }) {
     children: [
       i.jsx("strong", {
         children:
-          o.lastAttempt.outcome !== "succeeded" || a
+          connection.lastAttempt.outcome !== "succeeded" || hasLocalChanges
             ? "Stale source data"
             : "Source snapshot",
       }),
       i.jsxs("span", {
         children: [
-          o.source.label,
+          connection.source.label,
           " · ",
-          o.lastSuccess.rows,
+          connection.lastSuccess.rows,
           " records · last successful refresh ",
-          o.lastSuccess.at,
+          connection.lastSuccess.at,
         ],
       }),
       i.jsx("span", {
-        children: a
+        children: hasLocalChanges
           ? "Local values changed; refresh cannot overwrite them."
-          : o.lastAttempt.code
-            ? errorMessageOf(o.lastAttempt.code)
+          : connection.lastAttempt.code
+            ? errorMessageOf(connection.lastAttempt.code)
             : "Refresh to check for newer source data.",
       }),
       i.jsx("button", {
@@ -702,222 +788,293 @@ function ExternalSourceStatusPanel({ workbook, sheetId, onReview }) {
 function errorMessageOf(code) {
   return new ExternalSourceError(code).message;
 }
-function ExternalDataRefreshDialog(e) {
-  const [r, t] = ne.useState(false),
+function ExternalDataRefreshDialog(props) {
+  const [isBatchRefreshOpen, setBatchRefreshOpen] = ne.useState(false),
     workbookMessages = useWorkbookMessages(),
-    o = ne.useId(),
-    a = ne.useRef(null),
-    s = ne.useRef(e);
-  s.current = e;
-  const d = ne.useRef(true),
-    u = ne.useRef(null),
-    l = ne.useRef(false),
-    c = ne.useRef([e.workbook, e.readOnly, JSON.stringify(e.allowedSheetIds)]),
-    h = e.workbook.sheets.find(
-      (sheet) => sheet.id === e.sheetId,
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    propsRef = ne.useRef(props);
+  propsRef.current = props;
+  const isMounted = ne.useRef(true),
+    abortControllerRef = ne.useRef(null),
+    isRequestPending = ne.useRef(false),
+    previousInputs = ne.useRef([
+      props.workbook,
+      props.readOnly,
+      JSON.stringify(props.allowedSheetIds),
+    ]),
+    initialConnection = props.workbook.sheets.find(
+      (sheet) => sheet.id === props.sheetId,
     )?.externalConnection,
-    [f, p] = ne.useState(h ? e.sheetId : ""),
-    [m, v] = ne.useState(h?.source.id ?? ""),
-    [outputName, b] = ne.useState("External data"),
-    [y, w] = ne.useState([]),
-    [E, A] = ne.useState(""),
-    [k, F] = ne.useState(""),
-    [I, O] = ne.useState(""),
-    [j, z] = ne.useState(null),
-    [V, D] = ne.useState(0),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === f),
-    _ = sheet?.externalConnection,
-    C =
-      j?.book === e.workbook && j.adapter === e.adapter && !e.readOnly
-        ? j.plan
+    [selectedSheetId, setSelectedSheetId] = ne.useState(
+      initialConnection ? props.sheetId : "",
+    ),
+    [selectedSourceId, setSelectedSourceId] = ne.useState(
+      initialConnection?.source.id ?? "",
+    ),
+    [outputName, setOutputName] = ne.useState("External data"),
+    [approvedSources, setApprovedSources] = ne.useState([]),
+    [busyMessage, setBusyMessage] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [successMessage, setSuccessMessage] = ne.useState(""),
+    [refreshPreview, setRefreshPreview] = ne.useState(null),
+    [previewPage, setPreviewPage] = ne.useState(0),
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === selectedSheetId),
+    selectedConnection = sheet?.externalConnection,
+    applicablePlan =
+      refreshPreview?.book === props.workbook &&
+      refreshPreview.adapter === props.adapter &&
+      !props.readOnly
+        ? refreshPreview.plan
         : undefined,
-    T = { readOnly: e.readOnly, allowedSheetIds: e.allowedSheetIds },
-    N =
+    accessPolicy = {
+      readOnly: props.readOnly,
+      allowedSheetIds: props.allowedSheetIds,
+    },
+    canRefreshSheet =
       !sheet ||
       (!sheet.hidden &&
         !sheet.veryHidden &&
         !sheet.protection?.enabled &&
-        (!e.allowedSheetIds || e.allowedSheetIds.includes(sheet.id))),
-    R = !!e.readOnly || !N || !e.adapter || !!E;
+        (!props.allowedSheetIds || props.allowedSheetIds.includes(sheet.id))),
+    isRefreshBlocked =
+      !!props.readOnly || !canRefreshSheet || !props.adapter || !!busyMessage;
   (ne.useEffect(() => {
-    d.current = true;
+    isMounted.current = true;
     const activeElement = document.activeElement;
     return (
-      a.current?.querySelector("button")?.focus(),
+      dialogRef.current?.querySelector("button")?.focus(),
       () => {
-        ((d.current = false),
-          u.current?.abort(),
+        ((isMounted.current = false),
+          abortControllerRef.current?.abort(),
           activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
     ne.useEffect(() => {
-      (u.current?.abort(),
-        (u.current = null),
-        (l.current = false),
-        A(""),
-        w([]),
-        z(null),
-        e.adapter && U());
-    }, [e.adapter]),
+      (abortControllerRef.current?.abort(),
+        (abortControllerRef.current = null),
+        (isRequestPending.current = false),
+        setBusyMessage(""),
+        setApprovedSources([]),
+        setRefreshPreview(null),
+        props.adapter && loadApprovedSources());
+    }, [props.adapter]),
     ne.useEffect(() => {
-      const W = [e.workbook, e.readOnly, JSON.stringify(e.allowedSheetIds)];
-      (W.some((te, ae) => te !== c.current[ae]) &&
-        (l.current && u.current?.abort(), z(null)),
-        (c.current = W));
-    }, [e.workbook, e.readOnly, JSON.stringify(e.allowedSheetIds)]));
+      const currentInputs = [
+        props.workbook,
+        props.readOnly,
+        JSON.stringify(props.allowedSheetIds),
+      ];
+      (currentInputs.some(
+        (inputValue, inputIndex) =>
+          inputValue !== previousInputs.current[inputIndex],
+      ) &&
+        (isRequestPending.current && abortControllerRef.current?.abort(),
+        setRefreshPreview(null)),
+        (previousInputs.current = currentInputs));
+    }, [
+      props.workbook,
+      props.readOnly,
+      JSON.stringify(props.allowedSheetIds),
+    ]));
   function onClick() {
-    (u.current?.abort(), e.onClose());
+    (abortControllerRef.current?.abort(), props.onClose());
   }
-  function $() {
-    (z(null), D(0), F(""), O(""));
+  function resetRefreshState() {
+    (setRefreshPreview(null),
+      setPreviewPage(0),
+      setErrorMessage(""),
+      setSuccessMessage(""));
   }
-  async function U() {
-    const adapter = s.current.adapter;
-    if (!adapter || l.current) return;
-    ((l.current = true), A("Loading approved sources…"), F(""));
-    const K = new AbortController();
-    u.current = K;
+  async function loadApprovedSources() {
+    const adapter = propsRef.current.adapter;
+    if (!adapter || isRequestPending.current) return;
+    ((isRequestPending.current = true),
+      setBusyMessage("Loading approved sources…"),
+      setErrorMessage(""));
+    const loadController = new AbortController();
+    abortControllerRef.current = loadController;
     try {
       const sourceCatalog = await fetchSourceCatalog(adapter, {
-        signal: K.signal,
-        reliability: s.current.reliability,
+        signal: loadController.signal,
+        reliability: propsRef.current.reliability,
       });
-      if (!d.current || adapter !== s.current.adapter) return;
-      (w(sourceCatalog), v((ae) => ae || sourceCatalog[0]?.source.id || ""));
+      if (!isMounted.current || adapter !== propsRef.current.adapter) return;
+      (setApprovedSources(sourceCatalog),
+        setSelectedSourceId(
+          (previousSourceId) =>
+            previousSourceId || sourceCatalog[0]?.source.id || "",
+        ));
     } catch (error) {
-      d.current && F(isExternalSourceError(error).message);
+      isMounted.current &&
+        setErrorMessage(isExternalSourceError(error).message);
     } finally {
-      u.current === K &&
-        ((u.current = null), (l.current = false), d.current && A(""));
+      abortControllerRef.current === loadController &&
+        ((abortControllerRef.current = null),
+        (isRequestPending.current = false),
+        isMounted.current && setBusyMessage(""));
     }
   }
-  async function G(W = false) {
-    if (R || l.current || !e.adapter || !m || (W && !C)) return;
-    const K = s.current,
-      adapter = e.adapter,
-      ae = m,
-      oe = f;
-    ((l.current = true),
-      A(W ? "Checking access and applying…" : "Refreshing preview…"),
-      F(""),
-      O(""));
-    const de = new AbortController();
-    u.current = de;
+  async function runSourceRefresh(isApplyRequested = false) {
+    if (
+      isRefreshBlocked ||
+      isRequestPending.current ||
+      !props.adapter ||
+      !selectedSourceId ||
+      (isApplyRequested && !applicablePlan)
+    )
+      return;
+    const currentProps = propsRef.current,
+      adapter = props.adapter,
+      sourceId = selectedSourceId,
+      sheetId = selectedSheetId;
+    ((isRequestPending.current = true),
+      setBusyMessage(
+        isApplyRequested
+          ? "Checking access and applying…"
+          : "Refreshing preview…",
+      ),
+      setErrorMessage(""),
+      setSuccessMessage(""));
+    const refreshController = new AbortController();
+    abortControllerRef.current = refreshController;
     try {
-      if (W) {
-        const he = await authorizeSourceAccess(adapter, ae, {
-          signal: de.signal,
-          reliability: e.reliability,
+      if (isApplyRequested) {
+        const accessGrant = await authorizeSourceAccess(adapter, sourceId, {
+          signal: refreshController.signal,
+          reliability: props.reliability,
         });
-        if (!d.current || de.signal.aborted) return;
+        if (!isMounted.current || refreshController.signal.aborted) return;
         if (
-          s.current.workbook !== K.workbook ||
-          s.current.adapter !== adapter ||
-          s.current.readOnly
+          propsRef.current.workbook !== currentProps.workbook ||
+          propsRef.current.adapter !== adapter ||
+          propsRef.current.readOnly
         )
           throw new ExternalSourceError("stale");
-        const Se = grantSheetSnapshotSource(s.current.workbook, C, he, {
-          readOnly: s.current.readOnly,
-          allowedSheetIds: s.current.allowedSheetIds,
-        });
-        (s.current.onWorkbookChange(Se, "Refresh external source"),
-          z(null),
-          O(
+        const grantedWorkbook = grantSheetSnapshotSource(
+          propsRef.current.workbook,
+          applicablePlan,
+          accessGrant,
+          {
+            readOnly: propsRef.current.readOnly,
+            allowedSheetIds: propsRef.current.allowedSheetIds,
+          },
+        );
+        (propsRef.current.onWorkbookChange(
+          grantedWorkbook,
+          "Refresh external source",
+        ),
+          setRefreshPreview(null),
+          setSuccessMessage(
             "Source data refreshed. The reviewed population and control totals were applied together.",
           ));
       } else {
-        const he = await refreshSourceSnapshot(adapter, ae, {
-          signal: de.signal,
-          reliability: e.reliability,
+        const refreshResult = await refreshSourceSnapshot(adapter, sourceId, {
+          signal: refreshController.signal,
+          reliability: props.reliability,
         });
-        if (!d.current || de.signal.aborted) return;
+        if (!isMounted.current || refreshController.signal.aborted) return;
         if (
-          s.current.workbook !== K.workbook ||
-          s.current.adapter !== adapter ||
-          s.current.readOnly
+          propsRef.current.workbook !== currentProps.workbook ||
+          propsRef.current.adapter !== adapter ||
+          propsRef.current.readOnly
         )
           throw new ExternalSourceError("stale");
         const plan = EH(
-          K.workbook,
-          he.snapshot,
-          he.grant,
-          { outputName: outputName, sheetId: oe || undefined },
-          T,
+          currentProps.workbook,
+          refreshResult.snapshot,
+          refreshResult.grant,
+          { outputName: outputName, sheetId: sheetId || undefined },
+          accessPolicy,
         );
-        (z({ plan: plan, book: K.workbook, adapter: adapter }), D(0));
+        (setRefreshPreview({
+          plan: plan,
+          book: currentProps.workbook,
+          adapter: adapter,
+        }),
+          setPreviewPage(0));
       }
     } catch (error) {
-      if (!d.current) return;
-      const Se = isExternalSourceError(error);
+      if (!isMounted.current) return;
+      const sourceError = isExternalSourceError(error);
       if (
-        (F(Se.message),
-        z(null),
-        oe &&
-          s.current.adapter === adapter &&
-          s.current.workbook === K.workbook)
+        (setErrorMessage(sourceError.message),
+        setRefreshPreview(null),
+        sheetId &&
+          propsRef.current.adapter === adapter &&
+          propsRef.current.workbook === currentProps.workbook)
       ) {
-        const le = s.current,
+        const latestProps = propsRef.current,
           externalSourceState = normalizeExternalSourceState(
-            le.workbook,
-            oe,
-            ae,
-            Se.code,
+            latestProps.workbook,
+            sheetId,
+            sourceId,
+            sourceError.code,
             {
-              readOnly: le.readOnly,
-              allowedSheetIds: le.allowedSheetIds,
+              readOnly: latestProps.readOnly,
+              allowedSheetIds: latestProps.allowedSheetIds,
             },
           );
-        if (externalSourceState !== le.workbook)
+        if (externalSourceState !== latestProps.workbook)
           try {
-            le.onWorkbookChange(
+            latestProps.onWorkbookChange(
               externalSourceState,
               "External source refresh failed; previous data retained",
             );
           } catch {
-            F(
+            setErrorMessage(
               "The host changed while refresh failed. Previous source data remains unchanged; reopen Connections & Refresh.",
             );
           }
       }
     } finally {
-      u.current === de &&
-        ((u.current = null), (l.current = false), d.current && A(""));
+      abortControllerRef.current === refreshController &&
+        ((abortControllerRef.current = null),
+        (isRequestPending.current = false),
+        isMounted.current && setBusyMessage(""));
     }
   }
-  const H = e.workbook.sheets.filter(
+  const connectedSheets = props.workbook.sheets.filter(
     (sheet) =>
       sheet.externalConnection &&
       !sheet.hidden &&
       !sheet.veryHidden &&
-      (!e.allowedSheetIds || e.allowedSheetIds.includes(sheet.id)),
+      (!props.allowedSheetIds || props.allowedSheetIds.includes(sheet.id)),
   );
-  return r
-    ? i.jsx(ExternalSourceBatchRefreshPanel, { ...e, onClose: () => t(false) })
+  return isBatchRefreshOpen
+    ? i.jsx(ExternalSourceBatchRefreshPanel, {
+        ...props,
+        onClose: () => setBatchRefreshOpen(false),
+      })
     : i.jsx("div", {
         className: "lg-modal-backdrop",
         children: i.jsxs("section", {
           className: "lg-external-sources",
-          ref: a,
+          ref: dialogRef,
           role: "dialog",
           "aria-modal": "true",
-          "aria-labelledby": o,
+          "aria-labelledby": titleId,
           onKeyDown: (event) => {
-            var K, te;
+            var lastFocusable, firstFocusable;
             if (
               (event.key === "Escape" && (event.stopPropagation(), onClick()),
               event.key === "Tab")
             ) {
-              const ae = [
+              const focusableElements = [
                 ...event.currentTarget.querySelectorAll(
                   'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
                 ),
               ];
-              event.shiftKey && document.activeElement === ae[0]
-                ? (event.preventDefault(), (K = ae.at(-1)) == null || K.focus())
+              event.shiftKey && document.activeElement === focusableElements[0]
+                ? (event.preventDefault(),
+                  (lastFocusable = focusableElements.at(-1)) == null ||
+                    lastFocusable.focus())
                 : !event.shiftKey &&
-                  document.activeElement === ae.at(-1) &&
-                  (event.preventDefault(), (te = ae[0]) == null || te.focus());
+                  document.activeElement === focusableElements.at(-1) &&
+                  (event.preventDefault(),
+                  (firstFocusable = focusableElements[0]) == null ||
+                    firstFocusable.focus());
             }
           },
           children: [
@@ -932,7 +1089,7 @@ function ExternalDataRefreshDialog(e) {
                       }),
                     }),
                     i.jsx("h2", {
-                      id: o,
+                      id: titleId,
                       children: i.jsx(LocalizedText, {
                         children: "Connections & Refresh",
                       }),
@@ -956,13 +1113,13 @@ function ExternalDataRefreshDialog(e) {
             i.jsxs("div", {
               className: "lg-source-body",
               children: [
-                !e.adapter &&
+                !props.adapter &&
                   i.jsx("p", {
                     className: "lg-source-message",
                     children:
                       "Your application has not connected a source service. Ask the host developer to supply approved sources. Existing snapshots remain available.",
                   }),
-                e.readOnly &&
+                props.readOnly &&
                   i.jsx("p", {
                     className: "lg-source-message",
                     children:
@@ -976,32 +1133,39 @@ function ExternalDataRefreshDialog(e) {
                         i.jsx(LocalizedText, { children: "Connection" }),
                         i.jsxs("select", {
                           "aria-label": "Connection",
-                          value: f,
-                          disabled: !!E,
+                          value: selectedSheetId,
+                          disabled: !!busyMessage,
                           onChange: (event) => {
-                            ($(), p(event.target.value));
-                            const K = e.workbook.sheets.find(
-                              (sheet) => sheet.id === event.target.value,
-                            )?.externalConnection;
-                            v(K?.source.id ?? y[0]?.source.id ?? "");
+                            (resetRefreshState(),
+                              setSelectedSheetId(event.target.value));
+                            const selectedSheetConnection =
+                              props.workbook.sheets.find(
+                                (sheet) => sheet.id === event.target.value,
+                              )?.externalConnection;
+                            setSelectedSourceId(
+                              selectedSheetConnection?.source.id ??
+                                approvedSources[0]?.source.id ??
+                                "",
+                            );
                           },
                           children: [
                             i.jsx("option", {
                               value: "",
                               children: "New connection",
                             }),
-                            H.map((W) =>
+                            connectedSheets.map((connectedSheet) =>
                               i.jsxs(
                                 "option",
                                 {
-                                  value: W.id,
+                                  value: connectedSheet.id,
                                   children: [
-                                    W.name,
+                                    connectedSheet.name,
                                     " · ",
-                                    W.externalConnection.source.label,
+                                    connectedSheet.externalConnection.source
+                                      .label,
                                   ],
                                 },
-                                W.id,
+                                connectedSheet.id,
                               ),
                             ),
                           ],
@@ -1013,44 +1177,52 @@ function ExternalDataRefreshDialog(e) {
                         i.jsx(LocalizedText, { children: "Approved source" }),
                         i.jsxs("select", {
                           "aria-label": "Approved source",
-                          disabled: !!E || !!f || !e.adapter,
-                          value: m,
+                          disabled:
+                            !!busyMessage ||
+                            !!selectedSheetId ||
+                            !props.adapter,
+                          value: selectedSourceId,
                           onChange: (event) => {
-                            ($(), v(event.target.value));
+                            (resetRefreshState(),
+                              setSelectedSourceId(event.target.value));
                           },
                           children: [
                             i.jsx("option", {
                               value: "",
                               children: "Choose a source",
                             }),
-                            m &&
-                              !y.some((W) => W.source.id === m) &&
+                            selectedSourceId &&
+                              !approvedSources.some(
+                                (approvedSource) =>
+                                  approvedSource.source.id === selectedSourceId,
+                              ) &&
                               i.jsxs("option", {
-                                value: m,
+                                value: selectedSourceId,
                                 children: [
-                                  _?.source.label ?? m,
+                                  selectedConnection?.source.label ??
+                                    selectedSourceId,
                                   " · approval unavailable",
                                 ],
                               }),
-                            y.map((W) =>
+                            approvedSources.map((approvedSource) =>
                               i.jsxs(
                                 "option",
                                 {
-                                  value: W.source.id,
+                                  value: approvedSource.source.id,
                                   children: [
-                                    W.source.label,
+                                    approvedSource.source.label,
                                     " · ",
-                                    W.source.kind,
+                                    approvedSource.source.kind,
                                   ],
                                 },
-                                W.source.id,
+                                approvedSource.source.id,
                               ),
                             ),
                           ],
                         }),
                       ],
                     }),
-                    !f &&
+                    !selectedSheetId &&
                       i.jsxs("label", {
                         children: [
                           i.jsx(LocalizedText, {
@@ -1059,17 +1231,18 @@ function ExternalDataRefreshDialog(e) {
                           i.jsx("input", {
                             "aria-label": "Output worksheet",
                             value: outputName,
-                            disabled: !!E,
+                            disabled: !!busyMessage,
                             onChange: (event) => {
-                              ($(), b(event.target.value));
+                              (resetRefreshState(),
+                                setOutputName(event.target.value));
                             },
                           }),
                         ],
                       }),
                     i.jsx("button", {
                       type: "button",
-                      onClick: () => void U(),
-                      disabled: !e.adapter || !!E,
+                      onClick: () => void loadApprovedSources(),
+                      disabled: !props.adapter || !!busyMessage,
                       children: i.jsx(LocalizedText, {
                         children: "Reload approved sources",
                       }),
@@ -1083,52 +1256,56 @@ function ExternalDataRefreshDialog(e) {
                 }),
                 i.jsx("button", {
                   type: "button",
-                  disabled: !!E || !!e.readOnly || !e.adapter || !H.length,
+                  disabled:
+                    !!busyMessage ||
+                    !!props.readOnly ||
+                    !props.adapter ||
+                    !connectedSheets.length,
                   onClick: () => {
-                    ($(), t(true));
+                    (resetRefreshState(), setBatchRefreshOpen(true));
                   },
                   children: i.jsx(LocalizedText, { children: "Refresh All" }),
                 }),
-                _ &&
+                selectedConnection &&
                   i.jsxs("section", {
                     className: "lg-source-history",
                     "aria-label": "Last successful source data",
                     children: [
                       i.jsx("h3", {
                         children:
-                          _.lastAttempt.outcome === "succeeded"
+                          selectedConnection.lastAttempt.outcome === "succeeded"
                             ? "Last successful snapshot"
                             : "Stale · previous successful data retained",
                       }),
                       i.jsxs("p", {
                         children: [
-                          _.source.label,
+                          selectedConnection.source.label,
                           " · ",
-                          _.source.kind,
+                          selectedConnection.source.kind,
                           " · source ID",
                           " ",
-                          _.source.id,
+                          selectedConnection.source.id,
                           " · schema ",
-                          _.source.schemaVersion,
+                          selectedConnection.source.schemaVersion,
                         ],
                       }),
                       i.jsxs("p", {
                         children: [
-                          _.lastSuccess.rows,
+                          selectedConnection.lastSuccess.rows,
                           " records · refreshed",
                           " ",
-                          _.lastSuccess.at,
+                          selectedConnection.lastSuccess.at,
                           " · source as of",
                           " ",
-                          _.lastSuccess.sourceTimestamp,
+                          selectedConnection.lastSuccess.sourceTimestamp,
                           " · version",
                           " ",
-                          _.lastSuccess.version,
+                          selectedConnection.lastSuccess.version,
                         ],
                       }),
                       i.jsx("p", {
                         children:
-                          _.lastSuccess.controls
+                          selectedConnection.lastSuccess.controls
                             .map(
                               (control) =>
                                 `${control.field}: ${control.sum} (${control.numeric} numbers; ${control.blanks} blanks)`,
@@ -1136,47 +1313,48 @@ function ExternalDataRefreshDialog(e) {
                             .join(" · ") ||
                           "No numeric control fields declared.",
                       }),
-                      _.lastAttempt.code &&
+                      selectedConnection.lastAttempt.code &&
                         i.jsxs("p", {
                           children: [
-                            errorMessageOf(_.lastAttempt.code),
+                            errorMessageOf(selectedConnection.lastAttempt.code),
                             " · attempted",
                             " ",
-                            _.lastAttempt.at,
+                            selectedConnection.lastAttempt.at,
                           ],
                         }),
                     ],
                   }),
-                k &&
+                errorMessage &&
                   i.jsx("p", {
                     className: "lg-source-error",
                     role: "alert",
-                    children: k,
+                    children: errorMessage,
                   }),
-                I && i.jsx("p", { role: "status", children: I }),
-                E &&
+                successMessage &&
+                  i.jsx("p", { role: "status", children: successMessage }),
+                busyMessage &&
                   i.jsxs("p", {
                     role: "status",
                     children: [
-                      E,
+                      busyMessage,
                       " ",
                       i.jsx("button", {
                         type: "button",
-                        onClick: () => u.current?.abort(),
+                        onClick: () => abortControllerRef.current?.abort(),
                         children: i.jsx(LocalizedText, {
                           children: "Cancel refresh",
                         }),
                       }),
                     ],
                   }),
-                j &&
-                  !C &&
+                refreshPreview &&
+                  !applicablePlan &&
                   i.jsx("p", {
                     className: "lg-source-message",
                     children:
                       "The workbook or access changed. Preview again before applying.",
                   }),
-                C &&
+                applicablePlan &&
                   i.jsxs("section", {
                     className: "lg-source-preview",
                     "aria-label": "External source refresh preview",
@@ -1184,36 +1362,37 @@ function ExternalDataRefreshDialog(e) {
                       i.jsxs("h3", {
                         children: [
                           "Refresh preview · ",
-                          C.snapshot.rows.length,
+                          applicablePlan.snapshot.rows.length,
                           " records",
                         ],
                       }),
                       i.jsxs("p", {
                         children: [
-                          C.snapshot.source.label,
+                          applicablePlan.snapshot.source.label,
                           " · ",
-                          C.snapshot.source.kind,
+                          applicablePlan.snapshot.source.kind,
                           " ",
                           "· ",
-                          C.snapshot.source.id,
+                          applicablePlan.snapshot.source.id,
                           " · as of",
                           " ",
-                          C.snapshot.sourceTimestamp,
+                          applicablePlan.snapshot.sourceTimestamp,
                           " · version",
                           " ",
-                          C.snapshot.version,
+                          applicablePlan.snapshot.version,
                         ],
                       }),
                       i.jsxs("p", {
                         children: [
                           "Rows: ",
-                          C.previous?.rows ?? 0,
+                          applicablePlan.previous?.rows ?? 0,
                           " →",
                           " ",
-                          C.snapshot.rows.length,
+                          applicablePlan.snapshot.rows.length,
                           " · change",
                           " ",
-                          C.snapshot.rows.length - (C.previous?.rows ?? 0),
+                          applicablePlan.snapshot.rows.length -
+                            (applicablePlan.previous?.rows ?? 0),
                         ],
                       }),
                       i.jsx("div", {
@@ -1248,41 +1427,46 @@ function ExternalDataRefreshDialog(e) {
                               }),
                             }),
                             i.jsx("tbody", {
-                              children: C.controls.map((control) => {
-                                const K =
-                                  C.previous?.controls.find(
-                                    (oe) => oe.field === control.field,
-                                  )?.sum ?? 0;
-                                return i.jsxs(
-                                  "tr",
-                                  {
-                                    children: [
-                                      i.jsx("th", {
-                                        scope: "row",
-                                        children: control.field,
-                                      }),
-                                      i.jsx("td", { children: K }),
-                                      i.jsx("td", { children: control.sum }),
-                                      i.jsx("td", {
-                                        children: control.sum - K,
-                                      }),
-                                      i.jsxs("td", {
-                                        children: [
-                                          control.numeric,
-                                          " / ",
-                                          control.blanks,
-                                        ],
-                                      }),
-                                    ],
-                                  },
-                                  control.field,
-                                );
-                              }),
+                              children: applicablePlan.controls.map(
+                                (control) => {
+                                  const previousTotal =
+                                    applicablePlan.previous?.controls.find(
+                                      (previousControl) =>
+                                        previousControl.field === control.field,
+                                    )?.sum ?? 0;
+                                  return i.jsxs(
+                                    "tr",
+                                    {
+                                      children: [
+                                        i.jsx("th", {
+                                          scope: "row",
+                                          children: control.field,
+                                        }),
+                                        i.jsx("td", {
+                                          children: previousTotal,
+                                        }),
+                                        i.jsx("td", { children: control.sum }),
+                                        i.jsx("td", {
+                                          children: control.sum - previousTotal,
+                                        }),
+                                        i.jsxs("td", {
+                                          children: [
+                                            control.numeric,
+                                            " / ",
+                                            control.blanks,
+                                          ],
+                                        }),
+                                      ],
+                                    },
+                                    control.field,
+                                  );
+                                },
+                              ),
                             }),
                           ],
                         }),
                       }),
-                      !C.controls.length &&
+                      !applicablePlan.controls.length &&
                         i.jsx("p", {
                           children:
                             "No numeric control fields were declared by the host.",
@@ -1291,7 +1475,7 @@ function ExternalDataRefreshDialog(e) {
                         children: [
                           "Schema:",
                           " ",
-                          C.snapshot.source.columns
+                          applicablePlan.snapshot.source.columns
                             .map(
                               (column) =>
                                 `${column.name} (${column.type}${column.nullable ? ", nullable" : ""})`,
@@ -1312,43 +1496,45 @@ function ExternalDataRefreshDialog(e) {
                                     scope: "col",
                                     children: "Record",
                                   }),
-                                  C.snapshot.source.columns.map((column) =>
-                                    i.jsx(
-                                      "th",
-                                      { scope: "col", children: column.name },
-                                      column.name,
-                                    ),
+                                  applicablePlan.snapshot.source.columns.map(
+                                    (column) =>
+                                      i.jsx(
+                                        "th",
+                                        { scope: "col", children: column.name },
+                                        column.name,
+                                      ),
                                   ),
                                 ],
                               }),
                             }),
                             i.jsx("tbody", {
-                              children: C.snapshot.rows
-                                .slice(V * 25, (V + 1) * 25)
-                                .map((W, K) =>
+                              children: applicablePlan.snapshot.rows
+                                .slice(previewPage * 25, (previewPage + 1) * 25)
+                                .map((row, pageRowIndex) =>
                                   i.jsxs(
                                     "tr",
                                     {
                                       children: [
                                         i.jsx("th", {
                                           scope: "row",
-                                          children: V * 25 + K + 1,
+                                          children:
+                                            previewPage * 25 + pageRowIndex + 1,
                                         }),
-                                        W.map((te, ae) =>
+                                        row.map((cellValue, columnIndex) =>
                                           i.jsx(
                                             "td",
                                             {
                                               children:
-                                                te === null
+                                                cellValue === null
                                                   ? "(blank)"
-                                                  : String(te),
+                                                  : String(cellValue),
                                             },
-                                            ae,
+                                            columnIndex,
                                           ),
                                         ),
                                       ],
                                     },
-                                    K,
+                                    pageRowIndex,
                                   ),
                                 ),
                             }),
@@ -1360,27 +1546,33 @@ function ExternalDataRefreshDialog(e) {
                         children: [
                           i.jsx("button", {
                             type: "button",
-                            disabled: V === 0,
-                            onClick: () => D((W) => W - 1),
+                            disabled: previewPage === 0,
+                            onClick: () =>
+                              setPreviewPage((currentPage) => currentPage - 1),
                             children: "Previous records",
                           }),
                           i.jsxs("span", {
                             children: [
                               "Page ",
-                              V + 1,
+                              previewPage + 1,
                               " of",
                               " ",
                               Math.max(
                                 1,
-                                Math.ceil(C.snapshot.rows.length / 25),
+                                Math.ceil(
+                                  applicablePlan.snapshot.rows.length / 25,
+                                ),
                               ),
                               " · all records available",
                             ],
                           }),
                           i.jsx("button", {
                             type: "button",
-                            disabled: (V + 1) * 25 >= C.snapshot.rows.length,
-                            onClick: () => D((W) => W + 1),
+                            disabled:
+                              (previewPage + 1) * 25 >=
+                              applicablePlan.snapshot.rows.length,
+                            onClick: () =>
+                              setPreviewPage((currentPage) => currentPage + 1),
                             children: "Next records",
                           }),
                         ],
@@ -1397,8 +1589,8 @@ function ExternalDataRefreshDialog(e) {
                 }),
                 i.jsx("button", {
                   type: "button",
-                  disabled: R || !m,
-                  onClick: () => void G(),
+                  disabled: isRefreshBlocked || !selectedSourceId,
+                  onClick: () => void runSourceRefresh(),
                   children: i.jsx(LocalizedText, {
                     children: "Preview refresh",
                   }),
@@ -1406,8 +1598,8 @@ function ExternalDataRefreshDialog(e) {
                 i.jsx("button", {
                   type: "button",
                   className: "primary",
-                  disabled: R || !C,
-                  onClick: () => void G(true),
+                  disabled: isRefreshBlocked || !applicablePlan,
+                  onClick: () => void runSourceRefresh(true),
                   children: i.jsx(LocalizedText, {
                     children: "Apply reviewed refresh",
                   }),
@@ -1420,32 +1612,34 @@ function ExternalDataRefreshDialog(e) {
 }
 const workbookInstanceIds = new WeakMap();
 let workbookInstanceCounter = 0;
-function workbookInstanceKey(e) {
-  return e
-    ? (workbookInstanceIds.has(e) ||
-        workbookInstanceIds.set(e, ++workbookInstanceCounter),
-      workbookInstanceIds.get(e))
+function workbookInstanceKey(workbook) {
+  return workbook
+    ? (workbookInstanceIds.has(workbook) ||
+        workbookInstanceIds.set(workbook, ++workbookInstanceCounter),
+      workbookInstanceIds.get(workbook))
     : "default";
 }
-const isPromiseLike = (e) => !!e && typeof e.then == "function";
-function chainMaybePromise(e, r) {
-  return isPromiseLike(e) ? e.then(r) : r(e);
+const isPromiseLike = (value) => !!value && typeof value.then == "function";
+function chainMaybePromise(valueOrPromise, callback) {
+  return isPromiseLike(valueOrPromise)
+    ? valueOrPromise.then(callback)
+    : callback(valueOrPromise);
 }
 const Vj = buildLocalDemoProposal();
 
-function wy(e, r) {
-  const t = _t(e),
-    n = _t(r);
-  return `${columnIndexToLetters(Math.min(t.col, n.col))}${Math.min(t.row, n.row) + 1}:${columnIndexToLetters(Math.max(t.col, n.col))}${Math.max(t.row, n.row) + 1}`;
+function wy(startAddress, endAddress) {
+  const startCell = _t(startAddress),
+    endCell = _t(endAddress);
+  return `${columnIndexToLetters(Math.min(startCell.col, endCell.col))}${Math.min(startCell.row, endCell.row) + 1}:${columnIndexToLetters(Math.max(startCell.col, endCell.col))}${Math.max(startCell.row, endCell.row) + 1}`;
 }
 const LazyAssistantChat = ne.lazy(() =>
-    import("../assistant/AssistantChat.js").then((e) => ({
-      default: e.AssistantChat,
+    import("../assistant/AssistantChat.js").then((loadedModule) => ({
+      default: loadedModule.AssistantChat,
     })),
   ),
   LazyAssistantChatMarkdown = ne.lazy(() =>
-    import("../assistant/AssistantChatMarkdown.js").then((e) => ({
-      default: e.AssistantChatMarkdown,
+    import("../assistant/AssistantChatMarkdown.js").then((loadedModule) => ({
+      default: loadedModule.AssistantChatMarkdown,
     })),
   );
 

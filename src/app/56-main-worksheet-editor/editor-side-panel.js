@@ -161,7 +161,7 @@ function EditorSidePanel({
                         className: "lg-timeline",
                         children: [...activeWorkbook.events]
                           .reverse()
-                          .map((fe) =>
+                          .map((activityEvent) =>
                             i.jsxs(
                               "article",
                               {
@@ -170,42 +170,51 @@ function EditorSidePanel({
                                     className: "lg-timeline-dot",
                                   }),
                                   i.jsx("h4", {
-                                    children: fe.action,
+                                    children: activityEvent.action,
                                   }),
                                   i.jsxs("p", {
                                     children: [
-                                      fe.actor,
+                                      activityEvent.actor,
                                       " ·",
                                       " ",
-                                      new Date(fe.timestamp).toLocaleString(),
+                                      new Date(
+                                        activityEvent.timestamp,
+                                      ).toLocaleString(),
                                     ],
                                   }),
-                                  fe.changes.slice(0, 5).map((Oe, Be) =>
-                                    i.jsxs(
-                                      "small",
-                                      {
-                                        children: [
-                                          activeWorkbook.sheets.find(
-                                            (sheet) => sheet.id === Oe.sheetId,
-                                          )?.name ?? "Sheet",
-                                          "!",
-                                          Oe.address,
-                                          ":",
-                                          " ",
-                                          String(Oe.before?.raw ?? "∅"),
-                                          " →",
-                                          " ",
-                                          String(Oe.after?.raw ?? "∅"),
-                                        ],
-                                      },
-                                      Be,
+                                  activityEvent.changes
+                                    .slice(0, 5)
+                                    .map((cellChange, changeIndex) =>
+                                      i.jsxs(
+                                        "small",
+                                        {
+                                          children: [
+                                            activeWorkbook.sheets.find(
+                                              (sheet) =>
+                                                sheet.id === cellChange.sheetId,
+                                            )?.name ?? "Sheet",
+                                            "!",
+                                            cellChange.address,
+                                            ":",
+                                            " ",
+                                            String(
+                                              cellChange.before?.raw ?? "∅",
+                                            ),
+                                            " →",
+                                            " ",
+                                            String(
+                                              cellChange.after?.raw ?? "∅",
+                                            ),
+                                          ],
+                                        },
+                                        changeIndex,
+                                      ),
                                     ),
-                                  ),
-                                  fe.changes.length > 5 &&
+                                  activityEvent.changes.length > 5 &&
                                     i.jsxs("small", {
                                       children: [
                                         "+ ",
-                                        fe.changes.length - 5,
+                                        activityEvent.changes.length - 5,
                                         " ",
                                         i.jsx(LocalizedText, {
                                           children: "more cell changes",
@@ -214,7 +223,7 @@ function EditorSidePanel({
                                     }),
                                 ],
                               },
-                              fe.id,
+                              activityEvent.id,
                             ),
                           ),
                       }),

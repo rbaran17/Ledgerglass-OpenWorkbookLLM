@@ -59,10 +59,10 @@ function publishConsolidatedSchedule(workbook, plan, options = {}) {
   const definition = consolidationPreview.request.definition,
     review = consolidationPreview.review,
     worksheetRecord = createWorksheetRecord(plan.request.outputName),
-    d = definition.categoryLabels.length + 4,
-    u = columnIndexToLetters(d),
-    l = definition.categoryLabels.length + 7,
-    c = [
+    amountColumnIndex = definition.categoryLabels.length + 4,
+    amountColumnLetter = columnIndexToLetters(amountColumnIndex),
+    columnCount = definition.categoryLabels.length + 7,
+    headerRow = [
       "Row type",
       ...definition.categoryLabels,
       "Period",
@@ -72,123 +72,142 @@ function publishConsolidatedSchedule(workbook, plan, options = {}) {
       "Source",
       "Link state",
     ];
-  let h = 1;
-  const f = [],
-    p = (E, A = -1, note = "") => {
-      const F = h++;
+  let nextRowNumber = 1;
+  const subtotalChecks = [],
+    appendRow = (values, formulaColumnIndex = -1, note = "") => {
+      const rowNumber = nextRowNumber++;
       return (
-        E.forEach((raw, O) => {
-          worksheetRecord.cells[`${columnIndexToLetters(O)}${F}`] = {
+        values.forEach((raw, columnIndex) => {
+          worksheetRecord.cells[
+            `${columnIndexToLetters(columnIndex)}${rowNumber}`
+          ] = {
             raw: raw,
-            ...(typeof raw == "string" && raw.startsWith("=") && O !== A
+            ...(typeof raw == "string" &&
+            raw.startsWith("=") &&
+            columnIndex !== formulaColumnIndex
               ? { literal: true }
               : {}),
-            ...(note && O === d ? { note: note } : {}),
-            ...(O === d && F > 1
+            ...(note && columnIndex === amountColumnIndex
+              ? { note: note }
+              : {}),
+            ...(columnIndex === amountColumnIndex && rowNumber > 1
               ? { format: "number", numFmt: "#,##0.00;[Red](#,##0.00)" }
               : {}),
-            ...(F === 1 || E[0] !== "Detail"
+            ...(rowNumber === 1 || values[0] !== "Detail"
               ? {
                   style: {
                     bold: true,
-                    fill: F === 1 ? "#362C63" : "#EEEAF8",
-                    color: F === 1 ? "#FFFFFF" : "#29243C",
+                    fill: rowNumber === 1 ? "#362C63" : "#EEEAF8",
+                    color: rowNumber === 1 ? "#FFFFFF" : "#29243C",
                   },
                 }
               : {}),
           };
         }),
-        F
+        rowNumber
       );
     };
-  p(c);
-  const m = (E) =>
-      p(
+  appendRow(headerRow);
+  const appendDetailRow = (contribution) =>
+      appendRow(
         [
           "Detail",
-          ...E.categories,
-          E.period,
-          E.currency,
-          E.unit,
-          E.link === "live"
-            ? `='${E.sheetName.replaceAll("'", "''")}'!$${E.address.replace(/\d+$/, "")}$${E.row}`
-            : E.amount,
-          E.locator,
-          E.link === "live"
+          ...contribution.categories,
+          contribution.period,
+          contribution.currency,
+          contribution.unit,
+          contribution.link === "live"
+            ? `='${contribution.sheetName.replaceAll("'", "''")}'!$${contribution.address.replace(/\d+$/, "")}$${contribution.row}`
+            : contribution.amount,
+          contribution.locator,
+          contribution.link === "live"
             ? "Live amount · reviewed context"
-            : E.link === "approved snapshot"
+            : contribution.link === "approved snapshot"
               ? "Approved workbook snapshot"
               : "Reviewed snapshot",
         ],
-        E.link === "live" ? d : -1,
-        `Reviewed amount ${E.amount}; period ${E.period}; currency ${E.currency}; unit ${E.unit}. ${E.locator}. Source ID ${E.sourceId}; workbook ${E.workbookId}; worksheet ${E.sheetId}. Source freshness is displayed in the native workbook banner.`,
+        contribution.link === "live" ? amountColumnIndex : -1,
+        `Reviewed amount ${contribution.amount}; period ${contribution.period}; currency ${contribution.currency}; unit ${contribution.unit}. ${contribution.locator}. Source ID ${contribution.sourceId}; workbook ${contribution.workbookId}; worksheet ${contribution.sheetId}. Source freshness is displayed in the native workbook banner.`,
       ),
-    v = (E, A) => {
-      const k = new Map();
-      for (const F of E) {
-        const I = serializeTypedKeyValues(F.categories.slice(0, A)),
-          O = k.get(I) ?? [];
-        (O.push(F), k.set(I, O));
+    appendSubtotalGroups = (contributions, categoryDepth) => {
+      const groupsByKey = new Map();
+      for (const contribution of contributions) {
+        const groupKey = serializeTypedKeyValues(
+            contribution.categories.slice(0, categoryDepth),
+          ),
+          groupContributions = groupsByKey.get(groupKey) ?? [];
+        (groupContributions.push(contribution),
+          groupsByKey.set(groupKey, groupContributions));
       }
-      for (const F of k.values()) {
-        const I = h;
-        (A < definition.categoryLabels.length ? v(F, A + 1) : F.forEach(m),
-          f.push({
-            address: `${u}${h}`,
-            expected: sumConsolidationAmounts(F.map((z) => z.amount)),
-            count: F.length,
+      for (const group of groupsByKey.values()) {
+        const groupStartRow = nextRowNumber;
+        (categoryDepth < definition.categoryLabels.length
+          ? appendSubtotalGroups(group, categoryDepth + 1)
+          : group.forEach(appendDetailRow),
+          subtotalChecks.push({
+            address: `${amountColumnLetter}${nextRowNumber}`,
+            expected: sumConsolidationAmounts(
+              group.map((contribution) => contribution.amount),
+            ),
+            count: group.length,
           }));
-        const O = h - 1,
-          j = Array.from(
+        const groupEndRow = nextRowNumber - 1,
+          subtotalCategories = Array.from(
             { length: definition.categoryLabels.length },
-            (z, V) => (V < A ? F[0].categories[V] : null),
+            (_item, categoryIndex) =>
+              categoryIndex < categoryDepth
+                ? group[0].categories[categoryIndex]
+                : null,
           );
-        (p(
+        (appendRow(
           [
-            `Subtotal ${A}`,
-            ...j,
+            `Subtotal ${categoryDepth}`,
+            ...subtotalCategories,
             definition.period,
             definition.currency,
             definition.unit,
-            `=SUBTOTAL(9,${u}${I}:${u}${O})`,
-            `${F.length} contributions`,
+            `=SUBTOTAL(9,${amountColumnLetter}${groupStartRow}:${amountColumnLetter}${groupEndRow})`,
+            `${group.length} contributions`,
             "Review source status",
           ],
-          d,
+          amountColumnIndex,
         ),
           (worksheetRecord.outlineGroups ??= []).push({
             id: crypto.randomUUID(),
             axis: "row",
-            start: I - 1,
-            end: O - 1,
+            start: groupStartRow - 1,
+            end: groupEndRow - 1,
             collapsed: definition.collapseDetails,
           }));
       }
     };
   if (
-    (v(review.contributions, 1),
-    f.push({
-      address: `${u}${h}`,
+    (appendSubtotalGroups(review.contributions, 1),
+    subtotalChecks.push({
+      address: `${amountColumnLetter}${nextRowNumber}`,
       expected: review.grandTotal,
       count: review.contributions.length,
     }),
-    p(
+    appendRow(
       [
         "Grand total",
         ...definition.categoryLabels.map(() => null),
         definition.period,
         definition.currency,
         definition.unit,
-        `=SUBTOTAL(9,${u}2:${u}${h - 1})`,
+        `=SUBTOTAL(9,${amountColumnLetter}2:${amountColumnLetter}${nextRowNumber - 1})`,
         `${review.contributions.length} contributions`,
         "Review source status",
       ],
-      d,
+      amountColumnIndex,
       `Reviewed grand total ${review.grandTotal}; source controls ${review.sourceTotal}; difference ${review.difference}. No implicit conversion.`,
     ),
-    h - 1 > consolidationLimits.outputRows ||
-      (h - 1) * l > consolidationLimits.outputCells ||
-      workbook.sheets.reduce((E, A) => E + Object.keys(A.cells).length, 0) +
+    nextRowNumber - 1 > consolidationLimits.outputRows ||
+      (nextRowNumber - 1) * columnCount > consolidationLimits.outputCells ||
+      workbook.sheets.reduce(
+        (total, sheet) => total + Object.keys(sheet.cells).length,
+        0,
+      ) +
         Object.keys(worksheetRecord.cells).length >
         workbookLimits.maxCells)
   )
@@ -197,10 +216,17 @@ function publishConsolidatedSchedule(workbook, plan, options = {}) {
     );
   ((worksheetRecord.frozenRows = 1),
     (worksheetRecord.columnWidths = Object.fromEntries(
-      c.map((E, A) => [A, A === l - 2 ? 340 : A === l - 1 ? 260 : 130]),
+      headerRow.map((_header, columnIndex) => [
+        columnIndex,
+        columnIndex === columnCount - 2
+          ? 340
+          : columnIndex === columnCount - 1
+            ? 260
+            : 130,
+      ]),
     )));
-  const outputRange = `A1:${columnIndexToLetters(l - 1)}${h - 1}`,
-    b = {
+  const outputRange = `A1:${columnIndexToLetters(columnCount - 1)}${nextRowNumber - 1}`,
+    origin = {
       workbookId: workbook.id,
       revision: workbook.revision,
       at: new Date().toISOString(),
@@ -209,11 +235,11 @@ function publishConsolidatedSchedule(workbook, plan, options = {}) {
     engine: consolidationFormatVersion,
     definition: definition,
     review: review,
-    origin: b,
+    origin: origin,
     evidenceHash: fingerprintCanonicalValue({
       definition: definition,
       review: review,
-      origin: b,
+      origin: origin,
     }),
     outputRange: outputRange,
     outputHash: buildConsolidationOutputCells(worksheetRecord, outputRange),
@@ -223,13 +249,20 @@ function publishConsolidatedSchedule(workbook, plan, options = {}) {
       sheets: [...workbook.sheets, worksheetRecord],
     }),
     workbookWithSettings = calculateWorkbookWithSettings(workbookInput);
-  for (const E of f) {
-    const A = workbookWithSettings(worksheetRecord.id, E.address),
-      k = Number.EPSILON * Math.max(1, Math.abs(E.expected)) * E.count * 4;
+  for (const subtotalCheck of subtotalChecks) {
+    const calculatedValue = workbookWithSettings(
+        worksheetRecord.id,
+        subtotalCheck.address,
+      ),
+      tolerance =
+        Number.EPSILON *
+        Math.max(1, Math.abs(subtotalCheck.expected)) *
+        subtotalCheck.count *
+        4;
     if (
-      typeof A != "number" ||
-      !Number.isFinite(A) ||
-      Math.abs(A - E.expected) > k
+      typeof calculatedValue != "number" ||
+      !Number.isFinite(calculatedValue) ||
+      Math.abs(calculatedValue - subtotalCheck.expected) > tolerance
     )
       throw Error(
         "Calculated subtotals do not reconcile with the reviewed amounts, or a calculation limit was reached. Reduce numeric cancellation or explicitly round source amounts before publishing.",
@@ -261,10 +294,10 @@ function checkConsolidationFreshness(workbook, worksheetRecord, options = {}) {
             source,
             options,
           ),
-          d = consolidation.review.sources.find(
-            (u) => u.sourceId === source.id,
+          reviewedSource = consolidation.review.sources.find(
+            (reviewSource) => reviewSource.sourceId === source.id,
           );
-        sourceTableRecords.fingerprint !== d?.fingerprint &&
+        sourceTableRecords.fingerprint !== reviewedSource?.fingerprint &&
           messages.push(
             `${source.id}: source data, context, layout or formula dependencies changed.`,
           );
@@ -276,31 +309,33 @@ function checkConsolidationFreshness(workbook, worksheetRecord, options = {}) {
   }
   return { state: messages.length ? "stale" : "current", messages: messages };
 }
-function saveBlobToFile(e, r) {
-  const t = URL.createObjectURL(e),
-    n = document.createElement("a");
-  ((n.href = t),
-    (n.download = r),
-    n.click(),
-    setTimeout(() => URL.revokeObjectURL(t), 5e3));
+function saveBlobToFile(blob, fileName) {
+  const objectUrl = URL.createObjectURL(blob),
+    anchor = document.createElement("a");
+  ((anchor.href = objectUrl),
+    (anchor.download = fileName),
+    anchor.click(),
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 5e3));
 }
 function findTableRangesForSource(workbook, source) {
   try {
-    const o = workbook?.sheets.find((sheet) => sheet.id === source.sheetId);
-    if (!o) return [];
+    const sourceSheet = workbook?.sheets.find(
+      (sheet) => sheet.id === source.sheetId,
+    );
+    if (!sourceSheet) return [];
     const rangeAddress = parseRangeAddress(
-      o.tables?.find((table) => table.id === source.tableId)?.range ??
+      sourceSheet.tables?.find((table) => table.id === source.tableId)?.range ??
         source.range,
     );
     return rangeAddress.lastCol - rangeAddress.firstCol >= 50
       ? []
       : Array.from(
           { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
-          (s, d) =>
-            o.cells[
-              `${columnIndexToLetters(rangeAddress.firstCol + d)}${rangeAddress.firstRow + 1}`
+          (_value, columnOffset) =>
+            sourceSheet.cells[
+              `${columnIndexToLetters(rangeAddress.firstCol + columnOffset)}${rangeAddress.firstRow + 1}`
             ]?.raw,
-        ).filter((s) => typeof s == "string" && !!s);
+        ).filter((rawValue) => typeof rawValue == "string" && !!rawValue);
   } catch {
     return [];
   }
@@ -319,18 +354,19 @@ function createConsolidationDefinition(workbook, sheetId, range, definition) {
       duplicatePolicy: "reject",
     },
     tableRangesForSource = findTableRangesForSource(workbook, source);
-  ((source.categories = definition.categoryLabels.map((categoryLabel, d) =>
-    tableRangesForSource.includes(categoryLabel)
-      ? categoryLabel
-      : (tableRangesForSource[d] ?? categoryLabel),
+  ((source.categories = definition.categoryLabels.map(
+    (categoryLabel, categoryIndex) =>
+      tableRangesForSource.includes(categoryLabel)
+        ? categoryLabel
+        : (tableRangesForSource[categoryIndex] ?? categoryLabel),
   )),
     (source.amountField = tableRangesForSource.includes("Amount")
       ? "Amount"
       : (tableRangesForSource.at(-1) ?? "Amount")));
-  for (const s of ["period", "currency", "unit"]) {
-    const field = s[0].toUpperCase() + s.slice(1);
+  for (const propertyName of ["period", "currency", "unit"]) {
+    const field = propertyName[0].toUpperCase() + propertyName.slice(1);
     tableRangesForSource.includes(field) &&
-      (source[s] = { kind: "field", field: field });
+      (source[propertyName] = { kind: "field", field: field });
   }
   return source;
 }
@@ -342,17 +378,19 @@ function ConsolidationStatusBanner({
 }) {
   const { text, language } = useWorkbookMessages(),
     sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
-    d = sheet?.consolidation ? JSON.stringify([workbook, options]) : "",
-    u = ne.useMemo(
+    dependencyKey = sheet?.consolidation
+      ? JSON.stringify([workbook, options])
+      : "",
+    freshness = ne.useMemo(
       () =>
         sheet?.consolidation
           ? checkConsolidationFreshness(workbook, sheet, options)
           : null,
-      [d, sheetId],
+      [dependencyKey, sheetId],
     );
-  return u
+  return freshness
     ? i.jsxs("div", {
-        className: `lg-consolidation-status ${u.state}`,
+        className: `lg-consolidation-status ${freshness.state}`,
         role: "status",
         "aria-label": text("Consolidation source status"),
         lang: language("Consolidation source status"),
@@ -362,15 +400,15 @@ function ConsolidationStatusBanner({
             children: [
               i.jsx("strong", {
                 children:
-                  u.state === "stale"
+                  freshness.state === "stale"
                     ? "Stale consolidation"
                     : "Consolidation sources current",
               }),
               " ",
               "·",
               " ",
-              u.messages.length
-                ? u.messages.join(" ")
+              freshness.messages.length
+                ? freshness.messages.join(" ")
                 : "Amounts reconcile to the reviewed sources. External amounts are approved snapshots.",
             ],
           }),
@@ -382,33 +420,33 @@ function ConsolidationStatusBanner({
       })
     : null;
 }
-function ConsolidationDialog(e) {
+function ConsolidationDialog(props) {
   const { text, language } = useWorkbookMessages(),
     cancellableOperation = useCancellableOperation(),
-    o = ne.useRef(null),
-    a = ne.useRef(null),
-    s = ne.useRef(0),
-    d = ne.useRef(""),
-    u = ne.useRef(true),
+    previewRef = ne.useRef(null),
+    dialogRef = ne.useRef(null),
+    requestCounter = ne.useRef(0),
+    latestInputStamp = ne.useRef(""),
+    isMounted = ne.useRef(true),
     allowedSheetIds =
-      e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
-    c = JSON.stringify([
-      e.workbook,
-      e.sheetId,
-      e.range,
-      e.readOnly,
+      props.allowedSheetIds ?? props.workbook.sheets.map((sheet) => sheet.id),
+    inputStamp = JSON.stringify([
+      props.workbook,
+      props.sheetId,
+      props.range,
+      props.readOnly,
       allowedSheetIds,
-      e.allowHidden,
-      e.allowFileSources,
-      e.approvedWorkbooks,
+      props.allowHidden,
+      props.allowFileSources,
+      props.approvedWorkbooks,
     ]);
-  d.current = c;
-  const [definition, f] = ne.useState(() => {
-      const K =
-        e.initialDefinition ??
-        e.workbook.sheets.find((sheet) => sheet.id === e.sheetId)?.consolidation
-          ?.definition;
-      if (K) return structuredClone(K);
+  latestInputStamp.current = inputStamp;
+  const [definition, setDefinition] = ne.useState(() => {
+      const storedDefinition =
+        props.initialDefinition ??
+        props.workbook.sheets.find((sheet) => sheet.id === props.sheetId)
+          ?.consolidation?.definition;
+      if (storedDefinition) return structuredClone(storedDefinition);
       const definition = {
           engine: consolidationFormatVersion,
           categoryLabels: ["Category"],
@@ -419,14 +457,16 @@ function ConsolidationDialog(e) {
           collapseDetails: false,
           sources: [],
         },
-        sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-        range = e.range.includes(":")
-          ? e.range
+        sheet = props.workbook.sheets.find(
+          (sheet) => sheet.id === props.sheetId,
+        ),
+        range = props.range.includes(":")
+          ? props.range
           : formatOccupiedRangeAddress(sheet);
       return (
         (definition.sources = [
           createConsolidationDefinition(
-            e.workbook,
+            props.workbook,
             sheet.id,
             range,
             definition,
@@ -435,150 +475,173 @@ function ConsolidationDialog(e) {
         definition
       );
     }),
-    [outputName, m] = ne.useState(() => {
-      let K = "Consolidated",
-        te = 2;
+    [outputName, setOutputName] = ne.useState(() => {
+      let candidateName = "Consolidated",
+        nameSuffix = 2;
       for (
         ;
-        e.workbook.sheets.some(
-          (sheet) => sheet.name.toLowerCase() === K.toLowerCase(),
+        props.workbook.sheets.some(
+          (sheet) => sheet.name.toLowerCase() === candidateName.toLowerCase(),
         );
       )
-        K = `Consolidated ${te++}`;
-      return K;
+        candidateName = `Consolidated ${nameSuffix++}`;
+      return candidateName;
     }),
-    [checked, g] = ne.useState(false),
-    [b, y] = ne.useState([]),
-    [w, E] = ne.useState(null),
-    [A, k] = ne.useState(false),
-    [F, I] = ne.useState(""),
-    [O, j] = ne.useState(null),
-    [z, V] = ne.useState(0),
-    [D, B] = ne.useState("contributions"),
+    [checked, setIncludeHidden] = ne.useState(false),
+    [localApprovedWorkbooks, setLocalApprovedWorkbooks] = ne.useState([]),
+    [pendingImport, setPendingImport] = ne.useState(null),
+    [isInspecting, setIsInspecting] = ne.useState(false),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [preview, setPreview] = ne.useState(null),
+    [requestedPage, setRequestedPage] = ne.useState(0),
+    [reviewTab, setReviewTab] = ne.useState("contributions"),
     approvedWorkbooks = [
-      ...(e.approvedWorkbooks ?? []),
-      ...b.filter(
-        (K) =>
-          !e.approvedWorkbooks?.some(
+      ...(props.approvedWorkbooks ?? []),
+      ...localApprovedWorkbooks.filter(
+        (localApproval) =>
+          !props.approvedWorkbooks?.some(
             (approvedWorkbook) =>
-              approvedWorkbook.workbook.id === K.workbook.id,
+              approvedWorkbook.workbook.id === localApproval.workbook.id,
           ),
       ),
     ],
     options = {
-      readOnly: e.readOnly,
+      readOnly: props.readOnly,
       allowedSheetIds: allowedSheetIds,
-      includeHidden: !!e.allowHidden && checked,
+      includeHidden: !!props.allowHidden && checked,
       approvedWorkbooks: approvedWorkbooks,
     },
-    stamp = JSON.stringify([c, definition, outputName, options]),
-    N = O?.stamp === stamp,
-    review = N ? O.plan.review : null,
-    L = [
+    stamp = JSON.stringify([inputStamp, definition, outputName, options]),
+    isPreviewCurrent = preview?.stamp === stamp,
+    review = isPreviewCurrent ? preview.plan.review : null,
+    workbookSources = [
       {
-        workbook: e.workbook,
+        workbook: props.workbook,
         allowedSheetIds: allowedSheetIds,
-        includeHidden: !!e.allowHidden,
+        includeHidden: !!props.allowHidden,
       },
       ...approvedWorkbooks,
     ];
   (ne.useEffect(() => {
-    u.current = true;
+    isMounted.current = true;
     const activeElement = document.activeElement;
     return (
-      a.current?.querySelector("input,select,button")?.focus(),
+      dialogRef.current?.querySelector("input,select,button")?.focus(),
       () => {
-        ((u.current = false),
-          s.current++,
+        ((isMounted.current = false),
+          requestCounter.current++,
           activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
     ne.useEffect(() => {
-      var K;
-      N &&
-        ((K = o.current) == null ? undefined : K.scrollIntoView)?.call(K, {
+      var previewElement;
+      isPreviewCurrent &&
+        ((previewElement = previewRef.current) == null
+          ? undefined
+          : previewElement.scrollIntoView
+        )?.call(previewElement, {
           block: "start",
         });
-    }, [O, N]));
-  const $ = (K) => {
-      (f(K), j(null), I(""), V(0));
+    }, [preview, isPreviewCurrent]));
+  const updateDefinition = (nextDefinition) => {
+      (setDefinition(nextDefinition),
+        setPreview(null),
+        setErrorMessage(""),
+        setRequestedPage(0));
     },
-    U = (K, te) =>
-      $({
+    updateSourceAt = (targetIndex, nextSource) =>
+      updateDefinition({
         ...definition,
-        sources: definition.sources.map((source, oe) =>
-          oe === K ? te : source,
+        sources: definition.sources.map((source, currentIndex) =>
+          currentIndex === targetIndex ? nextSource : source,
         ),
       }),
-    G = (K) => {
+    runGuarded = (action) => {
       try {
-        (I(""), K());
+        (setErrorMessage(""), action());
       } catch (error) {
-        I(error.message);
+        setErrorMessage(error.message);
       }
     };
-  async function H(K) {
-    if (!K) return;
-    const te = ++s.current,
-      stamp = d.current;
-    (E(null), k(true), I(""));
+  async function inspectWorkbookFile(workbookFile) {
+    if (!workbookFile) return;
+    const requestId = ++requestCounter.current,
+      stamp = latestInputStamp.current;
+    (setPendingImport(null), setIsInspecting(true), setErrorMessage(""));
     try {
-      if (!/\.(json|xlsx)$/i.test(K.name))
+      if (!/\.(json|xlsx)$/i.test(workbookFile.name))
         throw Error("Choose a native workbook JSON or an XLSX file.");
-      const oe = await importWorkbookFile(K, cancellableOperation.begin());
-      if (!u.current || te !== s.current || stamp !== d.current) return;
-      if (oe.workbook.id === e.workbook.id)
+      const importResult = await importWorkbookFile(
+        workbookFile,
+        cancellableOperation.begin(),
+      );
+      if (
+        !isMounted.current ||
+        requestId !== requestCounter.current ||
+        stamp !== latestInputStamp.current
+      )
+        return;
+      if (importResult.workbook.id === props.workbook.id)
         throw Error(
           "This is the current workbook identity. Use the current workbook source instead.",
         );
-      E({ ...oe, stamp: stamp });
+      setPendingImport({ ...importResult, stamp: stamp });
     } catch (error) {
-      u.current && te === s.current && stamp === d.current && I(error.message);
+      isMounted.current &&
+        requestId === requestCounter.current &&
+        stamp === latestInputStamp.current &&
+        setErrorMessage(error.message);
     } finally {
-      u.current && te === s.current && k(false);
+      isMounted.current &&
+        requestId === requestCounter.current &&
+        setIsInspecting(false);
     }
   }
-  function Q(K) {
-    (e.onApprovedWorkbooksChange ? e.onApprovedWorkbooksChange(K) : y(K),
-      j(null));
+  function updateApprovedWorkbooks(nextApprovedWorkbooks) {
+    (props.onApprovedWorkbooksChange
+      ? props.onApprovedWorkbooksChange(nextApprovedWorkbooks)
+      : setLocalApprovedWorkbooks(nextApprovedWorkbooks),
+      setPreview(null));
   }
   const X$1 = review
-      ? D === "contributions"
+      ? reviewTab === "contributions"
         ? review.contributions
-        : D === "subtotals"
+        : reviewTab === "subtotals"
           ? review.subtotals
-          : D === "sources"
+          : reviewTab === "sources"
             ? review.sources
             : review.exceptions
       : [],
-    J = Math.max(1, Math.ceil(X$1.length / 25)),
-    q = Math.min(z, J - 1);
+    pageCount = Math.max(1, Math.ceil(X$1.length / 25)),
+    pageIndex = Math.min(requestedPage, pageCount - 1);
   return i.jsx("div", {
     className: "lg-modal-backdrop lg-consolidation-backdrop",
     children: i.jsxs("section", {
-      ref: a,
+      ref: dialogRef,
       className: "lg-consolidation",
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": "consolidation-title",
       onKeyDown: (event) => {
         if (
-          (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+          (event.key === "Escape" && (event.stopPropagation(), props.onClose()),
           event.key === "Tab")
         ) {
-          const te = [
-              ...a.current.querySelectorAll(
+          const focusableElements = [
+              ...dialogRef.current.querySelectorAll(
                 "button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href]",
               ),
-            ].filter((de) => !de.hasAttribute("hidden")),
-            ae = te[0],
-            oe = te.at(-1);
-          event.shiftKey && document.activeElement === ae
-            ? (event.preventDefault(), oe == null || oe.focus())
+            ].filter((element) => !element.hasAttribute("hidden")),
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === oe &&
-              (event.preventDefault(), ae == null || ae.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -608,7 +671,7 @@ function ConsolidationDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close consolidation"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close consolidation"),
               "data-ui-label": "Close consolidation",
               children: i.jsx(X, { size: 20 }),
@@ -632,29 +695,32 @@ function ConsolidationDialog(e) {
                       value: outputName,
                       maxLength: 31,
                       onChange: (event) => {
-                        (m(event.target.value), j(null));
+                        (setOutputName(event.target.value), setPreview(null));
                       },
                       lang: language("Output worksheet"),
                       "data-ui-label": "Output worksheet",
                     }),
                   ],
                 }),
-                ["period", "currency", "unit"].map((K) =>
+                ["period", "currency", "unit"].map((fieldName) =>
                   i.jsxs(
                     "label",
                     {
                       children: [
                         i.jsx(LocalizedText, { children: "Target " }),
-                        K,
+                        fieldName,
                         i.jsx("input", {
-                          "aria-label": `Target ${K}`,
-                          value: definition[K],
+                          "aria-label": `Target ${fieldName}`,
+                          value: definition[fieldName],
                           onChange: (event) =>
-                            $({ ...definition, [K]: event.target.value }),
+                            updateDefinition({
+                              ...definition,
+                              [fieldName]: event.target.value,
+                            }),
                         }),
                       ],
                     },
-                    K,
+                    fieldName,
                   ),
                 ),
                 i.jsxs("label", {
@@ -664,51 +730,51 @@ function ConsolidationDialog(e) {
                       "aria-label": text("Category levels"),
                       value: definition.categoryLabels.length,
                       onChange: (event) => {
-                        const te = Number(event.target.value),
+                        const levelCount = Number(event.target.value),
                           categoryLabels = Array.from(
-                            { length: te },
-                            (oe, de) =>
-                              definition.categoryLabels[de] ??
-                              `Category ${de + 1}`,
+                            { length: levelCount },
+                            (oe, newLabelIndex) =>
+                              definition.categoryLabels[newLabelIndex] ??
+                              `Category ${newLabelIndex + 1}`,
                           );
-                        $({
+                        updateDefinition({
                           ...definition,
                           categoryLabels: categoryLabels,
                           sources: definition.sources.map((source) => ({
                             ...source,
                             categories: categoryLabels.map(
-                              (categoryLabel, he) =>
-                                source.categories[he] ?? "",
+                              (categoryLabel, categorySlot) =>
+                                source.categories[categorySlot] ?? "",
                             ),
                           })),
                         });
                       },
                       lang: language("Category levels"),
                       "data-ui-label": "Category levels",
-                      children: [1, 2, 3].map((K) =>
-                        i.jsx("option", { children: K }, K),
+                      children: [1, 2, 3].map((levelOption) =>
+                        i.jsx("option", { children: levelOption }, levelOption),
                       ),
                     }),
                   ],
                 }),
-                definition.categoryLabels.map((categoryLabel, te) =>
+                definition.categoryLabels.map((categoryLabel, labelIndex) =>
                   i.jsxs(
                     "label",
                     {
                       children: [
                         i.jsx(LocalizedText, { children: "Category " }),
-                        te + 1,
+                        labelIndex + 1,
                         " ",
                         i.jsx(LocalizedText, { children: "label" }),
                         i.jsx("input", {
-                          "aria-label": `Category ${te + 1} label`,
+                          "aria-label": `Category ${labelIndex + 1} label`,
                           value: categoryLabel,
                           onChange: (event) =>
-                            $({
+                            updateDefinition({
                               ...definition,
                               categoryLabels: definition.categoryLabels.map(
-                                (categoryLabel, de) =>
-                                  de === te
+                                (categoryLabel, mappedLabelIndex) =>
+                                  mappedLabelIndex === labelIndex
                                     ? event.target.value
                                     : categoryLabel,
                               ),
@@ -716,7 +782,7 @@ function ConsolidationDialog(e) {
                         }),
                       ],
                     },
-                    te,
+                    labelIndex,
                   ),
                 ),
               ],
@@ -730,7 +796,7 @@ function ConsolidationDialog(e) {
                       type: "checkbox",
                       checked: definition.linkedAmounts,
                       onChange: (event) =>
-                        $({
+                        updateDefinition({
                           ...definition,
                           linkedAmounts: event.target.checked,
                         }),
@@ -746,7 +812,7 @@ function ConsolidationDialog(e) {
                       type: "checkbox",
                       checked: definition.collapseDetails,
                       onChange: (event) =>
-                        $({
+                        updateDefinition({
                           ...definition,
                           collapseDetails: event.target.checked,
                         }),
@@ -756,14 +822,15 @@ function ConsolidationDialog(e) {
                     }),
                   ],
                 }),
-                e.allowHidden &&
+                props.allowHidden &&
                   i.jsxs("label", {
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
                         checked: checked,
                         onChange: (event) => {
-                          (g(event.target.checked), j(null));
+                          (setIncludeHidden(event.target.checked),
+                            setPreview(null));
                         },
                       }),
                       i.jsx(LocalizedText, {
@@ -785,39 +852,49 @@ function ConsolidationDialog(e) {
               lang: language("Consolidation sources"),
               "data-ui-label": "Consolidation sources",
               children: [
-                definition.sources.map((source, te) => {
-                  const ae = L.find(
-                      (se) => se.workbook.id === source.workbookId,
+                definition.sources.map((source, sourceIndex) => {
+                  const sourceApproval = workbookSources.find(
+                      (approvalEntry) =>
+                        approvalEntry.workbook.id === source.workbookId,
                     ),
-                    workbook = ae?.workbook,
-                    de =
+                    workbook = sourceApproval?.workbook,
+                    selectableSheets =
                       workbook?.sheets.filter(
                         (sheet) =>
-                          ae.allowedSheetIds.includes(sheet.id) &&
+                          sourceApproval.allowedSheetIds.includes(sheet.id) &&
                           ((!sheet.hidden && !sheet.veryHidden) ||
-                            (checked && ae.includeHidden)),
+                            (checked && sourceApproval.includeHidden)),
                       ) ?? [],
-                    he = de.find((se) => se.id === source.sheetId),
-                    Se = he ? findTableRangesForSource(workbook, source) : [],
-                    le = (se, we, Ee) =>
+                    selectedSheet = selectableSheets.find(
+                      (candidateSheet) => candidateSheet.id === source.sheetId,
+                    ),
+                    sourceFields = selectedSheet
+                      ? findTableRangesForSource(workbook, source)
+                      : [],
+                    renderFieldSelect = (
+                      fieldLabel,
+                      fieldValue,
+                      onFieldChange,
+                    ) =>
                       i.jsxs("label", {
                         children: [
-                          se,
+                          fieldLabel,
                           i.jsxs("select", {
-                            "aria-label": `Source ${te + 1} ${se}`,
-                            value: we,
-                            onChange: (event) => Ee(event.target.value),
+                            "aria-label": `Source ${sourceIndex + 1} ${fieldLabel}`,
+                            value: fieldValue,
+                            onChange: (event) =>
+                              onFieldChange(event.target.value),
                             children: [
-                              !Se.includes(we) &&
+                              !sourceFields.includes(fieldValue) &&
                                 i.jsx("option", {
-                                  value: we,
-                                  children: we || "Choose field",
+                                  value: fieldValue,
+                                  children: fieldValue || "Choose field",
                                 }),
-                              Se.map((Ae) =>
+                              sourceFields.map((sourceField) =>
                                 i.jsx(
                                   "option",
-                                  { value: Ae, children: Ae },
-                                  Ae,
+                                  { value: sourceField, children: sourceField },
+                                  sourceField,
                                 ),
                               ),
                             ],
@@ -835,23 +912,24 @@ function ConsolidationDialog(e) {
                             i.jsxs("strong", {
                               children: [
                                 i.jsx(LocalizedText, { children: "Source " }),
-                                te + 1,
+                                sourceIndex + 1,
                               ],
                             }),
                             i.jsxs("button", {
                               disabled: definition.sources.length === 1,
                               onClick: () =>
-                                $({
+                                updateDefinition({
                                   ...definition,
                                   sources: definition.sources.filter(
-                                    (source, we) => te !== we,
+                                    (source, candidateIndex) =>
+                                      sourceIndex !== candidateIndex,
                                   ),
                                 }),
                               children: [
                                 i.jsx(LocalizedText, {
                                   children: "Remove source ",
                                 }),
-                                te + 1,
+                                sourceIndex + 1,
                               ],
                             }),
                           ],
@@ -863,25 +941,27 @@ function ConsolidationDialog(e) {
                               children: [
                                 i.jsx(LocalizedText, { children: "Workbook" }),
                                 i.jsxs("select", {
-                                  "aria-label": `Source ${te + 1} Workbook`,
+                                  "aria-label": `Source ${sourceIndex + 1} Workbook`,
                                   value: source.workbookId,
                                   onChange: (event) => {
-                                    const we = L.find(
-                                        (Ae) =>
-                                          Ae.workbook.id === event.target.value,
+                                    const chosenApproval = workbookSources.find(
+                                        (approvalMatch) =>
+                                          approvalMatch.workbook.id ===
+                                          event.target.value,
                                       ),
-                                      sheet = we.workbook.sheets.find(
-                                        (sheet) =>
-                                          we.allowedSheetIds.includes(
-                                            sheet.id,
-                                          ) &&
-                                          !sheet.hidden &&
-                                          !sheet.veryHidden,
-                                      );
+                                      sheet =
+                                        chosenApproval.workbook.sheets.find(
+                                          (sheet) =>
+                                            chosenApproval.allowedSheetIds.includes(
+                                              sheet.id,
+                                            ) &&
+                                            !sheet.hidden &&
+                                            !sheet.veryHidden,
+                                        );
                                     sheet &&
-                                      U(te, {
+                                      updateSourceAt(sourceIndex, {
                                         ...createConsolidationDefinition(
-                                          we.workbook,
+                                          chosenApproval.workbook,
                                           sheet.id,
                                           formatOccupiedRangeAddress(sheet),
                                           definition,
@@ -890,25 +970,26 @@ function ConsolidationDialog(e) {
                                       });
                                   },
                                   children: [
-                                    !ae &&
+                                    !sourceApproval &&
                                       i.jsx("option", {
                                         value: source.workbookId,
                                         children:
                                           "Missing or unapproved workbook",
                                       }),
-                                    L.map((se) =>
+                                    workbookSources.map((approvalOption) =>
                                       i.jsxs(
                                         "option",
                                         {
-                                          value: se.workbook.id,
+                                          value: approvalOption.workbook.id,
                                           children: [
-                                            se.workbook.name,
-                                            se.workbook.id === e.workbook.id
+                                            approvalOption.workbook.name,
+                                            approvalOption.workbook.id ===
+                                            props.workbook.id
                                               ? " (current)"
                                               : " (approved)",
                                           ],
                                         },
-                                        se.workbook.id,
+                                        approvalOption.workbook.id,
                                       ),
                                     ),
                                   ],
@@ -919,34 +1000,38 @@ function ConsolidationDialog(e) {
                               children: [
                                 i.jsx(LocalizedText, { children: "Worksheet" }),
                                 i.jsxs("select", {
-                                  "aria-label": `Source ${te + 1} Worksheet`,
+                                  "aria-label": `Source ${sourceIndex + 1} Worksheet`,
                                   value: source.sheetId,
                                   onChange: (event) => {
-                                    const we = de.find(
-                                      (Ee) => Ee.id === event.target.value,
+                                    const chosenSheet = selectableSheets.find(
+                                      (matchingSheet) =>
+                                        matchingSheet.id === event.target.value,
                                     );
-                                    U(te, {
+                                    updateSourceAt(sourceIndex, {
                                       ...createConsolidationDefinition(
                                         workbook,
-                                        we.id,
-                                        formatOccupiedRangeAddress(we),
+                                        chosenSheet.id,
+                                        formatOccupiedRangeAddress(chosenSheet),
                                         definition,
                                       ),
                                       id: source.id,
                                     });
                                   },
                                   children: [
-                                    !he &&
+                                    !selectedSheet &&
                                       i.jsx("option", {
                                         value: source.sheetId,
                                         children:
                                           "Missing or unauthorized worksheet",
                                       }),
-                                    de.map((se) =>
+                                    selectableSheets.map((sheetOption) =>
                                       i.jsx(
                                         "option",
-                                        { value: se.id, children: se.name },
-                                        se.id,
+                                        {
+                                          value: sheetOption.id,
+                                          children: sheetOption.name,
+                                        },
+                                        sheetOption.id,
                                       ),
                                     ),
                                   ],
@@ -959,12 +1044,13 @@ function ConsolidationDialog(e) {
                                   children: "Source type",
                                 }),
                                 i.jsxs("select", {
-                                  "aria-label": `Source ${te + 1} Source type`,
+                                  "aria-label": `Source ${sourceIndex + 1} Source type`,
                                   value: source.tableId ?? "",
                                   onChange: (event) => {
-                                    const { tableId, ...Ee } = source;
-                                    U(te, {
-                                      ...Ee,
+                                    const { tableId, ...sourceWithoutTable } =
+                                      source;
+                                    updateSourceAt(sourceIndex, {
+                                      ...sourceWithoutTable,
                                       ...(event.target.value
                                         ? { tableId: event.target.value }
                                         : {}),
@@ -976,14 +1062,14 @@ function ConsolidationDialog(e) {
                                       children: "Explicit range",
                                     }),
                                     source.tableId &&
-                                      !he?.tables?.some(
+                                      !selectedSheet?.tables?.some(
                                         (table) => table.id === source.tableId,
                                       ) &&
                                       i.jsx("option", {
                                         value: source.tableId,
                                         children: "Missing table",
                                       }),
-                                    he?.tables?.map((table) =>
+                                    selectedSheet?.tables?.map((table) =>
                                       i.jsx(
                                         "option",
                                         {
@@ -1003,39 +1089,48 @@ function ConsolidationDialog(e) {
                                   children: "Header & data range",
                                 }),
                                 i.jsx("input", {
-                                  "aria-label": `Source ${te + 1} Header & data range`,
+                                  "aria-label": `Source ${sourceIndex + 1} Header & data range`,
                                   value: source.range,
                                   disabled: !!source.tableId,
                                   onChange: (event) =>
-                                    U(te, {
+                                    updateSourceAt(sourceIndex, {
                                       ...source,
                                       range: event.target.value,
                                     }),
                                 }),
                               ],
                             }),
-                            definition.categoryLabels.map((categoryLabel, we) =>
-                              i.jsx(
-                                "div",
-                                {
-                                  children: le(
-                                    `Category ${we + 1}`,
-                                    source.categories[we],
-                                    (Ee) =>
-                                      U(te, {
-                                        ...source,
-                                        categories: source.categories.map(
-                                          (category, ye) =>
-                                            ye === we ? Ee : category,
-                                        ),
-                                      }),
-                                  ),
-                                },
-                                we,
-                              ),
+                            definition.categoryLabels.map(
+                              (categoryLabel, categoryIndex) =>
+                                i.jsx(
+                                  "div",
+                                  {
+                                    children: renderFieldSelect(
+                                      `Category ${categoryIndex + 1}`,
+                                      source.categories[categoryIndex],
+                                      (categoryValue) =>
+                                        updateSourceAt(sourceIndex, {
+                                          ...source,
+                                          categories: source.categories.map(
+                                            (category, categoryPosition) =>
+                                              categoryPosition === categoryIndex
+                                                ? categoryValue
+                                                : category,
+                                          ),
+                                        }),
+                                    ),
+                                  },
+                                  categoryIndex,
+                                ),
                             ),
-                            le("Amount", source.amountField, (amountField) =>
-                              U(te, { ...source, amountField: amountField }),
+                            renderFieldSelect(
+                              "Amount",
+                              source.amountField,
+                              (amountField) =>
+                                updateSourceAt(sourceIndex, {
+                                  ...source,
+                                  amountField: amountField,
+                                }),
                             ),
                             i.jsxs("label", {
                               children: [
@@ -1043,10 +1138,10 @@ function ConsolidationDialog(e) {
                                   children: "Repeated categories",
                                 }),
                                 i.jsxs("select", {
-                                  "aria-label": `Source ${te + 1} Repeated categories`,
+                                  "aria-label": `Source ${sourceIndex + 1} Repeated categories`,
                                   value: source.duplicatePolicy,
                                   onChange: (event) =>
-                                    U(te, {
+                                    updateSourceAt(sourceIndex, {
                                       ...source,
                                       duplicatePolicy: event.target.value,
                                     }),
@@ -1063,7 +1158,7 @@ function ConsolidationDialog(e) {
                                 }),
                               ],
                             }),
-                            ["period", "currency", "unit"].map((se) =>
+                            ["period", "currency", "unit"].map((contextField) =>
                               i.jsxs(
                                 "div",
                                 {
@@ -1071,27 +1166,31 @@ function ConsolidationDialog(e) {
                                   children: [
                                     i.jsxs("label", {
                                       children: [
-                                        se,
+                                        contextField,
                                         " ",
                                         i.jsx(LocalizedText, {
                                           children: "source",
                                         }),
                                         i.jsxs("select", {
-                                          "aria-label": `Source ${te + 1} ${se} source`,
-                                          value: source[se].kind,
+                                          "aria-label": `Source ${sourceIndex + 1} ${contextField} source`,
+                                          value: source[contextField].kind,
                                           onChange: (event) =>
-                                            U(te, {
+                                            updateSourceAt(sourceIndex, {
                                               ...source,
-                                              [se]:
+                                              [contextField]:
                                                 event.target.value ===
                                                 "constant"
                                                   ? {
                                                       kind: "constant",
-                                                      value: definition[se],
+                                                      value:
+                                                        definition[
+                                                          contextField
+                                                        ],
                                                     }
                                                   : {
                                                       kind: "field",
-                                                      field: Se[0] ?? "",
+                                                      field:
+                                                        sourceFields[0] ?? "",
                                                     },
                                             }),
                                           children: [
@@ -1107,26 +1206,29 @@ function ConsolidationDialog(e) {
                                         }),
                                       ],
                                     }),
-                                    source[se].kind === "field"
-                                      ? le(se, source[se].field, (field) =>
-                                          U(te, {
-                                            ...source,
-                                            [se]: {
-                                              kind: "field",
-                                              field: field,
-                                            },
-                                          }),
+                                    source[contextField].kind === "field"
+                                      ? renderFieldSelect(
+                                          contextField,
+                                          source[contextField].field,
+                                          (field) =>
+                                            updateSourceAt(sourceIndex, {
+                                              ...source,
+                                              [contextField]: {
+                                                kind: "field",
+                                                field: field,
+                                              },
+                                            }),
                                         )
                                       : i.jsxs("label", {
                                           children: [
-                                            se,
+                                            contextField,
                                             i.jsx("input", {
-                                              "aria-label": `Source ${te + 1} ${se}`,
-                                              value: source[se].value,
+                                              "aria-label": `Source ${sourceIndex + 1} ${contextField}`,
+                                              value: source[contextField].value,
                                               onChange: (event) =>
-                                                U(te, {
+                                                updateSourceAt(sourceIndex, {
                                                   ...source,
-                                                  [se]: {
+                                                  [contextField]: {
                                                     kind: "constant",
                                                     value: event.target.value,
                                                   },
@@ -1136,7 +1238,7 @@ function ConsolidationDialog(e) {
                                         }),
                                   ],
                                 },
-                                se,
+                                contextField,
                               ),
                             ),
                           ],
@@ -1149,19 +1251,19 @@ function ConsolidationDialog(e) {
                 i.jsx("button", {
                   disabled: definition.sources.length >= 8,
                   onClick: () => {
-                    const sheet = e.workbook.sheets.find(
+                    const sheet = props.workbook.sheets.find(
                       (sheet) =>
                         allowedSheetIds.includes(sheet.id) &&
                         !sheet.hidden &&
                         !sheet.veryHidden,
                     );
                     sheet &&
-                      $({
+                      updateDefinition({
                         ...definition,
                         sources: [
                           ...definition.sources,
                           createConsolidationDefinition(
-                            e.workbook,
+                            props.workbook,
                             sheet.id,
                             formatOccupiedRangeAddress(sheet),
                             definition,
@@ -1173,7 +1275,7 @@ function ConsolidationDialog(e) {
                 }),
               ],
             }),
-            e.allowFileSources &&
+            props.allowFileSources &&
               i.jsxs("details", {
                 className: "lg-consolidation-import",
                 children: [
@@ -1197,9 +1299,9 @@ function ConsolidationDialog(e) {
                         type: "file",
                         accept: ".json,.xlsx",
                         "aria-label": text("Inspect consolidation workbook"),
-                        disabled: A || approvedWorkbooks.length >= 8,
+                        disabled: isInspecting || approvedWorkbooks.length >= 8,
                         onChange: (event) => {
-                          (H(event.target.files?.[0]),
+                          (inspectWorkbookFile(event.target.files?.[0]),
                             (event.target.value = ""));
                         },
                         lang: language("Inspect consolidation workbook"),
@@ -1207,112 +1309,114 @@ function ConsolidationDialog(e) {
                       }),
                     ],
                   }),
-                  A &&
+                  isInspecting &&
                     i.jsx("p", {
                       role: "status",
                       children: i.jsx(LocalizedText, {
                         children: "Inspecting workbook…",
                       }),
                     }),
-                  w?.stamp === c &&
+                  pendingImport?.stamp === inputStamp &&
                     i.jsxs("div", {
                       "aria-label": text("Pending workbook approval"),
                       lang: language("Pending workbook approval"),
                       "data-ui-label": "Pending workbook approval",
                       children: [
-                        i.jsx("strong", { children: w.workbook.name }),
+                        i.jsx("strong", {
+                          children: pendingImport.workbook.name,
+                        }),
                         i.jsx("p", {
-                          children: w.workbook.sheets
+                          children: pendingImport.workbook.sheets
                             .filter(
                               (sheet) => !sheet.hidden && !sheet.veryHidden,
                             )
-                            .map((K) => K.name)
+                            .map((visibleSheet) => visibleSheet.name)
                             .join(", "),
                         }),
-                        w.warnings.map((warning, te) =>
-                          i.jsx("p", { children: warning }, te),
+                        pendingImport.warnings.map((warning, warningIndex) =>
+                          i.jsx("p", { children: warning }, warningIndex),
                         ),
                         i.jsx("button", {
                           onClick: () => {
-                            (Q([
+                            (updateApprovedWorkbooks([
                               ...approvedWorkbooks.filter(
                                 (approvedWorkbook) =>
                                   approvedWorkbook.workbook.id !==
-                                  w.workbook.id,
+                                  pendingImport.workbook.id,
                               ),
                               {
-                                workbook: w.workbook,
-                                allowedSheetIds: w.workbook.sheets
+                                workbook: pendingImport.workbook,
+                                allowedSheetIds: pendingImport.workbook.sheets
                                   .filter(
                                     (sheet) =>
                                       !sheet.hidden && !sheet.veryHidden,
                                   )
-                                  .map((K) => K.id),
+                                  .map((allowedSheetId) => allowedSheetId.id),
                                 includeHidden: false,
                               },
                             ]),
-                              E(null));
+                              setPendingImport(null));
                           },
                           children: i.jsx(LocalizedText, {
                             children: "Approve workbook",
                           }),
                         }),
                         i.jsx("button", {
-                          onClick: () => E(null),
+                          onClick: () => setPendingImport(null),
                           children: i.jsx(LocalizedText, {
                             children: "Discard file",
                           }),
                         }),
                       ],
                     }),
-                  approvedWorkbooks.map((K) =>
+                  approvedWorkbooks.map((approvedEntry) =>
                     i.jsxs(
                       "p",
                       {
                         children: [
-                          K.workbook.name,
+                          approvedEntry.workbook.name,
                           " · ",
-                          K.allowedSheetIds.length,
+                          approvedEntry.allowedSheetIds.length,
                           " ",
                           i.jsx(LocalizedText, { children: "approved sheets" }),
                           " ",
                           i.jsxs("button", {
                             disabled:
-                              !e.onApprovedWorkbooksChange &&
-                              !!e.approvedWorkbooks?.some(
+                              !props.onApprovedWorkbooksChange &&
+                              !!props.approvedWorkbooks?.some(
                                 (approvedWorkbook) =>
                                   approvedWorkbook.workbook.id ===
-                                  K.workbook.id,
+                                  approvedEntry.workbook.id,
                               ),
                             onClick: () =>
-                              Q(
+                              updateApprovedWorkbooks(
                                 approvedWorkbooks.filter(
                                   (approvedWorkbook) =>
                                     approvedWorkbook.workbook.id !==
-                                    K.workbook.id,
+                                    approvedEntry.workbook.id,
                                 ),
                               ),
                             children: [
                               i.jsx(LocalizedText, { children: "Revoke " }),
-                              K.workbook.name,
+                              approvedEntry.workbook.name,
                             ],
                           }),
                         ],
                       },
-                      K.workbook.id,
+                      approvedEntry.workbook.id,
                     ),
                   ),
                 ],
               }),
-            F &&
+            errorMessage &&
               i.jsx("p", {
                 role: "alert",
                 className: "lg-consolidation-error",
-                children: F,
+                children: errorMessage,
               }),
             review &&
               i.jsxs("section", {
-                ref: o,
+                ref: previewRef,
                 "aria-label": text("Consolidation preview"),
                 className: "lg-consolidation-preview",
                 lang: language("Consolidation preview"),
@@ -1387,17 +1491,18 @@ function ConsolidationDialog(e) {
                         "subtotals",
                         "sources",
                         "exceptions",
-                      ].map((K) =>
+                      ].map((tabName) =>
                         i.jsx(
                           "button",
                           {
-                            "aria-pressed": D === K,
+                            "aria-pressed": reviewTab === tabName,
                             onClick: () => {
-                              (B(K), V(0));
+                              (setReviewTab(tabName), setRequestedPage(0));
                             },
-                            children: K[0].toUpperCase() + K.slice(1),
+                            children:
+                              tabName[0].toUpperCase() + tabName.slice(1),
                           },
-                          K,
+                          tabName,
                         ),
                       ),
                       i.jsx("button", {
@@ -1407,7 +1512,7 @@ function ConsolidationDialog(e) {
                               [
                                 JSON.stringify(
                                   {
-                                    definition: O.plan.request.definition,
+                                    definition: preview.plan.request.definition,
                                     review: review,
                                   },
                                   null,
@@ -1428,11 +1533,11 @@ function ConsolidationDialog(e) {
                     className: "lg-consolidation-table",
                     children: [
                       i.jsxs("table", {
-                        "aria-label": `Consolidation ${D}`,
+                        "aria-label": `Consolidation ${reviewTab}`,
                         children: [
                           i.jsx("thead", {
                             children: i.jsx("tr", {
-                              children: (D === "contributions"
+                              children: (reviewTab === "contributions"
                                 ? [
                                     "Category path",
                                     "Period / currency / unit",
@@ -1440,14 +1545,14 @@ function ConsolidationDialog(e) {
                                     "Source amount",
                                     "Link",
                                   ]
-                                : D === "subtotals"
+                                : reviewTab === "subtotals"
                                   ? [
                                       "Category path",
                                       "Level",
                                       "Contributions",
                                       "Subtotal",
                                     ]
-                                  : D === "sources"
+                                  : reviewTab === "sources"
                                     ? [
                                         "Source",
                                         "Range",
@@ -1457,21 +1562,27 @@ function ConsolidationDialog(e) {
                                         "Fingerprint",
                                       ]
                                     : ["Source / row", "Severity", "Exception"]
-                              ).map((K) => i.jsx("th", { children: K }, K)),
+                              ).map((headerLabel) =>
+                                i.jsx(
+                                  "th",
+                                  { children: headerLabel },
+                                  headerLabel,
+                                ),
+                              ),
                             }),
                           }),
                           i.jsxs("tbody", {
                             children: [
-                              D === "contributions" &&
+                              reviewTab === "contributions" &&
                                 review.contributions
-                                  .slice(q * 25, q * 25 + 25)
-                                  .map((K, te) =>
+                                  .slice(pageIndex * 25, pageIndex * 25 + 25)
+                                  .map((contribution, contributionRowIndex) =>
                                     i.jsxs(
                                       "tr",
                                       {
                                         children: [
                                           i.jsx("td", {
-                                            children: K.categories
+                                            children: contribution.categories
                                               .map(
                                                 (category) =>
                                                   `${typeof category}: ${String(category)}`,
@@ -1480,90 +1591,109 @@ function ConsolidationDialog(e) {
                                           }),
                                           i.jsxs("td", {
                                             children: [
-                                              K.period,
+                                              contribution.period,
                                               " / ",
-                                              K.currency,
+                                              contribution.currency,
                                               " / ",
-                                              K.unit,
+                                              contribution.unit,
                                             ],
                                           }),
-                                          i.jsx("td", { children: K.amount }),
-                                          i.jsx("td", { children: K.locator }),
-                                          i.jsx("td", { children: K.link }),
+                                          i.jsx("td", {
+                                            children: contribution.amount,
+                                          }),
+                                          i.jsx("td", {
+                                            children: contribution.locator,
+                                          }),
+                                          i.jsx("td", {
+                                            children: contribution.link,
+                                          }),
                                         ],
                                       },
-                                      te,
+                                      contributionRowIndex,
                                     ),
                                   ),
-                              D === "subtotals" &&
+                              reviewTab === "subtotals" &&
                                 review.subtotals
-                                  .slice(q * 25, q * 25 + 25)
-                                  .map((K, te) =>
+                                  .slice(pageIndex * 25, pageIndex * 25 + 25)
+                                  .map((subtotal, subtotalRowIndex) =>
                                     i.jsxs(
                                       "tr",
                                       {
                                         children: [
                                           i.jsx("td", {
-                                            children: K.categories
+                                            children: subtotal.categories
                                               .map(String)
                                               .join(" / "),
                                           }),
-                                          i.jsx("td", { children: K.level }),
-                                          i.jsx("td", { children: K.count }),
-                                          i.jsx("td", { children: K.amount }),
+                                          i.jsx("td", {
+                                            children: subtotal.level,
+                                          }),
+                                          i.jsx("td", {
+                                            children: subtotal.count,
+                                          }),
+                                          i.jsx("td", {
+                                            children: subtotal.amount,
+                                          }),
                                         ],
                                       },
-                                      te,
+                                      subtotalRowIndex,
                                     ),
                                   ),
-                              D === "sources" &&
+                              reviewTab === "sources" &&
                                 review.sources
-                                  .slice(q * 25, q * 25 + 25)
-                                  .map((K) =>
+                                  .slice(pageIndex * 25, pageIndex * 25 + 25)
+                                  .map((sourceSummary) =>
                                     i.jsxs(
                                       "tr",
                                       {
                                         children: [
                                           i.jsxs("td", {
                                             children: [
-                                              K.workbookName,
+                                              sourceSummary.workbookName,
                                               " / ",
-                                              K.sheetName,
+                                              sourceSummary.sheetName,
                                             ],
                                           }),
-                                          i.jsx("td", { children: K.range }),
-                                          i.jsxs("td", {
-                                            children: [
-                                              K.records,
-                                              " / ",
-                                              K.acceptedRecords,
-                                            ],
+                                          i.jsx("td", {
+                                            children: sourceSummary.range,
                                           }),
                                           i.jsxs("td", {
                                             children: [
-                                              K.periods.join(", "),
+                                              sourceSummary.records,
                                               " / ",
-                                              K.currencies.join(", "),
+                                              sourceSummary.acceptedRecords,
+                                            ],
+                                          }),
+                                          i.jsxs("td", {
+                                            children: [
+                                              sourceSummary.periods.join(", "),
+                                              " / ",
+                                              sourceSummary.currencies.join(
+                                                ", ",
+                                              ),
                                               " ",
                                               "/ ",
-                                              K.units.join(", "),
+                                              sourceSummary.units.join(", "),
                                             ],
                                           }),
-                                          i.jsx("td", { children: K.amount }),
+                                          i.jsx("td", {
+                                            children: sourceSummary.amount,
+                                          }),
                                           i.jsx("td", {
                                             children: i.jsx("code", {
-                                              children: K.fingerprint,
+                                              children:
+                                                sourceSummary.fingerprint,
                                             }),
                                           }),
                                         ],
                                       },
-                                      K.sourceId,
+                                      sourceSummary.sourceId,
                                     ),
                                   ),
-                              D === "exceptions" &&
+                              reviewTab === "exceptions" &&
                                 review.exceptions
-                                  .slice(q * 25, q * 25 + 25)
-                                  .map((K, te) =>
+                                  .slice(pageIndex * 25, pageIndex * 25 + 25)
+                                  .map((exception, exceptionRowIndex) =>
                                     i.jsxs(
                                       "tr",
                                       {
@@ -1576,18 +1706,27 @@ function ConsolidationDialog(e) {
                                               " ",
                                               definition.sources.findIndex(
                                                 (source) =>
-                                                  source.id === K.sourceId,
+                                                  source.id ===
+                                                  exception.sourceId,
                                               ) + 1,
-                                              K.row ? ` / row ${K.row}` : "",
+                                              exception.row
+                                                ? ` / row ${exception.row}`
+                                                : "",
                                             ],
                                           }),
-                                          i.jsx("td", { children: K.severity }),
+                                          i.jsx("td", {
+                                            children: exception.severity,
+                                          }),
                                           i.jsxs("td", {
-                                            children: [K.code, ": ", K.message],
+                                            children: [
+                                              exception.code,
+                                              ": ",
+                                              exception.message,
+                                            ],
                                           }),
                                         ],
                                       },
-                                      te,
+                                      exceptionRowIndex,
                                     ),
                                   ),
                             ],
@@ -1598,7 +1737,7 @@ function ConsolidationDialog(e) {
                         i.jsxs("p", {
                           children: [
                             i.jsx(LocalizedText, { children: "No " }),
-                            D,
+                            reviewTab,
                             ".",
                           ],
                         }),
@@ -1608,8 +1747,8 @@ function ConsolidationDialog(e) {
                     className: "lg-consolidation-pages",
                     children: [
                       i.jsx("button", {
-                        disabled: q === 0,
-                        onClick: () => V(q - 1),
+                        disabled: pageIndex === 0,
+                        onClick: () => setRequestedPage(pageIndex - 1),
                         children: i.jsx(LocalizedText, {
                           children: "Previous page",
                         }),
@@ -1617,10 +1756,10 @@ function ConsolidationDialog(e) {
                       i.jsxs("span", {
                         children: [
                           i.jsx(LocalizedText, { children: "Page " }),
-                          q + 1,
+                          pageIndex + 1,
                           " ",
                           i.jsx(LocalizedText, { children: "of " }),
-                          J,
+                          pageCount,
                           " · ",
                           X$1.length,
                           " ",
@@ -1628,8 +1767,8 @@ function ConsolidationDialog(e) {
                         ],
                       }),
                       i.jsx("button", {
-                        disabled: q + 1 >= J,
-                        onClick: () => V(q + 1),
+                        disabled: pageIndex + 1 >= pageCount,
+                        onClick: () => setRequestedPage(pageIndex + 1),
                         children: i.jsx(LocalizedText, {
                           children: "Next page",
                         }),
@@ -1643,25 +1782,25 @@ function ConsolidationDialog(e) {
         i.jsxs("footer", {
           children: [
             i.jsx("span", {
-              children: e.readOnly
+              children: props.readOnly
                 ? "Read-only: preview available"
                 : "Separate output · originals retained · Undo / Redo",
             }),
             i.jsx("button", {
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               onClick: () =>
-                G(() => {
+                runGuarded(() => {
                   const consolidationPreview = createConsolidationPreview(
-                    e.workbook,
+                    props.workbook,
                     { definition: definition, outputName: outputName },
                     options,
                   );
-                  (j({ plan: consolidationPreview, stamp: stamp }),
-                    V(0),
-                    B(
+                  (setPreview({ plan: consolidationPreview, stamp: stamp }),
+                    setRequestedPage(0),
+                    setReviewTab(
                       consolidationPreview.review.complete
                         ? "contributions"
                         : "exceptions",
@@ -1675,19 +1814,22 @@ function ConsolidationDialog(e) {
               className: "primary",
               disabled:
                 !review?.complete ||
-                e.readOnly ||
-                !!e.workbook.structureProtection?.enabled,
+                props.readOnly ||
+                !!props.workbook.structureProtection?.enabled,
               onClick: () =>
-                G(() => {
-                  if (!N) return;
-                  const K = publishConsolidatedSchedule(
-                    e.workbook,
-                    O.plan,
+                runGuarded(() => {
+                  if (!isPreviewCurrent) return;
+                  const publishedWorkbook = publishConsolidatedSchedule(
+                    props.workbook,
+                    preview.plan,
                     options,
                   );
-                  (j(null),
-                    e.onWorkbookChange(K, "Publish consolidated schedule"),
-                    e.onClose());
+                  (setPreview(null),
+                    props.onWorkbookChange(
+                      publishedWorkbook,
+                      "Publish consolidated schedule",
+                    ),
+                    props.onClose());
                 }),
               children: i.jsx(LocalizedText, {
                 children: "Publish consolidated schedule",
@@ -1699,69 +1841,85 @@ function ConsolidationDialog(e) {
     }),
   });
 }
-const caseFoldText = (e) => e.toLowerCase(),
-  buildTypedValueKey = (e) =>
-    JSON.stringify([typeof e, typeof e == "string" ? caseFoldText(e) : e]),
-  buildTableColumnKey = (e) => `${e.tableId}\0${e.column}`,
-  requireScalarValue = (e) =>
-    typeof e == "object" && e !== null
+const caseFoldText = (value) => value.toLowerCase(),
+  buildTypedValueKey = (value) =>
+    JSON.stringify([
+      typeof value,
+      typeof value == "string" ? caseFoldText(value) : value,
+    ]),
+  buildTableColumnKey = (tableColumn) =>
+    `${tableColumn.tableId}\0${tableColumn.column}`,
+  requireScalarValue = (value) =>
+    typeof value == "object" && value !== null
       ? throwDaxError("DAX_TYPE", "A table cannot be used as a scalar.")
-      : e,
-  requireLogicalOperand = (e) =>
-    e === null
+      : value,
+  requireLogicalOperand = (value) =>
+    value === null
       ? false
-      : typeof e == "boolean"
-        ? e
-        : typeof e == "number"
-          ? e !== 0
+      : typeof value == "boolean"
+        ? value
+        : typeof value == "number"
+          ? value !== 0
           : throwDaxError(
               "DAX_TYPE",
               "A logical condition requires a boolean, number or BLANK.",
             ),
-  requireNumericOperand = (e) =>
-    e === null
+  requireNumericOperand = (value) =>
+    value === null
       ? 0
-      : typeof e == "number"
-        ? e
+      : typeof value == "number"
+        ? value
         : throwDaxError(
             "DAX_TYPE",
             "Numeric expressions require numbers or BLANK; implicit text/date conversion is unsupported.",
           ),
-  requireFiniteNumber = (e) =>
-    Number.isFinite(e)
-      ? e
+  requireFiniteNumber = (value) =>
+    Number.isFinite(value)
+      ? value
       : throwDaxError(
           "DAX_NUMBER",
           "The result is not finite. Use DIVIDE for a blank or zero denominator.",
         );
-function compareDaxValues(e, r, t = false) {
-  if (t && (e === null || r === null)) return e === r ? 0 : undefined;
-  if (e === null && r === null) return 0;
+function compareDaxValues(left, right, shouldTreatBlankAsUnknown = false) {
+  if (shouldTreatBlankAsUnknown && (left === null || right === null))
+    return left === right ? 0 : undefined;
+  if (left === null && right === null) return 0;
   if (
-    (e === null &&
-      (e = typeof r == "string" ? "" : typeof r == "boolean" ? false : 0),
-    r === null &&
-      (r = typeof e == "string" ? "" : typeof e == "boolean" ? false : 0),
-    typeof e != typeof r)
+    (left === null &&
+      (left =
+        typeof right == "string" ? "" : typeof right == "boolean" ? false : 0),
+    right === null &&
+      (right =
+        typeof left == "string" ? "" : typeof left == "boolean" ? false : 0),
+    typeof left != typeof right)
   )
     return throwDaxError(
       "DAX_TYPE",
       "Comparison operands must have compatible types.",
     );
-  const n = typeof e == "string" ? caseFoldText(e) : e,
-    o = typeof r == "string" ? caseFoldText(r) : r;
-  return n === o ? 0 : n < o ? -1 : 1;
+  const comparableLeft = typeof left == "string" ? caseFoldText(left) : left,
+    comparableRight = typeof right == "string" ? caseFoldText(right) : right;
+  return comparableLeft === comparableRight
+    ? 0
+    : comparableLeft < comparableRight
+      ? -1
+      : 1;
 }
-function sumWithCompensation(e) {
-  let r = 0,
-    t = 0,
-    n = 0;
-  for (const o of e) {
-    if (typeof o != "number") continue;
-    const a = r + o;
-    ((t += Math.abs(r) >= Math.abs(o) ? r - a + o : o - a + r), (r = a), n++);
+function sumWithCompensation(values) {
+  let runningSum = 0,
+    compensation = 0,
+    numericCount = 0;
+  for (const value of values) {
+    if (typeof value != "number") continue;
+    const nextSum = runningSum + value;
+    ((compensation +=
+      Math.abs(runningSum) >= Math.abs(value)
+        ? runningSum - nextSum + value
+        : value - nextSum + runningSum),
+      (runningSum = nextSum),
+      numericCount++);
   }
-  return n ? requireFiniteNumber(r + t) : null;
+  return numericCount ? requireFiniteNumber(runningSum + compensation) : null;
 }
 
 export {

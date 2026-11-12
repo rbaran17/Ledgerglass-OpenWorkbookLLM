@@ -32,14 +32,14 @@ import {
   StructureToolDialog,
 } from "./28-duplicate-review-and-structure.js";
 
-function DataToolDialogRouter(e) {
-  return e.mode === "validation"
-    ? i.jsx(DataValidationDialog, { ...e })
-    : e.mode === "duplicates"
-      ? i.jsx(DuplicateReviewDialog, { ...e })
-      : e.mode === "insertRow" || e.mode === "insertColumn"
-        ? i.jsx(StructureToolDialog, { ...e })
-        : i.jsx(WorksheetToolDialog, { ...e });
+function DataToolDialogRouter(props) {
+  return props.mode === "validation"
+    ? i.jsx(DataValidationDialog, { ...props })
+    : props.mode === "duplicates"
+      ? i.jsx(DuplicateReviewDialog, { ...props })
+      : props.mode === "insertRow" || props.mode === "insertColumn"
+        ? i.jsx(StructureToolDialog, { ...props })
+        : i.jsx(WorksheetToolDialog, { ...props });
 }
 function WorksheetToolDialog({
   mode,
@@ -52,58 +52,62 @@ function WorksheetToolDialog({
 }) {
   const { text, language } = useWorkbookMessages(),
     sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
-    c = range.split(":")[0],
-    [h, f] = ne.useState(
-      mode === "duplicates" && range === c
+    rangeStart = range.split(":")[0],
+    [rangeText, setRangeText] = ne.useState(
+      mode === "duplicates" && range === rangeStart
         ? formatOccupiedRangeAddress(sheet)
         : range,
     ),
-    [p, m] = ne.useState(mode === "conditional" ? "greater" : "list"),
-    [v, g] = ne.useState(""),
-    [b, y] = ne.useState("100"),
-    [fill, E] = ne.useState("#fff2cc"),
-    [color, k] = ne.useState("#9c5700"),
-    [operator, I] = ne.useState("between"),
-    [O, j] = ne.useState(true),
-    [z, V] = ne.useState("Enter a value that satisfies this rule."),
-    [checked, B] = ne.useState(true),
-    [_, C] = ne.useState(null),
-    [T, N] = ne.useState(""),
-    [count, L] = ne.useState(1),
-    [remove, U] = ne.useState(false),
-    [G, H] = ne.useState(""),
-    [Q, X$1] = ne.useState(""),
-    [J, q] = ne.useState(false),
+    [ruleKind, setRuleKind] = ne.useState(
+      mode === "conditional" ? "greater" : "list",
+    ),
+    [ruleValue, setRuleValue] = ne.useState(""),
+    [ruleSecondValue, setRuleSecondValue] = ne.useState("100"),
+    [fill, setFill] = ne.useState("#fff2cc"),
+    [color, setColor] = ne.useState("#9c5700"),
+    [operator, setOperator] = ne.useState("between"),
+    [allowBlank, setAllowBlank] = ne.useState(true),
+    [validationMessage, setValidationMessage] = ne.useState(
+      "Enter a value that satisfies this rule.",
+    ),
+    [checked, setChecked] = ne.useState(true),
+    [selectedColumns, setSelectedColumns] = ne.useState(null),
+    [protectionPassword, setProtectionPassword] = ne.useState(""),
+    [count, setCount] = ne.useState(1),
+    [remove, setRemove] = ne.useState(false),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [statusMessage, X$1] = ne.useState(""),
+    [isSubmitting, setIsSubmitting] = ne.useState(false),
     [W, K] = ne.useState(""),
-    te = ne.useRef(null),
-    ae = Object.entries(sheet.cells)
-      .filter(([Re, cell]) => {
+    dialogRef = ne.useRef(null),
+    textCellEntries = Object.entries(sheet.cells)
+      .filter(([cellAddress, cell]) => {
         try {
-          const rangeAddress = parseRangeAddress(h),
-            je = parseRangeAddress(Re);
+          const rangeAddress = parseRangeAddress(rangeText),
+            cellRange = parseRangeAddress(cellAddress);
           return (
             typeof cell.raw == "string" &&
             !cell.raw.startsWith("=") &&
-            je.firstRow >= rangeAddress.firstRow &&
-            je.lastRow <= rangeAddress.lastRow &&
-            je.firstCol >= rangeAddress.firstCol &&
-            je.lastCol <= rangeAddress.lastCol
+            cellRange.firstRow >= rangeAddress.firstRow &&
+            cellRange.lastRow <= rangeAddress.lastRow &&
+            cellRange.firstCol >= rangeAddress.firstCol &&
+            cellRange.lastCol <= rangeAddress.lastCol
           );
         } catch {
           return false;
         }
       })
       .slice(0, 500),
-    [oe, de] = ne.useState(0),
-    [raw, Se] = ne.useState(ae[0]?.[1].raw ?? "");
+    [spellingIndex, setSpellingIndex] = ne.useState(0),
+    [raw, setRawValue] = ne.useState(textCellEntries[0]?.[1].raw ?? "");
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      te.current?.querySelector("input,textarea,select,button")?.focus(),
+      dialogRef.current?.querySelector("input,textarea,select,button")?.focus(),
       () => activeElement?.focus()
     );
   }, []);
-  const le = {
+  const modeLabels = {
       conditional: "Conditional Formatting",
       validation: "Data Validation",
       duplicates: "Remove Duplicates",
@@ -116,47 +120,54 @@ function WorksheetToolDialog({
       insertRow: "Insert / Delete Rows",
       insertColumn: "Insert / Delete Columns",
     },
-    ce = (Re, Me) => {
-      (onWorkbookChange(Re, Me), onClose());
+    applyWorkbookChange = (nextWorkbook, changeLabel) => {
+      (onWorkbookChange(nextWorkbook, changeLabel), onClose());
     };
-  async function ge() {
-    (H(""), q(true));
+  async function runToolAction() {
+    (setErrorMessage(""), setIsSubmitting(true));
     try {
       if (readOnly && mode !== "spelling")
         throw Error("This workbook is read-only.");
       if (mode === "merge")
-        ce(mergeWorksheetCells(workbook, sheetId, h, false), "Merge cells");
+        applyWorkbookChange(
+          mergeWorksheetCells(workbook, sheetId, rangeText, false),
+          "Merge cells",
+        );
       else if (mode === "paint")
-        ce(
-          paintCellFormatting(workbook, sheetId, c, W),
+        applyWorkbookChange(
+          paintCellFormatting(workbook, sheetId, rangeStart, W),
           "Paint cell formatting",
         );
       else if (mode === "protection") {
-        const ke = await updateSheetProtection(
+        const protectedWorkbook = await updateSheetProtection(
           workbook,
           sheetId,
-          T,
+          protectionPassword,
           !sheet.protection?.enabled,
         );
-        ce(ke, sheet.protection?.enabled ? "Unprotect sheet" : "Protect sheet");
+        applyWorkbookChange(
+          protectedWorkbook,
+          sheet.protection?.enabled ? "Unprotect sheet" : "Protect sheet",
+        );
       } else if (mode === "conditional") {
         if (
-          ["greater", "less", "between"].includes(p) &&
-          (!v.trim() ||
-            !Number.isFinite(Number(v)) ||
-            (p === "between" && !Number.isFinite(Number(b))))
+          ["greater", "less", "between"].includes(ruleKind) &&
+          (!ruleValue.trim() ||
+            !Number.isFinite(Number(ruleValue)) ||
+            (ruleKind === "between" &&
+              !Number.isFinite(Number(ruleSecondValue))))
         )
           throw Error("Enter finite comparison values.");
-        const ke = {
+        const newConditionalFormat = {
           id: crypto.randomUUID(),
-          range: CE(h),
-          kind: p,
-          value: v,
-          second: b,
+          range: CE(rangeText),
+          kind: ruleKind,
+          value: ruleValue,
+          second: ruleSecondValue,
           fill: fill,
           color: color,
         };
-        ce(
+        applyWorkbookChange(
           {
             ...workbook,
             sheets: workbook.sheets.map((sheet) =>
@@ -165,7 +176,7 @@ function WorksheetToolDialog({
                     ...sheet,
                     conditionalFormats: [
                       ...(sheet.conditionalFormats ?? []),
-                      ke,
+                      newConditionalFormat,
                     ],
                   }
                 : sheet,
@@ -174,54 +185,60 @@ function WorksheetToolDialog({
           "Add conditional formatting",
         );
       } else if (mode === "validation") {
-        const ke = {
+        const newValidation = {
           id: crypto.randomUUID(),
-          range: CE(h),
-          kind: p,
+          range: CE(rangeText),
+          kind: ruleKind,
           operator: operator,
-          min: Number(v || 0),
-          max: Number(b),
-          list: v
+          min: Number(ruleValue || 0),
+          max: Number(ruleSecondValue),
+          list: ruleValue
             .split(",")
-            .map((je) => je.trim())
+            .map((listEntry) => listEntry.trim())
             .filter(Boolean),
-          allowBlank: O,
-          message: z,
+          allowBlank: allowBlank,
+          message: validationMessage,
         };
-        ce(
+        applyWorkbookChange(
           {
             ...workbook,
             sheets: workbook.sheets.map((sheet) =>
               sheet.id === sheetId
-                ? { ...sheet, validations: [...(sheet.validations ?? []), ke] }
+                ? {
+                    ...sheet,
+                    validations: [...(sheet.validations ?? []), newValidation],
+                  }
                 : sheet,
             ),
           },
           "Add data validation",
         );
       } else if (mode === "duplicates") {
-        const rangeAddress = parseRangeAddress(h),
-          je =
-            _ ??
+        const rangeAddress = parseRangeAddress(rangeText),
+          compareColumns =
+            selectedColumns ??
             Array.from(
               { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
-              (Je, ze) => rangeAddress.firstCol + ze,
+              (Je, offset) => rangeAddress.firstCol + offset,
             ),
-          $e = validateRemoveDuplicatesRequest(
+          removalResult = validateRemoveDuplicatesRequest(
             workbook,
             sheetId,
-            h,
-            je,
+            rangeText,
+            compareColumns,
             checked,
           );
-        if (!$e.removed) {
+        if (!removalResult.removed) {
           X$1("No duplicate rows found.");
           return;
         }
-        ce($e.workbook, `Remove ${$e.removed} duplicate rows from selection`);
+        applyWorkbookChange(
+          removalResult.workbook,
+          `Remove ${removalResult.removed} duplicate rows from selection`,
+        );
       } else if (mode === "insertRow" || mode === "insertColumn") {
-        const rangeAddress = parseRangeAddress(h),
-          je = {
+        const rangeAddress = parseRangeAddress(rangeText),
+          structuralEdit = {
             axis: mode === "insertRow" ? "row" : "column",
             index:
               mode === "insertRow"
@@ -230,46 +247,49 @@ function WorksheetToolDialog({
             count: count,
             remove: remove,
           };
-        ce(
-          applyStructuralEdit(workbook, sheetId, je),
-          `${remove ? "Delete" : "Insert"} ${count} ${je.axis}${count === 1 ? "" : "s"}`,
+        applyWorkbookChange(
+          applyStructuralEdit(workbook, sheetId, structuralEdit),
+          `${remove ? "Delete" : "Insert"} ${count} ${structuralEdit.axis}${count === 1 ? "" : "s"}`,
         );
       } else if (mode === "spelling") {
         if (readOnly) throw Error("This workbook is read-only.");
-        const ke = ae[oe];
-        if (!ke) throw Error("No text cells in the selected range.");
-        const cells = { ...sheet.cells, [ke[0]]: { ...ke[1], raw: raw } };
-        ce(
+        const spellingEntry = textCellEntries[spellingIndex];
+        if (!spellingEntry) throw Error("No text cells in the selected range.");
+        const cells = {
+          ...sheet.cells,
+          [spellingEntry[0]]: { ...spellingEntry[1], raw: raw },
+        };
+        applyWorkbookChange(
           renameTableHeaderField(workbook, {
             ...workbook,
             sheets: workbook.sheets.map((sheet) =>
               sheet.id === sheetId ? { ...sheet, cells: cells } : sheet,
             ),
           }),
-          `Spelling correction at ${ke[0]}`,
+          `Spelling correction at ${spellingEntry[0]}`,
         );
       }
     } catch (error) {
-      H(
+      setErrorMessage(
         error instanceof Error
           ? error.message
           : "The operation could not be completed.",
       );
     } finally {
-      q(false);
+      setIsSubmitting(false);
     }
   }
-  let se;
+  let activeRange;
   try {
-    se = parseRangeAddress(h);
+    activeRange = parseRangeAddress(rangeText);
   } catch {
-    se = parseRangeAddress(range);
+    activeRange = parseRangeAddress(range);
   }
-  const we =
-    se.lastCol - se.firstCol < 100
+  const columnIndexes =
+    activeRange.lastCol - activeRange.firstCol < 100
       ? Array.from(
-          { length: se.lastCol - se.firstCol + 1 },
-          (Re, Me) => se.firstCol + Me,
+          { length: activeRange.lastCol - activeRange.firstCol + 1 },
+          (Re, columnOffset) => activeRange.firstCol + columnOffset,
         )
       : [];
   return i.jsx("div", {
@@ -279,27 +299,29 @@ function WorksheetToolDialog({
     },
     children: i.jsxs("div", {
       className: "wt-dialog",
-      ref: te,
+      ref: dialogRef,
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": le[mode] ?? mode,
+      "aria-label": modeLabels[mode] ?? mode,
       onKeyDown: (event) => {
         if (
           (event.key === "Escape" && (event.stopPropagation(), onClose()),
           event.key === "Tab")
         ) {
-          const ke = Array.from(
-              te.current?.querySelectorAll(
+          const focusableElements = Array.from(
+              dialogRef.current?.querySelectorAll(
                 "button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])",
               ) ?? [],
             ),
-            je = ke[0],
-            $e = ke.at(-1);
-          event.shiftKey && document.activeElement === je
-            ? (event.preventDefault(), $e == null || $e.focus())
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === $e &&
-              (event.preventDefault(), je == null || je.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -308,7 +330,7 @@ function WorksheetToolDialog({
             i.jsxs("span", {
               children: [
                 i.jsx(Grid2x2, { size: 19 }),
-                i.jsx("h2", { children: le[mode] ?? mode }),
+                i.jsx("h2", { children: modeLabels[mode] ?? mode }),
               ],
             }),
             i.jsx("button", {
@@ -330,9 +352,10 @@ function WorksheetToolDialog({
                   i.jsx(LocalizedText, { children: "Range" }),
                   i.jsx("input", {
                     "aria-label": text("Tool range"),
-                    value: h,
+                    value: rangeText,
                     onChange: (event) => {
-                      (f(event.target.value), C(null));
+                      (setRangeText(event.target.value),
+                        setSelectedColumns(null));
                     },
                     lang: language("Tool range"),
                     "data-ui-label": "Tool range",
@@ -350,7 +373,9 @@ function WorksheetToolDialog({
                         children: "Copy formatting from",
                       }),
                       " ",
-                      i.jsxs("strong", { children: [sheet.name, "!", c] }),
+                      i.jsxs("strong", {
+                        children: [sheet.name, "!", rangeStart],
+                      }),
                       ".",
                     ],
                   }),
@@ -390,12 +415,17 @@ function WorksheetToolDialog({
                     disabled: readOnly,
                     onClick: () => {
                       try {
-                        ce(
-                          mergeWorksheetCells(workbook, sheetId, h, true),
+                        applyWorkbookChange(
+                          mergeWorksheetCells(
+                            workbook,
+                            sheetId,
+                            rangeText,
+                            true,
+                          ),
                           "Unmerge cells",
                         );
                       } catch (error) {
-                        H(String(error));
+                        setErrorMessage(String(error));
                       }
                     },
                     children: i.jsx(LocalizedText, {
@@ -412,8 +442,8 @@ function WorksheetToolDialog({
                       i.jsx(LocalizedText, { children: "Rule" }),
                       i.jsxs("select", {
                         "aria-label": text("Conditional rule"),
-                        value: p,
-                        onChange: (event) => m(event.target.value),
+                        value: ruleKind,
+                        onChange: (event) => setRuleKind(event.target.value),
                         lang: language("Conditional rule"),
                         "data-ui-label": "Conditional rule",
                         children: [
@@ -449,27 +479,28 @@ function WorksheetToolDialog({
                       }),
                     ],
                   }),
-                  !["duplicate", "colorScale"].includes(p) &&
+                  !["duplicate", "colorScale"].includes(ruleKind) &&
                     i.jsxs("label", {
                       children: [
                         i.jsx(LocalizedText, { children: "Value" }),
                         i.jsx("input", {
                           "aria-label": text("Conditional value"),
-                          value: v,
-                          onChange: (event) => g(event.target.value),
+                          value: ruleValue,
+                          onChange: (event) => setRuleValue(event.target.value),
                           lang: language("Conditional value"),
                           "data-ui-label": "Conditional value",
                         }),
                       ],
                     }),
-                  p === "between" &&
+                  ruleKind === "between" &&
                     i.jsxs("label", {
                       children: [
                         i.jsx(LocalizedText, { children: "Maximum" }),
                         i.jsx("input", {
                           "aria-label": text("Conditional maximum"),
-                          value: b,
-                          onChange: (event) => y(event.target.value),
+                          value: ruleSecondValue,
+                          onChange: (event) =>
+                            setRuleSecondValue(event.target.value),
                           lang: language("Conditional maximum"),
                           "data-ui-label": "Conditional maximum",
                         }),
@@ -485,7 +516,7 @@ function WorksheetToolDialog({
                             type: "color",
                             "aria-label": text("Conditional fill"),
                             value: fill,
-                            onChange: (event) => E(event.target.value),
+                            onChange: (event) => setFill(event.target.value),
                             lang: language("Conditional fill"),
                             "data-ui-label": "Conditional fill",
                           }),
@@ -498,7 +529,7 @@ function WorksheetToolDialog({
                             type: "color",
                             "aria-label": text("Conditional color"),
                             value: color,
-                            onChange: (event) => k(event.target.value),
+                            onChange: (event) => setColor(event.target.value),
                             lang: language("Conditional color"),
                             "data-ui-label": "Conditional color",
                           }),
@@ -529,7 +560,7 @@ function WorksheetToolDialog({
                           i.jsx("button", {
                             disabled: readOnly,
                             onClick: () =>
-                              ce(
+                              applyWorkbookChange(
                                 {
                                   ...workbook,
                                   sheets: workbook.sheets.map((sheet) =>
@@ -538,8 +569,9 @@ function WorksheetToolDialog({
                                           ...sheet,
                                           conditionalFormats:
                                             sheet.conditionalFormats?.filter(
-                                              (je) =>
-                                                je.id !== conditionalFormat.id,
+                                              (formatEntry) =>
+                                                formatEntry.id !==
+                                                conditionalFormat.id,
                                             ),
                                         }
                                       : sheet,
@@ -566,8 +598,8 @@ function WorksheetToolDialog({
                       i.jsx(LocalizedText, { children: "Allow" }),
                       i.jsxs("select", {
                         "aria-label": text("Validation type"),
-                        value: p,
-                        onChange: (event) => m(event.target.value),
+                        value: ruleKind,
+                        onChange: (event) => setRuleKind(event.target.value),
                         lang: language("Validation type"),
                         "data-ui-label": "Validation type",
                         children: [
@@ -592,14 +624,14 @@ function WorksheetToolDialog({
                       }),
                     ],
                   }),
-                  p !== "list" &&
+                  ruleKind !== "list" &&
                     i.jsxs("label", {
                       children: [
                         i.jsx(LocalizedText, { children: "Condition" }),
                         i.jsxs("select", {
                           "aria-label": text("Validation operator"),
                           value: operator,
-                          onChange: (event) => I(event.target.value),
+                          onChange: (event) => setOperator(event.target.value),
                           lang: language("Validation operator"),
                           "data-ui-label": "Validation operator",
                           children: [
@@ -625,29 +657,32 @@ function WorksheetToolDialog({
                     }),
                   i.jsxs("label", {
                     children: [
-                      p === "list"
+                      ruleKind === "list"
                         ? "Values, separated by commas"
                         : "Minimum / comparison value",
                       i.jsx("input", {
                         "aria-label": text("Validation values"),
-                        value: v,
-                        onChange: (event) => g(event.target.value),
+                        value: ruleValue,
+                        onChange: (event) => setRuleValue(event.target.value),
                         placeholder:
-                          p === "list" ? "Pending, Complete, Reviewed" : "0",
+                          ruleKind === "list"
+                            ? "Pending, Complete, Reviewed"
+                            : "0",
                         lang: language("Validation values"),
                         "data-ui-label": "Validation values",
                       }),
                     ],
                   }),
-                  p !== "list" &&
+                  ruleKind !== "list" &&
                     operator === "between" &&
                     i.jsxs("label", {
                       children: [
                         i.jsx(LocalizedText, { children: "Maximum" }),
                         i.jsx("input", {
                           "aria-label": text("Validation maximum"),
-                          value: b,
-                          onChange: (event) => y(event.target.value),
+                          value: ruleSecondValue,
+                          onChange: (event) =>
+                            setRuleSecondValue(event.target.value),
                           lang: language("Validation maximum"),
                           "data-ui-label": "Validation maximum",
                         }),
@@ -658,8 +693,9 @@ function WorksheetToolDialog({
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
-                        checked: O,
-                        onChange: (event) => j(event.target.checked),
+                        checked: allowBlank,
+                        onChange: (event) =>
+                          setAllowBlank(event.target.checked),
                       }),
                       i.jsx(LocalizedText, { children: "Allow blank cells" }),
                     ],
@@ -669,8 +705,9 @@ function WorksheetToolDialog({
                       i.jsx(LocalizedText, { children: "Error message" }),
                       i.jsx("input", {
                         "aria-label": text("Validation message"),
-                        value: z,
-                        onChange: (event) => V(event.target.value),
+                        value: validationMessage,
+                        onChange: (event) =>
+                          setValidationMessage(event.target.value),
                         lang: language("Validation message"),
                         "data-ui-label": "Validation message",
                       }),
@@ -692,7 +729,7 @@ function WorksheetToolDialog({
                           i.jsx("button", {
                             disabled: readOnly,
                             onClick: () =>
-                              ce(
+                              applyWorkbookChange(
                                 {
                                   ...workbook,
                                   sheets: workbook.sheets.map((sheet) =>
@@ -701,7 +738,9 @@ function WorksheetToolDialog({
                                           ...sheet,
                                           validations:
                                             sheet.validations?.filter(
-                                              (je) => je.id !== validation.id,
+                                              (validationEntry) =>
+                                                validationEntry.id !==
+                                                validation.id,
                                             ),
                                         }
                                       : sheet,
@@ -729,7 +768,7 @@ function WorksheetToolDialog({
                       i.jsx("input", {
                         type: "checkbox",
                         checked: checked,
-                        onChange: (event) => B(event.target.checked),
+                        onChange: (event) => setChecked(event.target.checked),
                       }),
                       i.jsx(LocalizedText, { children: "My data has headers" }),
                     ],
@@ -741,7 +780,7 @@ function WorksheetToolDialog({
                           children: "Compare these columns",
                         }),
                       }),
-                      we.map((Re) =>
+                      columnIndexes.map((columnIndex) =>
                         i.jsxs(
                           "label",
                           {
@@ -749,25 +788,35 @@ function WorksheetToolDialog({
                             children: [
                               i.jsx("input", {
                                 type: "checkbox",
-                                checked: (_ ?? we).includes(Re),
+                                checked: (
+                                  selectedColumns ?? columnIndexes
+                                ).includes(columnIndex),
                                 onChange: (event) =>
-                                  C(
+                                  setSelectedColumns(
                                     event.target.checked
-                                      ? [...(_ ?? we), Re]
-                                      : (_ ?? we).filter((je) => je !== Re),
+                                      ? [
+                                          ...(selectedColumns ?? columnIndexes),
+                                          columnIndex,
+                                        ]
+                                      : (
+                                          selectedColumns ?? columnIndexes
+                                        ).filter(
+                                          (selectedColumn) =>
+                                            selectedColumn !== columnIndex,
+                                        ),
                                   ),
                               }),
-                              columnIndexToLetters(Re),
+                              columnIndexToLetters(columnIndex),
                               " ·",
                               " ",
                               String(
                                 sheet.cells[
-                                  `${columnIndexToLetters(Re)}${se.firstRow + 1}`
+                                  `${columnIndexToLetters(columnIndex)}${activeRange.firstRow + 1}`
                                 ]?.raw ?? "",
                               ),
                             ],
                           },
-                          Re,
+                          columnIndex,
                         ),
                       ),
                     ],
@@ -801,8 +850,9 @@ function WorksheetToolDialog({
                       i.jsx("input", {
                         type: "password",
                         "aria-label": text("Sheet password"),
-                        value: T,
-                        onChange: (event) => N(event.target.value),
+                        value: protectionPassword,
+                        onChange: (event) =>
+                          setProtectionPassword(event.target.value),
                         autoComplete: "new-password",
                         lang: language("Sheet password"),
                         "data-ui-label": "Sheet password",
@@ -827,7 +877,8 @@ function WorksheetToolDialog({
                       i.jsxs("select", {
                         "aria-label": text("Structure operation"),
                         value: remove ? "delete" : "insert",
-                        onChange: (event) => U(event.target.value === "delete"),
+                        onChange: (event) =>
+                          setRemove(event.target.value === "delete"),
                         lang: language("Structure operation"),
                         "data-ui-label": "Structure operation",
                         children: [
@@ -851,7 +902,8 @@ function WorksheetToolDialog({
                         max: "10000",
                         "aria-label": text("Structure count"),
                         value: count,
-                        onValueChange: (Re) => L(Number(Re)),
+                        onValueChange: (countText) =>
+                          setCount(Number(countText)),
                         lang: language("Structure count"),
                         "data-ui-label": "Structure count",
                       }),
@@ -879,7 +931,7 @@ function WorksheetToolDialog({
                       }),
                     ],
                   }),
-                  ae.length
+                  textCellEntries.length
                     ? i.jsxs(i.Fragment, {
                         children: [
                           i.jsxs("label", {
@@ -887,19 +939,30 @@ function WorksheetToolDialog({
                               i.jsx(LocalizedText, { children: "Cell" }),
                               i.jsx("select", {
                                 "aria-label": text("Spelling cell"),
-                                value: oe,
+                                value: spellingIndex,
                                 onChange: (event) => {
-                                  const Me = Number(event.target.value);
-                                  (de(Me), Se(String(ae[Me][1].raw)));
+                                  const selectedIndex = Number(
+                                    event.target.value,
+                                  );
+                                  (setSpellingIndex(selectedIndex),
+                                    setRawValue(
+                                      String(
+                                        textCellEntries[selectedIndex][1].raw,
+                                      ),
+                                    ));
                                 },
                                 lang: language("Spelling cell"),
                                 "data-ui-label": "Spelling cell",
-                                children: ae.map(([Re], Me) =>
-                                  i.jsx(
-                                    "option",
-                                    { value: Me, children: Re },
-                                    Re,
-                                  ),
+                                children: textCellEntries.map(
+                                  ([entryAddress], optionIndex) =>
+                                    i.jsx(
+                                      "option",
+                                      {
+                                        value: optionIndex,
+                                        children: entryAddress,
+                                      },
+                                      entryAddress,
+                                    ),
                                 ),
                               }),
                             ],
@@ -909,7 +972,8 @@ function WorksheetToolDialog({
                             spellCheck: true,
                             autoCorrect: "on",
                             value: raw,
-                            onChange: (event) => Se(event.target.value),
+                            onChange: (event) =>
+                              setRawValue(event.target.value),
                             readOnly,
                             lang: language("Spelling text"),
                             "data-ui-label": "Spelling text",
@@ -931,9 +995,14 @@ function WorksheetToolDialog({
                   }),
                 ],
               }),
-            Q && i.jsx("p", { role: "status", children: Q }),
-            G &&
-              i.jsx("p", { className: "wt-error", role: "alert", children: G }),
+            statusMessage &&
+              i.jsx("p", { role: "status", children: statusMessage }),
+            errorMessage &&
+              i.jsx("p", {
+                className: "wt-error",
+                role: "alert",
+                children: errorMessage,
+              }),
           ],
         }),
         i.jsxs("footer", {
@@ -944,9 +1013,9 @@ function WorksheetToolDialog({
             }),
             i.jsx("button", {
               className: "wt-primary",
-              disabled: J || readOnly,
-              onClick: () => void ge(),
-              children: J
+              disabled: isSubmitting || readOnly,
+              onClick: () => void runToolAction(),
+              children: isSubmitting
                 ? "Applying…"
                 : mode === "spelling"
                   ? "Save correction"
@@ -974,15 +1043,15 @@ function TableColumnTypesPanel({
     table = workbook.sheets
       .find((sheet) => sheet.id === sheetId)
       .tables.find((table) => table.id === tableId),
-    [columnId, c] = ne.useState(table.columns[0].id),
-    [dataType, f] = ne.useState(table.columns[0].dataType ?? "any"),
-    [mode, m] = ne.useState("convert"),
-    [invalid, g] = ne.useState("reject"),
-    [decimal, y] = ne.useState("."),
-    [group, E] = ne.useState(","),
-    [A, k] = ne.useState(null),
-    [F, I] = ne.useState(""),
-    [O, j] = ne.useState(0),
+    [columnId, setColumnId] = ne.useState(table.columns[0].id),
+    [dataType, setDataType] = ne.useState(table.columns[0].dataType ?? "any"),
+    [mode, setMode] = ne.useState("convert"),
+    [invalid, setInvalid] = ne.useState("reject"),
+    [decimal, setDecimal] = ne.useState("."),
+    [group, setGroup] = ne.useState(","),
+    [columnTypePreview, setColumnTypePreview] = ne.useState(null),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [pageIndex, setPageIndex] = ne.useState(0),
     request = {
       columnId: columnId,
       dataType: dataType,
@@ -991,17 +1060,22 @@ function TableColumnTypesPanel({
       decimal: decimal,
       group: group,
     },
-    V = JSON.stringify({ context, request: request }),
-    D =
-      !!A && (A.context !== V || A.plan.snapshot !== JSON.stringify(workbook)),
-    B = ne.useMemo(() => {
+    requestKey = JSON.stringify({ context, request: request }),
+    isPreviewStale =
+      !!columnTypePreview &&
+      (columnTypePreview.context !== requestKey ||
+        columnTypePreview.plan.snapshot !== JSON.stringify(workbook)),
+    currentTypeReport = ne.useMemo(() => {
       try {
         return setTableColumnDataType(workbook, sheetId, tableId, columnId);
       } catch {
         return null;
       }
     }, [workbook, sheetId, tableId, columnId]),
-    _ = workbook.tableEvidence?.filter((T) => T.tableId === tableId) ?? [];
+    tableEvidence =
+      workbook.tableEvidence?.filter(
+        (evidenceRecord) => evidenceRecord.tableId === tableId,
+      ) ?? [];
   return i.jsxs("details", {
     children: [
       i.jsx("summary", {
@@ -1022,13 +1096,13 @@ function TableColumnTypesPanel({
                 "aria-label": text("Typed column"),
                 value: columnId,
                 onChange: (event) => {
-                  (c(event.target.value),
-                    f(
+                  (setColumnId(event.target.value),
+                    setDataType(
                       table.columns.find(
                         (column) => column.id === event.target.value,
                       )?.dataType ?? "any",
                     ),
-                    k(null));
+                    setColumnTypePreview(null));
                 },
                 lang: language("Typed column"),
                 "data-ui-label": "Typed column",
@@ -1048,19 +1122,21 @@ function TableColumnTypesPanel({
             "data-ui-label": "Current column type",
             children: [
               i.jsx(LocalizedText, { children: "Saved type: " }),
-              B?.dataType ?? "unknown",
+              currentTypeReport?.dataType ?? "unknown",
               "; ",
-              B?.checked ?? 0,
+              currentTypeReport?.checked ?? 0,
               " ",
               i.jsx(LocalizedText, { children: "rows checked; " }),
-              B?.exceptions.length ?? 0,
+              currentTypeReport?.exceptions.length ?? 0,
               " ",
               i.jsx(LocalizedText, { children: "exceptions" }),
-              B?.truncated ? " — partial inspection (first 500 rows)" : "",
+              currentTypeReport?.truncated
+                ? " — partial inspection (first 500 rows)"
+                : "",
               ".",
             ],
           }),
-          !!B?.exceptions.length &&
+          !!currentTypeReport?.exceptions.length &&
             i.jsxs("details", {
               children: [
                 i.jsx("summary", {
@@ -1068,13 +1144,19 @@ function TableColumnTypesPanel({
                     children: "Current type exceptions",
                   }),
                 }),
-                B.exceptions
+                currentTypeReport.exceptions
                   .slice(0, 50)
-                  .map((T) =>
+                  .map((exceptionEntry) =>
                     i.jsxs(
                       "p",
-                      { children: [T.address, ": ", JSON.stringify(T.value)] },
-                      T.address,
+                      {
+                        children: [
+                          exceptionEntry.address,
+                          ": ",
+                          JSON.stringify(exceptionEntry.value),
+                        ],
+                      },
+                      exceptionEntry.address,
                     ),
                   ),
               ],
@@ -1085,7 +1167,7 @@ function TableColumnTypesPanel({
               i.jsx("select", {
                 "aria-label": text("Column type"),
                 value: dataType,
-                onChange: (event) => f(event.target.value),
+                onChange: (event) => setDataType(event.target.value),
                 lang: language("Column type"),
                 "data-ui-label": "Column type",
                 children: tableColumnDataTypes.map((tableColumnDataType) =>
@@ -1109,7 +1191,7 @@ function TableColumnTypesPanel({
               i.jsx(LocalizedText, { children: "Type operation" }),
               i.jsxs("select", {
                 value: mode,
-                onChange: (event) => m(event.target.value),
+                onChange: (event) => setMode(event.target.value),
                 children: [
                   i.jsx("option", {
                     value: "convert",
@@ -1133,7 +1215,7 @@ function TableColumnTypesPanel({
                     i.jsx(LocalizedText, { children: "Decimal separator" }),
                     i.jsxs("select", {
                       value: decimal,
-                      onChange: (event) => y(event.target.value),
+                      onChange: (event) => setDecimal(event.target.value),
                       children: [
                         i.jsx("option", { value: ".", children: "Period" }),
                         i.jsx("option", { value: ",", children: "Comma" }),
@@ -1146,7 +1228,7 @@ function TableColumnTypesPanel({
                     i.jsx(LocalizedText, { children: "Group separator" }),
                     i.jsxs("select", {
                       value: group,
-                      onChange: (event) => E(event.target.value),
+                      onChange: (event) => setGroup(event.target.value),
                       children: [
                         i.jsx("option", { value: ",", children: "Comma" }),
                         i.jsx("option", { value: ".", children: "Period" }),
@@ -1163,7 +1245,7 @@ function TableColumnTypesPanel({
               i.jsx(LocalizedText, { children: "Unconvertible values" }),
               i.jsxs("select", {
                 value: invalid,
-                onChange: (event) => g(event.target.value),
+                onChange: (event) => setInvalid(event.target.value),
                 children: [
                   i.jsx("option", {
                     value: "reject",
@@ -1184,14 +1266,16 @@ function TableColumnTypesPanel({
                 "Preview up to 500 rows. Blanks and formulas are preserved. Types report current exceptions; ordinary edits are not coerced. Explicit row appends must match the saved types. Native JSON retains original headers and converted cells, including their notes and formats.",
             }),
           }),
-          F && i.jsx("p", { role: "alert", children: F }),
+          errorMessage && i.jsx("p", { role: "alert", children: errorMessage }),
           i.jsx("button", {
             type: "button",
             disabled: readOnly,
             onClick: () => {
-              (I(""), j(0), k(null));
+              (setErrorMessage(""),
+                setPageIndex(0),
+                setColumnTypePreview(null));
               try {
-                k({
+                setColumnTypePreview({
                   plan: previewColumnTypeChange(
                     workbook,
                     sheetId,
@@ -1201,15 +1285,15 @@ function TableColumnTypesPanel({
                       readOnly,
                     },
                   ),
-                  context: V,
+                  context: requestKey,
                 });
               } catch (error) {
-                I(error.message);
+                setErrorMessage(error.message);
               }
             },
             children: i.jsx(LocalizedText, { children: "Preview column type" }),
           }),
-          A &&
+          columnTypePreview &&
             i.jsxs("section", {
               "aria-label": text("Column type preview"),
               className: "lg-table-preview",
@@ -1223,21 +1307,21 @@ function TableColumnTypesPanel({
                 }),
                 i.jsxs("p", {
                   children: [
-                    A.plan.beforeType,
+                    columnTypePreview.plan.beforeType,
                     " → ",
-                    A.plan.request.dataType,
+                    columnTypePreview.plan.request.dataType,
                     ";",
                     " ",
-                    A.plan.changes.length,
+                    columnTypePreview.plan.changes.length,
                     " ",
                     i.jsx(LocalizedText, { children: "cell changes;" }),
                     " ",
-                    A.plan.exceptions.length,
+                    columnTypePreview.plan.exceptions.length,
                     " ",
                     i.jsx(LocalizedText, { children: "exceptions." }),
                   ],
                 }),
-                D &&
+                isPreviewStale &&
                   i.jsx("p", {
                     role: "alert",
                     children: i.jsx(LocalizedText, {
@@ -1245,7 +1329,7 @@ function TableColumnTypesPanel({
                         "The workbook, selection or settings changed. Preview again.",
                     }),
                   }),
-                !A.plan.canApply &&
+                !columnTypePreview.plan.canApply &&
                   i.jsx("p", {
                     role: "alert",
                     children: i.jsx(LocalizedText, {
@@ -1254,29 +1338,29 @@ function TableColumnTypesPanel({
                     }),
                   }),
                 i.jsx("ol", {
-                  start: O * 20 + 1,
+                  start: pageIndex * 20 + 1,
                   children: [
-                    ...A.plan.changes.map((change) => ({
+                    ...columnTypePreview.plan.changes.map((change) => ({
                       address: change.address,
                       text: `${JSON.stringify(change.before?.raw ?? null)} → ${JSON.stringify(change.after.raw)}`,
                     })),
-                    ...A.plan.exceptions.map((exception) => ({
+                    ...columnTypePreview.plan.exceptions.map((exception) => ({
                       address: exception.address,
                       text: `Retained ${JSON.stringify(exception.value)}: ${exception.reason}`,
                     })),
                   ]
-                    .slice(O * 20, O * 20 + 20)
-                    .map((T) =>
+                    .slice(pageIndex * 20, pageIndex * 20 + 20)
+                    .map((changeItem) =>
                       i.jsxs(
                         "li",
                         {
                           children: [
-                            i.jsx("strong", { children: T.address }),
+                            i.jsx("strong", { children: changeItem.address }),
                             ": ",
-                            T.text,
+                            changeItem.text,
                           ],
                         },
-                        T.address,
+                        changeItem.address,
                       ),
                     ),
                 }),
@@ -1285,8 +1369,9 @@ function TableColumnTypesPanel({
                   children: [
                     i.jsx("button", {
                       type: "button",
-                      disabled: !O,
-                      onClick: () => j((T) => T - 1),
+                      disabled: !pageIndex,
+                      onClick: () =>
+                        setPageIndex((currentPage) => currentPage - 1),
                       children: i.jsx(LocalizedText, {
                         children: "Previous type changes",
                       }),
@@ -1294,15 +1379,17 @@ function TableColumnTypesPanel({
                     i.jsxs("span", {
                       children: [
                         i.jsx(LocalizedText, { children: "Page " }),
-                        O + 1,
+                        pageIndex + 1,
                       ],
                     }),
                     i.jsx("button", {
                       type: "button",
                       disabled:
-                        (O + 1) * 20 >=
-                        A.plan.changes.length + A.plan.exceptions.length,
-                      onClick: () => j((T) => T + 1),
+                        (pageIndex + 1) * 20 >=
+                        columnTypePreview.plan.changes.length +
+                          columnTypePreview.plan.exceptions.length,
+                      onClick: () =>
+                        setPageIndex((pageNumber) => pageNumber + 1),
                       children: i.jsx(LocalizedText, {
                         children: "Next type changes",
                       }),
@@ -1311,19 +1398,29 @@ function TableColumnTypesPanel({
                 }),
                 i.jsx("button", {
                   type: "button",
-                  disabled: readOnly || D || !A.plan.canApply,
+                  disabled:
+                    readOnly ||
+                    isPreviewStale ||
+                    !columnTypePreview.plan.canApply,
                   onClick: () => {
-                    I("");
+                    setErrorMessage("");
                     try {
-                      if (D) throw Error("Preview again.");
-                      const T = applyColumnTypePreview(workbook, A.plan, {
-                        readOnly,
-                      });
-                      (T !== workbook &&
-                        onWorkbookChange(T, "Apply reviewed table column type"),
-                        k(null));
+                      if (isPreviewStale) throw Error("Preview again.");
+                      const appliedWorkbook = applyColumnTypePreview(
+                        workbook,
+                        columnTypePreview.plan,
+                        {
+                          readOnly,
+                        },
+                      );
+                      (appliedWorkbook !== workbook &&
+                        onWorkbookChange(
+                          appliedWorkbook,
+                          "Apply reviewed table column type",
+                        ),
+                        setColumnTypePreview(null));
                     } catch (error) {
-                      I(error.message);
+                      setErrorMessage(error.message);
                     }
                   },
                   children: i.jsx(LocalizedText, {
@@ -1332,7 +1429,7 @@ function TableColumnTypesPanel({
                 }),
                 i.jsx("button", {
                   type: "button",
-                  onClick: () => k(null),
+                  onClick: () => setColumnTypePreview(null),
                   children: i.jsx(LocalizedText, {
                     children: "Cancel type preview",
                   }),
@@ -1346,7 +1443,7 @@ function TableColumnTypesPanel({
                   i.jsx(LocalizedText, {
                     children: "Saved original source evidence (",
                   }),
-                  _.length,
+                  tableEvidence.length,
                   ")",
                 ],
               }),
@@ -1356,29 +1453,31 @@ function TableColumnTypesPanel({
                     "Historical addresses and source revisions. Save native JSON to retain these records; XLSX carries current values only.",
                 }),
               }),
-              _.map((T) =>
+              tableEvidence.map((evidence) =>
                 i.jsxs(
                   "details",
                   {
                     children: [
                       i.jsxs("summary", {
                         children: [
-                          T.kind,
+                          evidence.kind,
                           " ",
                           i.jsx(LocalizedText, {
                             children: "· source revision ",
                           }),
-                          T.sourceRevision,
+                          evidence.sourceRevision,
                           " · ",
-                          T.changes.length,
+                          evidence.changes.length,
                           " ",
                           i.jsx(LocalizedText, { children: "cells" }),
                         ],
                       }),
-                      i.jsx("pre", { children: JSON.stringify(T, null, 2) }),
+                      i.jsx("pre", {
+                        children: JSON.stringify(evidence, null, 2),
+                      }),
                     ],
                   },
-                  T.id,
+                  evidence.id,
                 ),
               ),
             ],
@@ -1516,11 +1615,13 @@ function PivotFieldOptionsPanel({
                 "Each calculation uses source-field sums within each group and total. These are aggregate calculations. Use a table calculated column for arithmetic on individual records. Choose sum in Value fields.",
             }),
           }),
-          calculatedFields.map((calculatedField, l) => {
-            const c = (h) =>
+          calculatedFields.map((calculatedField, calculationIndex) => {
+            const updateCalculation = (changes) =>
               setCalculatedFields(
-                calculatedFields.map((calculatedField, p) =>
-                  l === p ? { ...calculatedField, ...h } : calculatedField,
+                calculatedFields.map((calculatedField, itemIndex) =>
+                  calculationIndex === itemIndex
+                    ? { ...calculatedField, ...changes }
+                    : calculatedField,
                 ),
               );
             return i.jsxs(
@@ -1531,7 +1632,7 @@ function PivotFieldOptionsPanel({
                   i.jsxs("legend", {
                     children: [
                       i.jsx(LocalizedText, { children: "Calculation " }),
-                      l + 1,
+                      calculationIndex + 1,
                     ],
                   }),
                   i.jsxs("label", {
@@ -1539,20 +1640,22 @@ function PivotFieldOptionsPanel({
                       i.jsx(LocalizedText, {
                         children: "Calculated field name ",
                       }),
-                      l + 1,
+                      calculationIndex + 1,
                       i.jsx("input", {
                         value: calculatedField.name,
-                        onChange: (event) => c({ name: event.target.value }),
+                        onChange: (event) =>
+                          updateCalculation({ name: event.target.value }),
                       }),
                     ],
                   }),
                   i.jsxs("label", {
                     children: [
                       i.jsx(LocalizedText, { children: "Left source field " }),
-                      l + 1,
+                      calculationIndex + 1,
                       i.jsx("select", {
                         value: calculatedField.field,
-                        onChange: (event) => c({ field: event.target.value }),
+                        onChange: (event) =>
+                          updateCalculation({ field: event.target.value }),
                         children: fields.map((field) =>
                           i.jsx("option", { children: field }, field),
                         ),
@@ -1564,13 +1667,14 @@ function PivotFieldOptionsPanel({
                       i.jsx(LocalizedText, {
                         children: "Calculation operation ",
                       }),
-                      l + 1,
+                      calculationIndex + 1,
                       i.jsx("select", {
                         value: calculatedField.operation,
                         onChange: (event) =>
-                          c({ operation: event.target.value }),
+                          updateCalculation({ operation: event.target.value }),
                         children: ["add", "subtract", "multiply", "divide"].map(
-                          (h) => i.jsx("option", { children: h }, h),
+                          (operation) =>
+                            i.jsx("option", { children: operation }, operation),
                         ),
                       }),
                     ],
@@ -1578,22 +1682,23 @@ function PivotFieldOptionsPanel({
                   i.jsxs("label", {
                     children: [
                       i.jsx(LocalizedText, { children: "Right operand " }),
-                      l + 1,
+                      calculationIndex + 1,
                       i.jsxs("select", {
                         value: calculatedField.otherField ?? "",
                         onChange: (event) =>
                           setCalculatedFields(
-                            calculatedFields.map((calculatedField, p) =>
-                              p !== l
-                                ? calculatedField
-                                : {
-                                    name: calculatedField.name,
-                                    field: calculatedField.field,
-                                    operation: calculatedField.operation,
-                                    ...(event.target.value
-                                      ? { otherField: event.target.value }
-                                      : { constant: 1 }),
-                                  },
+                            calculatedFields.map(
+                              (calculatedField, fieldIndex) =>
+                                fieldIndex !== calculationIndex
+                                  ? calculatedField
+                                  : {
+                                      name: calculatedField.name,
+                                      field: calculatedField.field,
+                                      operation: calculatedField.operation,
+                                      ...(event.target.value
+                                        ? { otherField: event.target.value }
+                                        : { constant: 1 }),
+                                    },
                             ),
                           ),
                         children: [
@@ -1614,14 +1719,21 @@ function PivotFieldOptionsPanel({
                         i.jsx(LocalizedText, {
                           children: "Calculation constant ",
                         }),
-                        l + 1,
+                        calculationIndex + 1,
                         i.jsx(LocalizedNumberField, {
-                          "aria-label": text("Calculation constant ") + (l + 1),
+                          "aria-label":
+                            text("Calculation constant ") +
+                            (calculationIndex + 1),
                           value: Number.isFinite(calculatedField.constant)
                             ? calculatedField.constant
                             : "",
-                          onValueChange: (h) =>
-                            c({ constant: h === "" ? NaN : Number(h) }),
+                          onValueChange: (constantText) =>
+                            updateCalculation({
+                              constant:
+                                constantText === ""
+                                  ? NaN
+                                  : Number(constantText),
+                            }),
                         }),
                       ],
                     }),
@@ -1630,44 +1742,45 @@ function PivotFieldOptionsPanel({
                     onClick: () =>
                       setCalculatedFields(
                         calculatedFields.filter(
-                          (calculatedField, f) => f !== l,
+                          (calculatedField, entryIndex) =>
+                            entryIndex !== calculationIndex,
                         ),
                       ),
                     children: [
                       i.jsx(LocalizedText, { children: "Remove calculation " }),
-                      l + 1,
+                      calculationIndex + 1,
                     ],
                   }),
                 ],
               },
-              l,
+              calculationIndex,
             );
           }),
           i.jsx("button", {
             type: "button",
             disabled: !fields.length || calculatedFields.length >= 100,
             onClick: () => {
-              let u = 1;
+              let nameSuffix = 1;
               for (
                 ;
-                fields.includes(`Calculated${u}`) ||
+                fields.includes(`Calculated${nameSuffix}`) ||
                 calculatedFields.some(
                   (calculatedField) =>
-                    calculatedField.name === `Calculated${u}`,
+                    calculatedField.name === `Calculated${nameSuffix}`,
                 );
               )
-                u++;
-              const l = `Calculated${u}`;
+                nameSuffix++;
+              const newCalculatedName = `Calculated${nameSuffix}`;
               (setCalculatedFields([
                 ...calculatedFields,
                 {
-                  name: l,
+                  name: newCalculatedName,
                   field: fields.at(-1),
                   operation: "multiply",
                   constant: 1,
                 },
               ]),
-                onAdd(l));
+                onAdd(newCalculatedName));
             },
             children: i.jsx(LocalizedText, {
               children: "Add calculated pivot field",
@@ -1679,26 +1792,26 @@ function PivotFieldOptionsPanel({
   });
 }
 function PivotStatusBadge({ workbook, pivotId, compact = false }) {
-  const n = ne.useMemo(
+  const refreshState = ne.useMemo(
       () => getPivotRefreshState(workbook, pivotId),
       [workbook, pivotId],
     ),
-    definition = n.definition,
+    definition = refreshState.definition,
     refresh = definition.refresh;
   return i.jsxs("section", {
     "aria-label": `Pivot status ${definition.name}`,
-    className: `lg-pivot-status ${n.state}`,
+    className: `lg-pivot-status ${refreshState.state}`,
     children: [
       i.jsxs("strong", {
         children: [
           definition.name,
           ":",
           " ",
-          n.state === "current"
+          refreshState.state === "current"
             ? "Current"
-            : n.state === "stale"
+            : refreshState.state === "stale"
               ? "Stale — refresh required"
-              : n.state === "unverified"
+              : refreshState.state === "unverified"
                 ? "Unverified — refresh required"
                 : "Source unavailable",
         ],
@@ -1716,10 +1829,10 @@ function PivotStatusBadge({ workbook, pivotId, compact = false }) {
           refresh?.at ?? "not recorded",
         ],
       }),
-      n.state !== "current" &&
+      refreshState.state !== "current" &&
         i.jsxs("p", {
           children: [
-            n.reason,
+            refreshState.reason,
             " ",
             i.jsx(LocalizedText, {
               children: "Existing totals are retained as historical output.",
@@ -1748,7 +1861,7 @@ function PivotStatusBadge({ workbook, pivotId, compact = false }) {
               ],
             }),
             i.jsx("ul", {
-              children: refresh.measures.map((measure, d) =>
+              children: refresh.measures.map((measure, measureIndex) =>
                 i.jsxs(
                   "li",
                   {
@@ -1765,7 +1878,7 @@ function PivotStatusBadge({ workbook, pivotId, compact = false }) {
                       i.jsx(LocalizedText, { children: "nonblank inputs" }),
                     ],
                   },
-                  d,
+                  measureIndex,
                 ),
               ),
             }),
@@ -1782,27 +1895,28 @@ function PivotStatusBadge({ workbook, pivotId, compact = false }) {
 }
 function PivotResultsStatusBar({ workbook, sheetId, onOpen, onExplore }) {
   const { text, language } = useWorkbookMessages(),
-    s = workbook.sheets.find((sheet) => sheet.id === sheetId)?.pivots ?? [];
-  return s.length
+    pivots =
+      workbook.sheets.find((sheet) => sheet.id === sheetId)?.pivots ?? [];
+  return pivots.length
     ? i.jsxs("div", {
         className: "lg-pivot-status-bar",
         "aria-label": text("Pivot result freshness"),
         lang: language("Pivot result freshness"),
         "data-ui-label": "Pivot result freshness",
         children: [
-          s
+          pivots
             .slice(0, 3)
-            .map((u) =>
+            .map((pivot) =>
               i.jsx(
                 PivotStatusBadge,
-                { workbook, pivotId: u.id, compact: true },
-                u.id,
+                { workbook, pivotId: pivot.id, compact: true },
+                pivot.id,
               ),
             ),
-          s.length > 3 &&
+          pivots.length > 3 &&
             i.jsxs("p", {
               children: [
-                s.length - 3,
+                pivots.length - 3,
                 " ",
                 i.jsx(LocalizedText, {
                   children:
@@ -1829,10 +1943,14 @@ function PivotResultsStatusBar({ workbook, sheetId, onOpen, onExplore }) {
       })
     : null;
 }
-const toggleListValue = (e, r) =>
-    e.includes(r) ? e.filter((t) => t !== r) : [...e, r],
-  formatAggregationLabel = (e) =>
-    e === "distinctCount" ? "Distinct count" : e[0].toUpperCase() + e.slice(1);
+const toggleListValue = (list, value) =>
+    list.includes(value)
+      ? list.filter((entry) => entry !== value)
+      : [...list, value],
+  formatAggregationLabel = (aggregation) =>
+    aggregation === "distinctCount"
+      ? "Distinct count"
+      : aggregation[0].toUpperCase() + aggregation.slice(1);
 function tryComputePivotRows(workbook, sheetId, range) {
   try {
     return getPivotSourceFields(workbook, sheetId, range);
@@ -1841,15 +1959,17 @@ function tryComputePivotRows(workbook, sheetId, range) {
   }
 }
 function nextDefaultTableName(workbook) {
-  let r = 1;
+  let tableNumber = 1;
   for (
     ;
     workbook.sheets.some((sheet) =>
-      sheet.tables?.some((table) => table.name.toLowerCase() === `table${r}`),
+      sheet.tables?.some(
+        (table) => table.name.toLowerCase() === `table${tableNumber}`,
+      ),
     );
   )
-    r++;
-  return `Table${r}`;
+    tableNumber++;
+  return `Table${tableNumber}`;
 }
 
 export {

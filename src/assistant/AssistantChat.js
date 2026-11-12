@@ -37,10 +37,10 @@ import {
 } from "../app/20-calculation-options-and-assistant.js";
 import { AssistantChatMarkdown } from "./AssistantChatMarkdown.js";
 
-const db = (t) =>
-  t < 1024 * 1024
-    ? `${Math.max(1, Math.ceil(t / 1024))} KB`
-    : `${(t / 1024 / 1024).toFixed(1)} MB`;
+const db = (byteCount) =>
+  byteCount < 1024 * 1024
+    ? `${Math.max(1, Math.ceil(byteCount / 1024))} KB`
+    : `${(byteCount / 1024 / 1024).toFixed(1)} MB`;
 function ai({ file, remove }) {
   const { text, language, message } = useWorkbookMessages();
   return jsxRuntime.jsxs("div", {
@@ -108,30 +108,37 @@ function ai({ file, remove }) {
     ],
   });
 }
-function mb(t) {
+function mb(props) {
   const { text, language, message } = useWorkbookMessages(),
-    r$1 = React.useRef(t);
-  r$1.current = t;
+    r$1 = React.useRef(props);
+  r$1.current = props;
   const i$1 = React.useRef(false),
-    o = React.useRef(null),
-    a = React.useRef(null),
-    c = React.useRef(null),
+    fileInputRef = React.useRef(null),
+    promptInputRef = React.useRef(null),
+    attachmentAbortRef = React.useRef(null),
     [l$1, u$1] = React.useState(false),
     [h$1, d$1] = React.useState(""),
     [f$1, p$1] = React.useState(false),
-    [m, _] = React.useState(null),
-    [x, y] = React.useState("");
-  (React.useEffect(() => () => c.current?.abort(), []),
+    [copiedMessageId, setCopiedMessageId] = React.useState(null),
+    [statusMessage, setStatusMessage] = React.useState("");
+  (React.useEffect(() => () => attachmentAbortRef.current?.abort(), []),
     React.useEffect(() => {
-      (c.current?.abort(), u$1(false), d$1(""));
-    }, [t.session.id, t.adapter]));
-  async function w(v) {
-    if (!v.length || !t.adapter.chat?.attachments || c.current || l$1 || t.busy)
+      (attachmentAbortRef.current?.abort(), u$1(false), d$1(""));
+    }, [props.session.id, props.adapter]));
+  async function attachFiles(files) {
+    if (
+      !files.length ||
+      !props.adapter.chat?.attachments ||
+      attachmentAbortRef.current ||
+      l$1 ||
+      props.busy
+    )
       return;
-    const attachments = t.session.attachments;
+    const attachments = props.session.attachments;
     if (
       (d$1(""),
-      attachments.length + v.length > assistantRequestLimits.filesPerMessage)
+      attachments.length + files.length >
+        assistantRequestLimits.filesPerMessage)
     ) {
       d$1(
         "Attach up to 4 files per message. Remove a file before adding more.",
@@ -139,8 +146,8 @@ function mb(t) {
       return;
     }
     if (
-      attachments.reduce((F, H) => F + H.size, 0) +
-        v.reduce((F, H) => F + H.size, 0) >
+      attachments.reduce((total, attachment) => total + attachment.size, 0) +
+        files.reduce((total, file) => total + file.size, 0) >
       assistantRequestLimits.totalFileBytes
     ) {
       d$1("Attachments must total 10 MB or less.");
@@ -151,136 +158,151 @@ function mb(t) {
         ...attachments.map(
           (attachment) => `${attachment.name}:${attachment.size}`,
         ),
-        ...v.map((F) => `${F.name}:${F.size}`),
+        ...files.map((file) => `${file.name}:${file.size}`),
       ]).size !==
-      attachments.length + v.length
+      attachments.length + files.length
     ) {
       d$1("This file is already attached. Remove it before adding it again.");
       return;
     }
-    const $ = new AbortController(),
-      U = t.session.id;
-    ((c.current = $), u$1(true));
+    const controller = new AbortController(),
+      sessionId = props.session.id;
+    ((attachmentAbortRef.current = controller), u$1(true));
     try {
-      const F = await Promise.all(
-        v.map((H) => prepareChatAttachment(H, $.signal)),
+      const preparedAttachments = await Promise.all(
+        files.map((file) => prepareChatAttachment(file, controller.signal)),
       );
-      $.signal.aborted ||
-        t.setSession((H) =>
-          H.id === U ? { ...H, attachments: [...H.attachments, ...F] } : H,
+      controller.signal.aborted ||
+        props.setSession((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                attachments: [...session.attachments, ...preparedAttachments],
+              }
+            : session,
         );
     } catch (error) {
-      $.signal.aborted ||
+      controller.signal.aborted ||
         d$1(
           error instanceof Error
             ? error.message
             : "The attachment could not be read.",
         );
     } finally {
-      c.current === $ && (u$1(false), (c.current = null));
+      attachmentAbortRef.current === controller &&
+        (u$1(false), (attachmentAbortRef.current = null));
     }
   }
-  async function S$1(v$1, D) {
-    const $ = r$1.current;
-    if (i$1.current || $.busy || l$1 || !v$1.trim()) return;
-    const attachments = D ?? $.session.attachments,
-      scope = $.scope,
-      F = $.session.id,
-      H = [];
-    for (let N = 1; N < $.session.messages.length; N++) {
-      const V = $.session.messages[N],
-        L = $.session.messages[N - 1];
-      V.role === "assistant" &&
-        V.outcome === "complete" &&
-        V.scope === scope &&
-        L.role === "user" &&
-        L.scope === scope &&
-        H.push(
+  async function S$1(v$1, attachmentsOverride) {
+    const latestProps = r$1.current;
+    if (i$1.current || latestProps.busy || l$1 || !v$1.trim()) return;
+    const attachments = attachmentsOverride ?? latestProps.session.attachments,
+      scope = latestProps.scope,
+      sessionId = latestProps.session.id,
+      chatHistory = [];
+    for (
+      let messageIndex = 1;
+      messageIndex < latestProps.session.messages.length;
+      messageIndex++
+    ) {
+      const assistantMessage = latestProps.session.messages[messageIndex],
+        precedingUserMessage = latestProps.session.messages[messageIndex - 1];
+      assistantMessage.role === "assistant" &&
+        assistantMessage.outcome === "complete" &&
+        assistantMessage.scope === scope &&
+        precedingUserMessage.role === "user" &&
+        precedingUserMessage.scope === scope &&
+        chatHistory.push(
           {
             role: "user",
-            text: L.text,
-            ...(L.attachments?.length ? { attachments: L.attachments } : {}),
+            text: precedingUserMessage.text,
+            ...(precedingUserMessage.attachments?.length
+              ? { attachments: precedingUserMessage.attachments }
+              : {}),
           },
-          { role: "assistant", text: V.text },
+          { role: "assistant", text: assistantMessage.text },
         );
     }
-    let J;
+    let chatRequest;
     try {
-      if ($.session.messages.length >= 60)
+      if (latestProps.session.messages.length >= 60)
         throw Error(
           "Start a new chat to continue. This chat has reached its message limit.",
         );
       if (v$1.length > assistantRequestLimits.promptCharacters)
         throw Error("Keep your message under 10,000 characters.");
-      if (attachments.length && !$.adapter.chat?.attachments)
+      if (attachments.length && !latestProps.adapter.chat?.attachments)
         throw Error(
           "This provider does not support file attachments. Remove the files or connect a chat-enabled provider.",
         );
-      $.adapter.chat &&
-        (J = parseAssistantChatRequest({
+      latestProps.adapter.chat &&
+        (chatRequest = parseAssistantChatRequest({
           version: 1,
-          messages: $.adapter.chat.history ? H : [],
+          messages: latestProps.adapter.chat.history ? chatHistory : [],
           attachments: attachments,
         }));
     } catch (error) {
       d$1(error.message);
       return;
     }
-    const X = {
+    const userMessage = {
       id: crypto.randomUUID(),
       role: "user",
       text: v$1.trim(),
       scope: scope,
-      label: $.selectionLabel,
+      label: latestProps.selectionLabel,
       attachments: attachments,
     };
     ((i$1.current = true),
       d$1(""),
-      y(""),
-      $.setSession((N) => ({
-        ...N,
+      setStatusMessage(""),
+      latestProps.setSession((session) => ({
+        ...session,
         draft: "",
         attachments: [],
-        messages: [...N.messages, X],
+        messages: [...session.messages, userMessage],
       })));
     try {
-      const N = await $.onSend(X.text, J);
-      $.setSession((V) =>
-        V.id !== F
-          ? V
+      const proposal = await latestProps.onSend(userMessage.text, chatRequest);
+      latestProps.setSession((session) =>
+        session.id !== sessionId
+          ? session
           : {
-              ...V,
+              ...session,
               messages: [
-                ...V.messages,
+                ...session.messages,
                 {
                   id: crypto.randomUUID(),
                   role: "assistant",
                   text:
-                    N?.explanation ?? "Request stopped. No changes were made.",
+                    proposal?.explanation ??
+                    "Request stopped. No changes were made.",
                   scope: scope,
-                  label: X.label,
-                  proposalId: N?.id,
-                  outcome: N ? "complete" : "stopped",
+                  label: userMessage.label,
+                  proposalId: proposal?.id,
+                  outcome: proposal ? "complete" : "stopped",
                 },
               ],
             },
       );
     } catch {
-      $.setSession((N) =>
-        N.id !== F
-          ? N
+      latestProps.setSession((session) =>
+        session.id !== sessionId
+          ? session
           : {
-              ...N,
-              draft: N.draft || X.text,
-              attachments: N.attachments.length ? N.attachments : attachments,
+              ...session,
+              draft: session.draft || userMessage.text,
+              attachments: session.attachments.length
+                ? session.attachments
+                : attachments,
               messages: [
-                ...N.messages,
+                ...session.messages,
                 {
                   id: crypto.randomUUID(),
                   role: "assistant",
                   text: "The request did not complete. Your message is ready to retry.",
                   scope: scope,
-                  label: X.label,
+                  label: userMessage.label,
                   outcome: "failed",
                 },
               ],
@@ -292,58 +314,60 @@ function mb(t) {
   }
   const messages = React.useMemo(
       () =>
-        t.session.messages.map((message) => ({
+        props.session.messages.map((message) => ({
           id: message.id,
           role: message.role,
           content:
-            message.scope === t.scope
+            message.scope === props.scope
               ? message.text
               : text(
                   "This message belongs to an earlier selection or workbook revision and is excluded from the current context.",
                 ),
           metadata: { custom: { source: message } },
         })),
-      [t.session.messages, t.scope],
+      [props.session.messages, props.scope],
     ),
     externalStoreRuntime = useExternalStoreRuntime({
       messages: messages,
-      convertMessage: (v) => v,
-      isRunning: t.busy,
-      onNew: async (v) => {
+      convertMessage: (runtimeMessage) => runtimeMessage,
+      isRunning: props.busy,
+      onNew: async (newMessage) => {
         await S$1(
-          v.content.filter((D) => D.type === "text").map((D) => D.text).join(`
+          newMessage.content
+            .filter((part) => part.type === "text")
+            .map((part) => part.text).join(`
 `),
         );
       },
-      onCancel: async () => t.onCancel(),
+      onCancel: async () => props.onCancel(),
     }),
-    k$1 = t.session.messages.some(
+    k$1 = props.session.messages.some(
       (message) =>
         message.proposalId &&
-        message.proposalId === t.proposalId &&
-        message.scope === t.scope,
+        message.proposalId === props.proposalId &&
+        message.scope === props.scope,
     ),
     onClick = () => {
-      const v = [...t.session.messages]
+      const lastUserMessage = [...props.session.messages]
         .reverse()
-        .find((D) => D.role === "user" && D.scope === t.scope);
-      v && S$1(v.text, v.attachments);
+        .find((entry) => entry.role === "user" && entry.scope === props.scope);
+      lastUserMessage && S$1(lastUserMessage.text, lastUserMessage.attachments);
     },
     P$1 = () => {
-      (t.onCancel(),
-        t.onReset(),
-        c.current?.abort(),
-        t.setSession(createEmptyAssistantConversation()),
-        y("New chat started."),
-        a.current?.focus());
+      (props.onCancel(),
+        props.onReset(),
+        attachmentAbortRef.current?.abort(),
+        props.setSession(createEmptyAssistantConversation()),
+        setStatusMessage("New chat started."),
+        promptInputRef.current?.focus());
     },
-    E = async (v) => {
+    copyMessage = async (sourceMessage) => {
       try {
-        (await navigator.clipboard.writeText(v.text),
-          _(v.id),
-          y("Message copied."));
+        (await navigator.clipboard.writeText(sourceMessage.text),
+          setCopiedMessageId(sourceMessage.id),
+          setStatusMessage("Message copied."));
       } catch {
-        y(
+        setStatusMessage(
           "Copy is unavailable. Select the message text and use your browser’s Copy command.",
         );
       }
@@ -360,10 +384,10 @@ function mb(t) {
           children: [
             jsxRuntime.jsxs("span", {
               className: "lg-chat-provider",
-              title: t.adapter.name,
+              title: props.adapter.name,
               children: [
                 jsxRuntime.jsx("i", {}),
-                t.local ? text("Local demo") : t.adapter.name,
+                props.local ? text("Local demo") : props.adapter.name,
               ],
             }),
             jsxRuntime.jsxs("button", {
@@ -390,12 +414,12 @@ function mb(t) {
             jsxRuntime.jsx(Table2, { size: 16 }),
             jsxRuntime.jsxs("span", {
               children: [
-                jsxRuntime.jsx("strong", { children: t.selectionLabel }),
+                jsxRuntime.jsx("strong", { children: props.selectionLabel }),
                 jsxRuntime.jsx("small", {
                   children: message(
                     "{count} selected cells · shared when you send",
                     {
-                      count: t.selectedCount,
+                      count: props.selectedCount,
                     },
                   ),
                 }),
@@ -410,12 +434,12 @@ function mb(t) {
           "aria-live": "polite",
           "aria-relevant": "additions text",
           tabIndex: 0,
-          autoScroll: t.session.messages.length > 0,
-          scrollToBottomOnInitialize: t.session.messages.length > 0,
+          autoScroll: props.session.messages.length > 0,
+          scrollToBottomOnInitialize: props.session.messages.length > 0,
           scrollToBottomOnThreadSwitch: false,
           children: [
-            !t.session.messages.length &&
-              !t.proposalId &&
+            !props.session.messages.length &&
+              !props.proposalId &&
               jsxRuntime.jsxs("div", {
                 className: "lg-chat-welcome",
                 children: [
@@ -445,9 +469,12 @@ function mb(t) {
                         "button",
                         {
                           type: "button",
-                          disabled: t.busy || l$1,
+                          disabled: props.busy || l$1,
                           onClick: () => {
-                            (t.setSession((D) => ({ ...D, draft: draft })),
+                            (props.setSession((session) => ({
+                              ...session,
+                              draft: draft,
+                            })),
                               S$1(draft));
                           },
                           children: [
@@ -465,8 +492,11 @@ function mb(t) {
               children: ({ message }) => {
                 const source = message.metadata.custom.source;
                 if (!source) return null;
-                const $ = source.scope === t.scope,
-                  U = $ && source.proposalId === t.proposalId && !!t.review;
+                const isCurrentScope = source.scope === props.scope,
+                  shouldShowReview =
+                    isCurrentScope &&
+                    source.proposalId === props.proposalId &&
+                    !!props.review;
                 return jsxRuntime.jsxs(MessagePrimitive.Root, {
                   role: "article",
                   className: `lg-chat-message ${source.role}`,
@@ -492,9 +522,9 @@ function mb(t) {
                       ],
                     }),
                     jsxRuntime.jsxs("div", {
-                      className: `lg-chat-bubble ${$ ? "" : "archived"}`,
+                      className: `lg-chat-bubble ${isCurrentScope ? "" : "archived"}`,
                       children: [
-                        $ &&
+                        isCurrentScope &&
                           source.attachments?.map((attachment) =>
                             jsxRuntime.jsx(
                               ai,
@@ -502,10 +532,10 @@ function mb(t) {
                               attachment.id,
                             ),
                           ),
-                        U
-                          ? t.review
+                        shouldShowReview
+                          ? props.review
                           : jsxRuntime.jsx(AssistantChatMarkdown, {
-                              children: $
+                              children: isCurrentScope
                                 ? source.text
                                 : text(
                                     "This message belongs to an earlier selection or workbook revision and is excluded from the current context.",
@@ -513,7 +543,7 @@ function mb(t) {
                             }),
                       ],
                     }),
-                    $ &&
+                    isCurrentScope &&
                       source.outcome === "complete" &&
                       jsxRuntime.jsxs("div", {
                         className: "lg-chat-message-actions",
@@ -522,31 +552,31 @@ function mb(t) {
                             type: "button",
                             "aria-label": text("Copy assistant response"),
                             title: text("Copy response"),
-                            onClick: () => void E(source),
+                            onClick: () => void copyMessage(source),
                             children:
-                              m === source.id
+                              copiedMessageId === source.id
                                 ? jsxRuntime.jsx(Check, { size: 14 })
                                 : jsxRuntime.jsx(Copy, { size: 14 }),
                           }),
-                          source === t.session.messages.at(-1) &&
+                          source === props.session.messages.at(-1) &&
                             jsxRuntime.jsx("button", {
                               type: "button",
                               "aria-label": text("Regenerate response"),
                               title: text("Regenerate response"),
-                              disabled: t.busy || l$1,
+                              disabled: props.busy || l$1,
                               onClick: onClick,
                               children: jsxRuntime.jsx(RotateCcw, { size: 14 }),
                             }),
                         ],
                       }),
-                    $ &&
+                    isCurrentScope &&
                       (source.outcome === "failed" ||
                         source.outcome === "stopped") &&
-                      source === t.session.messages.at(-1) &&
+                      source === props.session.messages.at(-1) &&
                       jsxRuntime.jsxs("button", {
                         type: "button",
                         className: "lg-chat-retry",
-                        disabled: t.busy || l$1,
+                        disabled: props.busy || l$1,
                         onClick: onClick,
                         children: [
                           jsxRuntime.jsx(RotateCcw, { size: 13 }),
@@ -560,12 +590,12 @@ function mb(t) {
               },
             }),
             !k$1 &&
-              t.review &&
+              props.review &&
               jsxRuntime.jsx("div", {
                 className: "lg-chat-external-review",
-                children: t.review,
+                children: props.review,
               }),
-            t.busy &&
+            props.busy &&
               jsxRuntime.jsxs("div", {
                 role: "status",
                 className: "lg-chat-thinking",
@@ -602,7 +632,7 @@ function mb(t) {
             jsxRuntime.jsxs(ComposerPrimitive.Root, {
               className: `lg-chat-composer ${f$1 ? "dragging" : ""}`,
               onSubmit: (event) => {
-                (event.preventDefault(), S$1(t.session.draft));
+                (event.preventDefault(), S$1(props.session.draft));
               },
               onDragOver: (event) => {
                 event.dataTransfer.types.includes("Files") &&
@@ -614,26 +644,26 @@ function mb(t) {
               onDrop: (event) => {
                 (event.preventDefault(),
                   p$1(false),
-                  t.adapter.chat?.attachments
-                    ? w(Array.from(event.dataTransfer.files))
+                  props.adapter.chat?.attachments
+                    ? attachFiles(Array.from(event.dataTransfer.files))
                     : d$1("This provider does not support attachments."));
               },
               children: [
-                t.session.attachments.length > 0 &&
+                props.session.attachments.length > 0 &&
                   jsxRuntime.jsx("div", {
                     className: "lg-chat-attachments",
                     role: "group",
                     "aria-label": text("Attached files"),
-                    children: t.session.attachments.map((attachment) =>
+                    children: props.session.attachments.map((attachment) =>
                       jsxRuntime.jsx(
                         ai,
                         {
                           file: attachment,
                           remove: () =>
-                            t.setSession((D) => ({
-                              ...D,
-                              attachments: D.attachments.filter(
-                                ($) => $.id !== attachment.id,
+                            props.setSession((session) => ({
+                              ...session,
+                              attachments: session.attachments.filter(
+                                (entry) => entry.id !== attachment.id,
                               ),
                             })),
                         },
@@ -656,14 +686,17 @@ function mb(t) {
                     ],
                   }),
                 jsxRuntime.jsx(ComposerPrimitive.Input, {
-                  ref: a,
+                  ref: promptInputRef,
                   "aria-label": text("Assistant prompt"),
                   lang: language("Assistant prompt"),
                   "data-ui-label": "Assistant prompt",
                   placeholder: text("Message the workbook assistant…"),
-                  value: t.session.draft,
+                  value: props.session.draft,
                   onChange: (event) =>
-                    t.setSession((D) => ({ ...D, draft: event.target.value })),
+                    props.setSession((session) => ({
+                      ...session,
+                      draft: event.target.value,
+                    })),
                   minRows: 2,
                   maxRows: 6,
                   maxLength: 1e4,
@@ -674,8 +707,8 @@ function mb(t) {
                   onPaste: (event) => {
                     event.clipboardData.files.length &&
                       (event.preventDefault(),
-                      t.adapter.chat?.attachments
-                        ? w(Array.from(event.clipboardData.files))
+                      props.adapter.chat?.attachments
+                        ? attachFiles(Array.from(event.clipboardData.files))
                         : d$1("This provider does not support attachments."));
                   },
                 }),
@@ -685,30 +718,33 @@ function mb(t) {
                     jsxRuntime.jsxs("div", {
                       children: [
                         jsxRuntime.jsx("input", {
-                          ref: o,
+                          ref: fileInputRef,
                           type: "file",
                           hidden: true,
                           multiple: true,
                           accept: attachmentAcceptAttribute,
                           "aria-label": text("Upload chat attachments"),
                           onChange: (event) => {
-                            const D = Array.from(
+                            const selectedFiles = Array.from(
                               event.currentTarget.files ?? [],
                             );
-                            ((event.currentTarget.value = ""), w(D));
+                            ((event.currentTarget.value = ""),
+                              attachFiles(selectedFiles));
                           },
                         }),
                         jsxRuntime.jsx("button", {
                           type: "button",
                           "aria-label": text("Attach files"),
-                          title: t.adapter.chat?.attachments
+                          title: props.adapter.chat?.attachments
                             ? text("Attach files · up to 4 files, 5 MB each")
                             : text(
                                 "File support is not enabled by this host adapter",
                               ),
                           disabled:
-                            !t.adapter.chat?.attachments || t.busy || l$1,
-                          onClick: () => o.current?.click(),
+                            !props.adapter.chat?.attachments ||
+                            props.busy ||
+                            l$1,
+                          onClick: () => fileInputRef.current?.click(),
                           children: jsxRuntime.jsx(Paperclip, { size: 18 }),
                         }),
                         jsxRuntime.jsx("span", {
@@ -718,13 +754,13 @@ function mb(t) {
                         }),
                       ],
                     }),
-                    t.busy
+                    props.busy
                       ? jsxRuntime.jsx("button", {
                           type: "button",
                           className: "lg-chat-send",
                           "aria-label": text("Cancel request"),
                           title: text("Stop response"),
-                          onClick: t.onCancel,
+                          onClick: props.onCancel,
                           children: jsxRuntime.jsx(Square, {
                             size: 15,
                             fill: "currentColor",
@@ -735,7 +771,7 @@ function mb(t) {
                           className: "lg-chat-send",
                           "aria-label": text("Send selection"),
                           title: text("Send message and selected context"),
-                          disabled: !t.session.draft.trim() || l$1,
+                          disabled: !props.session.draft.trim() || l$1,
                           children: jsxRuntime.jsx(ArrowUp, { size: 19 }),
                         }),
                   ],
@@ -745,9 +781,9 @@ function mb(t) {
             jsxRuntime.jsxs("p", {
               className: "lg-chat-footnote",
               children: [
-                t.local
+                props.local
                   ? text("Local demo · files stay in this browser")
-                  : t.adapter.chat
+                  : props.adapter.chat
                     ? text(
                         "Selection, same-context chat and files go to your host",
                       )
@@ -765,8 +801,8 @@ function mb(t) {
               className: "lg-sr-only",
               role: "status",
               children: jsxRuntime.jsx("span", {
-                lang: language(x),
-                children: text(x),
+                lang: language(statusMessage),
+                children: text(statusMessage),
               }),
             }),
           ],

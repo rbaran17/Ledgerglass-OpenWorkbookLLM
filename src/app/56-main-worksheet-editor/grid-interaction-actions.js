@@ -43,8 +43,8 @@ function createGridInteractionActions({
   activeCell,
   rowViewport,
 }) {
-  function runEditorCommand(fe) {
-    if (fe === "xlsxSource") {
+  function runEditorCommand(commandName) {
+    if (commandName === "xlsxSource") {
       viewAndSelectionActions.runGuardedAction(() =>
         importExportState.setXlsxConversionReview({
           snapshot: activeWorkbook,
@@ -57,7 +57,7 @@ function createGridInteractionActions({
     }
     if (cellEditActions.commitCellEdit()) {
       if (
-        (fe === "populationFilter" &&
+        (commandName === "populationFilter" &&
           filterSortState.setActiveFilterColumn(undefined),
         selectionAreas.length > 1 &&
           ![
@@ -84,47 +84,55 @@ function createGridInteractionActions({
             "importSources",
             "workbookLinks",
             "extensions",
-          ].includes(fe))
+          ].includes(commandName))
       ) {
         operationStatusState.setErrorNotice(
           "This command requires one rectangular range. Click a cell or enter a single range to continue.",
         );
         return;
       }
-      if (fe === "calculateNow") {
+      if (commandName === "calculateNow") {
         persistenceActions.runCalculationNow();
         return;
       }
-      if (fe === "pasteSpecial" && clipboardState.clipboardSnapshotState) {
+      if (
+        commandName === "pasteSpecial" &&
+        clipboardState.clipboardSnapshotState
+      ) {
         clipboardState.setMoveCellsSource(
           clipboardState.clipboardSnapshotState.snapshot,
         );
         return;
       }
-      (fe === "sheets" && navigationState.setTabBarSheetId(activeSheet.id),
-        fe === "automation" && dialogState.setAutomationInspection(undefined),
-        dialogState.setActiveDialogMode(fe));
+      (commandName === "sheets" &&
+        navigationState.setTabBarSheetId(activeSheet.id),
+        commandName === "automation" &&
+          dialogState.setAutomationInspection(undefined),
+        dialogState.setActiveDialogMode(commandName));
     }
   }
-  function handleGridKeyDown(fe) {
+  function handleGridKeyDown(event) {
     if (
-      fe.target !== fe.currentTarget ||
-      fe.defaultPrevented ||
-      fe.nativeEvent.isComposing ||
-      (fe.altKey &&
-        !((fe.ctrlKey || fe.metaKey) && fe.key.toLowerCase() === "v")) ||
-      fe.getModifierState("AltGraph")
+      event.target !== event.currentTarget ||
+      event.defaultPrevented ||
+      event.nativeEvent.isComposing ||
+      (event.altKey &&
+        !(
+          (event.ctrlKey || event.metaKey) &&
+          event.key.toLowerCase() === "v"
+        )) ||
+      event.getModifierState("AltGraph")
     )
       return;
-    const Oe = fe.ctrlKey || fe.metaKey,
-      Be = fe.key.toLowerCase();
+    const hasCommandModifier = event.ctrlKey || event.metaKey,
+      lowerKey = event.key.toLowerCase();
     if (
-      (Oe &&
+      (hasCommandModifier &&
         ["tab", "enter", "f2", "f5", "f6", "delete", "backspace"].includes(
-          Be,
+          lowerKey,
         )) ||
-      (Oe &&
-        fe.shiftKey &&
+      (hasCommandModifier &&
+        event.shiftKey &&
         ![
           "z",
           "f",
@@ -135,35 +143,39 @@ function createGridInteractionActions({
           "arrowright",
           "arrowup",
           "arrowdown",
-        ].includes(Be))
+        ].includes(lowerKey))
     )
       return;
     if (
       operationStatusState.isOperationBusy &&
-      ((Oe && ["z", "y", "b", "i", "u", "d", "r", "v"].includes(Be)) ||
-        (!Oe &&
-          (fe.key.length === 1 ||
-            ["F2", "Delete", "Backspace"].includes(fe.key))))
+      ((hasCommandModifier &&
+        ["z", "y", "b", "i", "u", "d", "r", "v"].includes(lowerKey)) ||
+        (!hasCommandModifier &&
+          (event.key.length === 1 ||
+            ["F2", "Delete", "Backspace"].includes(event.key))))
     ) {
-      (fe.preventDefault(),
+      (event.preventDefault(),
         operationStatusState.setStatusNotice(
           "Wait for the current workbook operation to finish.",
         ));
       return;
     }
     if (
-      (fe.key === "ContextMenu" && !fe.shiftKey && !Oe) ||
-      (fe.key === "F10" && fe.shiftKey && !fe.ctrlKey && !fe.metaKey)
+      (event.key === "ContextMenu" && !event.shiftKey && !hasCommandModifier) ||
+      (event.key === "F10" &&
+        event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey)
     ) {
-      fe.preventDefault();
-      const rr = (
-        fe.currentTarget.querySelector(
+      event.preventDefault();
+      const anchorRect = (
+        event.currentTarget.querySelector(
           `[data-address="${selectionState.activeCellAddress}"]`,
-        ) ?? fe.currentTarget
+        ) ?? event.currentTarget
       ).getBoundingClientRect();
       selectionState.setContextMenuState({
-        x: rr.left + Math.min(40, rr.width),
-        y: rr.top + Math.min(24, rr.height),
+        x: anchorRect.left + Math.min(40, anchorRect.width),
+        y: anchorRect.top + Math.min(24, anchorRect.height),
         kind:
           parseRangeAddress(selectionState.activeSelectionRange).lastRow -
             parseRangeAddress(selectionState.activeSelectionRange).firstRow +
@@ -180,16 +192,19 @@ function createGridInteractionActions({
       });
       return;
     }
-    if (fe.key === "Escape" && clipboardState.clipboardSnapshotState) {
-      (fe.preventDefault(),
+    if (event.key === "Escape" && clipboardState.clipboardSnapshotState) {
+      (event.preventDefault(),
         viewAndSelectionActions.clearCutSession(),
         operationStatusState.setStatusNotice(
           "Cut canceled; source cells remain unchanged.",
         ));
       return;
     }
-    if (fe.key === "Escape" && selectionState.completedSelectionAreas.length) {
-      (fe.preventDefault(),
+    if (
+      event.key === "Escape" &&
+      selectionState.completedSelectionAreas.length
+    ) {
+      (event.preventDefault(),
         viewAndSelectionActions.selectSingleRange(
           selectionState.activeCellAddress,
         ),
@@ -200,118 +215,151 @@ function createGridInteractionActions({
           selectionState.activeCellAddress));
       return;
     }
-    if (fe.key === "Escape" && !fe.ctrlKey && !fe.metaKey && !fe.shiftKey) {
-      (fe.preventDefault(),
+    if (
+      event.key === "Escape" &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey
+    ) {
+      (event.preventDefault(),
         selectionState.appRootRef.current
           ?.querySelector('[role="tab"][aria-selected="true"]')
           ?.focus());
       return;
     }
     if (
-      (fe.key === "F5" && !fe.shiftKey && !Oe) ||
-      ((fe.ctrlKey || fe.metaKey) && fe.key.toLowerCase() === "g")
+      (event.key === "F5" && !event.shiftKey && !hasCommandModifier) ||
+      ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "g")
     ) {
-      (fe.preventDefault(), runEditorCommand("goToSpecial"));
+      (event.preventDefault(), runEditorCommand("goToSpecial"));
       return;
     }
     if (
-      (fe.ctrlKey || fe.metaKey) &&
-      fe.shiftKey &&
-      fe.key.toLowerCase() === "f"
+      (event.ctrlKey || event.metaKey) &&
+      event.shiftKey &&
+      event.key.toLowerCase() === "f"
     ) {
-      (fe.preventDefault(), runEditorCommand("search"));
+      (event.preventDefault(), runEditorCommand("search"));
       return;
     }
     if (
       selectionState.completedSelectionAreas.length &&
-      ["Tab", "Enter"].includes(fe.key)
+      ["Tab", "Enter"].includes(event.key)
     ) {
-      (fe.preventDefault(),
+      (event.preventDefault(),
         viewAndSelectionActions.runGuardedAction(() => {
-          const jt = enumerateSelectionCells(selectionAreas).filter((xr) => {
-            const Sr = _t(xr);
-            return (
-              !rowVisibilityIndex.isHidden(Sr.row) &&
-              !columnVisibilityIndex.isHidden(Sr.col)
-            );
-          });
-          if (!jt.length) return;
-          const rr = jt.indexOf(selectionState.activeCellAddress),
-            Mr = fe.shiftKey ? -1 : 1,
-            Br = jt[(rr + Mr + jt.length) % jt.length];
+          const visibleCells = enumerateSelectionCells(selectionAreas).filter(
+            (cellAddress) => {
+              const cellPosition = _t(cellAddress);
+              return (
+                !rowVisibilityIndex.isHidden(cellPosition.row) &&
+                !columnVisibilityIndex.isHidden(cellPosition.col)
+              );
+            },
+          );
+          if (!visibleCells.length) return;
+          const activeIndex = visibleCells.indexOf(
+              selectionState.activeCellAddress,
+            ),
+            direction = event.shiftKey ? -1 : 1,
+            nextCellAddress =
+              visibleCells[
+                (activeIndex + direction + visibleCells.length) %
+                  visibleCells.length
+              ];
           cellEditActions.commitCellEdit() &&
-            (selectionState.setActiveCellAddress(Br),
-            selectionState.setSelectionAnchorAddress(Br),
-            (selectionState.activeCellAddressRef.current = Br),
-            viewAndSelectionActions.requestCellScroll(Br));
+            (selectionState.setActiveCellAddress(nextCellAddress),
+            selectionState.setSelectionAnchorAddress(nextCellAddress),
+            (selectionState.activeCellAddressRef.current = nextCellAddress),
+            viewAndSelectionActions.requestCellScroll(nextCellAddress));
         }));
       return;
     }
-    const Ue = _t(
-      fe.shiftKey && fe.key.startsWith("Arrow")
+    const originCell = _t(
+      event.shiftKey && event.key.startsWith("Arrow")
         ? selectionState.activeCellAddressRef.current
         : selectionState.activeCellAddress,
     );
-    let row = Ue.row,
-      col = Ue.col;
-    if ((fe.ctrlKey || fe.metaKey) && fe.key.toLowerCase() === "z") {
-      (fe.preventDefault(), navigationActions.undoOrRedo(fe.shiftKey));
+    let row = originCell.row,
+      col = originCell.col;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      (event.preventDefault(), navigationActions.undoOrRedo(event.shiftKey));
       return;
     }
-    if (fe.ctrlKey || fe.metaKey) {
-      const jt = fe.key.toLowerCase();
-      if (jt === "1") {
-        (fe.preventDefault(), runEditorCommand("numberFormat"));
+    if (event.ctrlKey || event.metaKey) {
+      const shortcutKey = event.key.toLowerCase();
+      if (shortcutKey === "1") {
+        (event.preventDefault(), runEditorCommand("numberFormat"));
         return;
       }
-      if (jt === "v" && fe.altKey) {
-        (fe.preventDefault(), runEditorCommand("pasteSpecial"));
+      if (shortcutKey === "v" && event.altKey) {
+        (event.preventDefault(), runEditorCommand("pasteSpecial"));
         return;
       }
-      if (jt === " ") {
-        (fe.preventDefault(),
-          navigationActions.selectRowOrColumn("column", Ue.col, fe.shiftKey));
+      if (shortcutKey === " ") {
+        (event.preventDefault(),
+          navigationActions.selectRowOrColumn(
+            "column",
+            originCell.col,
+            event.shiftKey,
+          ));
         return;
       }
-      if (jt === "pageup" || jt === "pagedown") {
-        fe.preventDefault();
-        const rr = activeWorkbook.sheets.filter((sheet) => !sheet.hidden),
-          Mr = rr.findIndex((xr) => xr.id === activeSheet.id),
-          Br = rr[Mr + (jt === "pageup" ? -1 : 1)];
-        Br &&
+      if (shortcutKey === "pageup" || shortcutKey === "pagedown") {
+        event.preventDefault();
+        const visibleSheets = activeWorkbook.sheets.filter(
+            (sheet) => !sheet.hidden,
+          ),
+          activeSheetIndex = visibleSheets.findIndex(
+            (visibleSheet) => visibleSheet.id === activeSheet.id,
+          ),
+          targetSheet =
+            visibleSheets[
+              activeSheetIndex + (shortcutKey === "pageup" ? -1 : 1)
+            ];
+        targetSheet &&
           cellEditActions.commitCellEdit() &&
-          navigationActions.switchActiveWorksheet(Br.id);
+          navigationActions.switchActiveWorksheet(targetSheet.id);
         return;
       }
-      if (jt.startsWith("arrow")) {
-        fe.preventDefault();
-        const rr = viewAndSelectionActions.jumpToDataEdge(
-          Ue.row,
-          Ue.col,
-          jt === "arrowup" || jt === "arrowdown",
-          jt === "arrowup" || jt === "arrowleft" ? -1 : 1,
+      if (shortcutKey.startsWith("arrow")) {
+        event.preventDefault();
+        const edgeCell = viewAndSelectionActions.jumpToDataEdge(
+          originCell.row,
+          originCell.col,
+          shortcutKey === "arrowup" || shortcutKey === "arrowdown",
+          shortcutKey === "arrowup" || shortcutKey === "arrowleft" ? -1 : 1,
         );
         navigationActions.selectCellAddress(
-          `${columnIndexToLetters(rr.col)}${rr.row + 1}`,
-          fe.shiftKey,
+          `${columnIndexToLetters(edgeCell.col)}${edgeCell.row + 1}`,
+          event.shiftKey,
         );
         return;
       }
-      if (jt === "a") {
-        (fe.preventDefault(), navigationActions.selectAllCells());
+      if (shortcutKey === "a") {
+        (event.preventDefault(), navigationActions.selectAllCells());
         return;
       }
-      if (["b", "i", "u"].includes(jt)) {
-        if ((fe.preventDefault(), !isEditingLocked)) {
-          const rr = jt === "b" ? "bold" : jt === "i" ? "italic" : "underline";
+      if (["b", "i", "u"].includes(shortcutKey)) {
+        if ((event.preventDefault(), !isEditingLocked)) {
+          const styleProperty =
+            shortcutKey === "b"
+              ? "bold"
+              : shortcutKey === "i"
+                ? "italic"
+                : "underline";
           cellEditActions.applyCellFormatPatch({
-            style: { [rr]: !resolveEffectiveCellStyle(activeCell?.style)[rr] },
+            style: {
+              [styleProperty]: !resolveEffectiveCellStyle(activeCell?.style)[
+                styleProperty
+              ],
+            },
           });
         }
         return;
       }
-      if (jt === "d") {
-        (fe.preventDefault(),
+      if (shortcutKey === "d") {
+        (event.preventDefault(),
           isEditingLocked ||
             viewAndSelectionActions.runGuardedAction(() => {
               (viewAndSelectionActions.requireSingleSelectionRange(),
@@ -330,8 +378,8 @@ function createGridInteractionActions({
             }));
         return;
       }
-      if (jt === "r") {
-        (fe.preventDefault(),
+      if (shortcutKey === "r") {
+        (event.preventDefault(),
           isEditingLocked ||
             viewAndSelectionActions.runGuardedAction(() => {
               (viewAndSelectionActions.requireSingleSelectionRange(),
@@ -350,56 +398,56 @@ function createGridInteractionActions({
             }));
         return;
       }
-      if (jt === "y") {
-        (fe.preventDefault(), navigationActions.undoOrRedo(true));
+      if (shortcutKey === "y") {
+        (event.preventDefault(), navigationActions.undoOrRedo(true));
         return;
       }
-      if (jt === "f" || jt === "h") {
-        (fe.preventDefault(),
+      if (shortcutKey === "f" || shortcutKey === "h") {
+        (event.preventDefault(),
           findReplaceState.setIsFindBarVisible(true),
           requestAnimationFrame(() =>
             findReplaceState.findInputRef.current?.focus(),
           ));
         return;
       }
-      if (jt === "home") {
-        (fe.preventDefault(),
+      if (shortcutKey === "home") {
+        (event.preventDefault(),
           navigationActions.selectCellAddress(
             `${columnIndexToLetters(columnVisibilityIndex.logicalIndex(0))}${rowVisibilityIndex.logicalIndex(0) + 1}`,
-            fe.shiftKey,
+            event.shiftKey,
           ));
         return;
       }
-      if (jt === "end") {
-        fe.preventDefault();
+      if (shortcutKey === "end") {
+        event.preventDefault();
         const occupiedRangeBounds = findOccupiedRangeBounds(activeSheet);
         navigationActions.selectCellAddress(
           `${columnIndexToLetters(columnVisibilityIndex.next(occupiedRangeBounds?.lastCol ?? 0, -1, true) ?? columnVisibilityIndex.logicalIndex(0))}${(rowVisibilityIndex.next(occupiedRangeBounds?.lastRow ?? 0, -1, true) ?? rowVisibilityIndex.logicalIndex(0)) + 1}`,
-          fe.shiftKey,
+          event.shiftKey,
         );
         return;
       }
       return;
     }
-    if (fe.shiftKey && fe.key === " ") {
-      (fe.preventDefault(),
-        navigationActions.selectRowOrColumn("row", Ue.row, false));
+    if (event.shiftKey && event.key === " ") {
+      (event.preventDefault(),
+        navigationActions.selectRowOrColumn("row", originCell.row, false));
       return;
     }
-    if (["Home", "PageUp", "PageDown"].includes(fe.key)) {
-      (fe.preventDefault(),
-        fe.key === "Home"
+    if (["Home", "PageUp", "PageDown"].includes(event.key)) {
+      (event.preventDefault(),
+        event.key === "Home"
           ? (col = columnVisibilityIndex.logicalIndex(0))
           : (row = viewAndSelectionActions.stepVisibleRowIndex(
               row,
               Math.max(
                 1,
                 Math.floor(rowViewport / zoomScale / defaultRowHeight) - 1,
-              ) * (fe.key === "PageUp" ? -1 : 1),
+              ) * (event.key === "PageUp" ? -1 : 1),
             )),
         navigationActions.selectCellAddress(
           `${columnIndexToLetters(col)}${row + 1}`,
-          fe.shiftKey,
+          event.shiftKey,
         ));
       return;
     }
@@ -411,54 +459,60 @@ function createGridInteractionActions({
         "ArrowRight",
         "Tab",
         "Enter",
-      ].includes(fe.key)
+      ].includes(event.key)
     ) {
       if (
-        (fe.preventDefault(),
-        fe.key === "ArrowDown" &&
+        (event.preventDefault(),
+        event.key === "ArrowDown" &&
           (row = viewAndSelectionActions.stepVisibleRowIndex(row, 1)),
-        fe.key === "Enter" &&
+        event.key === "Enter" &&
           (row = viewAndSelectionActions.stepVisibleRowIndex(
             row,
-            fe.shiftKey ? -1 : 1,
+            event.shiftKey ? -1 : 1,
           )),
-        fe.key === "ArrowUp" &&
+        event.key === "ArrowUp" &&
           (row = viewAndSelectionActions.stepVisibleRowIndex(row, -1)),
-        fe.key === "ArrowLeft" &&
+        event.key === "ArrowLeft" &&
           (col = viewAndSelectionActions.stepVisibleColumnIndex(col, -1)),
-        (fe.key === "ArrowRight" || fe.key === "Tab") &&
+        (event.key === "ArrowRight" || event.key === "Tab") &&
           (col = viewAndSelectionActions.stepVisibleColumnIndex(
             col,
-            fe.shiftKey && fe.key === "Tab" ? -1 : 1,
+            event.shiftKey && event.key === "Tab" ? -1 : 1,
           )),
-        !fe.shiftKey &&
+        !event.shiftKey &&
           !filterSortState.filterValueSearch &&
           !filterSortState.activeColumnSort)
       ) {
         const mergeRange = mergeRanges.find((mergeRange) =>
-          Tp(mergeRange, Ue.row, Ue.col),
+          Tp(mergeRange, originCell.row, originCell.col),
         );
         mergeRange &&
-          (col > Ue.col &&
-            (col = columnVisibilityIndex.next(mergeRange.lastCol, 1) ?? Ue.col),
-          col < Ue.col &&
+          (col > originCell.col &&
             (col =
-              columnVisibilityIndex.next(mergeRange.firstCol, -1) ?? Ue.col),
-          row > Ue.row &&
-            (row = rowVisibilityIndex.next(mergeRange.lastRow, 1) ?? Ue.row),
-          row < Ue.row &&
-            (row = rowVisibilityIndex.next(mergeRange.firstRow, -1) ?? Ue.row));
+              columnVisibilityIndex.next(mergeRange.lastCol, 1) ??
+              originCell.col),
+          col < originCell.col &&
+            (col =
+              columnVisibilityIndex.next(mergeRange.firstCol, -1) ??
+              originCell.col),
+          row > originCell.row &&
+            (row =
+              rowVisibilityIndex.next(mergeRange.lastRow, 1) ?? originCell.row),
+          row < originCell.row &&
+            (row =
+              rowVisibilityIndex.next(mergeRange.firstRow, -1) ??
+              originCell.row));
       }
-      const jt = `${columnIndexToLetters(Math.max(0, Math.min(activeSheet.colCount - 1, col)))}${Math.max(1, Math.min(activeSheet.rowCount, row + 1))}`;
+      const targetAddress = `${columnIndexToLetters(Math.max(0, Math.min(activeSheet.colCount - 1, col)))}${Math.max(1, Math.min(activeSheet.rowCount, row + 1))}`;
       navigationActions.selectCellAddress(
-        jt,
-        fe.shiftKey && !["Tab", "Enter"].includes(fe.key),
+        targetAddress,
+        event.shiftKey && !["Tab", "Enter"].includes(event.key),
       );
       return;
     }
     (!isEditingLocked &&
-      (fe.key === "Delete" || fe.key === "Backspace") &&
-      (fe.preventDefault(),
+      (event.key === "Delete" || event.key === "Backspace") &&
+      (event.preventDefault(),
       viewAndSelectionActions.runGuardedAction(() =>
         cellEditActions.applyCellPatches(
           viewAndSelectionActions.getSelectedCellAddresses().map((address) => ({
@@ -470,16 +524,19 @@ function createGridInteractionActions({
         ),
       )),
       !isEditingLocked &&
-        (fe.key === "F2" ||
-          (fe.key.length === 1 && !fe.ctrlKey && !fe.metaKey && !fe.altKey)) &&
-        (fe.preventDefault(),
+        (event.key === "F2" ||
+          (event.key.length === 1 &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey)) &&
+        (event.preventDefault(),
         (formulaEntryState.formulaPointerStateRef.current.mode =
-          fe.key !== "F2"),
+          event.key !== "F2"),
         formulaEntryState.setIsFormulaPointMode(
           formulaEntryState.formulaPointerStateRef.current.mode,
         ),
         cellEditActions.beginCellEdit(
-          fe.key === "F2" ? getEditableCellText(activeCell) : fe.key,
+          event.key === "F2" ? getEditableCellText(activeCell) : event.key,
           true,
         )));
   }
@@ -500,25 +557,25 @@ function createGridInteractionActions({
               activeWorkbook,
               dialogState.promptDialogState.value,
             ),
-            Oe = workbook.sheets.at(-1);
+            newSheet = workbook.sheets.at(-1);
           (navigationActions.replaceWorkbookSnapshot(
             workbook,
-            `Add sheet: ${Oe.name}`,
+            `Add sheet: ${newSheet.name}`,
           ),
-            navigationActions.switchActiveWorksheet(Oe.id));
+            navigationActions.switchActiveWorksheet(newSheet.id));
         }
         dialogState.setPromptDialogState(null);
       });
   }
-  function activateGridPane(fe) {
-    return splitPaneSizes.active.current === fe
+  function activateGridPane(paneId) {
+    return splitPaneSizes.active.current === paneId
       ? true
       : !formulaEntryState.activeCellEditRef.current?.value.startsWith("=") &&
           !cellEditActions.commitCellEdit()
         ? false
-        : (splitPaneSizes.activate(fe),
+        : (splitPaneSizes.activate(paneId),
           (selectionState.gridContainerRef.current =
-            splitPaneSizes.refs.current[fe] ?? null),
+            splitPaneSizes.refs.current[paneId] ?? null),
           true);
   }
   return {

@@ -44,15 +44,15 @@ const cellBorderEdges = ["top", "right", "bottom", "left"],
     "verticalAlign",
     "indent",
   ]);
-function failWithMessage(e) {
-  throw Error(e);
+function failWithMessage(message) {
+  throw Error(message);
 }
-function isPlainObjectLiteral(e) {
+function isPlainObjectLiteral(value) {
   return !!(
-    e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    [Object.prototype, null].includes(Object.getPrototypeOf(e))
+    value &&
+    typeof value == "object" &&
+    !Array.isArray(value) &&
+    [Object.prototype, null].includes(Object.getPrototypeOf(value))
   );
 }
 function validateStyleColor(color) {
@@ -66,7 +66,9 @@ function validateStyleColor(color) {
 function validateCellBorder(line) {
   return (
     (!isPlainObjectLiteral(line) ||
-      Object.keys(line).some((r) => !["style", "color"].includes(r)) ||
+      Object.keys(line).some(
+        (propertyName) => !["style", "color"].includes(propertyName),
+      ) ||
       !borderLineStyles.includes(line.style)) &&
       failWithMessage(
         "Choose a supported border line style and hexadecimal color.",
@@ -83,93 +85,105 @@ function validateCellBorder(line) {
         }
   );
 }
-function validateCellStyle(e) {
-  isPlainObjectLiteral(e) || failWithMessage("Cell style must be an object.");
-  for (const t of Object.keys(e))
-    supportedCellStyleKeys.has(t) ||
-      failWithMessage(`Unsupported cell style setting: ${t}.`);
-  const r = {};
-  e.binding !== undefined && (r.binding = validateNamedStyleBinding(e.binding));
-  for (const t of ["bold", "italic", "underline", "strikethrough", "wrap"])
-    e[t] !== undefined &&
-      (typeof e[t] != "boolean" &&
-        failWithMessage(`Style ${t} must be boolean.`),
-      (r[t] = e[t]));
-  (e.fontFamily !== undefined &&
-    (supportedFontFamilies.includes(e.fontFamily) ||
+function validateCellStyle(cellStyle) {
+  isPlainObjectLiteral(cellStyle) ||
+    failWithMessage("Cell style must be an object.");
+  for (const settingKey of Object.keys(cellStyle))
+    supportedCellStyleKeys.has(settingKey) ||
+      failWithMessage(`Unsupported cell style setting: ${settingKey}.`);
+  const validatedStyle = {};
+  cellStyle.binding !== undefined &&
+    (validatedStyle.binding = validateNamedStyleBinding(cellStyle.binding));
+  for (const flagName of [
+    "bold",
+    "italic",
+    "underline",
+    "strikethrough",
+    "wrap",
+  ])
+    cellStyle[flagName] !== undefined &&
+      (typeof cellStyle[flagName] != "boolean" &&
+        failWithMessage(`Style ${flagName} must be boolean.`),
+      (validatedStyle[flagName] = cellStyle[flagName]));
+  (cellStyle.fontFamily !== undefined &&
+    (supportedFontFamilies.includes(cellStyle.fontFamily) ||
       failWithMessage("Unsupported font family."),
-    (r.fontFamily = e.fontFamily)),
-    e.fontSize !== undefined &&
-      ((typeof e.fontSize != "number" ||
-        !Number.isInteger(e.fontSize) ||
-        e.fontSize < 8 ||
-        e.fontSize > 72) &&
+    (validatedStyle.fontFamily = cellStyle.fontFamily)),
+    cellStyle.fontSize !== undefined &&
+      ((typeof cellStyle.fontSize != "number" ||
+        !Number.isInteger(cellStyle.fontSize) ||
+        cellStyle.fontSize < 8 ||
+        cellStyle.fontSize > 72) &&
         failWithMessage("Font size must be an integer between 8 and 72."),
-      (r.fontSize = e.fontSize)));
-  for (const t of ["fill", "color"])
-    e[t] !== undefined && (r[t] = validateStyleColor(e[t]));
+      (validatedStyle.fontSize = cellStyle.fontSize)));
+  for (const colorName of ["fill", "color"])
+    cellStyle[colorName] !== undefined &&
+      (validatedStyle[colorName] = validateStyleColor(cellStyle[colorName]));
   if (
-    (e.align !== undefined &&
-      (["left", "center", "right"].includes(e.align) ||
+    (cellStyle.align !== undefined &&
+      (["left", "center", "right"].includes(cellStyle.align) ||
         failWithMessage("Invalid text alignment."),
-      (r.align = e.align)),
-    e.verticalAlign !== undefined &&
-      (["top", "middle", "bottom"].includes(e.verticalAlign) ||
+      (validatedStyle.align = cellStyle.align)),
+    cellStyle.verticalAlign !== undefined &&
+      (["top", "middle", "bottom"].includes(cellStyle.verticalAlign) ||
         failWithMessage("Choose Top, Center or Bottom vertical alignment."),
-      (r.verticalAlign = e.verticalAlign)),
-    e.indent !== undefined &&
-      ((typeof e.indent != "number" ||
-        !Number.isInteger(e.indent) ||
-        e.indent < 0 ||
-        e.indent > 15) &&
+      (validatedStyle.verticalAlign = cellStyle.verticalAlign)),
+    cellStyle.indent !== undefined &&
+      ((typeof cellStyle.indent != "number" ||
+        !Number.isInteger(cellStyle.indent) ||
+        cellStyle.indent < 0 ||
+        cellStyle.indent > 15) &&
         failWithMessage("Indent must be an integer between 0 and 15."),
-      (r.indent = e.indent)),
-    e.border !== undefined &&
-      (["all", "bottom", "none"].includes(e.border) ||
+      (validatedStyle.indent = cellStyle.indent)),
+    cellStyle.border !== undefined &&
+      (["all", "bottom", "none"].includes(cellStyle.border) ||
         failWithMessage("Unsupported cell border."),
-      (r.border = e.border)),
-    e.borders !== undefined)
+      (validatedStyle.border = cellStyle.border)),
+    cellStyle.borders !== undefined)
   ) {
-    (!isPlainObjectLiteral(e.borders) ||
-      Object.keys(e.borders).some(
+    (!isPlainObjectLiteral(cellStyle.borders) ||
+      Object.keys(cellStyle.borders).some(
         (border) => !cellBorderEdges.includes(border),
       )) &&
       failWithMessage(
         "Cell borders support top, right, bottom and left edges only.",
       );
-    const t = {};
+    const validatedBorders = {};
     for (const cellBorderEdge of cellBorderEdges)
-      e.borders[cellBorderEdge] !== undefined &&
-        (t[cellBorderEdge] = validateCellBorder(e.borders[cellBorderEdge]));
-    Object.keys(t).length && (r.borders = t);
+      cellStyle.borders[cellBorderEdge] !== undefined &&
+        (validatedBorders[cellBorderEdge] = validateCellBorder(
+          cellStyle.borders[cellBorderEdge],
+        ));
+    Object.keys(validatedBorders).length &&
+      (validatedStyle.borders = validatedBorders);
   }
-  return r;
+  return validatedStyle;
 }
 function validateNamedStyleBinding(binding) {
   (!isPlainObjectLiteral(binding) ||
     Object.keys(binding).some(
-      (t) =>
+      (bindingKey) =>
         !["namespace", "styleId", "base", "missing", "themeFallback"].includes(
-          t,
+          bindingKey,
         ),
     )) &&
     failWithMessage(
       "Named style binding must contain a namespace, style ID and supported base.",
     );
-  for (const t of ["namespace", "styleId"])
-    (typeof binding[t] != "string" ||
-      !binding[t].trim() ||
-      binding[t].length > 100 ||
-      /[\x00-\x1f\x7f]/.test(binding[t])) &&
+  for (const identifierField of ["namespace", "styleId"])
+    (typeof binding[identifierField] != "string" ||
+      !binding[identifierField].trim() ||
+      binding[identifierField].length > 100 ||
+      /[\x00-\x1f\x7f]/.test(binding[identifierField])) &&
       failWithMessage(
         "Named style identifiers must contain 1–100 characters without control characters.",
       );
   (!isPlainObjectLiteral(binding.base) ||
     Object.hasOwn(binding.base, "binding")) &&
     failWithMessage("A named style base cannot contain another binding.");
-  for (const t of ["missing", "themeFallback"])
-    binding[t] !== undefined &&
-      binding[t] !== true &&
+  for (const flagName of ["missing", "themeFallback"])
+    binding[flagName] !== undefined &&
+      binding[flagName] !== true &&
       failWithMessage("Invalid named style fallback flag.");
   const base = validateCellStyle(binding.base);
   return (
@@ -185,27 +199,35 @@ function validateNamedStyleBinding(binding) {
     }
   );
 }
-function resolveEffectiveCellStyle(e) {
-  if (!e) return {};
-  const { binding, ...t } = e;
-  if (!binding) return t;
-  const n = binding.missing ? {} : binding.base,
-    o = { ...n, ...t };
+function resolveEffectiveCellStyle(cellStyle) {
+  if (!cellStyle) return {};
+  const { binding, ...directStyle } = cellStyle;
+  if (!binding) return directStyle;
+  const baseStyle = binding.missing ? {} : binding.base,
+    effectiveStyle = { ...baseStyle, ...directStyle };
   return (
-    Object.hasOwn(t, "border")
-      ? delete o.borders
-      : n.borders && (o.borders = { ...n.borders }),
-    t.borders && (o.borders = { ...o.borders, ...t.borders }),
-    o
+    Object.hasOwn(directStyle, "border")
+      ? delete effectiveStyle.borders
+      : baseStyle.borders &&
+        (effectiveStyle.borders = { ...baseStyle.borders }),
+    directStyle.borders &&
+      (effectiveStyle.borders = {
+        ...effectiveStyle.borders,
+        ...directStyle.borders,
+      }),
+    effectiveStyle
   );
 }
-function resolveBorderEdge(e, cellBorderEdge) {
-  if (((e = resolveEffectiveCellStyle(e)), e?.borders?.[cellBorderEdge]))
-    return e.borders[cellBorderEdge];
-  if (e?.border === "none") return { style: "none" };
+function resolveBorderEdge(cellStyle, cellBorderEdge) {
   if (
-    e?.border === "all" ||
-    (e?.border === "bottom" && cellBorderEdge === "bottom")
+    ((cellStyle = resolveEffectiveCellStyle(cellStyle)),
+    cellStyle?.borders?.[cellBorderEdge])
+  )
+    return cellStyle.borders[cellBorderEdge];
+  if (cellStyle?.border === "none") return { style: "none" };
+  if (
+    cellStyle?.border === "all" ||
+    (cellStyle?.border === "bottom" && cellBorderEdge === "bottom")
   )
     return { style: "thin", color: "#000000" };
 }
@@ -224,64 +246,75 @@ function borderToCssShorthand(borderEdge) {
       ? "none"
       : `${borderWidthPx(borderEdge)}px ${["dotted", "dashed", "double"].includes(borderEdge.style) ? borderEdge.style : "solid"} ${borderEdge.color ?? "#000000"}`;
 }
-function indentToPx(e) {
+function indentToPx(cellStyle) {
   return (
-    (e = resolveEffectiveCellStyle(e)),
-    (e?.indent ?? 0) *
+    (cellStyle = resolveEffectiveCellStyle(cellStyle)),
+    (cellStyle?.indent ?? 0) *
       cellIndentMetrics.indentEm *
-      (e?.fontSize ? (e.fontSize * 4) / 3 : 14)
+      (cellStyle?.fontSize ? (cellStyle.fontSize * 4) / 3 : 14)
   );
 }
-function cellStyleToCss(e, r, t = {}) {
-  e = resolveEffectiveCellStyle(e);
-  const textAlign = e?.align ?? (typeof r == "number" ? "right" : "left"),
-    o = indentToPx(e),
-    a = [e?.underline && "underline", e?.strikethrough && "line-through"]
+function cellStyleToCss(cellStyle, cellValue, options = {}) {
+  cellStyle = resolveEffectiveCellStyle(cellStyle);
+  const textAlign =
+      cellStyle?.align ?? (typeof cellValue == "number" ? "right" : "left"),
+    indentPx = indentToPx(cellStyle),
+    textDecorations = [
+      cellStyle?.underline && "underline",
+      cellStyle?.strikethrough && "line-through",
+    ]
       .filter(Boolean)
       .join(" ");
   return {
-    background: e?.fill,
-    color: e?.color,
-    fontWeight: e?.bold ? 700 : 400,
-    fontStyle: e?.italic ? "italic" : "normal",
-    fontFamily: e?.fontFamily,
-    fontSize: e?.fontSize ? `${e.fontSize}pt` : undefined,
-    textDecoration: a || "none",
+    background: cellStyle?.fill,
+    color: cellStyle?.color,
+    fontWeight: cellStyle?.bold ? 700 : 400,
+    fontStyle: cellStyle?.italic ? "italic" : "normal",
+    fontFamily: cellStyle?.fontFamily,
+    fontSize: cellStyle?.fontSize ? `${cellStyle.fontSize}pt` : undefined,
+    textDecoration: textDecorations || "none",
     textAlign: textAlign,
-    verticalAlign: e?.verticalAlign,
-    paddingLeft: 3 + (textAlign === "left" ? o : 0),
-    paddingRight: 3 + (textAlign === "right" ? o : 0),
+    verticalAlign: cellStyle?.verticalAlign,
+    paddingLeft: 3 + (textAlign === "left" ? indentPx : 0),
+    paddingRight: 3 + (textAlign === "right" ? indentPx : 0),
     borderTop:
-      borderToCssShorthand(resolveBorderEdge(e, "top")) ?? t.defaultBorder,
+      borderToCssShorthand(resolveBorderEdge(cellStyle, "top")) ??
+      options.defaultBorder,
     borderRight:
-      borderToCssShorthand(resolveBorderEdge(e, "right")) ?? t.defaultBorder,
+      borderToCssShorthand(resolveBorderEdge(cellStyle, "right")) ??
+      options.defaultBorder,
     borderBottom:
-      borderToCssShorthand(resolveBorderEdge(e, "bottom")) ?? t.defaultBorder,
+      borderToCssShorthand(resolveBorderEdge(cellStyle, "bottom")) ??
+      options.defaultBorder,
     borderLeft:
-      borderToCssShorthand(resolveBorderEdge(e, "left")) ?? t.defaultBorder,
+      borderToCssShorthand(resolveBorderEdge(cellStyle, "left")) ??
+      options.defaultBorder,
   };
 }
-function textWrapToCss(e) {
+function textWrapToCss(cellStyle) {
   return (
-    (e = resolveEffectiveCellStyle(e)),
+    (cellStyle = resolveEffectiveCellStyle(cellStyle)),
     {
-      whiteSpace: e?.wrap ? "pre-wrap" : "nowrap",
-      overflowWrap: e?.wrap ? "anywhere" : undefined,
+      whiteSpace: cellStyle?.wrap ? "pre-wrap" : "nowrap",
+      overflowWrap: cellStyle?.wrap ? "anywhere" : undefined,
     }
   );
 }
-function measureCellBorderInsets(e) {
-  if (((e = resolveEffectiveCellStyle(e)), !e?.borders)) {
-    const t = e?.border === "all" ? 2 : e?.border === "none" ? 0 : 1;
-    return { horizontal: t, vertical: t };
+function measureCellBorderInsets(cellStyle) {
+  if (
+    ((cellStyle = resolveEffectiveCellStyle(cellStyle)), !cellStyle?.borders)
+  ) {
+    const uniformInset =
+      cellStyle?.border === "all" ? 2 : cellStyle?.border === "none" ? 0 : 1;
+    return { horizontal: uniformInset, vertical: uniformInset };
   }
-  const r = (cellBorderEdge) => {
-    const borderEdge = resolveBorderEdge(e, cellBorderEdge);
+  const edgeInset = (cellBorderEdge) => {
+    const borderEdge = resolveBorderEdge(cellStyle, cellBorderEdge);
     return borderEdge ? borderWidthPx(borderEdge) : 0.5;
   };
   return {
-    horizontal: r("left") + r("right"),
-    vertical: r("top") + r("bottom"),
+    horizontal: edgeInset("left") + edgeInset("right"),
+    vertical: edgeInset("top") + edgeInset("bottom"),
   };
 }
 const themePaletteRoles = [
@@ -355,35 +388,38 @@ const themePaletteRoles = [
     },
   ];
 
-function assertKnownStyleKeys(e, r, t) {
-  Object.keys(e).some((n) => !r.includes(n)) &&
-    failWithMessage(`Unsupported ${t} setting.`);
+function assertKnownStyleKeys(styleObject, allowedKeys, label) {
+  Object.keys(styleObject).some((key) => !allowedKeys.includes(key)) &&
+    failWithMessage(`Unsupported ${label} setting.`);
 }
-function validateBoundedStyleText(e, r, t = 80) {
+function validateBoundedStyleText(text, label, maxLength = 80) {
   return (
-    (typeof e != "string" ||
-      !e.trim() ||
-      e.length > t ||
-      /[\x00-\x1f\x7f]/.test(e)) &&
+    (typeof text != "string" ||
+      !text.trim() ||
+      text.length > maxLength ||
+      /[\x00-\x1f\x7f]/.test(text)) &&
       failWithMessage(
-        `${r} must contain 1–${t} characters without control characters.`,
+        `${label} must contain 1–${maxLength} characters without control characters.`,
       ),
-    e.trim()
+    text.trim()
   );
 }
-function cloneStyleValue(e) {
-  return structuredClone(e);
+function cloneStyleValue(value) {
+  return structuredClone(value);
 }
-function canonicalStyleKey(e) {
-  return Array.isArray(e)
-    ? `[${e.map(canonicalStyleKey).join(",")}]`
-    : isPlainObjectLiteral(e)
-      ? `{${Object.keys(e)
-          .filter((r) => e[r] !== undefined)
+function canonicalStyleKey(value) {
+  return Array.isArray(value)
+    ? `[${value.map(canonicalStyleKey).join(",")}]`
+    : isPlainObjectLiteral(value)
+      ? `{${Object.keys(value)
+          .filter((definedKey) => value[definedKey] !== undefined)
           .sort()
-          .map((r) => `${JSON.stringify(r)}:${canonicalStyleKey(e[r])}`)
+          .map(
+            (propertyKey) =>
+              `${JSON.stringify(propertyKey)}:${canonicalStyleKey(value[propertyKey])}`,
+          )
           .join(",")}}`
-      : JSON.stringify(e);
+      : JSON.stringify(value);
 }
 function validateWorkbookTheme(theme) {
   (isPlainObjectLiteral(theme) || failWithMessage("Choose a workbook theme."),
@@ -395,13 +431,13 @@ function validateWorkbookTheme(theme) {
     assertKnownStyleKeys(theme.fonts, ["body", "heading"], "theme font"));
   const palette = {};
   for (const themePaletteRole of themePaletteRoles) {
-    const n = theme.palette[themePaletteRole];
-    ((typeof n != "string" || !/^#[0-9a-f]{6}$/i.test(n)) &&
+    const colorValue = theme.palette[themePaletteRole];
+    ((typeof colorValue != "string" || !/^#[0-9a-f]{6}$/i.test(colorValue)) &&
       failWithMessage("Theme colors must use six-digit hexadecimal colors."),
-      (palette[themePaletteRole] = n.toUpperCase()));
+      (palette[themePaletteRole] = colorValue.toUpperCase()));
   }
-  for (const t of ["body", "heading"])
-    supportedFontFamilies.includes(theme.fonts[t]) ||
+  for (const fontRole of ["body", "heading"])
+    supportedFontFamilies.includes(theme.fonts[fontRole]) ||
       failWithMessage("Choose a supported theme font.");
   return {
     name: validateBoundedStyleText(theme.name, "Theme name"),
@@ -422,16 +458,16 @@ function validateNamedStyleDefinition(definition) {
       failWithMessage(
         "A named style definition needs supported formatting without another binding.",
       ));
-  const r = { base: validateCellStyle(definition.base) };
+  const validatedDefinition = { base: validateCellStyle(definition.base) };
   definition.fontRole !== undefined &&
     (["body", "heading"].includes(definition.fontRole) ||
       failWithMessage("Choose Body or Heading theme font."),
-    (r.fontRole = definition.fontRole));
-  for (const n of ["fillRole", "colorRole"])
-    definition[n] !== undefined &&
-      (themePaletteRoles.includes(definition[n]) ||
+    (validatedDefinition.fontRole = definition.fontRole));
+  for (const roleField of ["fillRole", "colorRole"])
+    definition[roleField] !== undefined &&
+      (themePaletteRoles.includes(definition[roleField]) ||
         failWithMessage("Choose a supported theme color role."),
-      (r[n] = definition[n]));
+      (validatedDefinition[roleField] = definition[roleField]));
   if (definition.borderRoles !== undefined) {
     (isPlainObjectLiteral(definition.borderRoles) ||
       failWithMessage("Border color roles must be an object."),
@@ -440,74 +476,83 @@ function validateNamedStyleDefinition(definition) {
         cellBorderEdges,
         "border role",
       ));
-    const n = {};
+    const validatedBorderRoles = {};
     for (const cellBorderEdge of cellBorderEdges)
       definition.borderRoles[cellBorderEdge] !== undefined &&
         (themePaletteRoles.includes(definition.borderRoles[cellBorderEdge]) ||
           failWithMessage("Choose a supported border color role."),
-        (!resolveBorderEdge(r.base, cellBorderEdge) ||
-          resolveBorderEdge(r.base, cellBorderEdge)?.style === "none") &&
+        (!resolveBorderEdge(validatedDefinition.base, cellBorderEdge) ||
+          resolveBorderEdge(validatedDefinition.base, cellBorderEdge)?.style ===
+            "none") &&
           failWithMessage(
             "Add a border line before assigning its theme color.",
           ),
-        (n[cellBorderEdge] = definition.borderRoles[cellBorderEdge]));
-    Object.keys(n).length && (r.borderRoles = n);
+        (validatedBorderRoles[cellBorderEdge] =
+          definition.borderRoles[cellBorderEdge]));
+    Object.keys(validatedBorderRoles).length &&
+      (validatedDefinition.borderRoles = validatedBorderRoles);
   }
-  return r;
+  return validatedDefinition;
 }
-function validateWorkbookStyleCatalog(e) {
-  (isPlainObjectLiteral(e) ||
+function validateWorkbookStyleCatalog(catalog) {
+  (isPlainObjectLiteral(catalog) ||
     failWithMessage("Workbook styles must be an object."),
     assertKnownStyleKeys(
-      e,
+      catalog,
       ["namespace", "theme", "styles", "missingTheme"],
       "workbook style catalog",
     ),
-    e.missingTheme !== undefined &&
-      e.missingTheme !== true &&
+    catalog.missingTheme !== undefined &&
+      catalog.missingTheme !== true &&
       failWithMessage("Invalid missing theme flag."),
-    (!Array.isArray(e.styles) ||
-      e.styles.length > workbookStyleLimits.maxStyles) &&
+    (!Array.isArray(catalog.styles) ||
+      catalog.styles.length > workbookStyleLimits.maxStyles) &&
       failWithMessage("A workbook supports at most 50 named styles."));
-  const r = new Set(),
-    t = new Set(),
-    styles = e.styles.map((style) => {
+  const seenIds = new Set(),
+    seenNames = new Set(),
+    styles = catalog.styles.map((style) => {
       (isPlainObjectLiteral(style) || failWithMessage("Invalid named style."),
         assertKnownStyleKeys(
           style,
           ["id", "name", "definition"],
           "named style",
         ));
-      const d = validateBoundedStyleText(style.id, "Style ID", 100),
-        u = validateBoundedStyleText(style.name, "Style name");
+      const styleId = validateBoundedStyleText(style.id, "Style ID", 100),
+        styleName = validateBoundedStyleText(style.name, "Style name");
       return (
-        (r.has(d) || t.has(u.toLocaleLowerCase("en-US"))) &&
+        (seenIds.has(styleId) ||
+          seenNames.has(styleName.toLocaleLowerCase("en-US"))) &&
           failWithMessage(
             "Named style IDs and names must be unique within this workbook.",
           ),
-        r.add(d),
-        t.add(u.toLocaleLowerCase("en-US")),
+        seenIds.add(styleId),
+        seenNames.add(styleName.toLocaleLowerCase("en-US")),
         {
-          id: d,
-          name: u,
+          id: styleId,
+          name: styleName,
           definition: validateNamedStyleDefinition(style.definition),
         }
       );
     }),
-    o = e.theme === undefined || e.missingTheme === true,
+    isMissingTheme =
+      catalog.theme === undefined || catalog.missingTheme === true,
     theme =
-      e.theme === undefined
+      catalog.theme === undefined
         ? cloneStyleValue(officeThemeDefinition)
-        : validateWorkbookTheme(e.theme);
+        : validateWorkbookTheme(catalog.theme);
   return (
-    o &&
+    isMissingTheme &&
       canonicalStyleKey(theme) !== canonicalStyleKey(officeThemeDefinition) &&
       failWithMessage("A missing theme must use the Office fallback."),
     {
-      namespace: validateBoundedStyleText(e.namespace, "Style namespace", 100),
+      namespace: validateBoundedStyleText(
+        catalog.namespace,
+        "Style namespace",
+        100,
+      ),
       theme: theme,
       styles: styles,
-      ...(o ? { missingTheme: true } : {}),
+      ...(isMissingTheme ? { missingTheme: true } : {}),
     }
   );
 }
@@ -567,130 +612,157 @@ function createDefaultStyleCatalog(namespace) {
   });
 }
 function resolveNamedStyleAppearance(definition, theme) {
-  const t = cloneStyleValue(definition.base);
-  (definition.fontRole && (t.fontFamily = theme.fonts[definition.fontRole]),
-    definition.fillRole && (t.fill = theme.palette[definition.fillRole]),
-    definition.colorRole && (t.color = theme.palette[definition.colorRole]));
+  const appearance = cloneStyleValue(definition.base);
+  (definition.fontRole &&
+    (appearance.fontFamily = theme.fonts[definition.fontRole]),
+    definition.fillRole &&
+      (appearance.fill = theme.palette[definition.fillRole]),
+    definition.colorRole &&
+      (appearance.color = theme.palette[definition.colorRole]));
   for (const cellBorderEdge of cellBorderEdges)
     definition.borderRoles?.[cellBorderEdge] &&
-      (t.borders = {
-        ...t.borders,
+      (appearance.borders = {
+        ...appearance.borders,
         [cellBorderEdge]: {
-          ...resolveBorderEdge(t, cellBorderEdge),
+          ...resolveBorderEdge(appearance, cellBorderEdge),
           color: theme.palette[definition.borderRoles[cellBorderEdge]],
         },
       });
-  return validateCellStyle(t);
+  return validateCellStyle(appearance);
 }
-function resolveNamedStyleBinding(e, r) {
-  e &&
-    r.namespace !== e.namespace &&
+function resolveNamedStyleBinding(styleCatalog, binding) {
+  styleCatalog &&
+    binding.namespace !== styleCatalog.namespace &&
     failWithMessage(
       "This style belongs to another workbook. Import or remap its style catalog before pasting the binding.",
     );
-  const t = e?.styles.find((style) => style.id === r.styleId);
+  const namedStyle = styleCatalog?.styles.find(
+    (style) => style.id === binding.styleId,
+  );
   return {
-    namespace: r.namespace,
-    styleId: r.styleId,
-    base: t && e ? resolveNamedStyleAppearance(t.definition, e.theme) : {},
-    ...(t ? {} : { missing: true }),
-    ...(e?.missingTheme ? { themeFallback: true } : {}),
+    namespace: binding.namespace,
+    styleId: binding.styleId,
+    base:
+      namedStyle && styleCatalog
+        ? resolveNamedStyleAppearance(namedStyle.definition, styleCatalog.theme)
+        : {},
+    ...(namedStyle ? {} : { missing: true }),
+    ...(styleCatalog?.missingTheme ? { themeFallback: true } : {}),
   };
 }
 function reconcileWorkbookStyleBindings(styleCatalog, workbook) {
-  const t =
+  const validatedCatalog =
     styleCatalog === undefined
       ? undefined
       : validateWorkbookStyleCatalog(styleCatalog);
-  t ? (workbook.styleCatalog = t) : delete workbook.styleCatalog;
-  const n =
+  validatedCatalog
+    ? (workbook.styleCatalog = validatedCatalog)
+    : delete workbook.styleCatalog;
+  const isThemeOmitted =
     isPlainObjectLiteral(styleCatalog) && styleCatalog.theme === undefined;
   for (const sheet of workbook.sheets)
-    for (const s of hasLinkedOrBoundCells(sheet.cells)
+    for (const cell of hasLinkedOrBoundCells(sheet.cells)
       ? Object.values(sheet.cells)
       : []) {
-      if (!s.style?.binding) continue;
-      const d = validateNamedStyleBinding(s.style.binding),
-        namedStyleBinding = resolveNamedStyleBinding(t, d);
+      if (!cell.style?.binding) continue;
+      const validatedBinding = validateNamedStyleBinding(cell.style.binding),
+        namedStyleBinding = resolveNamedStyleBinding(
+          validatedCatalog,
+          validatedBinding,
+        );
       (!namedStyleBinding.missing &&
-        !n &&
-        canonicalStyleKey(d) !== canonicalStyleKey(namedStyleBinding) &&
+        !isThemeOmitted &&
+        canonicalStyleKey(validatedBinding) !==
+          canonicalStyleKey(namedStyleBinding) &&
         failWithMessage(
           "Named style appearance does not match the workbook catalog. Reapply the style from a trusted catalog.",
         ),
-        (s.style.binding = namedStyleBinding));
+        (cell.style.binding = namedStyleBinding));
     }
 }
-function assertNamedStyleBindingCurrent(workbook, r) {
-  if (!r?.binding) return;
-  const t = validateNamedStyleBinding(r.binding),
-    namedStyleBinding = resolveNamedStyleBinding(workbook.styleCatalog, t);
-  canonicalStyleKey(t) !== canonicalStyleKey(namedStyleBinding) &&
+function assertNamedStyleBindingCurrent(workbook, cellStyle) {
+  if (!cellStyle?.binding) return;
+  const validatedBinding = validateNamedStyleBinding(cellStyle.binding),
+    namedStyleBinding = resolveNamedStyleBinding(
+      workbook.styleCatalog,
+      validatedBinding,
+    );
+  canonicalStyleKey(validatedBinding) !==
+    canonicalStyleKey(namedStyleBinding) &&
     failWithMessage(
       "Named style binding is stale or inconsistent with this workbook. Reapply its named style.",
     );
 }
-function describeNamedStyleFallback(e) {
-  if (e?.binding?.missing)
+function describeNamedStyleFallback(cellStyle) {
+  if (cellStyle?.binding?.missing)
     return "Named style is missing. Default formatting and direct cell formatting are shown.";
-  if (e?.binding?.themeFallback)
+  if (cellStyle?.binding?.themeFallback)
     return "Workbook theme is missing. The Office theme is shown.";
 }
 function collectStyleFallbackWarnings(workbook) {
-  const r = new Set();
+  const warnings = new Set();
   workbook.styleCatalog?.missingTheme &&
-    r.add("Workbook theme is missing. The Office theme is shown.");
+    warnings.add("Workbook theme is missing. The Office theme is shown.");
   for (const sheet of workbook.sheets)
     for (const cell of Object.values(sheet.cells)) {
-      const a = describeNamedStyleFallback(cell.style);
-      a && r.add(a);
+      const warning = describeNamedStyleFallback(cell.style);
+      warning && warnings.add(warning);
     }
-  return [...r];
+  return [...warnings];
 }
-function hasBorderEdgeChanges(e, r) {
+function hasBorderEdgeChanges(firstStyle, secondStyle) {
   return cellBorderEdges.some(
     (cellBorderEdge) =>
-      canonicalStyleKey(resolveBorderEdge(e, cellBorderEdge)) !==
-      canonicalStyleKey(resolveBorderEdge(r, cellBorderEdge)),
+      canonicalStyleKey(resolveBorderEdge(firstStyle, cellBorderEdge)) !==
+      canonicalStyleKey(resolveBorderEdge(secondStyle, cellBorderEdge)),
   );
 }
-function renameStyleNamespace(e, r) {
-  const t = validateBoundedStyleText(r, "Style namespace", 100),
-    workbook = cloneStyleValue(e),
-    o = workbook.styleCatalog?.namespace;
-  if (!o) return workbook;
-  workbook.styleCatalog.namespace = t;
-  const a = (d) => {
-    d?.style?.binding?.namespace === o && (d.style.binding.namespace = t);
+function renameStyleNamespace(sourceWorkbook, newNamespace) {
+  const validatedNamespace = validateBoundedStyleText(
+      newNamespace,
+      "Style namespace",
+      100,
+    ),
+    workbook = cloneStyleValue(sourceWorkbook),
+    previousNamespace = workbook.styleCatalog?.namespace;
+  if (!previousNamespace) return workbook;
+  workbook.styleCatalog.namespace = validatedNamespace;
+  const renameBinding = (cellRecord) => {
+    cellRecord?.style?.binding?.namespace === previousNamespace &&
+      (cellRecord.style.binding.namespace = validatedNamespace);
   };
   for (const sheet of workbook.sheets)
-    for (const cell of Object.values(sheet.cells)) a(cell);
-  for (const d of workbook.events)
-    for (const change of d.changes) (a(change.before), a(change.after));
+    for (const cell of Object.values(sheet.cells)) renameBinding(cell);
+  for (const workbookEvent of workbook.events)
+    for (const change of workbookEvent.changes)
+      (renameBinding(change.before), renameBinding(change.after));
   return workbook;
 }
-function validateRowColumnMove(e, r) {
+function validateRowColumnMove(moveRequest, totalCount) {
   if (
-    !Number.isInteger(e.index) ||
-    e.index < 0 ||
-    !Number.isInteger(e.count) ||
-    e.count < 1 ||
-    e.count > 1e4 ||
-    e.index + e.count > r ||
-    !Number.isInteger(e.moveBefore) ||
-    e.moveBefore < 0 ||
-    e.moveBefore > r
+    !Number.isInteger(moveRequest.index) ||
+    moveRequest.index < 0 ||
+    !Number.isInteger(moveRequest.count) ||
+    moveRequest.count < 1 ||
+    moveRequest.count > 1e4 ||
+    moveRequest.index + moveRequest.count > totalCount ||
+    !Number.isInteger(moveRequest.moveBefore) ||
+    moveRequest.moveBefore < 0 ||
+    moveRequest.moveBefore > totalCount
   )
     throw new Error(
       "Choose a valid source, 1–10,000 rows or columns, and a destination within the worksheet.",
     );
-  if (e.permutation !== undefined) {
+  if (moveRequest.permutation !== undefined) {
     if (
-      !Array.isArray(e.permutation) ||
-      e.permutation.length !== e.count ||
-      new Set(e.permutation).size !== e.count ||
-      e.permutation.some(
-        (t) => !Number.isInteger(t) || t < e.index || t >= e.index + e.count,
+      !Array.isArray(moveRequest.permutation) ||
+      moveRequest.permutation.length !== moveRequest.count ||
+      new Set(moveRequest.permutation).size !== moveRequest.count ||
+      moveRequest.permutation.some(
+        (destinationIndex) =>
+          !Number.isInteger(destinationIndex) ||
+          destinationIndex < moveRequest.index ||
+          destinationIndex >= moveRequest.index + moveRequest.count,
       )
     )
       throw Error(
@@ -698,85 +770,120 @@ function validateRowColumnMove(e, r) {
       );
     return;
   }
-  if (e.moveBefore >= e.index && e.moveBefore <= e.index + e.count)
+  if (
+    moveRequest.moveBefore >= moveRequest.index &&
+    moveRequest.moveBefore <= moveRequest.index + moveRequest.count
+  )
     throw new Error(
       "The destination is inside or immediately after the selected block; this would not move anything.",
     );
 }
-function mapIndexAfterMove(e, r) {
-  if (r.permutation)
-    return e >= r.index && e < r.index + r.count
-      ? r.permutation[e - r.index]
-      : e;
-  const { index, count, moveBefore } = r,
-    a = moveBefore < index ? moveBefore : moveBefore - count;
-  return e >= index && e < index + count
-    ? a + e - index
-    : moveBefore < index && e >= moveBefore && e < index
-      ? e + count
-      : moveBefore > index && e >= index + count && e < moveBefore
-        ? e - count
-        : e;
+function mapIndexAfterMove(originalIndex, move) {
+  if (move.permutation)
+    return originalIndex >= move.index &&
+      originalIndex < move.index + move.count
+      ? move.permutation[originalIndex - move.index]
+      : originalIndex;
+  const { index, count, moveBefore } = move,
+    movedBlockStart = moveBefore < index ? moveBefore : moveBefore - count;
+  return originalIndex >= index && originalIndex < index + count
+    ? movedBlockStart + originalIndex - index
+    : moveBefore < index && originalIndex >= moveBefore && originalIndex < index
+      ? originalIndex + count
+      : moveBefore > index &&
+          originalIndex >= index + count &&
+          originalIndex < moveBefore
+        ? originalIndex - count
+        : originalIndex;
 }
-function planMoveSegments(start, end, t) {
-  if (t.permutation) {
-    const o = [],
-      a = (start, end, offset) => {
+function planMoveSegments(start, end, move) {
+  if (move.permutation) {
+    const segments = [],
+      pushSegment = (start, end, offset) => {
         if (start > end) return;
-        const l = o.at(-1);
-        l && l.end + 1 === start && l.offset === offset
-          ? (l.end = end)
-          : o.push({ start: start, end: end, offset: offset });
+        const lastSegment = segments.at(-1);
+        lastSegment &&
+        lastSegment.end + 1 === start &&
+        lastSegment.offset === offset
+          ? (lastSegment.end = end)
+          : segments.push({ start: start, end: end, offset: offset });
       };
-    a(start, Math.min(end, t.index - 1), 0);
+    pushSegment(start, Math.min(end, move.index - 1), 0);
     for (
-      let s = Math.max(start, t.index);
-      s <= Math.min(end, t.index + t.count - 1);
-      s++
+      let blockIndex = Math.max(start, move.index);
+      blockIndex <= Math.min(end, move.index + move.count - 1);
+      blockIndex++
     )
-      a(s, s, mapIndexAfterMove(s, t) - s);
-    return (a(Math.max(start, t.index + t.count), end, 0), o);
+      pushSegment(
+        blockIndex,
+        blockIndex,
+        mapIndexAfterMove(blockIndex, move) - blockIndex,
+      );
+    return (
+      pushSegment(Math.max(start, move.index + move.count), end, 0),
+      segments
+    );
   }
-  const n = [
+  const boundaries = [
     ...new Set(
-      [start, end + 1, t.index, t.index + t.count, t.moveBefore].filter(
-        (o) => o >= start && o <= end + 1,
-      ),
+      [
+        start,
+        end + 1,
+        move.index,
+        move.index + move.count,
+        move.moveBefore,
+      ].filter((boundary) => boundary >= start && boundary <= end + 1),
     ),
-  ].sort((o, a) => o - a);
-  return n.slice(0, -1).map((start, a) => ({
+  ].sort((leftBoundary, rightBoundary) => leftBoundary - rightBoundary);
+  return boundaries.slice(0, -1).map((start, segmentIndex) => ({
     start: start,
-    end: n[a + 1] - 1,
-    offset: mapIndexAfterMove(start, t) - start,
+    end: boundaries[segmentIndex + 1] - 1,
+    offset: mapIndexAfterMove(start, move) - start,
   }));
 }
-function mapRangeAfterMove(start, end, t) {
-  if (t.permutation && start <= t.index && end >= t.index + t.count - 1)
+function mapRangeAfterMove(start, end, move) {
+  if (
+    move.permutation &&
+    start <= move.index &&
+    end >= move.index + move.count - 1
+  )
     return [{ start: start, end: end }];
-  const n = planMoveSegments(start, end, t)
-      .map((a) => ({ start: a.start + a.offset, end: a.end + a.offset }))
-      .sort((a, s) => a.start - s.start),
-    o = [];
-  for (const a of n) {
-    const s = o.at(-1);
-    s && a.start <= s.end + 1 ? (s.end = Math.max(s.end, a.end)) : o.push(a);
+  const shiftedSegments = planMoveSegments(start, end, move)
+      .map((segment) => ({
+        start: segment.start + segment.offset,
+        end: segment.end + segment.offset,
+      }))
+      .sort((leftRange, rightRange) => leftRange.start - rightRange.start),
+    mergedRanges = [];
+  for (const range of shiftedSegments) {
+    const lastMergedRange = mergedRanges.at(-1);
+    lastMergedRange && range.start <= lastMergedRange.end + 1
+      ? (lastMergedRange.end = Math.max(lastMergedRange.end, range.end))
+      : mergedRanges.push(range);
   }
-  return o;
+  return mergedRanges;
 }
-function resolveMovedRange(start, end, t, n = "range", o = false) {
-  const a = mapRangeAfterMove(start, end, t);
-  if (a.length !== 1)
+function resolveMovedRange(
+  start,
+  end,
+  move,
+  rangeLabel = "range",
+  isStructureMove = false,
+) {
+  const movedRanges = mapRangeAfterMove(start, end, move);
+  if (movedRanges.length !== 1)
     throw new Error(
-      `This move would split ${n} into separate ranges. Move the complete range or use explicit cell references first.`,
+      `This move would split ${rangeLabel} into separate ranges. Move the complete range or use explicit cell references first.`,
     );
   if (
-    o &&
-    new Set(planMoveSegments(start, end, t).map((s) => s.offset)).size !== 1
+    isStructureMove &&
+    new Set(planMoveSegments(start, end, move).map((segment) => segment.offset))
+      .size !== 1
   )
     throw new Error(
-      `This move would reorder part of ${n}. Move the complete structure together.`,
+      `This move would reorder part of ${rangeLabel}. Move the complete structure together.`,
     );
-  return a[0];
+  return movedRanges[0];
 }
 const reviewThreadLimits = {
     threads: 1e3,
@@ -789,71 +896,73 @@ const reviewThreadLimits = {
   },
   unsafeControlCharPattern =
     /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/,
-  throwWithMessage = (e) => {
-    throw new Error(e);
+  throwWithMessage = (message) => {
+    throw new Error(message);
   };
-function assertPlainReviewRecord(e, r) {
+function assertPlainReviewRecord(value, label) {
   return (
-    (!e ||
-      typeof e != "object" ||
-      Array.isArray(e) ||
-      ![Object.prototype, null].includes(Object.getPrototypeOf(e))) &&
-      throwWithMessage(`${r} must be a plain object.`),
-    e
+    (!value ||
+      typeof value != "object" ||
+      Array.isArray(value) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(value))) &&
+      throwWithMessage(`${label} must be a plain object.`),
+    value
   );
 }
-function normalizeBoundedText(e, r, t, n = false) {
+function normalizeBoundedText(text, label, maxLength, isMultiline = false) {
   return (
-    (typeof e != "string" ||
-      !e.trim() ||
-      e.length > t ||
-      unsafeControlCharPattern.test(n ? e.replace(/[\n\r\t]/g, "") : e)) &&
+    (typeof text != "string" ||
+      !text.trim() ||
+      text.length > maxLength ||
+      unsafeControlCharPattern.test(
+        isMultiline ? text.replace(/[\n\r\t]/g, "") : text,
+      )) &&
       throwWithMessage(
-        `${r} must contain 1–${t} characters without unsupported control characters.`,
+        `${label} must contain 1–${maxLength} characters without unsupported control characters.`,
       ),
-    e.trim()
+    text.trim()
   );
 }
-function normalizeReviewTimestamp(e, r = "Review timestamp") {
+function normalizeReviewTimestamp(timestamp, label = "Review timestamp") {
   return (
-    (typeof e != "string" ||
-      !Number.isFinite(Date.parse(e)) ||
-      new Date(e).toISOString() !== e) &&
-      throwWithMessage(`${r} must be an ISO UTC timestamp.`),
-    e
+    (typeof timestamp != "string" ||
+      !Number.isFinite(Date.parse(timestamp)) ||
+      new Date(timestamp).toISOString() !== timestamp) &&
+      throwWithMessage(`${label} must be an ISO UTC timestamp.`),
+    timestamp
   );
 }
-function normalizeReviewAuthor(e = "Reviewer") {
+function normalizeReviewAuthor(author = "Reviewer") {
   return normalizeBoundedText(
-    e,
+    author,
     "Reviewer name",
     reviewThreadLimits.authorLength,
   );
 }
-function resolveReviewTimestamp(e = {}, updatedAt) {
-  const t =
-    e.timestamp === undefined
+function resolveReviewTimestamp(options = {}, updatedAt) {
+  const timestamp =
+    options.timestamp === undefined
       ? new Date(
           Math.max(Date.now(), updatedAt ? Date.parse(updatedAt) : 0),
         ).toISOString()
-      : normalizeReviewTimestamp(e.timestamp);
+      : normalizeReviewTimestamp(options.timestamp);
   return (
     updatedAt &&
-      t < updatedAt &&
+      timestamp < updatedAt &&
       throwWithMessage(
         "The review time cannot precede the existing discussion.",
       ),
-    t
+    timestamp
   );
 }
 function aQ(workbook, timestamp) {
-  const t = new Map(workbook.sheets.map((sheet) => [sheet.id, sheet]));
-  let n = false;
+  const sheetsById = new Map(workbook.sheets.map((sheet) => [sheet.id, sheet]));
+  let hasChanges = false;
   const reviewThreads = workbook.reviewThreads?.map((reviewThread) => {
       if (reviewThread.orphaned) return reviewThread;
-      const u = t.get(reviewThread.anchor.sheetId);
-      if (!u) {
-        n = true;
+      const anchorSheet = sheetsById.get(reviewThread.anchor.sheetId);
+      if (!anchorSheet) {
+        hasChanges = true;
         const reviewTimestamp = resolveReviewTimestamp(
           { timestamp: timestamp },
           reviewThread.updatedAt,
@@ -864,26 +973,26 @@ function aQ(workbook, timestamp) {
           orphaned: { reason: "worksheet-deleted", createdAt: reviewTimestamp },
         };
       }
-      return u.name !== reviewThread.anchor.sheetName
-        ? ((n = true),
+      return anchorSheet.name !== reviewThread.anchor.sheetName
+        ? ((hasChanges = true),
           {
             ...reviewThread,
-            anchor: { ...reviewThread.anchor, sheetName: u.name },
+            anchor: { ...reviewThread.anchor, sheetName: anchorSheet.name },
           })
         : reviewThread;
     }),
     sheets = workbook.sheets.map((sheet) => {
       let cells;
-      for (const [c, h] of Object.entries(sheet.cells))
-        h.hyperlink?.kind !== "internal" ||
-          t.has(h.hyperlink.sheetId) ||
+      for (const [cellAddress, cell] of Object.entries(sheet.cells))
+        cell.hyperlink?.kind !== "internal" ||
+          sheetsById.has(cell.hyperlink.sheetId) ||
           ((cells ??= { ...sheet.cells }),
-          (cells[c] = { ...h }),
-          delete cells[c].hyperlink,
-          (n = true));
+          (cells[cellAddress] = { ...cell }),
+          delete cells[cellAddress].hyperlink,
+          (hasChanges = true));
       return cells ? { ...sheet, cells: cells } : sheet;
     });
-  return n
+  return hasChanges
     ? {
         ...workbook,
         sheets: sheets,
@@ -891,7 +1000,7 @@ function aQ(workbook, timestamp) {
       }
     : workbook;
 }
-function uQ(workbook, r) {
+function uQ(workbook, sheetIdMap) {
   return {
     ...workbook,
     ...(workbook.reviewThreads
@@ -901,7 +1010,7 @@ function uQ(workbook, r) {
             anchor: {
               ...reviewThread.anchor,
               sheetId:
-                r.get(reviewThread.anchor.sheetId) ??
+                sheetIdMap.get(reviewThread.anchor.sheetId) ??
                 reviewThread.anchor.sheetId,
             },
           })),
@@ -910,28 +1019,30 @@ function uQ(workbook, r) {
     sheets: workbook.sheets.map((sheet) => ({
       ...sheet,
       cells: Object.fromEntries(
-        Object.entries(sheet.cells).map(([n, o]) => [
-          n,
-          o.hyperlink?.kind === "internal"
+        Object.entries(sheet.cells).map(([cellAddress, cell]) => [
+          cellAddress,
+          cell.hyperlink?.kind === "internal"
             ? {
-                ...o,
+                ...cell,
                 hyperlink: {
-                  ...o.hyperlink,
-                  sheetId: r.get(o.hyperlink.sheetId) ?? o.hyperlink.sheetId,
+                  ...cell.hyperlink,
+                  sheetId:
+                    sheetIdMap.get(cell.hyperlink.sheetId) ??
+                    cell.hyperlink.sheetId,
                 },
               }
-            : o,
+            : cell,
         ]),
       ),
     })),
   };
 }
-function createReviewThread(workbook, r) {
-  const t = uQ(workbook, r);
-  return t.reviewThreads
+function createReviewThread(workbook, sheetIdMap) {
+  const remappedWorkbook = uQ(workbook, sheetIdMap);
+  return remappedWorkbook.reviewThreads
     ? {
-        ...t,
-        reviewThreads: t.reviewThreads.map((reviewThread) => ({
+        ...remappedWorkbook,
+        reviewThreads: remappedWorkbook.reviewThreads.map((reviewThread) => ({
           ...reviewThread,
           id: crypto.randomUUID(),
           messages: reviewThread.messages.map((message) => ({
@@ -940,35 +1051,36 @@ function createReviewThread(workbook, r) {
           })),
         })),
       }
-    : t;
+    : remappedWorkbook;
 }
-function fQ(e, sheetId) {
-  return e.formulaWatches?.length
+function fQ(workbook, sheetId) {
+  return workbook.formulaWatches?.length
     ? {
-        ...e,
-        formulaWatches: e.formulaWatches.map((formulaWatch) =>
+        ...workbook,
+        formulaWatches: workbook.formulaWatches.map((formulaWatch) =>
           !formulaWatch.orphaned && formulaWatch.anchor.sheetId === sheetId
             ? { ...formulaWatch, orphaned: "deleted-sheet" }
             : formulaWatch,
         ),
       }
-    : e;
+    : workbook;
 }
-function createFormulaWatch(e, r) {
-  return e.formulaWatches?.length
+function createFormulaWatch(workbook, sheetIdMap) {
+  return workbook.formulaWatches?.length
     ? {
-        ...e,
-        formulaWatches: e.formulaWatches.map((formulaWatch) => ({
+        ...workbook,
+        formulaWatches: workbook.formulaWatches.map((formulaWatch) => ({
           ...formulaWatch,
           id: crypto.randomUUID(),
           anchor: {
             ...formulaWatch.anchor,
             sheetId:
-              r.get(formulaWatch.anchor.sheetId) ?? formulaWatch.anchor.sheetId,
+              sheetIdMap.get(formulaWatch.anchor.sheetId) ??
+              formulaWatch.anchor.sheetId,
           },
         })),
       }
-    : e;
+    : workbook;
 }
 function Pv(sheetSplitPanes) {
   return [
@@ -982,12 +1094,13 @@ function Pv(sheetSplitPanes) {
       : []),
   ];
 }
-function anchorsMatchOnAxis(e, r, t) {
+function anchorsMatchOnAxis(firstAnchor, secondAnchor, axis) {
   return (
-    e.split("-")[t === "row" ? 0 : 1] === r.split("-")[t === "row" ? 0 : 1]
+    firstAnchor.split("-")[axis === "row" ? 0 : 1] ===
+    secondAnchor.split("-")[axis === "row" ? 0 : 1]
   );
 }
-function validateSplitPaneState(splitPanes, r) {
+function validateSplitPaneState(splitPanes, dimensions) {
   if (splitPanes === undefined) return;
   if (
     !splitPanes ||
@@ -1003,71 +1116,97 @@ function validateSplitPaneState(splitPanes, r) {
     throw Error(
       "Split panes require divider percentages and valid row/column anchors.",
     );
-  const t = splitPanes;
-  if (t.horizontal === undefined && t.vertical === undefined)
+  const splitPaneSpec = splitPanes;
+  if (
+    splitPaneSpec.horizontal === undefined &&
+    splitPaneSpec.vertical === undefined
+  )
     throw Error("Choose a horizontal split, vertical split, or both.");
-  for (const n of [t.horizontal, t.vertical])
-    if (n !== undefined && (!Number.isFinite(n) || n < 20 || n > 80))
+  for (const dividerPercent of [
+    splitPaneSpec.horizontal,
+    splitPaneSpec.vertical,
+  ])
+    if (
+      dividerPercent !== undefined &&
+      (!Number.isFinite(dividerPercent) ||
+        dividerPercent < 20 ||
+        dividerPercent > 80)
+    )
       throw Error("Split dividers must be between 20% and 80%.");
   if (
-    !Number.isInteger(t.row) ||
-    t.row < 0 ||
-    t.row >= r.rows ||
-    !Number.isInteger(t.col) ||
-    t.col < 0 ||
-    t.col >= r.cols
+    !Number.isInteger(splitPaneSpec.row) ||
+    splitPaneSpec.row < 0 ||
+    splitPaneSpec.row >= dimensions.rows ||
+    !Number.isInteger(splitPaneSpec.col) ||
+    splitPaneSpec.col < 0 ||
+    splitPaneSpec.col >= dimensions.cols
   )
     throw Error(
       "Split anchors must be valid zero-based worksheet coordinates.",
     );
   return {
-    row: t.row,
-    col: t.col,
-    ...(t.horizontal !== undefined ? { horizontal: t.horizontal } : {}),
-    ...(t.vertical !== undefined ? { vertical: t.vertical } : {}),
+    row: splitPaneSpec.row,
+    col: splitPaneSpec.col,
+    ...(splitPaneSpec.horizontal !== undefined
+      ? { horizontal: splitPaneSpec.horizontal }
+      : {}),
+    ...(splitPaneSpec.vertical !== undefined
+      ? { vertical: splitPaneSpec.vertical }
+      : {}),
   };
 }
-function validateDefaultSizePixels(e, r) {
-  const t = r === "row" ? minRowHeight : minColumnWidth,
-    n = r === "row" ? maxRowHeight : maxColumnWidth;
-  if (typeof e != "number" || !Number.isFinite(e) || e < t || e > n)
+function validateDefaultSizePixels(sizePixels, axis) {
+  const minSize = axis === "row" ? minRowHeight : minColumnWidth,
+    maxSize = axis === "row" ? maxRowHeight : maxColumnWidth;
+  if (
+    typeof sizePixels != "number" ||
+    !Number.isFinite(sizePixels) ||
+    sizePixels < minSize ||
+    sizePixels > maxSize
+  )
     throw Error(
-      (r === "row" ? "Default row height" : "Default column width") +
+      (axis === "row" ? "Default row height" : "Default column width") +
         " must be " +
-        t +
+        minSize +
         "–" +
-        n +
+        maxSize +
         " pixels.",
     );
-  return e;
+  return sizePixels;
 }
-function validateSheetDefaultSizes(e, r) {
-  const t =
-      e.defaultRowHeight === undefined
+function validateSheetDefaultSizes(sourceSheet, targetSheet) {
+  const validatedRowHeight =
+      sourceSheet.defaultRowHeight === undefined
         ? undefined
-        : validateDefaultSizePixels(e.defaultRowHeight, "row"),
-    n =
-      e.defaultColumnWidth === undefined
+        : validateDefaultSizePixels(sourceSheet.defaultRowHeight, "row"),
+    validatedColumnWidth =
+      sourceSheet.defaultColumnWidth === undefined
         ? undefined
-        : validateDefaultSizePixels(e.defaultColumnWidth, "column");
-  (t !== undefined && (r.defaultRowHeight = t),
-    n !== undefined && (r.defaultColumnWidth = n));
+        : validateDefaultSizePixels(sourceSheet.defaultColumnWidth, "column");
+  (validatedRowHeight !== undefined &&
+    (targetSheet.defaultRowHeight = validatedRowHeight),
+    validatedColumnWidth !== undefined &&
+      (targetSheet.defaultColumnWidth = validatedColumnWidth));
 }
-function defaultRowHeightOf(e) {
-  return e.defaultRowHeight ?? defaultRowHeight;
+function defaultRowHeightOf(sheet) {
+  return sheet.defaultRowHeight ?? defaultRowHeight;
 }
-function defaultColumnWidthOf(e) {
-  return e.defaultColumnWidth ?? defaultColumnWidth;
+function defaultColumnWidthOf(sheet) {
+  return sheet.defaultColumnWidth ?? defaultColumnWidth;
 }
-function rowHeightAt(sheet, r) {
-  if (!Number.isInteger(r) || r < 0 || r >= sheet.rowCount)
+function rowHeightAt(sheet, rowIndex) {
+  if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= sheet.rowCount)
     throw Error("Row index is outside the worksheet.");
-  return sheet.rowHeights?.[r] ?? defaultRowHeightOf(sheet);
+  return sheet.rowHeights?.[rowIndex] ?? defaultRowHeightOf(sheet);
 }
-function columnWidthAt(sheet, r) {
-  if (!Number.isInteger(r) || r < 0 || r >= sheet.colCount)
+function columnWidthAt(sheet, columnIndex) {
+  if (
+    !Number.isInteger(columnIndex) ||
+    columnIndex < 0 ||
+    columnIndex >= sheet.colCount
+  )
     throw Error("Column index is outside the worksheet.");
-  return sheet.columnWidths?.[r] ?? defaultColumnWidthOf(sheet);
+  return sheet.columnWidths?.[columnIndex] ?? defaultColumnWidthOf(sheet);
 }
 function buildSnapshotGuard(workbook) {
   return Object.freeze({
@@ -1082,91 +1221,122 @@ const worksheetCapacityLimits = {
     maxFrozenVisibleCols: 50,
     maxXlsxHiddenRows: 1e5,
   },
-  axisCountOf = (e, r) => (r === "row" ? e.rowCount : e.colCount),
-  hiddenKeyForAxis = (e) => (e === "row" ? "hiddenRows" : "hiddenCols");
-function assertWorksheetAxis(e) {
-  if (e !== "row" && e !== "column") throw Error("Choose rows or columns.");
+  axisCountOf = (sheet, axis) =>
+    axis === "row" ? sheet.rowCount : sheet.colCount,
+  hiddenKeyForAxis = (axis) => (axis === "row" ? "hiddenRows" : "hiddenCols");
+function assertWorksheetAxis(axis) {
+  if (axis !== "row" && axis !== "column")
+    throw Error("Choose rows or columns.");
 }
-function assertAxisCapacity(e) {
-  if (!Number.isSafeInteger(e) || e < 0)
+function assertAxisCapacity(capacity) {
+  if (!Number.isSafeInteger(capacity) || capacity < 0)
     throw Error("Axis capacity must be a nonnegative integer.");
 }
-function normalizeHiddenIntervals(e, r) {
-  if ((assertAxisCapacity(r), e === undefined)) return [];
+function normalizeHiddenIntervals(rawIntervals, axisCount) {
+  if ((assertAxisCapacity(axisCount), rawIntervals === undefined)) return [];
   if (
-    !Array.isArray(e) ||
-    e.length > worksheetCapacityLimits.maxIntervalsPerAxis
+    !Array.isArray(rawIntervals) ||
+    rawIntervals.length > worksheetCapacityLimits.maxIntervalsPerAxis
   )
     throw Error("Hidden indices require at most 10,000 intervals per axis.");
-  const t = e
-      .map((o) => {
+  const sortedIntervals = rawIntervals
+      .map((rawInterval) => {
         if (
-          !o ||
-          typeof o != "object" ||
-          Array.isArray(o) ||
-          (Object.getPrototypeOf(o) !== Object.prototype &&
-            Object.getPrototypeOf(o) !== null) ||
-          Object.keys(o).some((a) => a !== "start" && a !== "end") ||
-          !Number.isInteger(o.start) ||
-          !Number.isInteger(o.end) ||
-          o.start < 0 ||
-          o.end < o.start ||
-          o.end >= r
+          !rawInterval ||
+          typeof rawInterval != "object" ||
+          Array.isArray(rawInterval) ||
+          (Object.getPrototypeOf(rawInterval) !== Object.prototype &&
+            Object.getPrototypeOf(rawInterval) !== null) ||
+          Object.keys(rawInterval).some(
+            (key) => key !== "start" && key !== "end",
+          ) ||
+          !Number.isInteger(rawInterval.start) ||
+          !Number.isInteger(rawInterval.end) ||
+          rawInterval.start < 0 ||
+          rawInterval.end < rawInterval.start ||
+          rawInterval.end >= axisCount
         )
           throw Error(
             "Hidden intervals require valid zero-based inclusive axis bounds.",
           );
-        return { start: o.start, end: o.end };
+        return { start: rawInterval.start, end: rawInterval.end };
       })
-      .sort((o, a) => o.start - a.start || o.end - a.end),
-    n = [];
-  for (const o of t) {
-    const a = n.at(-1);
-    a && o.start <= a.end + 1 ? (a.end = Math.max(a.end, o.end)) : n.push(o);
+      .sort((left, right) => left.start - right.start || left.end - right.end),
+    merged = [];
+  for (const sortedInterval of sortedIntervals) {
+    const previousInterval = merged.at(-1);
+    previousInterval && sortedInterval.start <= previousInterval.end + 1
+      ? (previousInterval.end = Math.max(
+          previousInterval.end,
+          sortedInterval.end,
+        ))
+      : merged.push(sortedInterval);
   }
-  return n;
+  return merged;
 }
-function createAxisVisibilityIndex(logicalCount, r = []) {
-  const hiddenIntervals = normalizeHiddenIntervals(r, logicalCount),
-    n = [0];
+function createAxisVisibilityIndex(logicalCount, rawHiddenIntervals = []) {
+  const hiddenIntervals = normalizeHiddenIntervals(
+      rawHiddenIntervals,
+      logicalCount,
+    ),
+    cumulativeHiddenCounts = [0];
   for (const hiddenInterval of hiddenIntervals)
-    n.push(n.at(-1) + hiddenInterval.end - hiddenInterval.start + 1);
-  const count = logicalCount - n.at(-1),
-    a = (l) => {
-      let c = 0,
-        h = hiddenIntervals.length;
-      for (; c < h;) {
-        const f = (c + h) >>> 1;
-        hiddenIntervals[f].start <= l ? (c = f + 1) : (h = f);
+    cumulativeHiddenCounts.push(
+      cumulativeHiddenCounts.at(-1) +
+        hiddenInterval.end -
+        hiddenInterval.start +
+        1,
+    );
+  const count = logicalCount - cumulativeHiddenCounts.at(-1),
+    findIntervalIndex = (logicalPosition) => {
+      let low = 0,
+        high = hiddenIntervals.length;
+      for (; low < high;) {
+        const middle = (low + high) >>> 1;
+        hiddenIntervals[middle].start <= logicalPosition
+          ? (low = middle + 1)
+          : (high = middle);
       }
-      return c - 1;
+      return low - 1;
     },
-    countBefore = (l) => {
-      const c = Math.max(0, Math.min(logicalCount, Math.floor(l))),
-        h = a(c - 1),
-        f =
-          h < 0
+    countBefore = (boundary) => {
+      const clampedBoundary = Math.max(
+          0,
+          Math.min(logicalCount, Math.floor(boundary)),
+        ),
+        containingIndex = findIntervalIndex(clampedBoundary - 1),
+        hiddenBefore =
+          containingIndex < 0
             ? 0
-            : n[h] +
+            : cumulativeHiddenCounts[containingIndex] +
               Math.min(
-                c - hiddenIntervals[h].start,
-                hiddenIntervals[h].end - hiddenIntervals[h].start + 1,
+                clampedBoundary - hiddenIntervals[containingIndex].start,
+                hiddenIntervals[containingIndex].end -
+                  hiddenIntervals[containingIndex].start +
+                  1,
               );
-      return c - f;
+      return clampedBoundary - hiddenBefore;
     },
-    isHidden = (l) => {
-      const c = a(l);
-      return c >= 0 && l <= hiddenIntervals[c].end;
+    isHidden = (candidate) => {
+      const hiddenIndex = findIntervalIndex(candidate);
+      return hiddenIndex >= 0 && candidate <= hiddenIntervals[hiddenIndex].end;
     },
-    logicalIndex = (l) => {
-      if (!Number.isInteger(l) || l < 0 || l >= count) return -1;
-      let c = 0,
-        h = logicalCount - 1;
-      for (; c < h;) {
-        const f = Math.floor((c + h) / 2);
-        countBefore(f + 1) <= l ? (c = f + 1) : (h = f);
+    logicalIndex = (visibleIndex) => {
+      if (
+        !Number.isInteger(visibleIndex) ||
+        visibleIndex < 0 ||
+        visibleIndex >= count
+      )
+        return -1;
+      let lowerBound = 0,
+        upperBound = logicalCount - 1;
+      for (; lowerBound < upperBound;) {
+        const midpoint = Math.floor((lowerBound + upperBound) / 2);
+        countBefore(midpoint + 1) <= visibleIndex
+          ? (lowerBound = midpoint + 1)
+          : (upperBound = midpoint);
       }
-      return c;
+      return lowerBound;
     };
   return {
     count: count,
@@ -1174,54 +1344,75 @@ function createAxisVisibilityIndex(logicalCount, r = []) {
     logicalIndex: logicalIndex,
     countBefore: countBefore,
     isHidden: isHidden,
-    viewIndex: (l) =>
-      Number.isInteger(l) && l >= 0 && l < logicalCount && !isHidden(l)
-        ? countBefore(l)
+    viewIndex: (sourceIndex) =>
+      Number.isInteger(sourceIndex) &&
+      sourceIndex >= 0 &&
+      sourceIndex < logicalCount &&
+      !isHidden(sourceIndex)
+        ? countBefore(sourceIndex)
         : null,
-    next: (l, c, h = false) => {
-      const f = Math.trunc(l) + (h ? 0 : c);
-      if (!count || (c === 1 && f >= logicalCount) || (c === -1 && f < 0))
+    next: (fromIndex, step, shouldIncludeCurrent = false) => {
+      const startIndex =
+        Math.trunc(fromIndex) + (shouldIncludeCurrent ? 0 : step);
+      if (
+        !count ||
+        (step === 1 && startIndex >= logicalCount) ||
+        (step === -1 && startIndex < 0)
+      )
         return null;
-      const p =
-          c === 1
-            ? countBefore(Math.max(0, f))
-            : countBefore(Math.min(logicalCount, f + 1)) - 1,
-        m = logicalIndex(p);
-      return m < 0 ? null : m;
+      const viewPosition =
+          step === 1
+            ? countBefore(Math.max(0, startIndex))
+            : countBefore(Math.min(logicalCount, startIndex + 1)) - 1,
+        nextLogicalIndex = logicalIndex(viewPosition);
+      return nextLogicalIndex < 0 ? null : nextLogicalIndex;
     },
   };
 }
-function readHiddenAxisIntervals(e, r) {
+function readHiddenAxisIntervals(sheet, axis) {
   return (
-    assertWorksheetAxis(r),
-    normalizeHiddenIntervals(e[hiddenKeyForAxis(r)], axisCountOf(e, r))
+    assertWorksheetAxis(axis),
+    normalizeHiddenIntervals(
+      sheet[hiddenKeyForAxis(axis)],
+      axisCountOf(sheet, axis),
+    )
   );
 }
 const outlineGroupLimits = { maxGroups: 1e3, maxDepth: 8 };
 
-function assertOutlineGroupNesting(e, r) {
-  const t = e
-      .filter((o) => o.axis === r)
-      .sort((o, a) => o.start - a.start || a.end - o.end),
-    n = [];
-  return t.map((o) => {
-    for (; n.length && n.at(-1).end < o.start;) n.pop();
-    const a = n.at(-1);
-    if (a && a.start === o.start && a.end === o.end)
+function assertOutlineGroupNesting(outlineGroups, axis) {
+  const axisGroups = outlineGroups
+      .filter((outlineGroup) => outlineGroup.axis === axis)
+      .sort(
+        (leftGroup, rightGroup) =>
+          leftGroup.start - rightGroup.start || rightGroup.end - leftGroup.end,
+      ),
+    openGroups = [];
+  return axisGroups.map((group) => {
+    for (; openGroups.length && openGroups.at(-1).end < group.start;)
+      openGroups.pop();
+    const parentGroup = openGroups.at(-1);
+    if (
+      parentGroup &&
+      parentGroup.start === group.start &&
+      parentGroup.end === group.end
+    )
       throw Error("An outline group already exists for these rows or columns.");
-    if (a && a.end < o.end)
+    if (parentGroup && parentGroup.end < group.end)
       throw Error(
         "Outline groups must be nested or separate; partially overlapping groups are not supported.",
       );
-    if ((n.push(o), n.length > outlineGroupLimits.maxDepth))
+    if (
+      (openGroups.push(group), openGroups.length > outlineGroupLimits.maxDepth)
+    )
       throw Error("Outline groups support at most 8 nested groups.");
-    return { ...o, depth: n.length };
+    return { ...group, depth: openGroups.length };
   });
 }
 function validateOutlineGroups(
   sheet,
-  r,
-  t = { rows: r.rowCount, cols: r.colCount },
+  targetSheet,
+  bounds = { rows: targetSheet.rowCount, cols: targetSheet.colCount },
 ) {
   if (sheet.outlineGroups === undefined) return;
   if (
@@ -1229,8 +1420,8 @@ function validateOutlineGroups(
     sheet.outlineGroups.length > outlineGroupLimits.maxGroups
   )
     throw Error("A worksheet supports at most 1,000 outline groups.");
-  const n = new Set(),
-    o = sheet.outlineGroups.map((outlineGroup) => {
+  const seenIds = new Set(),
+    validGroups = sheet.outlineGroups.map((outlineGroup) => {
       if (
         !outlineGroup ||
         typeof outlineGroup != "object" ||
@@ -1238,25 +1429,26 @@ function validateOutlineGroups(
         (Object.getPrototypeOf(outlineGroup) !== Object.prototype &&
           Object.getPrototypeOf(outlineGroup) !== null) ||
         Object.keys(outlineGroup).some(
-          (s) => !["id", "axis", "start", "end", "collapsed"].includes(s),
+          (key) => !["id", "axis", "start", "end", "collapsed"].includes(key),
         ) ||
         typeof outlineGroup.id != "string" ||
         !outlineGroup.id.trim() ||
         outlineGroup.id.length > 100 ||
-        n.has(outlineGroup.id) ||
+        seenIds.has(outlineGroup.id) ||
         !["row", "column"].includes(outlineGroup.axis) ||
         !Number.isSafeInteger(outlineGroup.start) ||
         !Number.isSafeInteger(outlineGroup.end) ||
         outlineGroup.start < 0 ||
         outlineGroup.end < outlineGroup.start ||
-        outlineGroup.end >= (outlineGroup.axis === "row" ? t.rows : t.cols) ||
+        outlineGroup.end >=
+          (outlineGroup.axis === "row" ? bounds.rows : bounds.cols) ||
         typeof outlineGroup.collapsed != "boolean"
       )
         throw Error(
           "Outline groups require unique IDs, valid row or column bounds, and a boolean collapsed state.",
         );
       return (
-        n.add(outlineGroup.id),
+        seenIds.add(outlineGroup.id),
         {
           id: outlineGroup.id,
           axis: outlineGroup.axis,
@@ -1266,33 +1458,36 @@ function validateOutlineGroups(
         }
       );
     });
-  (assertOutlineGroupNesting(o, "row"),
-    assertOutlineGroupNesting(o, "column"),
-    (r.outlineGroups = o));
+  (assertOutlineGroupNesting(validGroups, "row"),
+    assertOutlineGroupNesting(validGroups, "column"),
+    (targetSheet.outlineGroups = validGroups));
 }
-function addOutlineGroup(sheet, r) {
+function addOutlineGroup(sheet, axis) {
   return (
-    assertWorksheetAxis(r),
-    assertOutlineGroupNesting(sheet.outlineGroups ?? [], r)
+    assertWorksheetAxis(axis),
+    assertOutlineGroupNesting(sheet.outlineGroups ?? [], axis)
   );
 }
-function cn(e, r) {
-  assertWorksheetAxis(r);
-  const t = axisCountOf(e, r),
-    n = [
-      ...normalizeHiddenIntervals(r === "row" ? e.hiddenRows : e.hiddenCols, t),
-      ...(e.outlineGroups ?? [])
-        .filter((a) => a.axis === r && a.collapsed)
+function cn(sheet, axis) {
+  assertWorksheetAxis(axis);
+  const axisCount = axisCountOf(sheet, axis),
+    combinedIntervals = [
+      ...normalizeHiddenIntervals(
+        axis === "row" ? sheet.hiddenRows : sheet.hiddenCols,
+        axisCount,
+      ),
+      ...(sheet.outlineGroups ?? [])
+        .filter((group) => group.axis === axis && group.collapsed)
         .map(({ start, end }) => ({ start, end })),
-    ].sort((a, s) => a.start - s.start || a.end - s.end),
-    o = [];
-  for (const a of n) {
-    const s = o.at(-1);
-    s && a.start <= s.end + 1
-      ? (s.end = Math.max(s.end, a.end))
-      : o.push({ ...a });
+    ].sort((left, right) => left.start - right.start || left.end - right.end),
+    merged = [];
+  for (const interval of combinedIntervals) {
+    const previousInterval = merged.at(-1);
+    previousInterval && interval.start <= previousInterval.end + 1
+      ? (previousInterval.end = Math.max(previousInterval.end, interval.end))
+      : merged.push({ ...interval });
   }
-  return normalizeHiddenIntervals(o, t);
+  return normalizeHiddenIntervals(merged, axisCount);
 }
 function regenerateOutlineGroupIds(sheet) {
   return sheet.outlineGroups?.map((outlineGroup) => ({
@@ -1300,26 +1495,26 @@ function regenerateOutlineGroupIds(sheet) {
     id: crypto.randomUUID(),
   }));
 }
-function remapOutlineGroupsForEdit(e, axis, start, count, remove) {
+function remapOutlineGroupsForEdit(sheet, axis, start, count, remove) {
   assertWorksheetAxis(axis);
-  const a = axisCountOf(e, axis);
+  const axisCount = axisCountOf(sheet, axis);
   if (
     !Number.isInteger(start) ||
     start < 0 ||
     !Number.isInteger(count) ||
     count < 1 ||
     count > 1e4 ||
-    start + count > a ||
+    start + count > axisCount ||
     typeof remove != "boolean"
   )
     throw Error("Choose a valid structural edit of 1–10,000 rows or columns.");
-  if (!e.outlineGroups) return;
-  const s = start + count - 1,
-    d = e.outlineGroups.flatMap((outlineGroup) => {
+  if (!sheet.outlineGroups) return;
+  const editEnd = start + count - 1,
+    remappedGroups = sheet.outlineGroups.flatMap((outlineGroup) => {
       if (outlineGroup.axis !== axis || outlineGroup.end < start)
         return [{ ...outlineGroup }];
       if (!remove) {
-        if (outlineGroup.end + count >= a)
+        if (outlineGroup.end + count >= axisCount)
           throw Error(
             "Insertion would discard outline groups at the worksheet boundary. Ungroup those rows or columns first.",
           );
@@ -1334,7 +1529,7 @@ function remapOutlineGroupsForEdit(e, axis, start, count, remove) {
           },
         ];
       }
-      return outlineGroup.start > s
+      return outlineGroup.start > editEnd
         ? [
             {
               ...outlineGroup,
@@ -1342,60 +1537,62 @@ function remapOutlineGroupsForEdit(e, axis, start, count, remove) {
               end: outlineGroup.end - count,
             },
           ]
-        : outlineGroup.start >= start && outlineGroup.end <= s
+        : outlineGroup.start >= start && outlineGroup.end <= editEnd
           ? []
           : [
               {
                 ...outlineGroup,
                 start: Math.min(outlineGroup.start, start),
                 end:
-                  outlineGroup.end > s ? outlineGroup.end - count : start - 1,
+                  outlineGroup.end > editEnd
+                    ? outlineGroup.end - count
+                    : start - 1,
               },
             ];
     });
   try {
-    (assertOutlineGroupNesting(d, "row"),
-      assertOutlineGroupNesting(d, "column"));
+    (assertOutlineGroupNesting(remappedGroups, "row"),
+      assertOutlineGroupNesting(remappedGroups, "column"));
   } catch {
     throw Error(
       "This edit would make outline groups overlap or duplicate. Ungroup the affected rows or columns first.",
     );
   }
-  return d;
+  return remappedGroups;
 }
-const isPlainObjectValue = (e) =>
-  !!e &&
-  typeof e == "object" &&
-  !Array.isArray(e) &&
-  [Object.prototype, null].includes(Object.getPrototypeOf(e));
-function trimRequiredMetadataText(e, r, t) {
-  if (typeof e != "string" || !e.trim() || e.length > t)
-    throw new Error(`${r} must contain 1–${t} characters.`);
-  return e.trim();
+const isPlainObjectValue = (value) =>
+  !!value &&
+  typeof value == "object" &&
+  !Array.isArray(value) &&
+  [Object.prototype, null].includes(Object.getPrototypeOf(value));
+function trimRequiredMetadataText(text, label, maxLength) {
+  if (typeof text != "string" || !text.trim() || text.length > maxLength)
+    throw new Error(`${label} must contain 1–${maxLength} characters.`);
+  return text.trim();
 }
-function isValidUtcTimestamp(e) {
+function isValidUtcTimestamp(timestamp) {
   if (
-    typeof e != "string" ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(e) ||
-    !Number.isFinite(Date.parse(e)) ||
-    new Date(e).toISOString() !== e
+    typeof timestamp != "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(timestamp) ||
+    !Number.isFinite(Date.parse(timestamp)) ||
+    new Date(timestamp).toISOString() !== timestamp
   )
     throw new Error("Workbook metadata requires a valid UTC timestamp.");
-  return e;
+  return timestamp;
 }
-function validateWorkbookMetadata(metadata, r) {
+function validateWorkbookMetadata(metadata, workbook) {
   if (metadata === undefined) return;
   if (
     !isPlainObjectValue(metadata) ||
     Object.keys(metadata).some(
-      (a) =>
+      (key) =>
         ![
           "createdAt",
           "modifiedAt",
           "engagement",
           "period",
           "template",
-        ].includes(a),
+        ].includes(key),
     )
   )
     throw new Error("Invalid workbook metadata fields.");
@@ -1403,30 +1600,34 @@ function validateWorkbookMetadata(metadata, r) {
     modifiedAt = isValidUtcTimestamp(metadata.modifiedAt);
   if (modifiedAt < createdAt)
     throw new Error("Workbook modified time cannot precede its creation time.");
-  const o = { createdAt: createdAt, modifiedAt: modifiedAt };
+  const normalizedMetadata = { createdAt: createdAt, modifiedAt: modifiedAt };
   if (
     (metadata.engagement !== undefined &&
-      (o.engagement = trimRequiredMetadataText(
+      (normalizedMetadata.engagement = trimRequiredMetadataText(
         metadata.engagement,
         "Engagement",
         200,
       )),
     metadata.period !== undefined &&
-      (o.period = trimRequiredMetadataText(metadata.period, "Period", 100)),
+      (normalizedMetadata.period = trimRequiredMetadataText(
+        metadata.period,
+        "Period",
+        100,
+      )),
     metadata.template !== undefined)
   ) {
     const template = metadata.template;
     if (
       !isPlainObjectValue(template) ||
       Object.keys(template).some(
-        (s) =>
+        (key) =>
           ![
             "id",
             "name",
             "version",
             "sourceWorkbookId",
             "sourceRevision",
-          ].includes(s),
+          ].includes(key),
       ) ||
       !Number.isSafeInteger(template.version) ||
       Number(template.version) < 1 ||
@@ -1435,7 +1636,7 @@ function validateWorkbookMetadata(metadata, r) {
           Number(template.sourceRevision) < 0))
     )
       throw new Error("Invalid template provenance.");
-    o.template = {
+    normalizedMetadata.template = {
       id: trimRequiredMetadataText(template.id, "Template ID", 100),
       name: trimRequiredMetadataText(template.name, "Template name", 200),
       version: Number(template.version),
@@ -1449,49 +1650,62 @@ function validateWorkbookMetadata(metadata, r) {
         : {}),
     };
   }
-  r.metadata = o;
+  workbook.metadata = normalizedMetadata;
 }
-function createWorkbookMetadata(e = {}, timestamp = new Date().toISOString()) {
-  const t = {};
+function createWorkbookMetadata(
+  overrides = {},
+  timestamp = new Date().toISOString(),
+) {
+  const metadataHolder = {};
   return (
     validateWorkbookMetadata(
-      { createdAt: timestamp, modifiedAt: timestamp, ...e },
-      t,
+      { createdAt: timestamp, modifiedAt: timestamp, ...overrides },
+      metadataHolder,
     ),
-    t.metadata
+    metadataHolder.metadata
   );
 }
-function touchWorkbookModifiedAt(e, timestamp = new Date().toISOString()) {
-  const t = { ...e };
+function touchWorkbookModifiedAt(
+  workbook,
+  timestamp = new Date().toISOString(),
+) {
+  const updatedWorkbook = { ...workbook };
   isValidUtcTimestamp(timestamp);
   const modifiedAt = [
     timestamp,
-    e.metadata?.createdAt ?? timestamp,
-    e.metadata?.modifiedAt ?? timestamp,
+    workbook.metadata?.createdAt ?? timestamp,
+    workbook.metadata?.modifiedAt ?? timestamp,
   ]
     .sort()
     .at(-1);
   return (
     validateWorkbookMetadata(
-      e.metadata
-        ? { ...e.metadata, modifiedAt: modifiedAt }
+      workbook.metadata
+        ? { ...workbook.metadata, modifiedAt: modifiedAt }
         : createWorkbookMetadata({}, timestamp),
-      t,
+      updatedWorkbook,
     ),
-    t
+    updatedWorkbook
   );
 }
 const unquotedNameCharPattern = /[A-Za-z0-9_.\\\u0080-\uffff]/,
   sheetReferencePrefixPattern =
     /^(?:'(?:[^']|'')*'|[A-Za-z_\\\u0080-\uffff][A-Za-z0-9_.\\\u0080-\uffff]*)(?::(?:'(?:[^']|'')*'|[A-Za-z_\\\u0080-\uffff][A-Za-z0-9_.\\\u0080-\uffff]*))?!/,
-  columnLettersToIndex = (e) =>
-    [...e.toUpperCase()].reduce((r, t) => r * 26 + t.charCodeAt(0) - 64, 0) - 1;
-function offsetRowReference(e, r, t) {
-  const n = Number(r) + (e ? 0 : t);
-  return n < 1 || n > workbookLimits.maxRows ? "#REF!" : e + n;
+  columnLettersToIndex = (columnLetters) =>
+    [...columnLetters.toUpperCase()].reduce(
+      (total, letter) => total * 26 + letter.charCodeAt(0) - 64,
+      0,
+    ) - 1;
+function offsetRowReference(rowPrefix, rowValue, rowDelta) {
+  const rowNumber = Number(rowValue) + (rowPrefix ? 0 : rowDelta);
+  return rowNumber < 1 || rowNumber > workbookLimits.maxRows
+    ? "#REF!"
+    : rowPrefix + rowNumber;
 }
-const cloneCellRecord = (e) =>
-  e ? { ...e, ...(e.style ? { style: { ...e.style } } : {}) } : { raw: null };
+const cloneCellRecord = (cell) =>
+  cell
+    ? { ...cell, ...(cell.style ? { style: { ...cell.style } } : {}) }
+    : { raw: null };
 const validationLimits = Object.freeze({
     rulesPerSheet: 100,
     listItems: 200,
@@ -1499,49 +1713,60 @@ const validationLimits = Object.freeze({
     customChecks: 5e3,
     displayedIssues: 500,
   }),
-  isNonArrayObject = (e) => !!e && typeof e == "object" && !Array.isArray(e),
-  assertBoundedValidationText = (e, r, t) => {
-    if (typeof e != "string" || e.length > r)
-      throw Error(`Invalid validation ${t}.`);
-    return e;
+  isNonArrayObject = (value) =>
+    !!value && typeof value == "object" && !Array.isArray(value),
+  assertBoundedValidationText = (text, maxLength, label) => {
+    if (typeof text != "string" || text.length > maxLength)
+      throw Error(`Invalid validation ${label}.`);
+    return text;
   };
-function validateDataValidationRule(e, r, datePolicy = defaultDatePolicy) {
-  if (r === null || r === "") return e.allowBlank;
-  if (e.kind === "custom") return false;
-  if (e.kind === "list")
-    return e.list.some((o) => o.toLowerCase() === String(r).toLowerCase());
-  let n =
-    e.kind === "textLength" ? String(r).length : typeof r == "number" ? r : NaN;
+function validateDataValidationRule(
+  rule,
+  value,
+  datePolicy = defaultDatePolicy,
+) {
+  if (value === null || value === "") return rule.allowBlank;
+  if (rule.kind === "custom") return false;
+  if (rule.kind === "list")
+    return rule.list.some(
+      (listItem) => listItem.toLowerCase() === String(value).toLowerCase(),
+    );
+  let numericValue =
+    rule.kind === "textLength"
+      ? String(value).length
+      : typeof value == "number"
+        ? value
+        : NaN;
   if (
-    (["date", "time"].includes(e.kind) &&
-      typeof r == "string" &&
-      (n = parseDateText(r, datePolicy) ?? NaN),
-    !Number.isFinite(n) ||
-      (e.kind === "integer" && !Number.isInteger(n)) ||
-      (e.kind === "date" &&
-        (n < 1 ||
-          n > dateCalculationLimits.maxSerial + 0.999999999 ||
-          (typeof r == "string" && !/[/-]/.test(r)))) ||
-      (e.kind === "time" && (n < 0 || n >= 1)))
+    (["date", "time"].includes(rule.kind) &&
+      typeof value == "string" &&
+      (numericValue = parseDateText(value, datePolicy) ?? NaN),
+    !Number.isFinite(numericValue) ||
+      (rule.kind === "integer" && !Number.isInteger(numericValue)) ||
+      (rule.kind === "date" &&
+        (numericValue < 1 ||
+          numericValue > dateCalculationLimits.maxSerial + 0.999999999 ||
+          (typeof value == "string" && !/[/-]/.test(value)))) ||
+      (rule.kind === "time" && (numericValue < 0 || numericValue >= 1)))
   )
     return false;
-  switch (e.operator) {
+  switch (rule.operator) {
     case "between":
-      return n >= e.min && n <= e.max;
+      return numericValue >= rule.min && numericValue <= rule.max;
     case "notBetween":
-      return n < e.min || n > e.max;
+      return numericValue < rule.min || numericValue > rule.max;
     case "greater":
-      return n > e.min;
+      return numericValue > rule.min;
     case "greaterEqual":
-      return n >= e.min;
+      return numericValue >= rule.min;
     case "less":
-      return n < e.min;
+      return numericValue < rule.min;
     case "lessEqual":
-      return n <= e.min;
+      return numericValue <= rule.min;
     case "notEqual":
-      return n !== e.min;
+      return numericValue !== rule.min;
     default:
-      return n === e.min;
+      return numericValue === rule.min;
   }
 }
 const MB = new WeakMap(),
@@ -1551,8 +1776,10 @@ class DataValidationError extends Error {
     super(
       issues
         .slice(0, 5)
-        .map((o) => `${o.sheetName}!${o.address}: ${o.message} ${o.reason}`)
-        .join(`
+        .map(
+          (issue) =>
+            `${issue.sheetName}!${issue.address}: ${issue.message} ${issue.reason}`,
+        ).join(`
 `) +
         (issues.length > 5
           ? `
@@ -1566,28 +1793,29 @@ ${issues.length} validation violations in this batch.`
   }
 }
 function assertNoStopValidationIssues(error) {
-  const r = MB.get(error);
+  const serializedError = MB.get(error);
   if (
-    !r ||
+    !serializedError ||
     !error.issues.length ||
     error.issues.some(
       (issue) => issue.style === "stop" || issue.evaluationError,
     ) ||
-    JSON.stringify(JSON.parse(r).issues) !== JSON.stringify(error.issues)
+    JSON.stringify(JSON.parse(serializedError).issues) !==
+      JSON.stringify(error.issues)
   )
     throw Error(
       "Stop errors cannot be overridden. Correct the invalid values.",
     );
-  const t = Object.freeze({ kind: "validation-warning-approval" });
-  return (r5.set(t, r), t);
+  const approval = Object.freeze({ kind: "validation-warning-approval" });
+  return (r5.set(approval, serializedError), approval);
 }
 const FB = new WeakMap();
 function resolveValidationInspection(workbook, report) {
-  const t = FB.get(report);
+  const inspection = FB.get(report);
   if (
-    !t ||
-    t.source !== JSON.stringify(workbook) ||
-    t.content !== JSON.stringify(report)
+    !inspection ||
+    inspection.source !== JSON.stringify(workbook) ||
+    inspection.content !== JSON.stringify(report)
   )
     throw Error(
       "Validation inspection is stale or unknown. Inspect existing values again.",
@@ -1602,14 +1830,17 @@ function resolveValidationInspection(workbook, report) {
     2,
   );
 }
-function vx(e, r) {
-  if (!r.getSpillEntries) return e.cells;
-  const t = r.getSpillEntries(e.id);
-  if (!t.length) return e.cells;
-  const n = { ...e.cells };
-  for (const { address } of t)
-    n[address] = { ...e.cells[address], raw: r(e.id, address) };
-  return n;
+function vx(sheet, evaluator) {
+  if (!evaluator.getSpillEntries) return sheet.cells;
+  const spillEntries = evaluator.getSpillEntries(sheet.id);
+  if (!spillEntries.length) return sheet.cells;
+  const cellsWithSpills = { ...sheet.cells };
+  for (const { address } of spillEntries)
+    cellsWithSpills[address] = {
+      ...sheet.cells[address],
+      raw: evaluator(sheet.id, address),
+    };
+  return cellsWithSpills;
 }
 const conditionalRuleKinds = [
   "greater",
@@ -1628,46 +1859,47 @@ const conditionalRuleKinds = [
   "dataBar",
   "iconSet",
 ];
-function assertBoundedString(e, r, t) {
-  if (typeof e != "string" || e.length > r) throw Error(`Invalid ${t}.`);
-  return e;
+function assertBoundedString(text, maxLength, label) {
+  if (typeof text != "string" || text.length > maxLength)
+    throw Error(`Invalid ${label}.`);
+  return text;
 }
-function assertSixDigitHexColor(e) {
-  if (typeof e != "string" || !/^#[\da-f]{6}$/i.test(e))
+function assertSixDigitHexColor(color) {
+  if (typeof color != "string" || !/^#[\da-f]{6}$/i.test(color))
     throw Error("Choose a six-digit hexadecimal color.");
-  return e;
+  return color;
 }
-const isCellInsideRange = (e, r) =>
-    r.row >= e.firstRow &&
-    r.row <= e.lastRow &&
-    r.col >= e.firstCol &&
-    r.col <= e.lastCol,
-  isErrorValueText = (e) =>
-    typeof e == "string" &&
+const isCellInsideRange = (range, cell) =>
+    cell.row >= range.firstRow &&
+    cell.row <= range.lastRow &&
+    cell.col >= range.firstCol &&
+    cell.col <= range.lastCol,
+  isErrorValueText = (value) =>
+    typeof value == "string" &&
     /^#(?:NULL!|DIV\/0!|VALUE!|REF!|NAME\?|NUM!|N\/A|ERROR!|CYCLE!|SPILL!|CALC!|LIMIT!|BLOCKED!)/.test(
-      e,
+      value,
     );
-function sortConditionalRulesByPriority(e) {
-  return e
-    .map((rule, t) => ({
+function sortConditionalRulesByPriority(rules) {
+  return rules
+    .map((rule, ruleIndex) => ({
       rule: rule,
-      rank: rule.priority ?? 101 + e.length - t,
+      rank: rule.priority ?? 101 + rules.length - ruleIndex,
     }))
-    .sort((r, t) => r.rank - t.rank)
-    .map((r) => r.rule);
+    .sort((leftEntry, rightEntry) => leftEntry.rank - rightEntry.rank)
+    .map((entry) => entry.rule);
 }
 
-function assertSheetUnprotected(e) {
-  e.protection?.enabled &&
+function assertSheetUnprotected(sheet) {
+  sheet.protection?.enabled &&
     failWithMessage(
       "This sheet is protected. Unprotect it before changing its contents.",
     );
 }
-function applySheetSizeEdits(workbook, sheetId, t, n = {}) {
-  if (n.readOnly !== undefined && typeof n.readOnly != "boolean")
+function applySheetSizeEdits(workbook, sheetId, sizeEdits, options = {}) {
+  if (options.readOnly !== undefined && typeof options.readOnly != "boolean")
     throw Error("Read-only state must be boolean.");
-  if (n.readOnly) throw Error("This workbook is read-only.");
-  const expectedSnapshot = n.expectedSnapshot;
+  if (options.readOnly) throw Error("This workbook is read-only.");
+  const expectedSnapshot = options.expectedSnapshot;
   if (
     expectedSnapshot !== undefined &&
     (!expectedSnapshot ||
@@ -1682,91 +1914,101 @@ function applySheetSizeEdits(workbook, sheetId, t, n = {}) {
   if (!sheet) throw Error("Worksheet not found.");
   if (
     (assertSheetUnprotected(sheet),
-    !t ||
-      typeof t != "object" ||
-      Array.isArray(t) ||
-      (Object.getPrototypeOf(t) !== Object.prototype &&
-        Object.getPrototypeOf(t) !== null) ||
-      Object.keys(t).some(
-        (l) =>
+    !sizeEdits ||
+      typeof sizeEdits != "object" ||
+      Array.isArray(sizeEdits) ||
+      (Object.getPrototypeOf(sizeEdits) !== Object.prototype &&
+        Object.getPrototypeOf(sizeEdits) !== null) ||
+      Object.keys(sizeEdits).some(
+        (key) =>
           ![
             "rowHeight",
             "columnWidth",
             "resetRowOverrides",
             "resetColumnOverrides",
-          ].includes(l),
+          ].includes(key),
       ))
   )
     throw Error("Choose valid worksheet size settings.");
-  for (const l of [t.resetRowOverrides, t.resetColumnOverrides])
-    if (l !== undefined && typeof l != "boolean")
+  for (const resetChoice of [
+    sizeEdits.resetRowOverrides,
+    sizeEdits.resetColumnOverrides,
+  ])
+    if (resetChoice !== undefined && typeof resetChoice != "boolean")
       throw Error("Reset choices must be boolean.");
-  const s =
-      t.rowHeight === undefined
+  const rowHeight =
+      sizeEdits.rowHeight === undefined
         ? undefined
-        : validateDefaultSizePixels(t.rowHeight, "row"),
-    d =
-      t.columnWidth === undefined
+        : validateDefaultSizePixels(sizeEdits.rowHeight, "row"),
+    columnWidth =
+      sizeEdits.columnWidth === undefined
         ? undefined
-        : validateDefaultSizePixels(t.columnWidth, "column"),
-    u = { ...sheet };
+        : validateDefaultSizePixels(sizeEdits.columnWidth, "column"),
+    updatedSheet = { ...sheet };
   return (
-    s !== undefined &&
-      s !== defaultRowHeightOf(sheet) &&
-      (s === defaultRowHeight
-        ? delete u.defaultRowHeight
-        : (u.defaultRowHeight = s)),
-    d !== undefined &&
-      d !== defaultColumnWidthOf(sheet) &&
-      (d === defaultColumnWidth
-        ? delete u.defaultColumnWidth
-        : (u.defaultColumnWidth = d)),
-    t.resetRowOverrides &&
+    rowHeight !== undefined &&
+      rowHeight !== defaultRowHeightOf(sheet) &&
+      (rowHeight === defaultRowHeight
+        ? delete updatedSheet.defaultRowHeight
+        : (updatedSheet.defaultRowHeight = rowHeight)),
+    columnWidth !== undefined &&
+      columnWidth !== defaultColumnWidthOf(sheet) &&
+      (columnWidth === defaultColumnWidth
+        ? delete updatedSheet.defaultColumnWidth
+        : (updatedSheet.defaultColumnWidth = columnWidth)),
+    sizeEdits.resetRowOverrides &&
       Object.keys(sheet.rowHeights ?? {}).length &&
-      delete u.rowHeights,
-    t.resetColumnOverrides &&
+      delete updatedSheet.rowHeights,
+    sizeEdits.resetColumnOverrides &&
       Object.keys(sheet.columnWidths ?? {}).length &&
-      delete u.columnWidths,
-    u.defaultRowHeight === sheet.defaultRowHeight &&
-    u.defaultColumnWidth === sheet.defaultColumnWidth &&
-    u.rowHeights === sheet.rowHeights &&
-    u.columnWidths === sheet.columnWidths
+      delete updatedSheet.columnWidths,
+    updatedSheet.defaultRowHeight === sheet.defaultRowHeight &&
+    updatedSheet.defaultColumnWidth === sheet.defaultColumnWidth &&
+    updatedSheet.rowHeights === sheet.rowHeights &&
+    updatedSheet.columnWidths === sheet.columnWidths
       ? workbook
       : {
           ...workbook,
           sheets: workbook.sheets.map((sheet) =>
-            sheet.id === sheetId ? u : sheet,
+            sheet.id === sheetId ? updatedSheet : sheet,
           ),
         }
   );
 }
-async function hashSheetPassword(e, salt) {
-  const t = await crypto.subtle.digest(
+async function hashSheetPassword(password, salt) {
+  const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(salt + "\0" + e),
+    new TextEncoder().encode(salt + "\0" + password),
   );
-  return [...new Uint8Array(t)]
-    .map((n) => n.toString(16).padStart(2, "0"))
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 }
-async function updateSheetProtection(workbook, sheetId, t, n) {
+async function updateSheetProtection(
+  workbook,
+  sheetId,
+  password,
+  isProtecting,
+) {
   const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  (n &&
+  (isProtecting &&
     sheet.protection?.enabled &&
     failWithMessage(
       "Unprotect this sheet before changing its protection settings.",
     ),
-    t.length > 200 && failWithMessage("Password is too long."),
-    !n &&
+    password.length > 200 && failWithMessage("Password is too long."),
+    !isProtecting &&
       sheet.protection?.hash &&
-      (await hashSheetPassword(t, sheet.protection.salt)) !==
+      (await hashSheetPassword(password, sheet.protection.salt)) !==
         sheet.protection.hash &&
       failWithMessage("The password does not match."));
   const salt = crypto.randomUUID(),
-    protection = n
+    protection = isProtecting
       ? {
           enabled: true,
-          ...(t ? { salt: salt, hash: await hashSheetPassword(t, salt) } : {}),
+          ...(password
+            ? { salt: salt, hash: await hashSheetPassword(password, salt) }
+            : {}),
         }
       : { enabled: false };
   return {
@@ -1816,8 +2058,8 @@ const supportedNumberLocales = [
     ],
     duration: ["[h]:mm", "[h]:mm:ss", "[h]:mm:ss.000", "[m]:ss", "[s].000"],
   };
-function throwWorkbookError(e) {
-  throw new Error(e);
+function throwWorkbookError(message) {
+  throw new Error(message);
 }
 const numericFormatKinds = new Set([
     "number",
@@ -1826,30 +2068,32 @@ const numericFormatKinds = new Set([
     "percent",
   ]),
   dateTimeFormatKinds = new Set(["date", "time", "datetime", "duration"]);
-function ZQ(e) {
+function ZQ(value) {
   return (
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    [Object.prototype, null].includes(Object.getPrototypeOf(e))
+    !!value &&
+    typeof value == "object" &&
+    !Array.isArray(value) &&
+    [Object.prototype, null].includes(Object.getPrototypeOf(value))
   );
 }
-function BN(e) {
-  const r = [""];
-  let t = false;
-  for (let n = 0; n < e.length; n++) {
-    const o = e[n];
-    if (o === "\\" && n + 1 < e.length) {
-      r[r.length - 1] += o + e[++n];
+function BN(formatCode) {
+  const sections = [""];
+  let inQuotes = false;
+  for (let charIndex = 0; charIndex < formatCode.length; charIndex++) {
+    const character = formatCode[charIndex];
+    if (character === "\\" && charIndex + 1 < formatCode.length) {
+      sections[sections.length - 1] += character + formatCode[++charIndex];
       continue;
     }
-    (o === '"' && (t = !t),
-      o === ";" && !t ? r.push("") : (r[r.length - 1] += o));
+    (character === '"' && (inQuotes = !inQuotes),
+      character === ";" && !inQuotes
+        ? sections.push("")
+        : (sections[sections.length - 1] += character));
   }
-  return t || r.length > 4 ? undefined : r;
+  return inQuotes || sections.length > 4 ? undefined : sections;
 }
-function parseNumberFormatCode(e) {
-  const r = {
+function parseNumberFormatCode(sectionCode) {
+  const parsedFormat = {
       prefix: "",
       suffix: "",
       minDecimals: 0,
@@ -1859,138 +2103,153 @@ function parseNumberFormatCode(e) {
       percent: false,
       hasNumber: false,
     },
-    t = (n) => {
-      r.hasNumber ? (r.suffix += n) : (r.prefix += n);
+    appendLiteral = (literal) => {
+      parsedFormat.hasNumber
+        ? (parsedFormat.suffix += literal)
+        : (parsedFormat.prefix += literal);
     };
-  for (let n = 0; n < e.length;) {
-    const o = e[n];
-    if (o === '"') {
-      const a = e.indexOf('"', n + 1);
-      if (a < 0) return;
-      (t(e.slice(n + 1, a)), (n = a + 1));
-    } else if (o === "\\") {
-      if (n + 1 >= e.length) return;
-      (t(e[n + 1]), (n += 2));
-    } else if (o === "[") {
-      const a =
+  for (let charIndex = 0; charIndex < sectionCode.length;) {
+    const character = sectionCode[charIndex];
+    if (character === '"') {
+      const closingQuoteIndex = sectionCode.indexOf('"', charIndex + 1);
+      if (closingQuoteIndex < 0) return;
+      (appendLiteral(sectionCode.slice(charIndex + 1, closingQuoteIndex)),
+        (charIndex = closingQuoteIndex + 1));
+    } else if (character === "\\") {
+      if (charIndex + 1 >= sectionCode.length) return;
+      (appendLiteral(sectionCode[charIndex + 1]), (charIndex += 2));
+    } else if (character === "[") {
+      const colorMatch =
         /^\[(?:Black|Blue|Cyan|Green|Magenta|Red|White|Yellow|Color\d+)\]/i.exec(
-          e.slice(n),
+          sectionCode.slice(charIndex),
         );
-      if (!a) return;
-      n += a[0].length;
-    } else if (o === "0" || o === "#") {
-      if (r.hasNumber) return;
-      const a = /^[0#.,]+/.exec(e.slice(n))[0],
-        s = /^(0+|#+0*|#,##0+)(?:\.(0*#*))?$/.exec(a);
-      if (!s) return;
-      const d = s[2] ?? "";
+      if (!colorMatch) return;
+      charIndex += colorMatch[0].length;
+    } else if (character === "0" || character === "#") {
+      if (parsedFormat.hasNumber) return;
+      const digitRun = /^[0#.,]+/.exec(sectionCode.slice(charIndex))[0],
+        digitMatch = /^(0+|#+0*|#,##0+)(?:\.(0*#*))?$/.exec(digitRun);
+      if (!digitMatch) return;
+      const fractionDigits = digitMatch[2] ?? "";
       if (
-        ((r.minDecimals = [...d].filter((u) => u === "0").length),
-        (r.maxDecimals = d.length),
-        (r.minIntegerDigits = [...s[1]].filter((u) => u === "0").length),
-        r.maxDecimals > 20 || r.minIntegerDigits > 21)
+        ((parsedFormat.minDecimals = [...fractionDigits].filter(
+          (fractionDigit) => fractionDigit === "0",
+        ).length),
+        (parsedFormat.maxDecimals = fractionDigits.length),
+        (parsedFormat.minIntegerDigits = [...digitMatch[1]].filter(
+          (integerDigit) => integerDigit === "0",
+        ).length),
+        parsedFormat.maxDecimals > 20 || parsedFormat.minIntegerDigits > 21)
       )
         return;
-      ((r.grouping = s[1].includes(",")),
-        (r.hasNumber = true),
-        (n += a.length));
-    } else if (o === "%") {
-      if (r.percent) return;
-      ((r.percent = true), t(o), n++);
-    } else if (/[$€£¥ ()+\-]/.test(o)) (t(o), n++);
+      ((parsedFormat.grouping = digitMatch[1].includes(",")),
+        (parsedFormat.hasNumber = true),
+        (charIndex += digitRun.length));
+    } else if (character === "%") {
+      if (parsedFormat.percent) return;
+      ((parsedFormat.percent = true), appendLiteral(character), charIndex++);
+    } else if (/[$€£¥ ()+\-]/.test(character))
+      (appendLiteral(character), charIndex++);
     else return;
   }
-  return r;
+  return parsedFormat;
 }
-function summarizeNumberFormat(e) {
-  if (!e) return;
-  const r = BN(e);
-  if (!r) return;
-  const numberFormatCode = parseNumberFormatCode(r[0]);
+function summarizeNumberFormat(formatCode) {
+  if (!formatCode) return;
+  const sections = BN(formatCode);
+  if (!sections) return;
+  const numberFormatCode = parseNumberFormatCode(sections[0]);
   return numberFormatCode?.hasNumber ? numberFormatCode.maxDecimals : undefined;
 }
-function numberFormatToIntlOptions(e, numFmt) {
-  const t = BN(numFmt);
-  if (!t) return;
-  const n = e < 0 && t.length > 1,
-    o = e === 0 && t.length > 2 ? 2 : n ? 1 : 0,
-    numberFormatCode = parseNumberFormatCode(t[o]);
+function numberFormatToIntlOptions(value, numFmt) {
+  const sections = BN(numFmt);
+  if (!sections) return;
+  const usesNegativeSection = value < 0 && sections.length > 1,
+    sectionIndex =
+      value === 0 && sections.length > 2 ? 2 : usesNegativeSection ? 1 : 0,
+    numberFormatCode = parseNumberFormatCode(sections[sectionIndex]);
   if (!numberFormatCode) return;
   if (!numberFormatCode.hasNumber)
     return numberFormatCode.prefix + numberFormatCode.suffix;
-  const s = Math.abs(e) * (numberFormatCode.percent ? 100 : 1);
-  if (!Number.isFinite(s)) return "#NUM!";
-  let d = new Intl.NumberFormat("en-US", {
+  const magnitude = Math.abs(value) * (numberFormatCode.percent ? 100 : 1);
+  if (!Number.isFinite(magnitude)) return "#NUM!";
+  let formatted = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: numberFormatCode.minDecimals,
     maximumFractionDigits: numberFormatCode.maxDecimals,
     minimumIntegerDigits: Math.max(1, numberFormatCode.minIntegerDigits),
     useGrouping: numberFormatCode.grouping,
-  }).format(s);
+  }).format(magnitude);
   return (
     numberFormatCode.minIntegerDigits === 0 &&
-      (d === "0" && numberFormatCode.minDecimals === 0
-        ? (d = "")
-        : d.startsWith("0.") && (d = d.slice(1))),
-    (e < 0 && !n ? "-" : "") +
+      (formatted === "0" && numberFormatCode.minDecimals === 0
+        ? (formatted = "")
+        : formatted.startsWith("0.") && (formatted = formatted.slice(1))),
+    (value < 0 && !usesNegativeSection ? "-" : "") +
       numberFormatCode.prefix +
-      d +
+      formatted +
       numberFormatCode.suffix
   );
 }
 const $b = new Map();
-function parseDateTimeFormatCode(e) {
-  const r = e.replace(/"[^"]*"|\\./g, "");
-  if (!/[ymdhs]/i.test(r)) return;
+function parseDateTimeFormatCode(formatCode) {
+  const unquotedFormatText = formatCode.replace(/"[^"]*"|\\./g, "");
+  if (!/[ymdhs]/i.test(unquotedFormatText)) return;
   const tokens = [];
   let fraction = 0;
-  for (let u = 0; u < e.length;) {
-    const l = e.slice(u),
-      c = l[0];
-    if (c === '"') {
-      const v = e.indexOf('"', u + 1);
-      (v < 0 &&
+  for (let scanIndex = 0; scanIndex < formatCode.length;) {
+    const remainingText = formatCode.slice(scanIndex),
+      currentChar = remainingText[0];
+    if (currentChar === '"') {
+      const closingQuoteIndex = formatCode.indexOf('"', scanIndex + 1);
+      (closingQuoteIndex < 0 &&
         throwWorkbookError("The format contains an unclosed quoted literal."),
-        tokens.push({ kind: "literal", text: e.slice(u + 1, v) }),
-        (u = v + 1));
+        tokens.push({
+          kind: "literal",
+          text: formatCode.slice(scanIndex + 1, closingQuoteIndex),
+        }),
+        (scanIndex = closingQuoteIndex + 1));
       continue;
     }
-    if (c === "\\") {
-      (l.length < 2 &&
+    if (currentChar === "\\") {
+      (remainingText.length < 2 &&
         throwWorkbookError("A format escape must be followed by a character."),
-        tokens.push({ kind: "literal", text: l[1] }),
-        (u += 2));
+        tokens.push({ kind: "literal", text: remainingText[1] }),
+        (scanIndex += 2));
       continue;
     }
-    const h = /^(AM\/PM|A\/P)/i.exec(l);
-    if (h) {
-      (tokens.push({ kind: "ampm", text: h[0] }), (u += h[0].length));
+    const ampmMatch = /^(AM\/PM|A\/P)/i.exec(remainingText);
+    if (ampmMatch) {
+      (tokens.push({ kind: "ampm", text: ampmMatch[0] }),
+        (scanIndex += ampmMatch[0].length));
       continue;
     }
-    const f = /^\[(h{1,2}|m{1,2}|s{1,2})\]/i.exec(l);
-    if (f) {
-      (tokens.push({ kind: "elapsed", text: f[1].toLowerCase() }),
-        (u += f[0].length));
+    const elapsedMatch = /^\[(h{1,2}|m{1,2}|s{1,2})\]/i.exec(remainingText);
+    if (elapsedMatch) {
+      (tokens.push({ kind: "elapsed", text: elapsedMatch[1].toLowerCase() }),
+        (scanIndex += elapsedMatch[0].length));
       continue;
     }
-    const p = /^(y+|m+|d+|h+|s+)/i.exec(l);
-    if (p) {
-      const v = p[0].toLowerCase(),
-        g = v[0];
-      (((g === "y" && ![2, 4].includes(v.length)) ||
-        (g === "m" && v.length > 4) ||
-        (["d", "h", "s"].includes(g) && v.length > 2)) &&
+    const dateFieldMatch = /^(y+|m+|d+|h+|s+)/i.exec(remainingText);
+    if (dateFieldMatch) {
+      const fieldText = dateFieldMatch[0].toLowerCase(),
+        fieldLetter = fieldText[0];
+      (((fieldLetter === "y" && ![2, 4].includes(fieldText.length)) ||
+        (fieldLetter === "m" && fieldText.length > 4) ||
+        (["d", "h", "s"].includes(fieldLetter) && fieldText.length > 2)) &&
         throwWorkbookError(
           "This date pattern uses unsupported fields. Use yy/yyyy, m–mmmm, d/dd, h/hh or s/ss.",
         ),
         tokens.push({
-          kind: { y: "year", m: "month", d: "day", h: "hour", s: "second" }[g],
-          text: v,
+          kind: { y: "year", m: "month", d: "day", h: "hour", s: "second" }[
+            fieldLetter
+          ],
+          text: fieldText,
         }),
-        (u += v.length));
+        (scanIndex += fieldText.length));
       continue;
     }
-    const m = /^\.(0{1,3})(?!0)/.exec(l);
-    if (m) {
+    const fractionMatch = /^\.(0{1,3})(?!0)/.exec(remainingText);
+    if (fractionMatch) {
       ((!tokens.length ||
         !["second", "elapsed"].includes(tokens.at(-1).kind) ||
         (tokens.at(-1).kind === "elapsed" &&
@@ -1999,58 +2258,71 @@ function parseDateTimeFormatCode(e) {
         throwWorkbookError(
           "Fractional seconds must follow seconds and use 1–3 zero digits.",
         ),
-        (fraction = m[1].length),
-        tokens.push({ kind: "fraction", text: m[1] }),
-        (u += m[0].length));
+        (fraction = fractionMatch[1].length),
+        tokens.push({ kind: "fraction", text: fractionMatch[1] }),
+        (scanIndex += fractionMatch[0].length));
       continue;
     }
-    if (/^[ /:,.-]$/.test(c)) {
-      (tokens.push({ kind: "literal", text: c }), u++);
+    if (/^[ /:,.-]$/.test(currentChar)) {
+      (tokens.push({ kind: "literal", text: currentChar }), scanIndex++);
       continue;
     }
     throwWorkbookError(
       "Unsupported date/time code. Quote literal words and use one supported date/time pattern.",
     );
   }
-  const o = tokens.filter((token) => token.kind !== "literal");
-  o.forEach((u, l) => {
-    u.kind === "month" &&
-      u.text.length <= 2 &&
-      (o[l - 1]?.kind === "hour" ||
-        (o[l - 1]?.kind === "elapsed" && o[l - 1].text.startsWith("h")) ||
-        o[l + 1]?.kind === "second") &&
-      (u.kind = "minute");
+  const nonLiteralTokens = tokens.filter((token) => token.kind !== "literal");
+  nonLiteralTokens.forEach((entry, entryIndex) => {
+    entry.kind === "month" &&
+      entry.text.length <= 2 &&
+      (nonLiteralTokens[entryIndex - 1]?.kind === "hour" ||
+        (nonLiteralTokens[entryIndex - 1]?.kind === "elapsed" &&
+          nonLiteralTokens[entryIndex - 1].text.startsWith("h")) ||
+        nonLiteralTokens[entryIndex + 1]?.kind === "second") &&
+      (entry.kind = "minute");
   });
-  const a = o.some((u) => ["year", "month", "day"].includes(u.kind)),
-    s = o.some((u) => ["hour", "minute", "second"].includes(u.kind)),
-    d = o.filter((u) => u.kind === "elapsed");
-  if (d.length) {
-    (d.length !== 1 ||
-      a ||
-      o.some((l) => ["hour", "ampm"].includes(l.kind)) ||
-      o[0].kind !== "elapsed") &&
+  const hasDateField = nonLiteralTokens.some((calendarToken) =>
+      ["year", "month", "day"].includes(calendarToken.kind),
+    ),
+    hasTimeField = nonLiteralTokens.some((timeToken) =>
+      ["hour", "minute", "second"].includes(timeToken.kind),
+    ),
+    elapsedTokens = nonLiteralTokens.filter(
+      (elapsedToken) => elapsedToken.kind === "elapsed",
+    );
+  if (elapsedTokens.length) {
+    (elapsedTokens.length !== 1 ||
+      hasDateField ||
+      nonLiteralTokens.some((hourOrAmPmToken) =>
+        ["hour", "ampm"].includes(hourOrAmPmToken.kind),
+      ) ||
+      nonLiteralTokens[0].kind !== "elapsed") &&
       throwWorkbookError(
         "Elapsed-time patterns start with one [h], [m] or [s] field and cannot include calendar or AM/PM fields.",
       );
-    const u = d[0].text[0];
-    ((u === "s" && s) || (u === "m" && o.some((l) => l.kind === "minute"))) &&
+    const elapsedUnit = elapsedTokens[0].text[0];
+    ((elapsedUnit === "s" && hasTimeField) ||
+      (elapsedUnit === "m" &&
+        nonLiteralTokens.some(
+          (minuteToken) => minuteToken.kind === "minute",
+        ))) &&
       throwWorkbookError("Use [h]:mm:ss, [m]:ss or [s] for elapsed time.");
   }
   return (
-    o.some((u) => u.kind === "ampm") &&
-      !o.some((u) => u.kind === "hour") &&
+    nonLiteralTokens.some((ampmToken) => ampmToken.kind === "ampm") &&
+      !nonLiteralTokens.some((hourToken) => hourToken.kind === "hour") &&
       throwWorkbookError("AM/PM requires an hour field."),
-    !a &&
-      !s &&
-      !d.length &&
+    !hasDateField &&
+      !hasTimeField &&
+      !elapsedTokens.length &&
       throwWorkbookError("The format does not contain a date or time field."),
     {
       kind: "temporal",
-      category: d.length
+      category: elapsedTokens.length
         ? "duration"
-        : a && s
+        : hasDateField && hasTimeField
           ? "datetime"
-          : a
+          : hasDateField
             ? "date"
             : "time",
       tokens: tokens,
@@ -2058,45 +2330,48 @@ function parseDateTimeFormatCode(e) {
     }
   );
 }
-function parseCustomNumberFormat(e) {
-  let r = "",
+function parseCustomNumberFormat(formatCode) {
+  let patternText = "",
     divisor = 1,
-    n = false;
-  for (let s = 0; s < e.length;) {
-    const d = e.slice(s);
-    if (d[0] === '"') {
-      const u = e.indexOf('"', s + 1);
-      (u < 0 &&
+    hasNumericField = false;
+  for (let scanIndex = 0; scanIndex < formatCode.length;) {
+    const remainingText = formatCode.slice(scanIndex);
+    if (remainingText[0] === '"') {
+      const closingQuoteIndex = formatCode.indexOf('"', scanIndex + 1);
+      (closingQuoteIndex < 0 &&
         throwWorkbookError("The format contains an unclosed quoted literal."),
-        (r += e.slice(s, u + 1)),
-        (s = u + 1));
-    } else if (d[0] === "\\")
-      (d.length < 2 &&
+        (patternText += formatCode.slice(scanIndex, closingQuoteIndex + 1)),
+        (scanIndex = closingQuoteIndex + 1));
+    } else if (remainingText[0] === "\\")
+      (remainingText.length < 2 &&
         throwWorkbookError("A format escape must be followed by a character."),
-        (r += d.slice(0, 2)),
-        (s += 2));
-    else if (/^[0#]/.test(d)) {
-      n &&
+        (patternText += remainingText.slice(0, 2)),
+        (scanIndex += 2));
+    else if (/^[0#]/.test(remainingText)) {
+      hasNumericField &&
         throwWorkbookError(
           "Only one numeric field per custom section is supported.",
         );
-      const u = /^[0#.,]+/.exec(d)[0],
-        l = /,+$/.exec(u)?.[0] ?? "";
-      (l.length > 2 &&
+      const numericFieldText = /^[0#.,]+/.exec(remainingText)[0],
+        trailingCommas = /,+$/.exec(numericFieldText)?.[0] ?? "";
+      (trailingCommas.length > 2 &&
         throwWorkbookError(
           "Custom display scaling supports at most two trailing commas.",
         ),
-        (divisor = 1e3 ** l.length),
-        (r += u.slice(0, u.length - l.length)),
-        (s += u.length),
-        (n = true));
-    } else ((r += d[0]), s++);
+        (divisor = 1e3 ** trailingCommas.length),
+        (patternText += numericFieldText.slice(
+          0,
+          numericFieldText.length - trailingCommas.length,
+        )),
+        (scanIndex += numericFieldText.length),
+        (hasNumericField = true));
+    } else ((patternText += remainingText[0]), scanIndex++);
   }
-  /\[/.test(r.replace(/"[^"]*"|\\./g, "")) &&
+  /\[/.test(patternText.replace(/"[^"]*"|\\./g, "")) &&
     throwWorkbookError(
       "Custom colors, conditions and locale tags are not supported. Use conditional formatting or the locale selector.",
     );
-  const numberFormatCode = parseNumberFormatCode(r);
+  const numberFormatCode = parseNumberFormatCode(patternText);
   return (
     numberFormatCode ||
       throwWorkbookError(
@@ -2107,40 +2382,45 @@ function parseCustomNumberFormat(e) {
     { parsed: numberFormatCode, divisor: divisor }
   );
 }
-function isTextOnlyFormatSection(e) {
-  return e.replace(/"[^"]*"|\\./g, "").replace(/[@ ]/g, "") === "";
+function isTextOnlyFormatSection(formatSection) {
+  return formatSection.replace(/"[^"]*"|\\./g, "").replace(/[@ ]/g, "") === "";
 }
-function validateNumberFormatCode(e) {
-  const r = $b.get(e);
-  if (r) return r;
-  (typeof e != "string" ||
-    !e.length ||
-    e.length > 200 ||
-    /[\u0000-\u001f\u007f]/.test(e)) &&
+function validateNumberFormatCode(formatCode) {
+  const cachedFormat = $b.get(formatCode);
+  if (cachedFormat) return cachedFormat;
+  (typeof formatCode != "string" ||
+    !formatCode.length ||
+    formatCode.length > 200 ||
+    /[\u0000-\u001f\u007f]/.test(formatCode)) &&
     throwWorkbookError("Enter a supported format pattern of 1–200 characters.");
-  let t;
-  const n = BN(e);
-  n ||
+  let parsedFormat;
+  const formatSections = BN(formatCode);
+  formatSections ||
     throwWorkbookError(
       "A format has at most four sections and must close quoted literals.",
     );
-  const o = n.length === 1 ? parseDateTimeFormatCode(e) : undefined;
+  const dateTimeFormat =
+    formatSections.length === 1
+      ? parseDateTimeFormatCode(formatCode)
+      : undefined;
   return (
-    o
-      ? (t = o)
-      : (n.length === 4 &&
-          !isTextOnlyFormatSection(n[3]) &&
+    dateTimeFormat
+      ? (parsedFormat = dateTimeFormat)
+      : (formatSections.length === 4 &&
+          !isTextOnlyFormatSection(formatSections[3]) &&
           throwWorkbookError(
             "The text section supports @ and quoted or escaped literals only.",
           ),
-        (t = {
+        (parsedFormat = {
           kind: "numeric",
-          sections: n.slice(0, 3).map(parseCustomNumberFormat),
-          ...(n.length === 4 ? { textSection: n[3] } : {}),
+          sections: formatSections.slice(0, 3).map(parseCustomNumberFormat),
+          ...(formatSections.length === 4
+            ? { textSection: formatSections[3] }
+            : {}),
         })),
     $b.size >= 256 && $b.delete($b.keys().next().value),
-    $b.set(e, t),
-    t
+    $b.set(formatCode, parsedFormat),
+    parsedFormat
   );
 }
 

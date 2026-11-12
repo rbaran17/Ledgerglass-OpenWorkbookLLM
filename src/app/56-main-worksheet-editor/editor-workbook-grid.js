@@ -122,7 +122,7 @@ function EditorWorkbookGrid({
         activeWorkbook,
         activeSheet.id,
         selectionState.activeCellAddress,
-      ).map((fe) =>
+      ).map((dataValidation) =>
         i.jsxs(
           "div",
           {
@@ -131,18 +131,18 @@ function EditorWorkbookGrid({
             lang: language("Validation input guidance"),
             "data-ui-label": "Validation input guidance",
             children: [
-              fe.showInputMessage !== false &&
-                (fe.inputTitle || fe.inputMessage) &&
+              dataValidation.showInputMessage !== false &&
+                (dataValidation.inputTitle || dataValidation.inputMessage) &&
                 i.jsxs("span", {
                   children: [
-                    i.jsx("strong", { children: fe.inputTitle }),
+                    i.jsx("strong", { children: dataValidation.inputTitle }),
                     " ",
-                    fe.inputMessage,
+                    dataValidation.inputMessage,
                     " ",
                   ],
                 }),
-              fe.kind === "list" &&
-                fe.showDropdown !== false &&
+              dataValidation.kind === "list" &&
+                dataValidation.showDropdown !== false &&
                 i.jsxs("label", {
                   children: [
                     i.jsx(LocalizedText, {
@@ -155,7 +155,8 @@ function EditorWorkbookGrid({
                       disabled: isEditingLocked,
                       value: "",
                       onChange: (event) => {
-                        const raw = fe.list[Number(event.target.value)];
+                        const raw =
+                          dataValidation.list[Number(event.target.value)];
                         raw !== undefined &&
                           viewAndSelectionActions.runGuardedAction(() => {
                             (cellEditActions.cancelCellEdit(),
@@ -183,8 +184,12 @@ function EditorWorkbookGrid({
                           disabled: true,
                           children: "Select…",
                         }),
-                        fe.list.map((Oe, Be) =>
-                          i.jsx("option", { value: Be, children: Oe }, Be),
+                        dataValidation.list.map((optionLabel, optionIndex) =>
+                          i.jsx(
+                            "option",
+                            { value: optionIndex, children: optionLabel },
+                            optionIndex,
+                          ),
                         ),
                       ],
                     }),
@@ -192,7 +197,7 @@ function EditorWorkbookGrid({
                 }),
             ],
           },
-          fe.id,
+          dataValidation.id,
         ),
       ),
       workbookCalculator.getSpillDiagnostic(
@@ -379,9 +384,12 @@ function EditorWorkbookGrid({
             }),
             i.jsx("button", {
               onClick: () => {
-                (filterSortState.setFilterStateByScope((fe) => {
-                  const Oe = { ...fe };
-                  return (delete Oe[filterStateKey], Oe);
+                (filterSortState.setFilterStateByScope((filterStateMap) => {
+                  const remainingFilterStates = { ...filterStateMap };
+                  return (
+                    delete remainingFilterStates[filterStateKey],
+                    remainingFilterStates
+                  );
                 }),
                   auditState.setAuditPopulationScope("full"));
               },
@@ -452,10 +460,15 @@ function EditorWorkbookGrid({
               value: filterSortState.filterValueSearch,
               onChange: (event) => {
                 (filterSortState.setFilterValueSearch(event.target.value),
-                  filterSortState.setFilterStateByScope((Oe) => {
-                    const Be = { ...Oe };
-                    return (delete Be[filterStateKey], Be);
-                  }),
+                  filterSortState.setFilterStateByScope(
+                    (previousFilterStates) => {
+                      const updatedFilterStates = { ...previousFilterStates };
+                      return (
+                        delete updatedFilterStates[filterStateKey],
+                        updatedFilterStates
+                      );
+                    },
+                  ),
                   viewAndSelectionActions.scrollActivePaneVertically(0),
                   selectionState.gridContainerRef.current &&
                     (selectionState.gridContainerRef.current.scrollTop = 0));

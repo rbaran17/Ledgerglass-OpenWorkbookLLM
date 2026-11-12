@@ -151,14 +151,14 @@ function EditorFormulaBar({
         disabled:
           cellEditActions.isFormulaEditingLocked() ||
           !formulaEntryState.isFormulaBarFocused,
-        onAccept: (fe, Oe) => {
-          (cellEditActions.beginCellEdit(fe),
-            formulaEntryState.setFormulaCaretPosition(Oe),
+        onAccept: (formulaText, caretPosition) => {
+          (cellEditActions.beginCellEdit(formulaText),
+            formulaEntryState.setFormulaCaretPosition(caretPosition),
             requestAnimationFrame(() => {
               (formulaEntryState.formulaInputRef.current?.focus(),
                 formulaEntryState.formulaInputRef.current?.setSelectionRange(
-                  Oe,
-                  Oe,
+                  caretPosition,
+                  caretPosition,
                 ));
             }));
         },

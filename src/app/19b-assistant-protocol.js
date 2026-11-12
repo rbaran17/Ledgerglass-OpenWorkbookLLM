@@ -811,13 +811,13 @@ function validateProposedCalculation(workbook, assistantSelection, proposal) {
       sheetId: assistantSelection.sheetId,
       cells: cells,
     }),
-    a = workbook.sheets.find(
+    targetSheet = workbook.sheets.find(
       (sheet) => sheet.id === assistantSelection.sheetId,
     ),
     mergedProposal = {
       ...validatedProposal,
       patches: validatedProposal.patches.map((patch) => {
-        const cell = a.cells[patch.address],
+        const cell = targetSheet.cells[patch.address],
           mergedCell = {
             ...cell,
             ...patch.cell,
@@ -835,7 +835,7 @@ function validateProposedCalculation(workbook, assistantSelection, proposal) {
             patch.cell.numFmt === undefined &&
             delete mergedCell.numFmt);
         const cellAddress = parseCellAddress(patch.address),
-          isTableHeaderCell = (a.tables ?? []).some((table) => {
+          isTableHeaderCell = (targetSheet.tables ?? []).some((table) => {
             const [tableStartRef, tableEndRef] = table.range.split(":"),
               tableStart = parseCellAddress(tableStartRef),
               tableEnd = parseCellAddress(tableEndRef ?? tableStartRef);
@@ -860,7 +860,7 @@ function validateProposedCalculation(workbook, assistantSelection, proposal) {
     workbookWithPatches = {
       ...workbook,
       sheets: workbook.sheets.map((sheet) =>
-        sheet.id === a.id
+        sheet.id === targetSheet.id
           ? {
               ...sheet,
               cells: {
@@ -882,7 +882,7 @@ function validateProposedCalculation(workbook, assistantSelection, proposal) {
       {
         allowRead: () => true,
         allowDatabaseCriterion: (sheetId, criterionFormula) => {
-          if (sheetId !== a.id) return false;
+          if (sheetId !== targetSheet.id) return false;
           try {
             return (
               validateAssistantFormula(criterionFormula, selectedAddresses),
@@ -902,7 +902,7 @@ function validateProposedCalculation(workbook, assistantSelection, proposal) {
       patch.cell.literal
     )
       continue;
-    const calculatedValue = calculator(a.id, patch.address);
+    const calculatedValue = calculator(targetSheet.id, patch.address);
     (assertCondition(
       calculatedValue !== "#LIMIT!",
       "The proposed formula exceeds calculation limits.",
@@ -911,10 +911,10 @@ function validateProposedCalculation(workbook, assistantSelection, proposal) {
         calculator.getOperationalErrors().length === 0,
         "The proposed formula has invalid syntax, a circular reference or an operational calculation failure. Correct the formula before review; error handlers cannot suppress this rejection.",
       ));
-    const spillRange = calculator.getSpillRange(a.id, patch.address);
+    const spillRange = calculator.getSpillRange(targetSheet.id, patch.address);
     if (
       (assertCondition(
-        !calculator.getSpillDiagnostic(a.id, patch.address),
+        !calculator.getSpillDiagnostic(targetSheet.id, patch.address),
         "The proposed array is blocked. Review the spill obstruction before requesting approval.",
       ),
       spillRange)

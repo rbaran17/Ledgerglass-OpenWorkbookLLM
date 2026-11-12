@@ -48,17 +48,19 @@ function createGridPaneRenderer({
   renderGridRow,
   renderVirtualSpacer,
 }) {
-  function renderGridPane(fe) {
-    const Oe = _t(selectionState.activeCellAddress),
-      Be =
+  function renderGridPane(paneId) {
+    const activeCell = _t(selectionState.activeCellAddress),
+      activeMergeRange =
         filterSortState.filterValueSearch || filterSortState.activeColumnSort
           ? undefined
-          : mergeRanges.find((mergeRange) => Tp(mergeRange, Oe.row, Oe.col)),
-      Ue = Be
-        ? `${columnIndexToLetters(Be.firstCol)}${Be.firstRow + 1}`
+          : mergeRanges.find((mergeRange) =>
+              Tp(mergeRange, activeCell.row, activeCell.col),
+            ),
+      activeCellLabel = activeMergeRange
+        ? `${columnIndexToLetters(activeMergeRange.firstCol)}${activeMergeRange.firstRow + 1}`
         : selectionState.activeCellAddress,
-      Xe = splitPaneSizes.views[fe],
-      gt = viewAndSelectionActions.computeGridViewport(Xe),
+      paneSize = splitPaneSizes.views[paneId],
+      gridViewport = viewAndSelectionActions.computeGridViewport(paneSize),
       {
         rowWindow,
         columnWindow,
@@ -67,23 +69,23 @@ function createGridPaneRenderer({
         leftGap,
         rightGap,
         visibleColumnCount,
-      } = gt;
+      } = gridViewport;
     return i.jsxs("div", {
       className: "lg-grid-stage",
       onPointerDownCapture: (event) => {
         formulaEntryActions.handleFormulaPointerDown(event) ||
-          gridInteractionActions.activateGridPane(fe) ||
+          gridInteractionActions.activateGridPane(paneId) ||
           (event.preventDefault(), event.stopPropagation());
       },
-      onFocusCapture: () => gridInteractionActions.activateGridPane(fe),
+      onFocusCapture: () => gridInteractionActions.activateGridPane(paneId),
       children: [
         i.jsx("div", {
           className: "lg-grid-scroll",
-          id: `${editorIdPrefix}-${fe}-grid`,
-          ref: (Sr) => {
-            (splitPaneSizes.bindings[fe](Sr),
-              splitPaneSizes.active.current === fe &&
-                (selectionState.gridContainerRef.current = Sr));
+          id: `${editorIdPrefix}-${paneId}-grid`,
+          ref: (gridElement) => {
+            (splitPaneSizes.bindings[paneId](gridElement),
+              splitPaneSizes.active.current === paneId &&
+                (selectionState.gridContainerRef.current = gridElement));
           },
           tabIndex: 0,
           role: "grid",
@@ -99,35 +101,42 @@ function createGridPaneRenderer({
             [...frozenColumnIndexes, ...shownColumns].includes(
               _t(selectionState.activeCellAddress).col,
             )
-              ? `${editorIdPrefix}-${fe}-${Ue}`
+              ? `${editorIdPrefix}-${paneId}-${activeCellLabel}`
               : undefined,
           "aria-label": sheetSplitPanes
-            ? `Worksheet pane ${fe.replace("-", " ")}`
+            ? `Worksheet pane ${paneId.replace("-", " ")}`
             : text("Editable worksheet grid"),
           onScroll: (event) => {
             viewAndSelectionActions.applyPaneScrollOffsets(
-              fe,
+              paneId,
               event.currentTarget.scrollTop,
               event.currentTarget.scrollLeft,
             );
           },
-          onKeyDown: (Sr) => {
+          onKeyDown: (keyboardEvent) => {
             if (
               sheetSplitPanes &&
-              Sr.key === "F6" &&
-              Sr.target === Sr.currentTarget &&
-              !Sr.defaultPrevented &&
-              !Sr.ctrlKey &&
-              !Sr.metaKey &&
-              !Sr.altKey
+              keyboardEvent.key === "F6" &&
+              keyboardEvent.target === keyboardEvent.currentTarget &&
+              !keyboardEvent.defaultPrevented &&
+              !keyboardEvent.ctrlKey &&
+              !keyboardEvent.metaKey &&
+              !keyboardEvent.altKey
             ) {
-              Sr.preventDefault();
-              const Di = Pv(sheetSplitPanes),
-                $o = Di.indexOf(fe),
-                Ds = Di[($o + (Sr.shiftKey ? Di.length - 1 : 1)) % Di.length];
-              gridInteractionActions.activateGridPane(Ds) &&
-                splitPaneSizes.refs.current[Ds]?.focus({ preventScroll: true });
-            } else gridInteractionActions.handleGridKeyDown(Sr);
+              keyboardEvent.preventDefault();
+              const paneIds = Pv(sheetSplitPanes),
+                currentPaneIndex = paneIds.indexOf(paneId),
+                nextPaneId =
+                  paneIds[
+                    (currentPaneIndex +
+                      (keyboardEvent.shiftKey ? paneIds.length - 1 : 1)) %
+                      paneIds.length
+                  ];
+              gridInteractionActions.activateGridPane(nextPaneId) &&
+                splitPaneSizes.refs.current[nextPaneId]?.focus({
+                  preventScroll: true,
+                });
+            } else gridInteractionActions.handleGridKeyDown(keyboardEvent);
           },
           onContextMenu: (event) => {
             const target = event.target;
@@ -135,60 +144,76 @@ function createGridPaneRenderer({
               target.closest("input,textarea,button,a,[contenteditable=true]")
             )
               return;
-            const Di = target.closest("[data-address]"),
-              $o = target.closest("[data-column]"),
-              Ds = target.closest("[data-row-header]");
-            if (!(!Di && !$o && !Ds) && cellEditActions.commitCellEdit()) {
-              if ((event.preventDefault(), $o)) {
-                const qo = Number($o.dataset.column);
+            const cellElement = target.closest("[data-address]"),
+              columnHeaderElement = target.closest("[data-column]"),
+              rowHeaderElement = target.closest("[data-row-header]");
+            if (
+              !(!cellElement && !columnHeaderElement && !rowHeaderElement) &&
+              cellEditActions.commitCellEdit()
+            ) {
+              if ((event.preventDefault(), columnHeaderElement)) {
+                const columnIndex = Number(columnHeaderElement.dataset.column);
                 selectionAreaRanges.some(
                   (selectionAreaRange) =>
                     selectionAreaRange.firstRow === 0 &&
                     selectionAreaRange.lastRow === activeSheet.rowCount - 1 &&
-                    qo >= selectionAreaRange.firstCol &&
-                    qo <= selectionAreaRange.lastCol,
-                ) || navigationActions.selectRowOrColumn("column", qo, false);
-              } else if (Ds) {
-                const qo = Number(Ds.dataset.rowHeader);
+                    columnIndex >= selectionAreaRange.firstCol &&
+                    columnIndex <= selectionAreaRange.lastCol,
+                ) ||
+                  navigationActions.selectRowOrColumn(
+                    "column",
+                    columnIndex,
+                    false,
+                  );
+              } else if (rowHeaderElement) {
+                const rowIndex = Number(rowHeaderElement.dataset.rowHeader);
                 selectionAreaRanges.some(
                   (selectionAreaRange) =>
                     selectionAreaRange.firstCol === 0 &&
                     selectionAreaRange.lastCol === activeSheet.colCount - 1 &&
-                    qo >= selectionAreaRange.firstRow &&
-                    qo <= selectionAreaRange.lastRow,
-                ) || navigationActions.selectRowOrColumn("row", qo, false);
-              } else if (Di) {
-                const qo = _t(Di.dataset.address);
+                    rowIndex >= selectionAreaRange.firstRow &&
+                    rowIndex <= selectionAreaRange.lastRow,
+                ) ||
+                  navigationActions.selectRowOrColumn("row", rowIndex, false);
+              } else if (cellElement) {
+                const clickedCell = _t(cellElement.dataset.address);
                 selectionAreaRanges.some((selectionAreaRange) =>
-                  Tp(selectionAreaRange, qo.row, qo.col),
-                ) || navigationActions.selectCellAddress(Di.dataset.address);
+                  Tp(selectionAreaRange, clickedCell.row, clickedCell.col),
+                ) ||
+                  navigationActions.selectCellAddress(
+                    cellElement.dataset.address,
+                  );
               }
               selectionState.setContextMenuState({
                 x: event.clientX,
                 y: event.clientY,
-                kind: $o ? "column" : Ds ? "row" : "cell",
+                kind: columnHeaderElement
+                  ? "column"
+                  : rowHeaderElement
+                    ? "row"
+                    : "cell",
               });
             }
           },
-          onCopy: (Sr) => {
-            Sr.target !== Sr.currentTarget ||
-              Sr.defaultPrevented ||
-              (Sr.preventDefault(),
+          onCopy: (clipboardEvent) => {
+            clipboardEvent.target !== clipboardEvent.currentTarget ||
+              clipboardEvent.defaultPrevented ||
+              (clipboardEvent.preventDefault(),
               viewAndSelectionActions.runGuardedAction(() =>
-                Sr.clipboardData.setData(
+                clipboardEvent.clipboardData.setData(
                   "text/plain",
                   clipboardAndFindActions.selectionToTsv(),
                 ),
               ));
           },
-          onCut: (Sr) => {
-            Sr.target !== Sr.currentTarget ||
+          onCut: (clipboardEvent) => {
+            clipboardEvent.target !== clipboardEvent.currentTarget ||
               isEditingLocked ||
               operationStatusState.isOperationBusy ||
-              Sr.defaultPrevented ||
-              (Sr.preventDefault(),
+              clipboardEvent.defaultPrevented ||
+              (clipboardEvent.preventDefault(),
               viewAndSelectionActions.runGuardedAction(() => {
-                (Sr.clipboardData.setData(
+                (clipboardEvent.clipboardData.setData(
                   "text/plain",
                   clipboardAndFindActions.selectionToTsv(true),
                 ),
@@ -197,21 +222,22 @@ function createGridPaneRenderer({
                   ));
               }));
           },
-          onPaste: (Sr) => {
-            Sr.target !== Sr.currentTarget ||
+          onPaste: (clipboardEvent) => {
+            clipboardEvent.target !== clipboardEvent.currentTarget ||
               isEditingLocked ||
               operationStatusState.isOperationBusy ||
-              Sr.defaultPrevented ||
-              (Sr.preventDefault(),
+              clipboardEvent.defaultPrevented ||
+              (clipboardEvent.preventDefault(),
               clipboardAndFindActions.pasteClipboardText(
-                Sr.clipboardData.getData("text/plain"),
+                clipboardEvent.clipboardData.getData("text/plain"),
               ));
           },
           onPointerUp: () => {
             dragFillState.dragAnchorRef.current = null;
           },
-          onPointerLeave: (Sr) => {
-            Sr.buttons === 0 && (dragFillState.dragAnchorRef.current = null);
+          onPointerLeave: (pointerEvent) => {
+            pointerEvent.buttons === 0 &&
+              (dragFillState.dragAnchorRef.current = null);
           },
           children: i.jsxs("table", {
             className: `lg-grid ${viewDisplayState.isGridlinesVisible ? "" : "no-gridlines"} ${viewDisplayState.isHeadingsVisible ? "" : "no-headings"}`,
@@ -298,7 +324,7 @@ function createGridPaneRenderer({
               i.jsxs("tbody", {
                 children: [
                   frozenRowIndexes.map((frozenRowIndex) =>
-                    renderGridRow(frozenRowIndex, true, gt, fe),
+                    renderGridRow(frozenRowIndex, true, gridViewport, paneId),
                   ),
                   renderVirtualSpacer(
                     rowWindow.leading,
@@ -306,7 +332,7 @@ function createGridPaneRenderer({
                     visibleColumnCount,
                   ),
                   shownRows.map((shownRow) =>
-                    renderGridRow(shownRow, false, gt, fe),
+                    renderGridRow(shownRow, false, gridViewport, paneId),
                   ),
                   renderVirtualSpacer(
                     rowWindow.trailing,
@@ -326,40 +352,48 @@ function createGridPaneRenderer({
           readOnly: isEditingLocked,
           scale: zoomScale,
           onWorkbookChange: navigationActions.commitWorkbookEdit,
-          positionForCell: (Sr) => {
-            const Wi = _t(Sr);
+          positionForCell: (address) => {
+            const cell = _t(address);
             if (
-              rowVisibilityIndex.isHidden(Wi.row) ||
-              columnVisibilityIndex.isHidden(Wi.col)
+              rowVisibilityIndex.isHidden(cell.row) ||
+              columnVisibilityIndex.isHidden(cell.col)
             )
               return null;
-            const Di = scrollableRowPositionOf(Wi.row),
-              $o = Wi.row < pinnedRowCount,
-              Ds = Wi.col < frozenColumnCount;
-            if (!$o && Di === undefined) return null;
+            const scrollableRowPosition = scrollableRowPositionOf(cell.row),
+              isPinnedRow = cell.row < pinnedRowCount,
+              isFrozenColumn = cell.col < frozenColumnCount;
+            if (!isPinnedRow && scrollableRowPosition === undefined)
+              return null;
             const left =
                 (rowHeaderWidth +
-                  (Ds
+                  (isFrozenColumn
                     ? columnAxisLayout.offset(
-                        columnVisibilityIndex.viewIndex(Wi.col),
+                        columnVisibilityIndex.viewIndex(cell.col),
                       )
                     : frozenColumnsWidth +
                       scrollableColumnLayout.offset(
-                        columnVisibilityIndex.viewIndex(Wi.col) - yn,
+                        columnVisibilityIndex.viewIndex(cell.col) - yn,
                       ) -
                       columnWindow.logicalOffset)) *
                 zoomScale,
-              yo =
+              topOffset =
                 ((viewDisplayState.isHeadingsVisible ? 22 : 0) +
-                  ($o
-                    ? rowAxisLayout.offset(rowVisibilityIndex.viewIndex(Wi.row))
+                  (isPinnedRow
+                    ? rowAxisLayout.offset(
+                        rowVisibilityIndex.viewIndex(cell.row),
+                      )
                     : frozenRowsHeight +
-                      scrollableRowLayout.offset(Math.max(0, Di)) -
+                      scrollableRowLayout.offset(
+                        Math.max(0, scrollableRowPosition),
+                      ) -
                       rowWindow.logicalOffset)) *
                 zoomScale;
-            return left < -5e3 || yo < -5e3 || left > Xe.width || yo > Xe.height
+            return left < -5e3 ||
+              topOffset < -5e3 ||
+              left > paneSize.width ||
+              topOffset > paneSize.height
               ? null
-              : { left: left, top: yo };
+              : { left: left, top: topOffset };
           },
         }),
       ],

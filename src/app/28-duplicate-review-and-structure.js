@@ -25,66 +25,75 @@ import {
   applyDuplicateReviewPreview,
 } from "./27-validation-and-structural-edits.js";
 
-function DuplicateReviewDialog(e) {
+function DuplicateReviewDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(e.onClose);
-  a.current = e.onClose;
-  const [range, d] = ne.useState(e.range),
-    [keyColumns, l] = ne.useState(qk(e.range)),
-    [c, h] = ne.useState(true),
-    [comparison, p] = ne.useState("raw"),
-    [m, v] = ne.useState(true),
-    [g, b] = ne.useState(false),
-    [blankPolicy, w] = ne.useState("keep"),
-    [outputSheetName, A] = ne.useState("Unique review"),
-    [checked, F] = ne.useState(false),
-    [I, O] = ne.useState(null),
-    [j, z] = ne.useState(""),
-    [V, D] = ne.useState(""),
-    [B, _] = ne.useState(""),
-    [C, T] = ne.useState("all"),
-    [N, R] = ne.useState(0),
-    L = qk(range),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    U = [
+    dialogId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    onCloseRef = ne.useRef(props.onClose);
+  onCloseRef.current = props.onClose;
+  const [range, setRange] = ne.useState(props.range),
+    [keyColumns, setKeyColumns] = ne.useState(qk(props.range)),
+    [headers, setHeaders] = ne.useState(true),
+    [comparison, setComparison] = ne.useState("raw"),
+    [caseSensitive, setCaseSensitive] = ne.useState(true),
+    [trimText, setTrimText] = ne.useState(false),
+    [blankPolicy, setBlankPolicy] = ne.useState("keep"),
+    [outputSheetName, setOutputSheetName] = ne.useState("Unique review"),
+    [checked, setChecked] = ne.useState(false),
+    [preview, setPreview] = ne.useState(null),
+    [previewSourceKey, setPreviewSourceKey] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [failedReviewKey, setFailedReviewKey] = ne.useState(""),
+    [rowFilter, setRowFilter] = ne.useState("all"),
+    [pageIndex, setPageIndex] = ne.useState(0),
+    selectableColumns = qk(range),
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
+    allowedSheetIds = [
       ...new Set(
-        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+        props.allowedSheetIds ?? props.workbook.sheets.map((sheet) => sheet.id),
       ),
     ].sort(),
-    G = {
-      includeHidden: !!e.allowHidden && checked,
-      allowedSheetIds: e.allowedSheetIds,
+    sheetContext = {
+      includeHidden: !!props.allowHidden && checked,
+      allowedSheetIds: props.allowedSheetIds,
     },
-    H =
+    isSourceInContext =
       !!sheet &&
-      U.includes(sheet.id) &&
-      (G.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
-    Q = JSON.stringify([e.sheetId, e.range]),
-    X$1 = JSON.stringify([e.workbook, e.readOnly, U, G.includeHidden, Q]),
-    J =
-      !!I &&
-      !e.readOnly &&
-      I.snapshot === JSON.stringify(e.workbook) &&
-      j === Q &&
-      I.context.includeHidden === G.includeHidden &&
-      JSON.stringify(I.context.allowedSheetIds) === JSON.stringify(U),
-    q = () => {
-      (O(null), D(""), R(0));
+      allowedSheetIds.includes(sheet.id) &&
+      (sheetContext.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
+    sourceKey = JSON.stringify([props.sheetId, props.range]),
+    X$1 = JSON.stringify([
+      props.workbook,
+      props.readOnly,
+      allowedSheetIds,
+      sheetContext.includeHidden,
+      sourceKey,
+    ]),
+    isPreviewCurrent =
+      !!preview &&
+      !props.readOnly &&
+      preview.snapshot === JSON.stringify(props.workbook) &&
+      previewSourceKey === sourceKey &&
+      preview.context.includeHidden === sheetContext.includeHidden &&
+      JSON.stringify(preview.context.allowedSheetIds) ===
+        JSON.stringify(allowedSheetIds),
+    resetPreview = () => {
+      (setPreview(null), setErrorMessage(""), setPageIndex(0));
     },
-    W = (le) => {
-      (_(X$1),
-        D(
-          le instanceof Error
-            ? le.message
+    reportError = (error) => {
+      (setFailedReviewKey(X$1),
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
             : "Duplicate review could not complete the operation.",
         ));
     };
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      o.current?.querySelector('[data-ui-label="Source range"]')?.focus(),
+      dialogRef.current
+        ?.querySelector('[data-ui-label="Source range"]')
+        ?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
@@ -93,59 +102,74 @@ function DuplicateReviewDialog(e) {
   const onClick = () => {
       try {
         const duplicateReviewSheet = createDuplicateReviewSheet(
-          e.workbook,
+          props.workbook,
           {
-            sheetId: e.sheetId,
+            sheetId: props.sheetId,
             range: range,
             keyColumns: keyColumns,
-            headers: c,
+            headers: headers,
             comparison: comparison,
-            caseSensitive: m,
-            trimText: g,
+            caseSensitive: caseSensitive,
+            trimText: trimText,
             blankPolicy: blankPolicy,
             outputSheetName: outputSheetName,
           },
-          { ...G, readOnly: e.readOnly },
+          { ...sheetContext, readOnly: props.readOnly },
         );
-        (O(duplicateReviewSheet), z(Q), D(""), R(0), T("all"));
+        (setPreview(duplicateReviewSheet),
+          setPreviewSourceKey(sourceKey),
+          setErrorMessage(""),
+          setPageIndex(0),
+          setRowFilter("all"));
       } catch (error) {
-        (O(null), W(error));
+        (setPreview(null), reportError(error));
       }
     },
-    te = () => {
-      if (I)
+    applyPreview = () => {
+      if (preview)
         try {
-          if (!J)
+          if (!isPreviewCurrent)
             throw Error(
               "The source selection or preview changed. Preview and review again.",
             );
-          const le = applyDuplicateReviewPreview(e.workbook, I, {
-            ...G,
-            readOnly: e.readOnly,
-          });
-          (e.onWorkbookChange(
-            le,
-            `Create duplicate-reviewed population: ${I.counts.retained} retained, ${I.counts.excluded} excluded`,
+          const updatedWorkbook = applyDuplicateReviewPreview(
+            props.workbook,
+            preview,
+            {
+              ...sheetContext,
+              readOnly: props.readOnly,
+            },
+          );
+          (props.onWorkbookChange(
+            updatedWorkbook,
+            `Create duplicate-reviewed population: ${preview.counts.retained} retained, ${preview.counts.excluded} excluded`,
           ),
-            O(null),
-            D(""));
+            setPreview(null),
+            setErrorMessage(""));
         } catch (error) {
-          W(error);
+          reportError(error);
         }
     },
-    ae =
-      I?.rows.filter(
+    filteredRows =
+      preview?.rows.filter(
         (row) =>
-          C === "all" ||
-          (C === "groups" ? !!row.groupId : row.disposition === C),
+          rowFilter === "all" ||
+          (rowFilter === "groups"
+            ? !!row.groupId
+            : row.disposition === rowFilter),
       ) ?? [],
-    oe = Math.max(1, Math.ceil(ae.length / structuralEditLimits.pageSize)),
-    de = Math.min(N, oe - 1),
-    he = ae.slice(de * 20, de * 20 + 20),
-    Se = (cell, ce) =>
+    pageCount = Math.max(
+      1,
+      Math.ceil(filteredRows.length / structuralEditLimits.pageSize),
+    ),
+    currentPage = Math.min(pageIndex, pageCount - 1),
+    pageRows = filteredRows.slice(currentPage * 20, currentPage * 20 + 20),
+    renderCellDetails = (cell, calculatedValue) =>
       i.jsxs("details", {
         children: [
-          i.jsx("summary", { children: describeCellValueType(ce) }),
+          i.jsx("summary", {
+            children: describeCellValueType(calculatedValue),
+          }),
           i.jsxs("dl", {
             children: [
               i.jsx("dt", {
@@ -176,8 +200,8 @@ function DuplicateReviewDialog(e) {
                   children: JSON.stringify(
                     Object.fromEntries(
                       Object.entries(cell).filter(
-                        ([ge]) =>
-                          !["raw", "literal", "note", "tickmark"].includes(ge),
+                        ([key]) =>
+                          !["raw", "literal", "note", "tickmark"].includes(key),
                       ),
                     ),
                   ),
@@ -190,34 +214,40 @@ function DuplicateReviewDialog(e) {
   return i.jsx("div", {
     className: "dup-backdrop",
     onMouseDown: (event) => {
-      event.target === event.currentTarget && e.onClose();
+      event.target === event.currentTarget && props.onClose();
     },
     children: i.jsxs("section", {
       className: "dup-dialog",
-      ref: o,
+      ref: dialogRef,
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": `${n}-title`,
+      "aria-labelledby": `${dialogId}-title`,
       onKeyDown: (event) => {
-        var ge, se;
+        var lastFocusable, firstFocusable;
         if (
           (event.stopPropagation(),
-          event.key === "Escape" && (event.preventDefault(), a.current()),
+          event.key === "Escape" &&
+            (event.preventDefault(), onCloseRef.current()),
           event.key === "Tab")
         ) {
-          const we = [
-            ...(o.current?.querySelectorAll(
+          const focusableElements = [
+            ...(dialogRef.current?.querySelectorAll(
               "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary",
             ) ?? []),
           ].filter(
-            (Ee) =>
-              !Ee.closest("details:not([open])") || Ee.tagName === "SUMMARY",
+            (element) =>
+              !element.closest("details:not([open])") ||
+              element.tagName === "SUMMARY",
           );
-          event.shiftKey && document.activeElement === we[0]
-            ? (event.preventDefault(), (ge = we.at(-1)) == null || ge.focus())
+          event.shiftKey && document.activeElement === focusableElements[0]
+            ? (event.preventDefault(),
+              (lastFocusable = focusableElements.at(-1)) == null ||
+                lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === we.at(-1) &&
-              (event.preventDefault(), (se = we[0]) == null || se.focus());
+              document.activeElement === focusableElements.at(-1) &&
+              (event.preventDefault(),
+              (firstFocusable = focusableElements[0]) == null ||
+                firstFocusable.focus());
         }
       },
       children: [
@@ -226,7 +256,7 @@ function DuplicateReviewDialog(e) {
             i.jsxs("div", {
               children: [
                 i.jsx("h2", {
-                  id: `${n}-title`,
+                  id: `${dialogId}-title`,
                   children: i.jsx(LocalizedText, {
                     children: "Remove duplicates",
                   }),
@@ -241,7 +271,7 @@ function DuplicateReviewDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close duplicate review"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close duplicate review"),
               "data-ui-label": "Close duplicate review",
               children: i.jsx(X, { size: 18 }),
@@ -261,7 +291,9 @@ function DuplicateReviewDialog(e) {
               children: [
                 i.jsx(LocalizedText, { children: "Source worksheet" }),
                 i.jsx("strong", {
-                  children: H ? sheet.name : "Outside current context",
+                  children: isSourceInContext
+                    ? sheet.name
+                    : "Outside current context",
                 }),
               ],
             }),
@@ -270,11 +302,11 @@ function DuplicateReviewDialog(e) {
                 i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Source range"),
-                  value: H ? range : "",
-                  readOnly: e.readOnly,
+                  value: isSourceInContext ? range : "",
+                  readOnly: props.readOnly,
                   onChange: (event) => {
                     const value = event.target.value;
-                    (d(value), l(qk(value)), q());
+                    (setRange(value), setKeyColumns(qk(value)), resetPreview());
                   },
                   lang: language("Source range"),
                   "data-ui-label": "Source range",
@@ -287,9 +319,9 @@ function DuplicateReviewDialog(e) {
                 i.jsx("input", {
                   "aria-label": text("New worksheet name"),
                   value: outputSheetName,
-                  readOnly: e.readOnly,
+                  readOnly: props.readOnly,
                   onChange: (event) => {
-                    (A(event.target.value), q());
+                    (setOutputSheetName(event.target.value), resetPreview());
                   },
                   lang: language("New worksheet name"),
                   "data-ui-label": "New worksheet name",
@@ -302,9 +334,9 @@ function DuplicateReviewDialog(e) {
                 i.jsxs("select", {
                   "aria-label": text("Comparison basis"),
                   value: comparison,
-                  disabled: e.readOnly,
+                  disabled: props.readOnly,
                   onChange: (event) => {
-                    (p(event.target.value), q());
+                    (setComparison(event.target.value), resetPreview());
                   },
                   lang: language("Comparison basis"),
                   "data-ui-label": "Comparison basis",
@@ -327,9 +359,9 @@ function DuplicateReviewDialog(e) {
                 i.jsxs("select", {
                   "aria-label": text("Blank key policy"),
                   value: blankPolicy,
-                  disabled: e.readOnly,
+                  disabled: props.readOnly,
                   onChange: (event) => {
-                    (w(event.target.value), q());
+                    (setBlankPolicy(event.target.value), resetPreview());
                   },
                   lang: language("Blank key policy"),
                   "data-ui-label": "Blank key policy",
@@ -351,10 +383,10 @@ function DuplicateReviewDialog(e) {
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: c,
-                  disabled: e.readOnly,
+                  checked: headers,
+                  disabled: props.readOnly,
                   onChange: (event) => {
-                    (h(event.target.checked), q());
+                    (setHeaders(event.target.checked), resetPreview());
                   },
                 }),
                 i.jsx(LocalizedText, {
@@ -367,10 +399,10 @@ function DuplicateReviewDialog(e) {
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: m,
-                  disabled: e.readOnly,
+                  checked: caseSensitive,
+                  disabled: props.readOnly,
                   onChange: (event) => {
-                    (v(event.target.checked), q());
+                    (setCaseSensitive(event.target.checked), resetPreview());
                   },
                 }),
                 i.jsx(LocalizedText, { children: "Case-sensitive text" }),
@@ -381,10 +413,10 @@ function DuplicateReviewDialog(e) {
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: g,
-                  disabled: e.readOnly,
+                  checked: trimText,
+                  disabled: props.readOnly,
                   onChange: (event) => {
-                    (b(event.target.checked), q());
+                    (setTrimText(event.target.checked), resetPreview());
                   },
                 }),
                 i.jsx(LocalizedText, {
@@ -392,7 +424,7 @@ function DuplicateReviewDialog(e) {
                 }),
               ],
             }),
-            e.allowHidden &&
+            props.allowHidden &&
               i.jsxs("label", {
                 className: "dup-check",
                 children: [
@@ -400,7 +432,7 @@ function DuplicateReviewDialog(e) {
                     type: "checkbox",
                     checked: checked,
                     onChange: (event) => {
-                      (F(event.target.checked), q());
+                      (setChecked(event.target.checked), resetPreview());
                     },
                   }),
                   i.jsx(LocalizedText, { children: "Include hidden sources" }),
@@ -409,7 +441,7 @@ function DuplicateReviewDialog(e) {
           ],
         }),
         i.jsxs("fieldset", {
-          disabled: e.readOnly || !H,
+          disabled: props.readOnly || !isSourceInContext,
           children: [
             i.jsx("legend", {
               children: i.jsx(LocalizedText, {
@@ -419,31 +451,31 @@ function DuplicateReviewDialog(e) {
             i.jsx("div", {
               className: "dup-keys",
               children:
-                H &&
-                L.map((le) =>
+                isSourceInContext &&
+                selectableColumns.map((columnIndex) =>
                   i.jsxs(
                     "label",
                     {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          "aria-label": `Key column ${columnIndexToLetters(le)}`,
-                          checked: keyColumns.includes(le),
+                          "aria-label": `Key column ${columnIndexToLetters(columnIndex)}`,
+                          checked: keyColumns.includes(columnIndex),
                           onChange: (event) => {
-                            (l(
+                            (setKeyColumns(
                               event.target.checked
-                                ? [...keyColumns, le]
+                                ? [...keyColumns, columnIndex]
                                 : keyColumns.filter(
-                                    (keyColumn) => keyColumn !== le,
+                                    (keyColumn) => keyColumn !== columnIndex,
                                   ),
                             ),
-                              q());
+                              resetPreview());
                           },
                         }),
-                        columnIndexToLetters(le),
+                        columnIndexToLetters(columnIndex),
                       ],
                     },
-                    le,
+                    columnIndex,
                   ),
                 ),
             }),
@@ -455,36 +487,40 @@ function DuplicateReviewDialog(e) {
               "First source row wins. Numbers, text and Booleans remain distinct. Matching rules affect keys only; exported values preserve their original text. Raw formulas compare exactly and become literal text in the derived snapshot. Calculated mode freezes supported scalar results; cell display formats do not determine equality.",
           }),
         }),
-        V &&
-          B === X$1 &&
-          i.jsx("p", { className: "dup-error", role: "alert", children: V }),
+        errorMessage &&
+          failedReviewKey === X$1 &&
+          i.jsx("p", {
+            className: "dup-error",
+            role: "alert",
+            children: errorMessage,
+          }),
         i.jsx("button", {
           className: "dup-primary",
-          disabled: e.readOnly || !H || !keyColumns.length,
+          disabled: props.readOnly || !isSourceInContext || !keyColumns.length,
           onClick: onClick,
           children: i.jsx(LocalizedText, {
             children: "Preview duplicate review",
           }),
         }),
-        I &&
+        preview &&
           i.jsxs("section", {
             className: "dup-preview",
             "aria-label": text("Duplicate review preview"),
             lang: language("Duplicate review preview"),
             "data-ui-label": "Duplicate review preview",
             children: [
-              J
+              isPreviewCurrent
                 ? i.jsxs(i.Fragment, {
                     children: [
                       i.jsxs("h3", {
                         children: [
-                          I.counts.input,
+                          preview.counts.input,
                           " ",
                           i.jsx(LocalizedText, { children: "source rows · " }),
-                          I.counts.retained,
+                          preview.counts.retained,
                           " ",
                           i.jsx(LocalizedText, { children: "retained · " }),
-                          I.counts.excluded,
+                          preview.counts.excluded,
                           " ",
                           i.jsx(LocalizedText, { children: "excluded" }),
                         ],
@@ -492,31 +528,31 @@ function DuplicateReviewDialog(e) {
                       i.jsxs("p", {
                         role: "status",
                         children: [
-                          I.counts.duplicateGroups,
+                          preview.counts.duplicateGroups,
                           " ",
                           i.jsx(LocalizedText, {
                             children: "duplicate groups;",
                           }),
                           " ",
-                          I.counts.blankKeyRows,
+                          preview.counts.blankKeyRows,
                           " ",
                           i.jsx(LocalizedText, {
                             children: "rows with a blank key. New worksheet: ",
                           }),
-                          I.request.outputSheetName,
+                          preview.request.outputSheetName,
                           i.jsx(LocalizedText, {
                             children: ". Unique population:",
                           }),
                           " ",
-                          I.populationRange,
+                          preview.populationRange,
                           ".",
                           " ",
-                          I.excludedRange
-                            ? `Exclusion appendix: ${I.excludedRange}.`
+                          preview.excludedRange
+                            ? `Exclusion appendix: ${preview.excludedRange}.`
                             : "No duplicate rows were found; the derived population still includes source locators.",
                         ],
                       }),
-                      I.request.headers &&
+                      preview.request.headers &&
                         i.jsxs("details", {
                           children: [
                             i.jsx("summary", {
@@ -526,24 +562,29 @@ function DuplicateReviewDialog(e) {
                             }),
                             i.jsx("div", {
                               className: "dup-headers",
-                              children: I.headerCells.map((headerCell, ce) =>
-                                i.jsxs(
-                                  "div",
-                                  {
-                                    children: [
-                                      i.jsx("strong", {
-                                        children: columnIndexToLetters(
-                                          I.request.keyColumns.length
-                                            ? parseRangeAddress(I.request.range)
-                                                .firstCol + ce
-                                            : ce,
+                              children: preview.headerCells.map(
+                                (headerCell, headerIndex) =>
+                                  i.jsxs(
+                                    "div",
+                                    {
+                                      children: [
+                                        i.jsx("strong", {
+                                          children: columnIndexToLetters(
+                                            preview.request.keyColumns.length
+                                              ? parseRangeAddress(
+                                                  preview.request.range,
+                                                ).firstCol + headerIndex
+                                              : headerIndex,
+                                          ),
+                                        }),
+                                        renderCellDetails(
+                                          headerCell,
+                                          headerCell.raw,
                                         ),
-                                      }),
-                                      Se(headerCell, headerCell.raw),
-                                    ],
-                                  },
-                                  ce,
-                                ),
+                                      ],
+                                    },
+                                    headerIndex,
+                                  ),
                               ),
                             }),
                           ],
@@ -553,9 +594,10 @@ function DuplicateReviewDialog(e) {
                           i.jsx(LocalizedText, { children: "Preview view" }),
                           i.jsxs("select", {
                             "aria-label": text("Preview view"),
-                            value: C,
+                            value: rowFilter,
                             onChange: (event) => {
-                              (T(event.target.value), R(0));
+                              (setRowFilter(event.target.value),
+                                setPageIndex(0));
                             },
                             lang: language("Preview view"),
                             "data-ui-label": "Preview view",
@@ -611,13 +653,15 @@ function DuplicateReviewDialog(e) {
                                     Array.from(
                                       {
                                         length:
-                                          parseRangeAddress(I.request.range)
-                                            .lastCol -
-                                          parseRangeAddress(I.request.range)
-                                            .firstCol +
+                                          parseRangeAddress(
+                                            preview.request.range,
+                                          ).lastCol -
+                                          parseRangeAddress(
+                                            preview.request.range,
+                                          ).firstCol +
                                           1,
                                       },
-                                      (le, ce) =>
+                                      (le, columnOffset) =>
                                         i.jsxs(
                                           "th",
                                           {
@@ -628,19 +672,19 @@ function DuplicateReviewDialog(e) {
                                               " ",
                                               columnIndexToLetters(
                                                 parseRangeAddress(
-                                                  I.request.range,
-                                                ).firstCol + ce,
+                                                  preview.request.range,
+                                                ).firstCol + columnOffset,
                                               ),
                                             ],
                                           },
-                                          ce,
+                                          columnOffset,
                                         ),
                                     ),
                                   ],
                                 }),
                               }),
                               i.jsx("tbody", {
-                                children: he.map((le) =>
+                                children: pageRows.map((previewRow) =>
                                   i.jsxs(
                                     "tr",
                                     {
@@ -648,34 +692,35 @@ function DuplicateReviewDialog(e) {
                                         i.jsxs("th", {
                                           scope: "row",
                                           children: [
-                                            le.sourceRow,
+                                            previewRow.sourceRow,
                                             " · ",
-                                            le.sourceRange,
+                                            previewRow.sourceRange,
                                           ],
                                         }),
                                         i.jsxs("td", {
                                           children: [
-                                            le.disposition,
+                                            previewRow.disposition,
                                             " · ",
-                                            le.outputRow,
+                                            previewRow.outputRow,
                                           ],
                                         }),
                                         i.jsxs("td", {
                                           children: [
-                                            le.groupId || "Unique",
+                                            previewRow.groupId || "Unique",
                                             " · ",
-                                            le.firstSourceRow,
+                                            previewRow.firstSourceRow,
                                             " ·",
                                             " ",
-                                            le.groupSize,
+                                            previewRow.groupSize,
                                           ],
                                         }),
                                         i.jsxs("td", {
                                           children: [
                                             i.jsx("code", {
-                                              children: le.normalizedKey,
+                                              children:
+                                                previewRow.normalizedKey,
                                             }),
-                                            le.blankKey &&
+                                            previewRow.blankKey &&
                                               i.jsxs("span", {
                                                 children: [
                                                   " ",
@@ -686,24 +731,28 @@ function DuplicateReviewDialog(e) {
                                               }),
                                           ],
                                         }),
-                                        le.cells.map((cell, ge) =>
-                                          i.jsx(
-                                            "td",
-                                            {
-                                              children: Se(cell, le.values[ge]),
-                                            },
-                                            ge,
-                                          ),
+                                        previewRow.cells.map(
+                                          (cell, cellIndex) =>
+                                            i.jsx(
+                                              "td",
+                                              {
+                                                children: renderCellDetails(
+                                                  cell,
+                                                  previewRow.values[cellIndex],
+                                                ),
+                                              },
+                                              cellIndex,
+                                            ),
                                         ),
                                       ],
                                     },
-                                    le.sourceRow,
+                                    previewRow.sourceRow,
                                   ),
                                 ),
                               }),
                             ],
                           }),
-                          !ae.length &&
+                          !filteredRows.length &&
                             i.jsx("p", {
                               children: i.jsx(LocalizedText, {
                                 children: "No rows in this view.",
@@ -717,8 +766,8 @@ function DuplicateReviewDialog(e) {
                         "data-ui-label": "Duplicate preview pages",
                         children: [
                           i.jsx("button", {
-                            disabled: de === 0,
-                            onClick: () => R(de - 1),
+                            disabled: currentPage === 0,
+                            onClick: () => setPageIndex(currentPage - 1),
                             children: i.jsx(LocalizedText, {
                               children: "Previous page",
                             }),
@@ -727,12 +776,12 @@ function DuplicateReviewDialog(e) {
                             role: "status",
                             children: [
                               i.jsx(LocalizedText, { children: "Page " }),
-                              de + 1,
+                              currentPage + 1,
                               " ",
                               i.jsx(LocalizedText, { children: "of " }),
-                              oe,
+                              pageCount,
                               " · ",
-                              ae.length,
+                              filteredRows.length,
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "rows in this view",
@@ -740,8 +789,8 @@ function DuplicateReviewDialog(e) {
                             ],
                           }),
                           i.jsx("button", {
-                            disabled: de + 1 >= oe,
-                            onClick: () => R(de + 1),
+                            disabled: currentPage + 1 >= pageCount,
+                            onClick: () => setPageIndex(currentPage + 1),
                             children: i.jsx(LocalizedText, {
                               children: "Next page",
                             }),
@@ -761,15 +810,15 @@ function DuplicateReviewDialog(e) {
                 className: "dup-actions",
                 children: [
                   i.jsx("button", {
-                    onClick: () => O(null),
+                    onClick: () => setPreview(null),
                     children: i.jsx(LocalizedText, {
                       children: "Discard preview",
                     }),
                   }),
                   i.jsx("button", {
                     className: "dup-primary",
-                    disabled: e.readOnly || !J,
-                    onClick: te,
+                    disabled: props.readOnly || !isPreviewCurrent,
+                    onClick: applyPreview,
                     children: i.jsx(LocalizedText, {
                       children: "Create reviewed population",
                     }),
@@ -801,7 +850,7 @@ function DuplicateReviewDialog(e) {
         }),
         i.jsx("footer", {
           children: i.jsx("button", {
-            onClick: e.onClose,
+            onClick: props.onClose,
             children: i.jsx(LocalizedText, { children: "Close" }),
           }),
         }),
@@ -810,17 +859,22 @@ function DuplicateReviewDialog(e) {
   });
 }
 const structurePreviewRegistry = new WeakMap(),
-  containsRefError = (e) => /#REF!/i.test(e.replace(/"(?:[^"]|"")*"/g, '""')),
-  formatAxisAddress = (e, r) =>
-    e.axis === "row" ? String(r + 1) : columnIndexToLetters(r);
-function buildStructurePreview(workbook, sheetId, t, n = {}) {
-  if (n.readOnly) throw Error("This workbook is read-only.");
+  containsRefError = (formulaText) =>
+    /#REF!/i.test(formulaText.replace(/"(?:[^"]|"")*"/g, '""')),
+  formatAxisAddress = (edit, axisIndex) =>
+    edit.axis === "row"
+      ? String(axisIndex + 1)
+      : columnIndexToLetters(axisIndex);
+function buildStructurePreview(workbook, sheetId, edit, options = {}) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
   const workbookWithSettings = calculateWorkbookWithSettings(workbook),
-    a = applyStructuralEdit(workbook, sheetId, t),
-    s = calculateWorkbookWithSettings(a);
+    editedWorkbook = applyStructuralEdit(workbook, sheetId, edit),
+    editedValueAt = calculateWorkbookWithSettings(editedWorkbook);
   if (
     workbook.sheets.reduce(
-      (v, g) => v + Object.values(g.cells).filter(isFormulaCellValue).length,
+      (total, worksheet) =>
+        total +
+        Object.values(worksheet.cells).filter(isFormulaCellValue).length,
       0,
     ) > 5e3
   )
@@ -829,12 +883,12 @@ function buildStructurePreview(workbook, sheetId, t, n = {}) {
     );
   const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
     action =
-      t.moveBefore !== undefined
-        ? `Move ${t.count} ${t.axis}${t.count === 1 ? "" : "s"} before ${t.moveBefore === (t.axis === "row" ? sheet.rowCount : sheet.colCount) ? "worksheet end" : formatAxisAddress(t, t.moveBefore)}`
-        : `${t.remove ? "Delete" : "Insert"} ${t.count} ${t.axis}${t.count === 1 ? "" : "s"}`,
-    c = {
+      edit.moveBefore !== undefined
+        ? `Move ${edit.count} ${edit.axis}${edit.count === 1 ? "" : "s"} before ${edit.moveBefore === (edit.axis === "row" ? sheet.rowCount : sheet.colCount) ? "worksheet end" : formatAxisAddress(edit, edit.moveBefore)}`
+        : `${edit.remove ? "Delete" : "Insert"} ${edit.count} ${edit.axis}${edit.count === 1 ? "" : "s"}`,
+    preview = {
       sheetId: sheetId,
-      edit: { ...t },
+      edit: { ...edit },
       snapshot: JSON.stringify(workbook),
       action: action,
       deletedCells: 0,
@@ -845,51 +899,53 @@ function buildStructurePreview(workbook, sheetId, t, n = {}) {
       metadataChanges: [],
     };
   for (const sheet of workbook.sheets) {
-    const g = a.sheets.find((b) => b.id === sheet.id);
+    const editedSheet = editedWorkbook.sheets.find(
+      (entry) => entry.id === sheet.id,
+    );
     for (const [beforeAddress, cell] of Object.entries(sheet.cells)) {
       const address =
         sheet.id === sheetId
-          ? assertInsertionWithinSheet(beforeAddress, t)
+          ? assertInsertionWithinSheet(beforeAddress, edit)
           : beforeAddress;
       if (!address) {
-        c.deletedCells++;
+        preview.deletedCells++;
         continue;
       }
-      address !== beforeAddress && c.movedCells++;
-      const E = g.cells[address];
+      address !== beforeAddress && preview.movedCells++;
+      const editedCell = editedSheet.cells[address];
       isFormulaCellValue(cell) &&
-        (E?.raw !== cell.raw &&
-          c.formulaChanges.push({
+        (editedCell?.raw !== cell.raw &&
+          preview.formulaChanges.push({
             sheetId: sheet.id,
             sheetName: sheet.name,
             beforeAddress: beforeAddress,
             address: address,
             before: String(cell.raw),
-            after: String(E?.raw ?? ""),
+            after: String(editedCell?.raw ?? ""),
           }),
-        s(sheet.id, address) === "#REF!" &&
+        editedValueAt(sheet.id, address) === "#REF!" &&
           workbookWithSettings(sheet.id, beforeAddress) !== "#REF!" &&
-          c.referenceIssues.push({
+          preview.referenceIssues.push({
             kind: "cell",
             sheetName: sheet.name,
             address: address,
             before: String(cell.raw),
-            after: String(E?.raw ?? ""),
+            after: String(editedCell?.raw ?? ""),
           }));
     }
-    for (const b of g.conditionalFormats ?? []) {
-      const y = sheet.conditionalFormats?.find(
-        (conditionalFormat) => conditionalFormat.id === b.id,
+    for (const editedRule of editedSheet.conditionalFormats ?? []) {
+      const beforeRule = sheet.conditionalFormats?.find(
+        (conditionalFormat) => conditionalFormat.id === editedRule.id,
       );
-      b.formula &&
-        containsRefError(b.formula) &&
-        !containsRefError(y?.formula ?? "") &&
-        c.referenceIssues.push({
+      editedRule.formula &&
+        containsRefError(editedRule.formula) &&
+        !containsRefError(beforeRule?.formula ?? "") &&
+        preview.referenceIssues.push({
           kind: "conditional rule",
-          sheetName: g.name,
-          address: b.range,
-          before: y?.formula ?? "",
-          after: b.formula,
+          sheetName: editedSheet.name,
+          address: editedRule.range,
+          before: beforeRule?.formula ?? "",
+          after: editedRule.formula,
         });
     }
     for (const field of [
@@ -909,57 +965,65 @@ function buildStructurePreview(workbook, sheetId, t, n = {}) {
       "pageLayout",
       "outlineGroups",
     ])
-      JSON.stringify(sheet[field]) !== JSON.stringify(g[field]) &&
-        c.metadataChanges.push({ sheetName: sheet.name, field: field });
+      JSON.stringify(sheet[field]) !== JSON.stringify(editedSheet[field]) &&
+        preview.metadataChanges.push({ sheetName: sheet.name, field: field });
   }
-  for (const v of a.definedNames ?? []) {
-    const g = workbook.definedNames?.find(
+  for (const editedName of editedWorkbook.definedNames ?? []) {
+    const beforeName = workbook.definedNames?.find(
       (definedName) =>
-        definedName.name === v.name &&
-        definedName.scopeSheetId === v.scopeSheetId,
+        definedName.name === editedName.name &&
+        definedName.scopeSheetId === editedName.scopeSheetId,
     );
-    containsRefError(v.refersTo) &&
-      !containsRefError(g?.refersTo ?? "") &&
-      c.referenceIssues.push({
+    containsRefError(editedName.refersTo) &&
+      !containsRefError(beforeName?.refersTo ?? "") &&
+      preview.referenceIssues.push({
         kind: "name",
         sheetName:
-          workbook.sheets.find((sheet) => sheet.id === v.scopeSheetId)?.name ??
-          "Workbook",
-        address: v.name,
-        before: g?.refersTo ?? "",
-        after: v.refersTo,
+          workbook.sheets.find((sheet) => sheet.id === editedName.scopeSheetId)
+            ?.name ?? "Workbook",
+        address: editedName.name,
+        before: beforeName?.refersTo ?? "",
+        after: editedName.refersTo,
       });
   }
-  const h = new Map((workbook.rowOrigins ?? []).map((v) => [v.id, v]));
-  if (t.axis === "row")
-    for (const [v, g] of Object.entries(sheet.rowOriginIds ?? {})) {
-      const b = assertInsertionWithinSheet(`A${Number(v) + 1}`, t),
-        afterRow = b ? _t(b).row + 1 : null;
-      if (afterRow === Number(v) + 1) continue;
-      const w = h.get(g);
-      w &&
-        c.originChanges.push({
-          id: g,
-          sourceName: w.sourceName,
-          sourceSheet: w.sourceSheet,
-          originalRow: w.originalRow,
-          beforeRow: Number(v) + 1,
+  const rowOriginsById = new Map(
+    (workbook.rowOrigins ?? []).map((rowOrigin) => [rowOrigin.id, rowOrigin]),
+  );
+  if (edit.axis === "row")
+    for (const [rowKey, originId] of Object.entries(sheet.rowOriginIds ?? {})) {
+      const shiftedAddress = assertInsertionWithinSheet(
+          `A${Number(rowKey) + 1}`,
+          edit,
+        ),
+        afterRow = shiftedAddress ? _t(shiftedAddress).row + 1 : null;
+      if (afterRow === Number(rowKey) + 1) continue;
+      const origin = rowOriginsById.get(originId);
+      origin &&
+        preview.originChanges.push({
+          id: originId,
+          sourceName: origin.sourceName,
+          sourceSheet: origin.sourceSheet,
+          originalRow: origin.originalRow,
+          beforeRow: Number(rowKey) + 1,
           afterRow: afterRow,
         });
     }
-  return (structurePreviewRegistry.set(c, JSON.stringify(c)), c);
+  return (
+    structurePreviewRegistry.set(preview, JSON.stringify(preview)),
+    preview
+  );
 }
-function assertStructurePreviewCurrent(workbook, r, t = {}) {
-  if (t.readOnly) throw Error("This workbook is read-only.");
-  if (structurePreviewRegistry.get(r) !== JSON.stringify(r))
+function assertStructurePreviewCurrent(workbook, preview, options = {}) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
+  if (structurePreviewRegistry.get(preview) !== JSON.stringify(preview))
     throw Error(
       "This structural preview was changed or restored from another session. Create a fresh preview before applying.",
     );
-  if (JSON.stringify(workbook) !== r.snapshot)
+  if (JSON.stringify(workbook) !== preview.snapshot)
     throw Error(
       "The workbook changed after this preview. Refresh the preview before applying.",
     );
-  return applyStructuralEdit(workbook, r.sheetId, r.edit);
+  return applyStructuralEdit(workbook, preview.sheetId, preview.edit);
 }
 function StructureToolDialog({
   workbook,
@@ -973,115 +1037,130 @@ function StructureToolDialog({
   const { text, language } = useWorkbookMessages(),
     axis = mode === "insertRow" ? "row" : "column",
     rangeAddress = parseRangeAddress(range),
-    h = axis === "row" ? workbookLimits.maxRows : workbookLimits.maxCols,
-    [f, p] = ne.useState(
+    axisLimit =
+      axis === "row" ? workbookLimits.maxRows : workbookLimits.maxCols,
+    [startValue, setStartValue] = ne.useState(
       axis === "row"
         ? String(rangeAddress.firstRow + 1)
         : columnIndexToLetters(rangeAddress.firstCol),
     ),
-    [count, v] = ne.useState(1),
-    [g, b] = ne.useState("insert"),
-    [y, w] = ne.useState(""),
-    [E, A] = ne.useState(null),
-    [k, F] = ne.useState(""),
-    [I, O] = ne.useState(0),
-    [j, z] = ne.useState("formulas"),
-    [checked, D] = ne.useState(false),
-    B = ne.useRef(null),
+    [count, setCount] = ne.useState(1),
+    [operation, setOperation] = ne.useState("insert"),
+    [moveDestination, setMoveDestination] = ne.useState(""),
+    [preview, setPreview] = ne.useState(null),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [pageIndex, setPageIndex] = ne.useState(0),
+    [reviewCategory, setReviewCategory] = ne.useState("formulas"),
+    [checked, setChecked] = ne.useState(false),
+    dialogRef = ne.useRef(null),
     sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      B.current?.querySelector("select")?.focus(),
+      dialogRef.current?.querySelector("select")?.focus(),
       () => activeElement?.focus()
     );
   }, []);
-  const C = () => {
-      (A(null), D(false), F(""), O(0));
+  const resetPreview = () => {
+      (setPreview(null),
+        setChecked(false),
+        setErrorMessage(""),
+        setPageIndex(0));
     },
-    T = (G, H = false) => {
-      if (H && G.trim().toLowerCase() === "end") return h;
+    parseIndexInput = (inputText, allowEnd = false) => {
+      if (allowEnd && inputText.trim().toLowerCase() === "end")
+        return axisLimit;
       if (axis === "row") {
-        const Q = Number(G);
-        if (!/^[1-9]\d*$/.test(G.trim()) || !Number.isInteger(Q) || Q > h)
+        const rowNumber = Number(inputText);
+        if (
+          !/^[1-9]\d*$/.test(inputText.trim()) ||
+          !Number.isInteger(rowNumber) ||
+          rowNumber > axisLimit
+        )
           throw Error(
             "Enter an existing row number, or use end for the move destination.",
           );
-        return Q - 1;
+        return rowNumber - 1;
       }
-      if (!/^[a-z]{1,3}$/i.test(G.trim()))
+      if (!/^[a-z]{1,3}$/i.test(inputText.trim()))
         throw Error(
           "Enter a column letter such as A or XFD, or use end for the move destination.",
         );
-      return parseRangeAddress(G.trim().toUpperCase() + "1").firstCol;
+      return parseRangeAddress(inputText.trim().toUpperCase() + "1").firstCol;
     };
   function onClick() {
     try {
-      F("");
+      setErrorMessage("");
       const structurePreview = buildStructurePreview(
         workbook,
         sheetId,
         {
           axis: axis,
-          index: T(f),
+          index: parseIndexInput(startValue),
           count: count,
-          remove: g === "delete",
-          ...(g === "move" ? { moveBefore: T(y, true) } : {}),
+          remove: operation === "delete",
+          ...(operation === "move"
+            ? { moveBefore: parseIndexInput(moveDestination, true) }
+            : {}),
         },
         { readOnly },
       );
-      (A(structurePreview), D(false), O(0));
+      (setPreview(structurePreview), setChecked(false), setPageIndex(0));
     } catch (error) {
-      (F(error.message), A(null));
+      (setErrorMessage(error.message), setPreview(null));
     }
   }
-  function R() {
+  function applyPreview() {
     try {
-      if (!E) throw Error("Create a preview first.");
-      if (L && !checked)
+      if (!preview) throw Error("Create a preview first.");
+      if (requiresConfirmation && !checked)
         throw Error(
           "Confirm the deletion and reference changes before applying.",
         );
-      const G = assertStructurePreviewCurrent(workbook, E, { readOnly });
+      const nextWorkbook = assertStructurePreviewCurrent(workbook, preview, {
+        readOnly,
+      });
       (onWorkbookChange(
-        G,
-        `${E.action}${E.referenceIssues.length ? `; ${E.referenceIssues.length} new reference error(s) — reviewed` : ""}`,
+        nextWorkbook,
+        `${preview.action}${preview.referenceIssues.length ? `; ${preview.referenceIssues.length} new reference error(s) — reviewed` : ""}`,
       ),
         onClose());
     } catch (error) {
-      F(error.message);
+      setErrorMessage(error.message);
     }
   }
-  const L =
-      !!E &&
-      (E.deletedCells > 0 ||
-        E.referenceIssues.length > 0 ||
-        E.originChanges.some((originChange) => originChange.afterRow === null)),
-    $ = E
-      ? j === "errors"
-        ? E.referenceIssues.map((referenceIssue) => ({
+  const requiresConfirmation =
+      !!preview &&
+      (preview.deletedCells > 0 ||
+        preview.referenceIssues.length > 0 ||
+        preview.originChanges.some(
+          (originChange) => originChange.afterRow === null,
+        )),
+    reviewItems = preview
+      ? reviewCategory === "errors"
+        ? preview.referenceIssues.map((referenceIssue) => ({
             key: `${referenceIssue.kind}-${referenceIssue.sheetName}-${referenceIssue.address}`,
             title: `${referenceIssue.kind}: ${referenceIssue.sheetName}!${referenceIssue.address}`,
             detail: `${referenceIssue.before} → ${referenceIssue.after}`,
           }))
-        : j === "origins"
-          ? E.originChanges.map((originChange) => ({
+        : reviewCategory === "origins"
+          ? preview.originChanges.map((originChange) => ({
               key: originChange.id + "-" + originChange.beforeRow,
               title: `Row ${originChange.beforeRow} → ${originChange.afterRow ?? "deleted"}`,
               detail: `${originChange.sourceName} · ${originChange.sourceSheet}, original row ${originChange.originalRow} · ID ${originChange.id}`,
             }))
-          : E.formulaChanges.map((formulaChange) => ({
+          : preview.formulaChanges.map((formulaChange) => ({
               key: formulaChange.sheetId + formulaChange.beforeAddress,
               title: `${formulaChange.sheetName}!${formulaChange.beforeAddress} → ${formulaChange.address}`,
               detail: `${formulaChange.before} → ${formulaChange.after}`,
             }))
       : [];
-  let U = null;
+  let rowOrigin = null;
   try {
-    U = findRowOrigin(
+    rowOrigin = findRowOrigin(
       workbook,
       sheetId,
-      axis === "row" ? T(f) : rangeAddress.firstRow,
+      axis === "row" ? parseIndexInput(startValue) : rangeAddress.firstRow,
     );
   } catch {}
   return i.jsx("div", {
@@ -1091,7 +1170,7 @@ function StructureToolDialog({
     },
     children: i.jsxs("section", {
       className: "st-dialog",
-      ref: B,
+      ref: dialogRef,
       role: "dialog",
       "aria-modal": "true",
       "aria-label": `Insert / Delete / Move ${axis === "row" ? "Rows" : "Columns"}`,
@@ -1100,18 +1179,20 @@ function StructureToolDialog({
           (event.key === "Escape" && (event.stopPropagation(), onClose()),
           event.key === "Tab")
         ) {
-          const Q = Array.from(
-              B.current?.querySelectorAll(
+          const focusable = Array.from(
+              dialogRef.current?.querySelectorAll(
                 "button:not([disabled]),input:not([disabled]),select:not([disabled])",
               ) ?? [],
             ),
-            X = Q[0],
-            J = Q.at(-1);
-          event.shiftKey && document.activeElement === X
-            ? (event.preventDefault(), J == null || J.focus())
+            firstFocusable = focusable[0],
+            lastFocusable = focusable.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === J &&
-              (event.preventDefault(), X == null || X.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -1145,9 +1226,9 @@ function StructureToolDialog({
                     i.jsx(LocalizedText, { children: "Operation" }),
                     i.jsxs("select", {
                       "aria-label": text("Structure operation"),
-                      value: g,
+                      value: operation,
                       onChange: (event) => {
-                        (C(), b(event.target.value));
+                        (resetPreview(), setOperation(event.target.value));
                       },
                       lang: language("Structure operation"),
                       "data-ui-label": "Structure operation",
@@ -1173,9 +1254,9 @@ function StructureToolDialog({
                     axis === "row" ? "First row" : "First column",
                     i.jsx("input", {
                       "aria-label": text("Structure start"),
-                      value: f,
+                      value: startValue,
                       onChange: (event) => {
-                        (C(), p(event.target.value));
+                        (resetPreview(), setStartValue(event.target.value));
                       },
                       lang: language("Structure start"),
                       "data-ui-label": "Structure start",
@@ -1190,8 +1271,8 @@ function StructureToolDialog({
                       min: 1,
                       max: 1e4,
                       value: count,
-                      onValueChange: (G) => {
-                        (C(), v(Number(G)));
+                      onValueChange: (nextValue) => {
+                        (resetPreview(), setCount(Number(nextValue)));
                       },
                       lang: language("Structure count"),
                       "data-ui-label": "Structure count",
@@ -1200,7 +1281,7 @@ function StructureToolDialog({
                 }),
               ],
             }),
-            g === "move" &&
+            operation === "move" &&
               i.jsxs("label", {
                 className: "st-destination",
                 children: [
@@ -1210,10 +1291,10 @@ function StructureToolDialog({
                   i.jsx(LocalizedText, { children: "(original position)" }),
                   i.jsx("input", {
                     "aria-label": text("Structure destination"),
-                    value: y,
+                    value: moveDestination,
                     placeholder: axis === "row" ? "10, or end" : "F, or end",
                     onChange: (event) => {
-                      (C(), w(event.target.value));
+                      (resetPreview(), setMoveDestination(event.target.value));
                     },
                     lang: language("Structure destination"),
                     "data-ui-label": "Structure destination",
@@ -1237,32 +1318,36 @@ function StructureToolDialog({
                   children: i.jsx(LocalizedText, { children: "Source row" }),
                 }),
                 i.jsx("p", {
-                  children: U
-                    ? `${U.sourceName} · ${U.sourceSheet}, original row ${U.originalRow} · ID ${U.id}`
+                  children: rowOrigin
+                    ? `${rowOrigin.sourceName} · ${rowOrigin.sourceSheet}, original row ${rowOrigin.originalRow} · ID ${rowOrigin.id}`
                     : "No source identity is recorded for this row. Inserted and editor-created rows do not acquire a fabricated file origin.",
                 }),
               ],
             }),
-            k &&
-              i.jsx("p", { role: "alert", className: "st-error", children: k }),
-            E &&
+            errorMessage &&
+              i.jsx("p", {
+                role: "alert",
+                className: "st-error",
+                children: errorMessage,
+              }),
+            preview &&
               i.jsxs("section", {
                 "aria-label": text("Structure preview"),
                 lang: language("Structure preview"),
                 "data-ui-label": "Structure preview",
                 children: [
-                  i.jsx("h3", { children: E.action }),
+                  i.jsx("h3", { children: preview.action }),
                   i.jsxs("p", {
                     children: [
-                      E.movedCells,
+                      preview.movedCells,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "stored cells relocate · ",
                       }),
-                      E.deletedCells,
+                      preview.deletedCells,
                       " ",
                       i.jsx(LocalizedText, { children: "cells deleted · " }),
-                      E.formulaChanges.length,
+                      preview.formulaChanges.length,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "formulas rewritten ·",
@@ -1270,7 +1355,7 @@ function StructureToolDialog({
                       " ",
                       i.jsxs("strong", {
                         children: [
-                          E.referenceIssues.length,
+                          preview.referenceIssues.length,
                           " ",
                           i.jsx(LocalizedText, {
                             children: "new reference errors",
@@ -1279,7 +1364,7 @@ function StructureToolDialog({
                       }),
                       " ",
                       "· ",
-                      E.originChanges.length,
+                      preview.originChanges.length,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "source-row associations change.",
@@ -1293,7 +1378,7 @@ function StructureToolDialog({
                           "Original source IDs and original row numbers stay fixed. Deleted-row origins remain in the native source registry.",
                       }),
                       " ",
-                      E.metadataChanges.length,
+                      preview.metadataChanges.length,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "worksheet settings update.",
@@ -1305,9 +1390,10 @@ function StructureToolDialog({
                       i.jsx(LocalizedText, { children: "Review" }),
                       i.jsxs("select", {
                         "aria-label": text("Structure review category"),
-                        value: j,
+                        value: reviewCategory,
                         onChange: (event) => {
-                          (z(event.target.value), O(0));
+                          (setReviewCategory(event.target.value),
+                            setPageIndex(0));
                         },
                         lang: language("Structure review category"),
                         "data-ui-label": "Structure review category",
@@ -1316,7 +1402,7 @@ function StructureToolDialog({
                             value: "formulas",
                             children: [
                               "Rewritten formulas (",
-                              E.formulaChanges.length,
+                              preview.formulaChanges.length,
                               ")",
                             ],
                           }),
@@ -1324,7 +1410,7 @@ function StructureToolDialog({
                             value: "errors",
                             children: [
                               "New reference errors (",
-                              E.referenceIssues.length,
+                              preview.referenceIssues.length,
                               ")",
                             ],
                           }),
@@ -1332,7 +1418,7 @@ function StructureToolDialog({
                             value: "origins",
                             children: [
                               "Source rows (",
-                              E.originChanges.length,
+                              preview.originChanges.length,
                               ")",
                             ],
                           }),
@@ -1343,57 +1429,61 @@ function StructureToolDialog({
                   i.jsx("div", {
                     className: "st-changes",
                     children:
-                      $.length === 0
+                      reviewItems.length === 0
                         ? i.jsx("p", {
                             children: i.jsx(LocalizedText, {
                               children: "No changes in this category.",
                             }),
                           })
-                        : $.slice(I * 25, I * 25 + 25).map((G) =>
-                            i.jsxs(
-                              "article",
-                              {
-                                children: [
-                                  i.jsx("strong", { children: G.title }),
-                                  i.jsx("p", { children: G.detail }),
-                                ],
-                              },
-                              G.key,
+                        : reviewItems
+                            .slice(pageIndex * 25, pageIndex * 25 + 25)
+                            .map((reviewItem) =>
+                              i.jsxs(
+                                "article",
+                                {
+                                  children: [
+                                    i.jsx("strong", {
+                                      children: reviewItem.title,
+                                    }),
+                                    i.jsx("p", { children: reviewItem.detail }),
+                                  ],
+                                },
+                                reviewItem.key,
+                              ),
                             ),
-                          ),
                   }),
-                  $.length > 25 &&
+                  reviewItems.length > 25 &&
                     i.jsxs("nav", {
                       "aria-label": text("Structure review pages"),
                       lang: language("Structure review pages"),
                       "data-ui-label": "Structure review pages",
                       children: [
                         i.jsx("button", {
-                          disabled: I === 0,
-                          onClick: () => O((G) => G - 1),
+                          disabled: pageIndex === 0,
+                          onClick: () => setPageIndex((page) => page - 1),
                           children: i.jsx(LocalizedText, {
                             children: "Previous",
                           }),
                         }),
                         i.jsxs("span", {
                           children: [
-                            I * 25 + 1,
+                            pageIndex * 25 + 1,
                             "–",
-                            Math.min($.length, (I + 1) * 25),
+                            Math.min(reviewItems.length, (pageIndex + 1) * 25),
                             " ",
                             i.jsx(LocalizedText, { children: "of" }),
                             " ",
-                            $.length,
+                            reviewItems.length,
                           ],
                         }),
                         i.jsx("button", {
-                          disabled: (I + 1) * 25 >= $.length,
-                          onClick: () => O((G) => G + 1),
+                          disabled: (pageIndex + 1) * 25 >= reviewItems.length,
+                          onClick: () => setPageIndex((page) => page + 1),
                           children: i.jsx(LocalizedText, { children: "Next" }),
                         }),
                       ],
                     }),
-                  E.metadataChanges.length > 0 &&
+                  preview.metadataChanges.length > 0 &&
                     i.jsxs("details", {
                       children: [
                         i.jsx("summary", {
@@ -1402,35 +1492,36 @@ function StructureToolDialog({
                           }),
                         }),
                         i.jsx("ul", {
-                          children: E.metadataChanges.map((metadataChange) =>
-                            i.jsxs(
-                              "li",
-                              {
-                                children: [
-                                  metadataChange.sheetName,
-                                  ":",
-                                  " ",
-                                  {
-                                    rowHeights: "Row heights",
-                                    columnWidths: "Column widths",
-                                    hiddenRows: "Hidden rows",
-                                    hiddenCols: "Hidden columns",
-                                    frozenRows: "Frozen rows",
-                                    frozenCols: "Frozen columns",
-                                    merges: "Merged cells",
-                                    validations: "Validation rules",
-                                    conditionalFormats: "Conditional formats",
-                                    tables: "Tables",
-                                    pivots: "PivotTables",
-                                    queries: "Saved queries",
-                                    objects: "Pictures, charts and shapes",
-                                    pageLayout: "Print settings",
-                                    outlineGroups: "Outline groups",
-                                  }[metadataChange.field],
-                                ],
-                              },
-                              metadataChange.sheetName + metadataChange.field,
-                            ),
+                          children: preview.metadataChanges.map(
+                            (metadataChange) =>
+                              i.jsxs(
+                                "li",
+                                {
+                                  children: [
+                                    metadataChange.sheetName,
+                                    ":",
+                                    " ",
+                                    {
+                                      rowHeights: "Row heights",
+                                      columnWidths: "Column widths",
+                                      hiddenRows: "Hidden rows",
+                                      hiddenCols: "Hidden columns",
+                                      frozenRows: "Frozen rows",
+                                      frozenCols: "Frozen columns",
+                                      merges: "Merged cells",
+                                      validations: "Validation rules",
+                                      conditionalFormats: "Conditional formats",
+                                      tables: "Tables",
+                                      pivots: "PivotTables",
+                                      queries: "Saved queries",
+                                      objects: "Pictures, charts and shapes",
+                                      pageLayout: "Print settings",
+                                      outlineGroups: "Outline groups",
+                                    }[metadataChange.field],
+                                  ],
+                                },
+                                metadataChange.sheetName + metadataChange.field,
+                              ),
                           ),
                         }),
                       ],
@@ -1449,15 +1540,15 @@ function StructureToolDialog({
         i.jsxs("footer", {
           className: "st-footer",
           children: [
-            E &&
-              L &&
+            preview &&
+              requiresConfirmation &&
               i.jsxs("label", {
                 className: "st-consent",
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
                     checked: checked,
-                    onChange: (event) => D(event.target.checked),
+                    onChange: (event) => setChecked(event.target.checked),
                   }),
                   i.jsx(LocalizedText, {
                     children:
@@ -1474,12 +1565,13 @@ function StructureToolDialog({
                 i.jsx("button", {
                   disabled: readOnly,
                   onClick: onClick,
-                  children: E ? "Refresh preview" : "Preview changes",
+                  children: preview ? "Refresh preview" : "Preview changes",
                 }),
                 i.jsx("button", {
                   className: "st-primary",
-                  disabled: !E || readOnly || (L && !checked),
-                  onClick: R,
+                  disabled:
+                    !preview || readOnly || (requiresConfirmation && !checked),
+                  onClick: applyPreview,
                   children: i.jsx(LocalizedText, { children: "Apply changes" }),
                 }),
               ],

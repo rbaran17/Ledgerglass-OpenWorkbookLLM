@@ -15,131 +15,153 @@ import {
   stringifyEscapedJson,
 } from "./42-combine-populations-and-text-columns.js";
 
-function TextCleanupDialog(e) {
+function TextCleanupDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(false),
-    [sourceRange, d] = ne.useState(e.range),
-    [outputName, l] = ne.useState("Cleaned text"),
-    [checked, h] = ne.useState(false),
-    [steps, p] = ne.useState([
+    dialogId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    isApplied = ne.useRef(false),
+    [sourceRange, setSourceRange] = ne.useState(props.range),
+    [outputName, setOutputName] = ne.useState("Cleaned text"),
+    [checked, setChecked] = ne.useState(false),
+    [steps, setSteps] = ne.useState([
       getTextFunctionSpec("CLEAN"),
       getTextFunctionSpec("TRIM"),
     ]),
-    [m, v] = ne.useState("SUBSTITUTE"),
-    [g, b] = ne.useState(null),
-    [y, w] = ne.useState(""),
-    [E, A] = ne.useState(0),
-    [k, F] = ne.useState(e.workbook.textCleanups?.at(-1)?.id ?? ""),
-    [I, O] = ne.useState(0),
+    [selectedFunctionName, setSelectedFunctionName] = ne.useState("SUBSTITUTE"),
+    [previewState, setPreviewState] = ne.useState(null),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [rowPage, setRowPage] = ne.useState(0),
+    [selectedCleanupId, setSelectedCleanupId] = ne.useState(
+      props.workbook.textCleanups?.at(-1)?.id ?? "",
+    ),
+    [evidencePage, setEvidencePage] = ne.useState(0),
     allowedSheetIds = [
       ...new Set(
-        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+        props.allowedSheetIds ?? props.workbook.sheets.map((sheet) => sheet.id),
       ),
     ].sort(),
-    z = {
-      readOnly: e.readOnly,
-      includeHidden: !!e.allowHidden && checked,
+    cleanupOptions = {
+      readOnly: props.readOnly,
+      includeHidden: !!props.allowHidden && checked,
       allowedSheetIds: allowedSheetIds,
-      allowNewSheet: e.allowNewSheet ?? true,
+      allowNewSheet: props.allowNewSheet ?? true,
     },
-    V = JSON.stringify({
+    requestKey = JSON.stringify({
       sourceRange: sourceRange,
       outputName: outputName,
       steps: steps,
-      options: z,
-      selection: [e.sheetId, e.range],
+      options: cleanupOptions,
+      selection: [props.sheetId, props.range],
     }),
-    D = JSON.stringify(e.workbook),
-    B = g?.key === V && g.plan.snapshot === D ? g.plan : null,
-    _ = ne.useRef({ p: e, key: V, options: z });
-  _.current = { p: e, key: V, options: z };
-  const C = () => {
-    (b(null), w(""), (a.current = false), A(0));
+    workbookSnapshot = JSON.stringify(props.workbook),
+    currentPlan =
+      previewState?.key === requestKey &&
+      previewState.plan.snapshot === workbookSnapshot
+        ? previewState.plan
+        : null,
+    latestInputsRef = ne.useRef({
+      p: props,
+      key: requestKey,
+      options: cleanupOptions,
+    });
+  latestInputsRef.current = {
+    p: props,
+    key: requestKey,
+    options: cleanupOptions,
+  };
+  const clearPreview = () => {
+    (setPreviewState(null),
+      setErrorMessage(""),
+      (isApplied.current = false),
+      setRowPage(0));
   };
   (ne.useEffect(() => {
-    (d(e.range), b(null), w(""), (a.current = false));
-  }, [e.sheetId, e.range]),
+    (setSourceRange(props.range),
+      setPreviewState(null),
+      setErrorMessage(""),
+      (isApplied.current = false));
+  }, [props.sheetId, props.range]),
     ne.useEffect(() => {
       const activeElement = document.activeElement;
       return (
-        o.current?.querySelector("input:not(:disabled),button")?.focus(),
+        dialogRef.current
+          ?.querySelector("input:not(:disabled),button")
+          ?.focus(),
         () => {
           activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []));
-  const T = (H) =>
-      w(
-        H instanceof Error
-          ? H.message
+  const reportError = (failure) =>
+      setErrorMessage(
+        failure instanceof Error
+          ? failure.message
           : "Cleanup failed. Review the source and steps.",
       ),
     onClick = () => {
-      C();
+      clearPreview();
       try {
-        const H = steps.map((step) => ({
+        const cleanupSteps = steps.map((step) => ({
           function: step.name,
           args: step.fields
             .filter((field) => !(field.optional && field.value === ""))
-            .map((X) =>
-              X.kind === "number"
-                ? X.value.trim()
-                  ? Number(X.value)
+            .map((field) =>
+              field.kind === "number"
+                ? field.value.trim()
+                  ? Number(field.value)
                   : NaN
-                : X.kind === "boolean"
-                  ? X.value === "TRUE"
-                  : X.value,
+                : field.kind === "boolean"
+                  ? field.value === "TRUE"
+                  : field.value,
             ),
         }));
-        b({
-          key: V,
+        setPreviewState({
+          key: requestKey,
           plan: previewTextCleanup(
-            e.workbook,
+            props.workbook,
             {
-              sourceSheetId: e.sheetId,
+              sourceSheetId: props.sheetId,
               sourceRange: sourceRange,
               outputName: outputName,
-              steps: H,
+              steps: cleanupSteps,
             },
-            z,
+            cleanupOptions,
           ),
         });
       } catch (error) {
-        T(error);
+        reportError(error);
       }
     },
-    R = () => {
-      if (!(!B || a.current))
+    applyCleanup = () => {
+      if (!(!currentPlan || isApplied.current))
         try {
-          if (_.current.key !== g?.key)
+          if (latestInputsRef.current.key !== previewState?.key)
             throw Error("The cleanup settings changed. Preview again.");
           const textCleanupOutput = createTextCleanupOutput(
-            _.current.p.workbook,
-            B,
-            _.current.options,
+            latestInputsRef.current.p.workbook,
+            currentPlan,
+            latestInputsRef.current.options,
           );
-          ((a.current = true),
-            _.current.p.onWorkbookChange(
+          ((isApplied.current = true),
+            latestInputsRef.current.p.onWorkbookChange(
               textCleanupOutput,
-              `Text cleanup: ${B.sourceSheetName}!${B.request.sourceRange} → ${B.request.outputName}`,
+              `Text cleanup: ${currentPlan.sourceSheetName}!${currentPlan.request.sourceRange} → ${currentPlan.request.outputName}`,
             ),
-            b(null),
-            F(textCleanupOutput.textCleanups.at(-1).id),
-            O(0));
+            setPreviewState(null),
+            setSelectedCleanupId(textCleanupOutput.textCleanups.at(-1).id),
+            setEvidencePage(0));
         } catch (error) {
-          T(error);
+          reportError(error);
         }
     },
-    L = (e.workbook.textCleanups ?? []).filter((H) => {
-      const sheet = e.workbook.sheets.find(
-        (sheet) => sheet.id === H.sourceSheetId,
+    visibleCleanups = (props.workbook.textCleanups ?? []).filter((cleanup) => {
+      const sheet = props.workbook.sheets.find(
+        (sheet) => sheet.id === cleanup.sourceSheetId,
       );
       return (
-        (e.allowedSheetIds === undefined ||
-          allowedSheetIds.includes(H.sourceSheetId)) &&
-        (z.includeHidden ||
+        (props.allowedSheetIds === undefined ||
+          allowedSheetIds.includes(cleanup.sourceSheetId)) &&
+        (cleanupOptions.includeHidden ||
           !sheet ||
           (!sheet.hidden &&
             !sheet.veryHidden &&
@@ -147,50 +169,57 @@ function TextCleanupDialog(e) {
             !cn(sheet, "column").length))
       );
     }),
-    $ = L.find((H) => H.id === k) ?? L.at(-1);
+    selectedCleanup =
+      visibleCleanups.find((cleanup) => cleanup.id === selectedCleanupId) ??
+      visibleCleanups.at(-1);
   return i.jsx("div", {
     className: "ttc-backdrop",
     onMouseDown: (event) => {
-      event.target === event.currentTarget && e.onClose();
+      event.target === event.currentTarget && props.onClose();
     },
     children: i.jsxs("section", {
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": `${n}-title`,
+      "aria-labelledby": `${dialogId}-title`,
       className: "ttc-dialog cleanup-dialog",
-      ref: o,
+      ref: dialogRef,
       onKeyDown: (event) => {
-        var X, J;
+        var lastFocusable, firstFocusable;
         if (
           (event.stopPropagation(),
-          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Escape" && (event.preventDefault(), props.onClose()),
           event.key === "Tab")
         ) {
-          const q = [
-            ...(o.current?.querySelectorAll("button,input,select,summary") ??
-              []),
+          const focusableElements = [
+            ...(dialogRef.current?.querySelectorAll(
+              "button,input,select,summary",
+            ) ?? []),
           ].filter(
-            (W) =>
-              !W.matches(":disabled") &&
-              !W.closest("details:not([open]) > :not(summary)"),
+            (element) =>
+              !element.matches(":disabled") &&
+              !element.closest("details:not([open]) > :not(summary)"),
           );
-          event.shiftKey && document.activeElement === q[0]
-            ? (event.preventDefault(), (X = q.at(-1)) == null || X.focus())
+          event.shiftKey && document.activeElement === focusableElements[0]
+            ? (event.preventDefault(),
+              (lastFocusable = focusableElements.at(-1)) == null ||
+                lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === q.at(-1) &&
-              (event.preventDefault(), (J = q[0]) == null || J.focus());
+              document.activeElement === focusableElements.at(-1) &&
+              (event.preventDefault(),
+              (firstFocusable = focusableElements[0]) == null ||
+                firstFocusable.focus());
         }
       },
       children: [
         i.jsxs("header", {
           children: [
             i.jsx("h2", {
-              id: `${n}-title`,
+              id: `${dialogId}-title`,
               children: i.jsx(LocalizedText, { children: "Clean up text" }),
             }),
             i.jsx("button", {
               "aria-label": text("Close text cleanup"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close text cleanup"),
               "data-ui-label": "Close text cleanup",
               children: i.jsx(X, { size: 18 }),
@@ -205,7 +234,7 @@ function TextCleanupDialog(e) {
         }),
         i.jsxs("fieldset", {
           className: "ttc-fields",
-          disabled: e.readOnly || e.allowNewSheet === false,
+          disabled: props.readOnly || props.allowNewSheet === false,
           children: [
             i.jsx("legend", {
               children: i.jsx(LocalizedText, { children: "Source and output" }),
@@ -217,7 +246,7 @@ function TextCleanupDialog(e) {
                   "aria-label": text("Cleanup source range"),
                   value: sourceRange,
                   onChange: (event) => {
-                    (d(event.target.value), C());
+                    (setSourceRange(event.target.value), clearPreview());
                   },
                   lang: language("Cleanup source range"),
                   "data-ui-label": "Cleanup source range",
@@ -230,12 +259,12 @@ function TextCleanupDialog(e) {
                 i.jsx("input", {
                   value: outputName,
                   onChange: (event) => {
-                    (l(event.target.value), C());
+                    (setOutputName(event.target.value), clearPreview());
                   },
                 }),
               ],
             }),
-            e.allowHidden &&
+            props.allowHidden &&
               i.jsxs("label", {
                 className: "ttc-check",
                 children: [
@@ -243,7 +272,7 @@ function TextCleanupDialog(e) {
                     type: "checkbox",
                     checked: checked,
                     onChange: (event) => {
-                      (h(event.target.checked), C());
+                      (setChecked(event.target.checked), clearPreview());
                     },
                   }),
                   i.jsx(LocalizedText, {
@@ -253,7 +282,7 @@ function TextCleanupDialog(e) {
               }),
           ],
         }),
-        e.readOnly &&
+        props.readOnly &&
           i.jsx("p", {
             role: "status",
             children: i.jsx(LocalizedText, {
@@ -262,20 +291,22 @@ function TextCleanupDialog(e) {
             }),
           }),
         i.jsxs("fieldset", {
-          disabled: e.readOnly || e.allowNewSheet === false,
+          disabled: props.readOnly || props.allowNewSheet === false,
           className: "cleanup-steps",
           children: [
             i.jsx("legend", {
               children: i.jsx(LocalizedText, { children: "Steps in order" }),
             }),
-            steps.map((step, Q) =>
+            steps.map((step, stepIndex) =>
               i.jsxs(
                 "div",
                 {
                   className: "cleanup-step",
                   children: [
-                    i.jsxs("strong", { children: [Q + 1, ". ", step.name] }),
-                    step.fields.map((field, J) =>
+                    i.jsxs("strong", {
+                      children: [stepIndex + 1, ". ", step.name],
+                    }),
+                    step.fields.map((field, fieldIndex) =>
                       i.jsxs(
                         "label",
                         {
@@ -283,17 +314,18 @@ function TextCleanupDialog(e) {
                             field.label,
                             field.kind === "boolean"
                               ? i.jsxs("select", {
-                                  "aria-label": `Step ${Q + 1} ${field.label}`,
+                                  "aria-label": `Step ${stepIndex + 1} ${field.label}`,
                                   value: field.value,
                                   onChange: (event) => {
-                                    (p(
-                                      steps.map((step, K) =>
-                                        K === Q
+                                    (setSteps(
+                                      steps.map((step, candidateStepIndex) =>
+                                        candidateStepIndex === stepIndex
                                           ? {
                                               ...step,
                                               fields: step.fields.map(
-                                                (field, ae) =>
-                                                  ae === J
+                                                (field, candidateFieldIndex) =>
+                                                  candidateFieldIndex ===
+                                                  fieldIndex
                                                     ? {
                                                         ...field,
                                                         value:
@@ -305,7 +337,7 @@ function TextCleanupDialog(e) {
                                           : step,
                                       ),
                                     ),
-                                      C());
+                                      clearPreview());
                                   },
                                   children: [
                                     i.jsx("option", { children: "TRUE" }),
@@ -313,17 +345,18 @@ function TextCleanupDialog(e) {
                                   ],
                                 })
                               : i.jsx("input", {
-                                  "aria-label": `Step ${Q + 1} ${field.label}`,
+                                  "aria-label": `Step ${stepIndex + 1} ${field.label}`,
                                   value: field.value,
                                   onChange: (event) => {
-                                    (p(
-                                      steps.map((step, K) =>
-                                        K === Q
+                                    (setSteps(
+                                      steps.map((step, candidateStepIndex) =>
+                                        candidateStepIndex === stepIndex
                                           ? {
                                               ...step,
                                               fields: step.fields.map(
-                                                (field, ae) =>
-                                                  ae === J
+                                                (field, candidateFieldIndex) =>
+                                                  candidateFieldIndex ===
+                                                  fieldIndex
                                                     ? {
                                                         ...field,
                                                         value:
@@ -335,33 +368,47 @@ function TextCleanupDialog(e) {
                                           : step,
                                       ),
                                     ),
-                                      C());
+                                      clearPreview());
                                   },
                                 }),
                           ],
                         },
-                        J,
+                        fieldIndex,
                       ),
                     ),
                     i.jsx("button", {
-                      "aria-label": `Move step ${Q + 1} up`,
-                      disabled: Q === 0,
+                      "aria-label": `Move step ${stepIndex + 1} up`,
+                      disabled: stepIndex === 0,
                       onClick: () => {
-                        const X = [...steps];
-                        (([X[Q - 1], X[Q]] = [X[Q], X[Q - 1]]), p(X), C());
+                        const reorderedSteps = [...steps];
+                        (([
+                          reorderedSteps[stepIndex - 1],
+                          reorderedSteps[stepIndex],
+                        ] = [
+                          reorderedSteps[stepIndex],
+                          reorderedSteps[stepIndex - 1],
+                        ]),
+                          setSteps(reorderedSteps),
+                          clearPreview());
                       },
                       children: "↑",
                     }),
                     i.jsx("button", {
-                      "aria-label": `Remove step ${Q + 1}`,
+                      "aria-label": `Remove step ${stepIndex + 1}`,
                       onClick: () => {
-                        (p(steps.filter((step, J) => Q !== J)), C());
+                        (setSteps(
+                          steps.filter(
+                            (step, candidateStepIndex) =>
+                              stepIndex !== candidateStepIndex,
+                          ),
+                        ),
+                          clearPreview());
                       },
                       children: i.jsx(LocalizedText, { children: "Remove" }),
                     }),
                   ],
                 },
-                Q,
+                stepIndex,
               ),
             ),
             i.jsxs("div", {
@@ -371,8 +418,9 @@ function TextCleanupDialog(e) {
                   children: [
                     i.jsx(LocalizedText, { children: "Add function" }),
                     i.jsx("select", {
-                      value: m,
-                      onChange: (event) => v(event.target.value),
+                      value: selectedFunctionName,
+                      onChange: (event) =>
+                        setSelectedFunctionName(event.target.value),
                       children: textCleanupFunctionNames.map(
                         (textCleanupFunctionName) =>
                           i.jsx(
@@ -387,13 +435,17 @@ function TextCleanupDialog(e) {
                 i.jsx("button", {
                   disabled: steps.length >= 12,
                   onClick: () => {
-                    (p([...steps, getTextFunctionSpec(m)]), C());
+                    (setSteps([
+                      ...steps,
+                      getTextFunctionSpec(selectedFunctionName),
+                    ]),
+                      clearPreview());
                   },
                   children: i.jsx(LocalizedText, { children: "Add step" }),
                 }),
                 i.jsx("button", {
                   onClick: () => {
-                    (p([
+                    (setSteps([
                       ...steps,
                       {
                         name: "SUBSTITUTE",
@@ -409,7 +461,7 @@ function TextCleanupDialog(e) {
                         ],
                       },
                     ]),
-                      C());
+                      clearPreview());
                   },
                   disabled: steps.length >= 12,
                   children: i.jsx(LocalizedText, {
@@ -429,12 +481,17 @@ function TextCleanupDialog(e) {
         }),
         i.jsx("button", {
           onClick: onClick,
-          disabled: e.readOnly || e.allowNewSheet === false,
+          disabled: props.readOnly || props.allowNewSheet === false,
           children: i.jsx(LocalizedText, { children: "Preview cleanup" }),
         }),
-        y && i.jsx("p", { className: "ttc-error", role: "alert", children: y }),
-        g &&
-          !B &&
+        errorMessage &&
+          i.jsx("p", {
+            className: "ttc-error",
+            role: "alert",
+            children: errorMessage,
+          }),
+        previewState &&
+          !currentPlan &&
           i.jsx("p", {
             role: "status",
             children: i.jsx(LocalizedText, {
@@ -442,7 +499,7 @@ function TextCleanupDialog(e) {
                 "The workbook or settings changed. Preview again before applying.",
             }),
           }),
-        B &&
+        currentPlan &&
           i.jsxs("section", {
             className: "ttc-preview",
             "aria-label": text("Text cleanup preview"),
@@ -451,10 +508,10 @@ function TextCleanupDialog(e) {
             children: [
               i.jsxs("h3", {
                 children: [
-                  B.rows.length,
+                  currentPlan.rows.length,
                   " ",
                   i.jsx(LocalizedText, { children: "results · " }),
-                  B.errors.length,
+                  currentPlan.errors.length,
                   " ",
                   i.jsx(LocalizedText, { children: "errors" }),
                 ],
@@ -462,14 +519,14 @@ function TextCleanupDialog(e) {
               i.jsxs("p", {
                 children: [
                   i.jsx(LocalizedText, { children: "Source revision " }),
-                  e.workbook.revision,
+                  props.workbook.revision,
                   i.jsx(LocalizedText, {
                     children:
                       ". Quoted values expose spaces; nonbreaking spaces appear as \\u00a0.",
                   }),
                 ],
               }),
-              i.jsx("code", { children: B.formulas[0] }),
+              i.jsx("code", { children: currentPlan.formulas[0] }),
               i.jsx("div", {
                 className: "ttc-scroll",
                 children: i.jsxs("table", {
@@ -501,36 +558,43 @@ function TextCleanupDialog(e) {
                       }),
                     }),
                     i.jsx("tbody", {
-                      children: B.rows.slice(E * 20, E * 20 + 20).map((H) =>
-                        i.jsxs(
-                          "tr",
-                          {
-                            children: [
-                              i.jsx("td", { children: H.sourceAddress }),
-                              i.jsx("td", {
-                                children: i.jsx("code", {
-                                  children: stringifyEscapedJson(
-                                    H.original?.raw ?? null,
-                                  ),
+                      children: currentPlan.rows
+                        .slice(rowPage * 20, rowPage * 20 + 20)
+                        .map((previewRow) =>
+                          i.jsxs(
+                            "tr",
+                            {
+                              children: [
+                                i.jsx("td", {
+                                  children: previewRow.sourceAddress,
                                 }),
-                              }),
-                              i.jsx("td", {
-                                children: i.jsx("code", {
-                                  children: stringifyEscapedJson(H.result),
+                                i.jsx("td", {
+                                  children: i.jsx("code", {
+                                    children: stringifyEscapedJson(
+                                      previewRow.original?.raw ?? null,
+                                    ),
+                                  }),
                                 }),
-                              }),
-                              i.jsx("td", {
-                                children:
-                                  B.errors.find(
-                                    (error) =>
-                                      error.sourceAddress === H.sourceAddress,
-                                  )?.error ?? typeof H.result,
-                              }),
-                            ],
-                          },
-                          H.sourceAddress,
+                                i.jsx("td", {
+                                  children: i.jsx("code", {
+                                    children: stringifyEscapedJson(
+                                      previewRow.result,
+                                    ),
+                                  }),
+                                }),
+                                i.jsx("td", {
+                                  children:
+                                    currentPlan.errors.find(
+                                      (error) =>
+                                        error.sourceAddress ===
+                                        previewRow.sourceAddress,
+                                    )?.error ?? typeof previewRow.result,
+                                }),
+                              ],
+                            },
+                            previewRow.sourceAddress,
+                          ),
                         ),
-                      ),
                     }),
                   ],
                 }),
@@ -539,8 +603,8 @@ function TextCleanupDialog(e) {
                 className: "ttc-pages",
                 children: [
                   i.jsx("button", {
-                    disabled: E === 0,
-                    onClick: () => A(E - 1),
+                    disabled: rowPage === 0,
+                    onClick: () => setRowPage(rowPage - 1),
                     children: i.jsx(LocalizedText, {
                       children: "Previous results",
                     }),
@@ -548,22 +612,22 @@ function TextCleanupDialog(e) {
                   i.jsxs("span", {
                     children: [
                       i.jsx(LocalizedText, { children: "Page " }),
-                      E + 1,
+                      rowPage + 1,
                       " ",
                       i.jsx(LocalizedText, { children: "of " }),
-                      Math.ceil(B.rows.length / 20),
+                      Math.ceil(currentPlan.rows.length / 20),
                     ],
                   }),
                   i.jsx("button", {
-                    disabled: (E + 1) * 20 >= B.rows.length,
-                    onClick: () => A(E + 1),
+                    disabled: (rowPage + 1) * 20 >= currentPlan.rows.length,
+                    onClick: () => setRowPage(rowPage + 1),
                     children: i.jsx(LocalizedText, {
                       children: "Next results",
                     }),
                   }),
                 ],
               }),
-              B.errors.length > 0 &&
+              currentPlan.errors.length > 0 &&
                 i.jsx("p", {
                   role: "alert",
                   children: i.jsx(LocalizedText, {
@@ -573,7 +637,7 @@ function TextCleanupDialog(e) {
                 }),
             ],
           }),
-        L.length > 0 &&
+        visibleCleanups.length > 0 &&
           i.jsxs("details", {
             children: [
               i.jsxs("summary", {
@@ -581,7 +645,7 @@ function TextCleanupDialog(e) {
                   i.jsx(LocalizedText, {
                     children: "Saved text cleanup evidence (",
                   }),
-                  L.length,
+                  visibleCleanups.length,
                   ")",
                 ],
               }),
@@ -589,51 +653,54 @@ function TextCleanupDialog(e) {
                 children: [
                   i.jsx(LocalizedText, { children: "Cleanup record" }),
                   i.jsx("select", {
-                    value: $?.id ?? "",
+                    value: selectedCleanup?.id ?? "",
                     onChange: (event) => {
-                      (F(event.target.value), O(0));
+                      (setSelectedCleanupId(event.target.value),
+                        setEvidencePage(0));
                     },
-                    children: L.map((H) =>
+                    children: visibleCleanups.map((cleanup) =>
                       i.jsxs(
                         "option",
                         {
-                          value: H.id,
+                          value: cleanup.id,
                           children: [
-                            H.outputSheetName,
+                            cleanup.outputSheetName,
                             " · source revision ",
-                            H.sourceRevision,
+                            cleanup.sourceRevision,
                             " ·",
                             " ",
-                            H.createdAt,
+                            cleanup.createdAt,
                           ],
                         },
-                        H.id,
+                        cleanup.id,
                       ),
                     ),
                   }),
                 ],
               }),
-              $ &&
+              selectedCleanup &&
                 i.jsxs(i.Fragment, {
                   children: [
                     i.jsxs("p", {
                       children: [
                         i.jsx(LocalizedText, { children: "Source: " }),
-                        $.sourceSheetName,
+                        selectedCleanup.sourceSheetName,
                         " ",
                         i.jsx(LocalizedText, { children: "· workbook" }),
                         " ",
-                        $.workbookId,
+                        selectedCleanup.workbookId,
                         " ",
                         i.jsx(LocalizedText, { children: "· revision " }),
-                        $.sourceRevision,
+                        selectedCleanup.sourceRevision,
                         i.jsx(LocalizedText, {
                           children:
                             ". Addresses and values are snapshots from the cleanup, even if cells later move or are deleted.",
                         }),
                       ],
                     }),
-                    i.jsx("code", { children: stringifyEscapedJson($.steps) }),
+                    i.jsx("code", {
+                      children: stringifyEscapedJson(selectedCleanup.steps),
+                    }),
                     i.jsx("div", {
                       className: "ttc-scroll",
                       children: i.jsxs("table", {
@@ -665,38 +732,40 @@ function TextCleanupDialog(e) {
                             }),
                           }),
                           i.jsx("tbody", {
-                            children: $.rows
-                              .slice(I * 20, I * 20 + 20)
-                              .map((H) =>
+                            children: selectedCleanup.rows
+                              .slice(evidencePage * 20, evidencePage * 20 + 20)
+                              .map((evidenceRow) =>
                                 i.jsxs(
                                   "tr",
                                   {
                                     children: [
                                       i.jsx("td", {
-                                        children: H.sourceAddress,
+                                        children: evidenceRow.sourceAddress,
                                       }),
                                       i.jsx("td", {
                                         children: i.jsx("code", {
                                           children: stringifyEscapedJson(
-                                            H.original ?? { raw: null },
+                                            evidenceRow.original ?? {
+                                              raw: null,
+                                            },
                                           ),
                                         }),
                                       }),
                                       i.jsx("td", {
                                         children: i.jsx("code", {
                                           children: stringifyEscapedJson(
-                                            H.result,
+                                            evidenceRow.result,
                                           ),
                                         }),
                                       }),
                                       i.jsx("td", {
-                                        children: H.origin
-                                          ? `${H.origin.sourceName} · ${H.origin.sourceSheet} · row ${H.origin.originalRow}`
+                                        children: evidenceRow.origin
+                                          ? `${evidenceRow.origin.sourceName} · ${evidenceRow.origin.sourceSheet} · row ${evidenceRow.origin.originalRow}`
                                           : "Editor value snapshot",
                                       }),
                                     ],
                                   },
-                                  H.sourceAddress,
+                                  evidenceRow.sourceAddress,
                                 ),
                               ),
                           }),
@@ -704,15 +773,16 @@ function TextCleanupDialog(e) {
                       }),
                     }),
                     i.jsx("button", {
-                      disabled: I === 0,
-                      onClick: () => O(I - 1),
+                      disabled: evidencePage === 0,
+                      onClick: () => setEvidencePage(evidencePage - 1),
                       children: i.jsx(LocalizedText, {
                         children: "Previous evidence",
                       }),
                     }),
                     i.jsx("button", {
-                      disabled: (I + 1) * 20 >= $.rows.length,
-                      onClick: () => O(I + 1),
+                      disabled:
+                        (evidencePage + 1) * 20 >= selectedCleanup.rows.length,
+                      onClick: () => setEvidencePage(evidencePage + 1),
                       children: i.jsx(LocalizedText, {
                         children: "Next evidence",
                       }),
@@ -731,13 +801,17 @@ function TextCleanupDialog(e) {
         i.jsxs("footer", {
           children: [
             i.jsx("button", {
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(LocalizedText, { children: "Close" }),
             }),
             i.jsx("button", {
               className: "ttc-primary",
-              disabled: !B || !!B.errors.length || e.readOnly || a.current,
-              onClick: R,
+              disabled:
+                !currentPlan ||
+                !!currentPlan.errors.length ||
+                props.readOnly ||
+                isApplied.current,
+              onClick: applyCleanup,
               children: i.jsx(LocalizedText, {
                 children: "Create cleaned worksheet",
               }),
@@ -760,22 +834,27 @@ const textCleanupStepLabels = [
     ["select", "Select and reorder fields"],
     ["pattern", "Infer from examples"],
   ],
-  parseFieldPositions = (e, r = false) => {
-    if (!e.trim() && r) return [];
-    if (!/^\s*\d+(?:\s*,\s*\d+)*\s*$/.test(e))
+  parseFieldPositions = (positionsText, canBeEmpty = false) => {
+    if (!positionsText.trim() && canBeEmpty) return [];
+    if (!/^\s*\d+(?:\s*,\s*\d+)*\s*$/.test(positionsText))
       throw Error("Enter field positions separated by commas, such as 1, 3.");
-    const t = e.split(",").map((n) => Number(n) - 1);
-    if (t.some((n) => n < 0 || n > 49) || new Set(t).size !== t.length)
+    const positions = positionsText
+      .split(",")
+      .map((positionText) => Number(positionText) - 1);
+    if (
+      positions.some((position) => position < 0 || position > 49) ||
+      new Set(positions).size !== positions.length
+    )
       throw Error("Choose distinct field positions from 1 to 50.");
-    return t;
+    return positions;
   };
 function describeSplitFieldStep(step) {
   if (step.kind === "pattern")
     return `Infer “${step.name}”: ${describeInferredTextRule(step.pattern)} (${step.examples.length} examples)`;
   if (step.kind === "split")
     return `Split field ${step.column + 1}: ${step.mode === "fixed" ? "breaks " + step.breaks.join(", ") : "delimiters " + JSON.stringify(step.delimiters) + (step.collapse ? ", collapse consecutive" : "")}`;
-  const r = step.columns.map((column) => column + 1).join(", ");
-  return `${textCleanupStepLabels.find((textCleanupStepLabel) => textCleanupStepLabel[0] === step.kind)?.[1]} · fields ${r}${step.kind === "convert" ? ` → ${step.to} (decimal ${step.decimal}, groups ${step.group || "none"}, dates ${step.dateOrder})` : step.kind === "fill" ? ` → ${step.direction}${step.groupColumns.length ? " within fields " + step.groupColumns.map((groupColumn) => groupColumn + 1).join(", ") : ""}` : step.kind === "concat" ? ` → ${step.name}; separator ${JSON.stringify(step.separator)}` : step.kind === "case" || step.kind === "trim" ? ` → ${step.mode}` : step.kind === "replace" ? ` ${JSON.stringify(step.find)} → ${JSON.stringify(step.replacement)}` : ""}`;
+  const fieldList = step.columns.map((column) => column + 1).join(", ");
+  return `${textCleanupStepLabels.find((textCleanupStepLabel) => textCleanupStepLabel[0] === step.kind)?.[1]} · fields ${fieldList}${step.kind === "convert" ? ` → ${step.to} (decimal ${step.decimal}, groups ${step.group || "none"}, dates ${step.dateOrder})` : step.kind === "fill" ? ` → ${step.direction}${step.groupColumns.length ? " within fields " + step.groupColumns.map((groupColumn) => groupColumn + 1).join(", ") : ""}` : step.kind === "concat" ? ` → ${step.name}; separator ${JSON.stringify(step.separator)}` : step.kind === "case" || step.kind === "trim" ? ` → ${step.mode}` : step.kind === "replace" ? ` ${JSON.stringify(step.find)} → ${JSON.stringify(step.replacement)}` : ""}`;
 }
 
 export {

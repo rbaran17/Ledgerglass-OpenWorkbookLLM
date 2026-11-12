@@ -45,101 +45,120 @@ import {
   describeWorkbookError,
 } from "./46-workbook-manager.js";
 
-function PasteSpecialDialog(e) {
+function PasteSpecialDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(e);
-  a.current = e;
-  const s = ne.useRef({
-      workbookId: e.workbook.id,
-      revision: e.workbook.revision,
-      sheetId: e.sheetId,
-      range: e.range,
-      clipboard: e.clipboard,
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    propsRef = ne.useRef(props);
+  propsRef.current = props;
+  const openedSnapshotRef = ne.useRef({
+      workbookId: props.workbook.id,
+      revision: props.workbook.revision,
+      sheetId: props.sheetId,
+      range: props.range,
+      clipboard: props.clipboard,
     }),
-    sheetOrThrow = findSheetOrThrow(e.workbook, e.sheetId),
-    rangeAddress = parseRangeAddress(e.range),
-    l = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
-    [c, h] = ne.useState(""),
-    [mode, p] = ne.useState("all"),
-    [operation, v] = ne.useState("none"),
-    [g, b] = ne.useState(false),
-    [y, w] = ne.useState(false),
-    [E, A] = ne.useState("series"),
-    [k, F] = ne.useState("down"),
-    [I, O] = ne.useState(
+    sheetOrThrow = findSheetOrThrow(props.workbook, props.sheetId),
+    rangeAddress = parseRangeAddress(props.range),
+    anchorAddress = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
+    [actionError, setActionError] = ne.useState(""),
+    [mode, setMode] = ne.useState("all"),
+    [operation, setOperation] = ne.useState("none"),
+    [transpose, setTranspose] = ne.useState(false),
+    [skipBlanks, setSkipBlanks] = ne.useState(false),
+    [fillMode, setFillMode] = ne.useState("series"),
+    [fillDirection, setFillDirection] = ne.useState("down"),
+    [seriesAxis, setSeriesAxis] = ne.useState(
       rangeAddress.firstRow === rangeAddress.lastRow ? "rows" : "columns",
     ),
-    [j, z] = ne.useState(false),
-    [V, D] = ne.useState("number"),
-    [B, _] = ne.useState(""),
-    [C, T] = ne.useState("1"),
-    [N, R] = ne.useState(""),
-    [dateUnit, $] = ne.useState("day"),
-    [monthPolicy, G] = ne.useState("preserveDay"),
-    [H, Q] = ne.useState("row"),
-    [X$1, J] = ne.useState(0),
-    [q, W] = ne.useState(0),
-    [expectedSnapshot] = ne.useState(() => buildSnapshotGuard(e.workbook)),
-    [te, ae] = ne.useState(() => String(defaultRowHeightOf(sheetOrThrow))),
-    [oe, de] = ne.useState(() => String(defaultColumnWidthOf(sheetOrThrow))),
-    [he, Se] = ne.useState(false),
-    [le, ce] = ne.useState(false),
-    ge = Object.keys(sheetOrThrow.rowHeights ?? {}).length,
-    se = Object.keys(sheetOrThrow.columnWidths ?? {}).length,
-    we = e.readOnly || !!sheetOrThrow.protection?.enabled,
-    Ee =
-      (e.mode === "viewSettings" &&
-        JSON.stringify(e.workbook) !== expectedSnapshot.snapshotGuard) ||
-      s.current.workbookId !== e.workbook.id ||
-      s.current.revision !== e.workbook.revision ||
-      s.current.sheetId !== e.sheetId ||
-      s.current.range !== e.range ||
-      (e.mode === "pasteSpecial" && s.current.clipboard !== e.clipboard),
-    Ae =
-      "The workbook changed or the selection moved. Close this dialog and reopen it to review the current cells.",
-    ye = ne.useMemo(
-      () => calculateWorkbookWithSettings(e.workbook),
-      [e.workbook],
+    [isBackward, setIsBackward] = ne.useState(false),
+    [seriesKind, setSeriesKind] = ne.useState("number"),
+    [startText, setStartText] = ne.useState(""),
+    [stepText, setStepText] = ne.useState("1"),
+    [stopText, setStopText] = ne.useState(""),
+    [dateUnit, setDateUnit] = ne.useState("day"),
+    [monthPolicy, setMonthPolicy] = ne.useState("preserveDay"),
+    [viewAxis, setViewAxis] = ne.useState("row"),
+    [X$1, setHiddenPage] = ne.useState(0),
+    [previewPage, setPreviewPage] = ne.useState(0),
+    [expectedSnapshot] = ne.useState(() => buildSnapshotGuard(props.workbook)),
+    [defaultRowHeightText, setDefaultRowHeightText] = ne.useState(() =>
+      String(defaultRowHeightOf(sheetOrThrow)),
     ),
-    Te = ne.useMemo(() => {
-      if (e.mode === "viewSettings") return { plan: null, error: "" };
+    [defaultColumnWidthText, setDefaultColumnWidthText] = ne.useState(() =>
+      String(defaultColumnWidthOf(sheetOrThrow)),
+    ),
+    [resetRowOverrides, setResetRowOverrides] = ne.useState(false),
+    [resetColumnOverrides, setResetColumnOverrides] = ne.useState(false),
+    customRowHeightCount = Object.keys(sheetOrThrow.rowHeights ?? {}).length,
+    customColumnWidthCount = Object.keys(
+      sheetOrThrow.columnWidths ?? {},
+    ).length,
+    isReadOnly = props.readOnly || !!sheetOrThrow.protection?.enabled,
+    isStale =
+      (props.mode === "viewSettings" &&
+        JSON.stringify(props.workbook) !== expectedSnapshot.snapshotGuard) ||
+      openedSnapshotRef.current.workbookId !== props.workbook.id ||
+      openedSnapshotRef.current.revision !== props.workbook.revision ||
+      openedSnapshotRef.current.sheetId !== props.sheetId ||
+      openedSnapshotRef.current.range !== props.range ||
+      (props.mode === "pasteSpecial" &&
+        openedSnapshotRef.current.clipboard !== props.clipboard),
+    staleMessage =
+      "The workbook changed or the selection moved. Close this dialog and reopen it to review the current cells.",
+    calculatedWorkbook = ne.useMemo(
+      () => calculateWorkbookWithSettings(props.workbook),
+      [props.workbook],
+    ),
+    previewResult = ne.useMemo(() => {
+      if (props.mode === "viewSettings") return { plan: null, error: "" };
       try {
-        if (Ee) throw new Error(Ae);
-        if (e.mode === "pasteSpecial")
-          return e.clipboard
+        if (isStale) throw new Error(staleMessage);
+        if (props.mode === "pasteSpecial")
+          return props.clipboard
             ? {
                 plan: buildPastePreview(
-                  e.workbook,
-                  e.sheetId,
-                  e.range,
-                  e.clipboard,
+                  props.workbook,
+                  props.sheetId,
+                  props.range,
+                  props.clipboard,
                   {
                     mode: mode,
                     operation: operation,
-                    transpose: g,
-                    skipBlanks: y,
+                    transpose: transpose,
+                    skipBlanks: skipBlanks,
                   },
                 ),
                 error: "",
               }
             : { plan: null, error: "" };
-        if (E === "copy")
+        if (fillMode === "copy")
           return {
-            plan: buildFillPreview(e.workbook, e.sheetId, e.range, k),
+            plan: buildFillPreview(
+              props.workbook,
+              props.sheetId,
+              props.range,
+              fillDirection,
+            ),
             error: "",
           };
-        if (!C.trim()) throw new Error("Enter a step value.");
-        const Ze = (lt) => (V === "date" ? lt : Number(lt));
+        if (!stepText.trim()) throw new Error("Enter a step value.");
+        const toSeriesValue = (inputText) =>
+          seriesKind === "date" ? inputText : Number(inputText);
         return {
-          plan: buildSeriesPreview(e.workbook, e.sheetId, e.range, {
-            kind: V,
+          plan: buildSeriesPreview(props.workbook, props.sheetId, props.range, {
+            kind: seriesKind,
             direction:
-              I === "rows" ? (j ? "left" : "right") : j ? "up" : "down",
-            ...(B.trim() ? { start: Ze(B) } : {}),
-            step: Number(C),
-            ...(N.trim() ? { stop: Ze(N) } : {}),
+              seriesAxis === "rows"
+                ? isBackward
+                  ? "left"
+                  : "right"
+                : isBackward
+                  ? "up"
+                  : "down",
+            ...(startText.trim() ? { start: toSeriesValue(startText) } : {}),
+            step: Number(stepText),
+            ...(stopText.trim() ? { stop: toSeriesValue(stopText) } : {}),
             dateUnit: dateUnit,
             monthPolicy: monthPolicy,
           }),
@@ -149,39 +168,44 @@ function PasteSpecialDialog(e) {
         return { plan: null, error: describeWorkbookError(error) };
       }
     }, [
-      e.mode,
-      e.workbook,
-      e.sheetId,
-      e.range,
-      e.clipboard,
-      Ee,
+      props.mode,
+      props.workbook,
+      props.sheetId,
+      props.range,
+      props.clipboard,
+      isStale,
       mode,
       operation,
-      g,
-      y,
-      E,
-      k,
-      I,
-      j,
-      V,
-      B,
-      C,
-      N,
+      transpose,
+      skipBlanks,
+      fillMode,
+      fillDirection,
+      seriesAxis,
+      isBackward,
+      seriesKind,
+      startText,
+      stepText,
+      stopText,
       dateUnit,
       monthPolicy,
     ]),
-    Pe =
-      e.mode === "viewSettings" ? readHiddenAxisIntervals(sheetOrThrow, H) : [],
-    qe = Math.max(1, Math.ceil(Pe.length / 20)),
-    ht = Math.max(1, Math.ceil((Te.plan?.previewPatches.length ?? 0) / 12)),
-    Re = Math.min(q, ht - 1);
+    hiddenIntervals =
+      props.mode === "viewSettings"
+        ? readHiddenAxisIntervals(sheetOrThrow, viewAxis)
+        : [],
+    hiddenPageCount = Math.max(1, Math.ceil(hiddenIntervals.length / 20)),
+    previewPageCount = Math.max(
+      1,
+      Math.ceil((previewResult.plan?.previewPatches.length ?? 0) / 12),
+    ),
+    clampedPreviewPage = Math.min(previewPage, previewPageCount - 1);
   (ne.useEffect(() => {
-    W(0);
-  }, [Te.plan]),
+    setPreviewPage(0);
+  }, [previewResult.plan]),
     ne.useEffect(() => {
       const activeElement = document.activeElement;
       return (
-        o.current
+        dialogRef.current
           ?.querySelector("button:not(:disabled),input:not(:disabled)")
           ?.focus(),
         () => {
@@ -189,120 +213,133 @@ function PasteSpecialDialog(e) {
         }
       );
     }, []));
-  function Me() {
-    const Ze = a.current,
-      lt = s.current;
+  function assertCanApply() {
+    const currentProps = propsRef.current,
+      openedSnapshot = openedSnapshotRef.current;
     if (
-      Ze.readOnly ||
-      findSheetOrThrow(Ze.workbook, Ze.sheetId).protection?.enabled
+      currentProps.readOnly ||
+      findSheetOrThrow(currentProps.workbook, currentProps.sheetId).protection
+        ?.enabled
     )
       throw new Error("This worksheet is read-only.");
     if (
-      Ze.workbook.id !== lt.workbookId ||
-      (Ze.mode === "viewSettings" &&
-        JSON.stringify(Ze.workbook) !== expectedSnapshot.snapshotGuard) ||
-      Ze.workbook.revision !== lt.revision ||
-      Ze.sheetId !== lt.sheetId ||
-      Ze.range !== lt.range ||
-      (Ze.mode === "pasteSpecial" && Ze.clipboard !== lt.clipboard)
+      currentProps.workbook.id !== openedSnapshot.workbookId ||
+      (currentProps.mode === "viewSettings" &&
+        JSON.stringify(currentProps.workbook) !==
+          expectedSnapshot.snapshotGuard) ||
+      currentProps.workbook.revision !== openedSnapshot.revision ||
+      currentProps.sheetId !== openedSnapshot.sheetId ||
+      currentProps.range !== openedSnapshot.range ||
+      (currentProps.mode === "pasteSpecial" &&
+        currentProps.clipboard !== openedSnapshot.clipboard)
     )
-      throw new Error(Ae);
+      throw new Error(staleMessage);
   }
-  function ke(Ze, lt, be) {
-    var ft;
+  function applyChange(buildNextWorkbook, changeLabel, selectionRange) {
+    var currentProps;
     try {
-      (h(""), Me());
-      const Fe = Ze();
-      (JSON.stringify(Fe) !== JSON.stringify(a.current.workbook) &&
-        a.current.onWorkbookChange(Fe, lt),
-        be && (ft = a.current).onSelectionChange?.call(ft, be),
-        a.current.onClose());
+      (setActionError(""), assertCanApply());
+      const nextWorkbook = buildNextWorkbook();
+      (JSON.stringify(nextWorkbook) !==
+        JSON.stringify(propsRef.current.workbook) &&
+        propsRef.current.onWorkbookChange(nextWorkbook, changeLabel),
+        selectionRange &&
+          (currentProps = propsRef.current).onSelectionChange?.call(
+            currentProps,
+            selectionRange,
+          ),
+        propsRef.current.onClose());
     } catch (error) {
-      h(describeWorkbookError(error));
+      setActionError(describeWorkbookError(error));
     }
   }
   function onClick() {
-    const plan = Te.plan;
+    const plan = previewResult.plan;
     if (!plan) {
-      h(
-        Te.error ||
+      setActionError(
+        previewResult.error ||
           "Choose a valid source and target before applying this change.",
       );
       return;
     }
     "sourceRange" in plan
-      ? ke(
+      ? applyChange(
           () =>
-            applyCellPreview(a.current.workbook, plan, {
-              readOnly: a.current.readOnly,
+            applyCellPreview(propsRef.current.workbook, plan, {
+              readOnly: propsRef.current.readOnly,
             }),
           "Paste Special",
           plan.targetRange,
         )
-      : ke(
+      : applyChange(
           () =>
-            applyCellPreview(a.current.workbook, plan, {
-              readOnly: a.current.readOnly,
+            applyCellPreview(propsRef.current.workbook, plan, {
+              readOnly: propsRef.current.readOnly,
             }),
-          E === "series" ? "Fill series" : `Fill ${k}`,
+          fillMode === "series" ? "Fill series" : `Fill ${fillDirection}`,
           plan.targetRange,
         );
   }
-  const $e = (Ze, lt) =>
-      H === "row"
-        ? `Rows ${Ze + 1}${lt === Ze ? "" : `–${lt + 1}`}`
-        : `Columns ${columnIndexToLetters(Ze)}${lt === Ze ? "" : `–${columnIndexToLetters(lt)}`}`,
-    Je =
-      e.mode === "pasteSpecial"
+  const formatAxisRange = (startIndex, endIndex) =>
+      viewAxis === "row"
+        ? `Rows ${startIndex + 1}${endIndex === startIndex ? "" : `–${endIndex + 1}`}`
+        : `Columns ${columnIndexToLetters(startIndex)}${endIndex === startIndex ? "" : `–${columnIndexToLetters(endIndex)}`}`,
+    dialogTitle =
+      props.mode === "pasteSpecial"
         ? "Paste Special"
-        : e.mode === "fillSeries"
+        : props.mode === "fillSeries"
           ? "Fill Series"
           : "Worksheet View",
-    ze =
-      e.mode === "pasteSpecial"
+    dialogIcon =
+      props.mode === "pasteSpecial"
         ? Clipboard
-        : e.mode === "fillSeries"
+        : props.mode === "fillSeries"
           ? Rows3
           : Grid2x2;
   return i.jsx("div", {
     className: "et-backdrop",
     children: i.jsxs("section", {
-      ref: o,
+      ref: dialogRef,
       className: "et-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": n,
+      "aria-labelledby": titleId,
       tabIndex: -1,
       onKeyDown: (event) => {
         if (
           (event.stopPropagation(),
           event.key === "Escape" &&
-            (event.preventDefault(), a.current.onClose()),
+            (event.preventDefault(), propsRef.current.onClose()),
           event.key === "Tab")
         ) {
-          const be = Array.from(
-              o.current?.querySelectorAll(
+          const focusables = Array.from(
+              dialogRef.current?.querySelectorAll(
                 'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
               ) ?? [],
             ),
-            ft = be[0],
-            pt = be.at(-1);
-          event.shiftKey && document.activeElement === ft
-            ? (event.preventDefault(), pt == null || pt.focus())
+            firstFocusable = focusables[0],
+            lastFocusable = focusables.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === pt &&
-              (event.preventDefault(), ft == null || ft.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
         i.jsxs("header", {
           className: "et-header",
           children: [
-            i.jsxs("h2", { id: n, children: [i.jsx(ze, { size: 19 }), Je] }),
+            i.jsxs("h2", {
+              id: titleId,
+              children: [i.jsx(dialogIcon, { size: 19 }), dialogTitle],
+            }),
             i.jsx("button", {
               type: "button",
               "aria-label": text("Close editing tools"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close editing tools"),
               "data-ui-label": "Close editing tools",
               children: i.jsx(X, { size: 18 }),
@@ -318,11 +355,11 @@ function PasteSpecialDialog(e) {
                 i.jsx(LocalizedText, { children: "Selection" }),
                 " ",
                 i.jsxs("strong", {
-                  children: [sheetOrThrow.name, "!", e.range],
+                  children: [sheetOrThrow.name, "!", props.range],
                 }),
               ],
             }),
-            we &&
+            isReadOnly &&
               i.jsx("p", {
                 className: "et-warning",
                 children: i.jsx(LocalizedText, {
@@ -330,29 +367,29 @@ function PasteSpecialDialog(e) {
                     "This worksheet is read-only. You can review the options.",
                 }),
               }),
-            Ee &&
+            isStale &&
               i.jsx("p", {
                 className: "et-warning",
                 role: "alert",
-                children: Ae,
+                children: staleMessage,
               }),
-            e.mode === "pasteSpecial" &&
+            props.mode === "pasteSpecial" &&
               i.jsxs(i.Fragment, {
                 children: [
-                  e.clipboard
+                  props.clipboard
                     ? i.jsxs("p", {
                         className: "et-source",
                         children: [
                           i.jsx(LocalizedText, { children: "Copied cells " }),
                           i.jsx("strong", {
-                            children: e.clipboard.sourceRange,
+                            children: props.clipboard.sourceRange,
                           }),
                           " ·",
                           " ",
-                          e.clipboard.rowCount,
+                          props.clipboard.rowCount,
                           " ",
                           i.jsx(LocalizedText, { children: "rows × " }),
-                          e.clipboard.colCount,
+                          props.clipboard.colCount,
                           " ",
                           i.jsx(LocalizedText, { children: "columns" }),
                         ],
@@ -364,7 +401,7 @@ function PasteSpecialDialog(e) {
                         }),
                       }),
                   i.jsxs("fieldset", {
-                    disabled: we || Ee || !e.clipboard,
+                    disabled: isReadOnly || isStale || !props.clipboard,
                     children: [
                       i.jsx("legend", {
                         children: i.jsx(LocalizedText, { children: "Paste" }),
@@ -380,7 +417,7 @@ function PasteSpecialDialog(e) {
                             "Formulas and cell contents",
                           ],
                           ["formats", "Formats", "Formatting only"],
-                        ].map(([Ze, lt, be]) =>
+                        ].map(([optionValue, optionLabel, optionDescription]) =>
                           i.jsxs(
                             "label",
                             {
@@ -388,26 +425,28 @@ function PasteSpecialDialog(e) {
                               children: [
                                 i.jsx("input", {
                                   type: "radio",
-                                  name: `${n}-paste`,
-                                  checked: mode === Ze,
-                                  onChange: () => p(Ze),
+                                  name: `${titleId}-paste`,
+                                  checked: mode === optionValue,
+                                  onChange: () => setMode(optionValue),
                                 }),
                                 i.jsxs("span", {
                                   children: [
-                                    lt,
-                                    i.jsx("small", { children: be }),
+                                    optionLabel,
+                                    i.jsx("small", {
+                                      children: optionDescription,
+                                    }),
                                   ],
                                 }),
                               ],
                             },
-                            Ze,
+                            optionValue,
                           ),
                         ),
                       }),
                     ],
                   }),
                   i.jsxs("fieldset", {
-                    disabled: we || Ee || !e.clipboard,
+                    disabled: isReadOnly || isStale || !props.clipboard,
                     children: [
                       i.jsx("legend", {
                         children: i.jsx(LocalizedText, {
@@ -422,21 +461,22 @@ function PasteSpecialDialog(e) {
                           "subtract",
                           "multiply",
                           "divide",
-                        ].map((Ze) =>
+                        ].map((operationName) =>
                           i.jsxs(
                             "label",
                             {
                               children: [
                                 i.jsx("input", {
                                   type: "radio",
-                                  name: `${n}-operation`,
-                                  checked: operation === Ze,
-                                  onChange: () => v(Ze),
+                                  name: `${titleId}-operation`,
+                                  checked: operation === operationName,
+                                  onChange: () => setOperation(operationName),
                                 }),
-                                Ze[0].toUpperCase() + Ze.slice(1),
+                                operationName[0].toUpperCase() +
+                                  operationName.slice(1),
                               ],
                             },
-                            Ze,
+                            operationName,
                           ),
                         ),
                       }),
@@ -447,8 +487,9 @@ function PasteSpecialDialog(e) {
                             children: [
                               i.jsx("input", {
                                 type: "checkbox",
-                                checked: y,
-                                onChange: (event) => w(event.target.checked),
+                                checked: skipBlanks,
+                                onChange: (event) =>
+                                  setSkipBlanks(event.target.checked),
                               }),
                               i.jsx(LocalizedText, { children: "Skip blanks" }),
                             ],
@@ -457,8 +498,9 @@ function PasteSpecialDialog(e) {
                             children: [
                               i.jsx("input", {
                                 type: "checkbox",
-                                checked: g,
-                                onChange: (event) => b(event.target.checked),
+                                checked: transpose,
+                                onChange: (event) =>
+                                  setTranspose(event.target.checked),
                               }),
                               i.jsx(LocalizedText, { children: "Transpose" }),
                             ],
@@ -469,7 +511,7 @@ function PasteSpecialDialog(e) {
                   }),
                 ],
               }),
-            e.mode === "fillSeries" &&
+            props.mode === "fillSeries" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("div", {
@@ -484,15 +526,15 @@ function PasteSpecialDialog(e) {
                       )
                         return;
                       event.preventDefault();
-                      const lt =
+                      const nextTab =
                         event.key === "Home"
                           ? "series"
-                          : event.key === "End" || E === "series"
+                          : event.key === "End" || fillMode === "series"
                             ? "copy"
                             : "series";
-                      (A(lt),
+                      (setFillMode(nextTab),
                         event.currentTarget
-                          .querySelector(`[data-fill-tab="${lt}"]`)
+                          .querySelector(`[data-fill-tab="${nextTab}"]`)
                           ?.focus());
                     },
                     lang: language("Fill options"),
@@ -501,23 +543,23 @@ function PasteSpecialDialog(e) {
                       i.jsx("button", {
                         type: "button",
                         role: "tab",
-                        id: `${n}-series`,
+                        id: `${titleId}-series`,
                         "data-fill-tab": "series",
-                        "aria-controls": `${n}-fill-panel`,
-                        tabIndex: E === "series" ? 0 : -1,
-                        "aria-selected": E === "series",
-                        onClick: () => A("series"),
+                        "aria-controls": `${titleId}-fill-panel`,
+                        tabIndex: fillMode === "series" ? 0 : -1,
+                        "aria-selected": fillMode === "series",
+                        onClick: () => setFillMode("series"),
                         children: i.jsx(LocalizedText, { children: "Series" }),
                       }),
                       i.jsx("button", {
                         type: "button",
                         role: "tab",
-                        id: `${n}-copy`,
+                        id: `${titleId}-copy`,
                         "data-fill-tab": "copy",
-                        "aria-controls": `${n}-fill-panel`,
-                        tabIndex: E === "copy" ? 0 : -1,
-                        "aria-selected": E === "copy",
-                        onClick: () => A("copy"),
+                        "aria-controls": `${titleId}-fill-panel`,
+                        tabIndex: fillMode === "copy" ? 0 : -1,
+                        "aria-selected": fillMode === "copy",
+                        onClick: () => setFillMode("copy"),
                         children: i.jsx(LocalizedText, {
                           children: "Copy cells",
                         }),
@@ -526,12 +568,12 @@ function PasteSpecialDialog(e) {
                   }),
                   i.jsx("div", {
                     role: "tabpanel",
-                    id: `${n}-fill-panel`,
-                    "aria-labelledby": `${n}-${E}`,
+                    id: `${titleId}-fill-panel`,
+                    "aria-labelledby": `${titleId}-${fillMode}`,
                     children:
-                      E === "copy"
+                      fillMode === "copy"
                         ? i.jsxs("fieldset", {
-                            disabled: we || Ee,
+                            disabled: isReadOnly || isStale,
                             children: [
                               i.jsx("legend", {
                                 children: i.jsx(LocalizedText, {
@@ -547,8 +589,8 @@ function PasteSpecialDialog(e) {
                                       "button",
                                       {
                                         type: "button",
-                                        "aria-pressed": k === value,
-                                        onClick: () => F(value),
+                                        "aria-pressed": fillDirection === value,
+                                        onClick: () => setFillDirection(value),
                                         children: [
                                           i.jsx(icon, { size: 18 }),
                                           label,
@@ -568,7 +610,7 @@ function PasteSpecialDialog(e) {
                             ],
                           })
                         : i.jsxs("fieldset", {
-                            disabled: we || Ee,
+                            disabled: isReadOnly || isStale,
                             children: [
                               i.jsx("legend", {
                                 children: i.jsx(LocalizedText, {
@@ -585,9 +627,9 @@ function PasteSpecialDialog(e) {
                                       }),
                                       i.jsxs("select", {
                                         "aria-label": text("Series in"),
-                                        value: I,
+                                        value: seriesAxis,
                                         onChange: (event) =>
-                                          O(event.target.value),
+                                          setSeriesAxis(event.target.value),
                                         lang: language("Series in"),
                                         "data-ui-label": "Series in",
                                         children: [
@@ -610,9 +652,13 @@ function PasteSpecialDialog(e) {
                                       }),
                                       i.jsxs("select", {
                                         "aria-label": text("Series order"),
-                                        value: j ? "backward" : "forward",
+                                        value: isBackward
+                                          ? "backward"
+                                          : "forward",
                                         onChange: (event) =>
-                                          z(event.target.value === "backward"),
+                                          setIsBackward(
+                                            event.target.value === "backward",
+                                          ),
                                         lang: language("Series order"),
                                         "data-ui-label": "Series order",
                                         children: [
@@ -620,7 +666,9 @@ function PasteSpecialDialog(e) {
                                             value: "forward",
                                             children: [
                                               "Forward (",
-                                              I === "rows" ? "right" : "down",
+                                              seriesAxis === "rows"
+                                                ? "right"
+                                                : "down",
                                               ")",
                                             ],
                                           }),
@@ -628,7 +676,9 @@ function PasteSpecialDialog(e) {
                                             value: "backward",
                                             children: [
                                               "Backward (",
-                                              I === "rows" ? "left" : "up",
+                                              seriesAxis === "rows"
+                                                ? "left"
+                                                : "up",
                                               ")",
                                             ],
                                           }),
@@ -643,9 +693,11 @@ function PasteSpecialDialog(e) {
                                       }),
                                       i.jsxs("select", {
                                         "aria-label": text("Series type"),
-                                        value: V,
+                                        value: seriesKind,
                                         onChange: (event) => {
-                                          (D(event.target.value), _(""), R(""));
+                                          (setSeriesKind(event.target.value),
+                                            setStartText(""),
+                                            setStopText(""));
                                         },
                                         lang: language("Series type"),
                                         "data-ui-label": "Series type",
@@ -669,12 +721,15 @@ function PasteSpecialDialog(e) {
                                       }),
                                       i.jsx("input", {
                                         "aria-label": text("Start value"),
-                                        type: V === "date" ? "date" : "number",
+                                        type:
+                                          seriesKind === "date"
+                                            ? "date"
+                                            : "number",
                                         step: "any",
-                                        value: B,
+                                        value: startText,
                                         placeholder: text("Use first cell"),
                                         onChange: (event) =>
-                                          _(event.target.value),
+                                          setStartText(event.target.value),
                                         lang: language("Start value"),
                                         "data-ui-label": "Start value",
                                       }),
@@ -687,9 +742,11 @@ function PasteSpecialDialog(e) {
                                       }),
                                       i.jsx(LocalizedNumberField, {
                                         "aria-label": text("Step value"),
-                                        step: V === "date" ? "1" : "any",
-                                        value: C,
-                                        onValueChange: (Ze) => T(Ze),
+                                        step:
+                                          seriesKind === "date" ? "1" : "any",
+                                        value: stepText,
+                                        onValueChange: (stepValue) =>
+                                          setStepText(stepValue),
                                         lang: language("Step value"),
                                         "data-ui-label": "Step value",
                                       }),
@@ -702,11 +759,14 @@ function PasteSpecialDialog(e) {
                                       }),
                                       i.jsx("input", {
                                         "aria-label": text("Stop value"),
-                                        type: V === "date" ? "date" : "number",
+                                        type:
+                                          seriesKind === "date"
+                                            ? "date"
+                                            : "number",
                                         step: "any",
-                                        value: N,
+                                        value: stopText,
                                         onChange: (event) =>
-                                          R(event.target.value),
+                                          setStopText(event.target.value),
                                         lang: language("Stop value"),
                                         "data-ui-label": "Stop value",
                                       }),
@@ -714,7 +774,7 @@ function PasteSpecialDialog(e) {
                                   }),
                                 ],
                               }),
-                              V === "date" &&
+                              seriesKind === "date" &&
                                 i.jsxs("div", {
                                   className: "et-fields",
                                   children: [
@@ -727,7 +787,7 @@ function PasteSpecialDialog(e) {
                                           "aria-label": text("Date unit"),
                                           value: dateUnit,
                                           onChange: (event) =>
-                                            $(event.target.value),
+                                            setDateUnit(event.target.value),
                                           lang: language("Date unit"),
                                           "data-ui-label": "Date unit",
                                           children: [
@@ -762,7 +822,9 @@ function PasteSpecialDialog(e) {
                                             "aria-label": text("Month dates"),
                                             value: monthPolicy,
                                             onChange: (event) =>
-                                              G(event.target.value),
+                                              setMonthPolicy(
+                                                event.target.value,
+                                              ),
                                             lang: language("Month dates"),
                                             "data-ui-label": "Month dates",
                                             children: [
@@ -793,11 +855,11 @@ function PasteSpecialDialog(e) {
                   }),
                 ],
               }),
-            e.mode === "viewSettings" &&
+            props.mode === "viewSettings" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("fieldset", {
-                    disabled: we || Ee,
+                    disabled: isReadOnly || isStale,
                     children: [
                       i.jsx("legend", {
                         children: i.jsx(LocalizedText, {
@@ -824,8 +886,9 @@ function PasteSpecialDialog(e) {
                                 min: minRowHeight,
                                 max: maxRowHeight,
                                 step: "any",
-                                value: te,
-                                onValueChange: (Ze) => ae(Ze),
+                                value: defaultRowHeightText,
+                                onValueChange: (nextRowHeight) =>
+                                  setDefaultRowHeightText(nextRowHeight),
                               }),
                             ],
                           }),
@@ -839,8 +902,9 @@ function PasteSpecialDialog(e) {
                                 min: minColumnWidth,
                                 max: maxColumnWidth,
                                 step: "any",
-                                value: oe,
-                                onValueChange: (Ze) => de(Ze),
+                                value: defaultColumnWidthText,
+                                onValueChange: (nextColumnWidth) =>
+                                  setDefaultColumnWidthText(nextColumnWidth),
                               }),
                             ],
                           }),
@@ -851,11 +915,12 @@ function PasteSpecialDialog(e) {
                         children: [
                           i.jsx("input", {
                             type: "checkbox",
-                            checked: he,
-                            onChange: (event) => Se(event.target.checked),
+                            checked: resetRowOverrides,
+                            onChange: (event) =>
+                              setResetRowOverrides(event.target.checked),
                           }),
                           i.jsx(LocalizedText, { children: "Reset " }),
-                          ge.toLocaleString(),
+                          customRowHeightCount.toLocaleString(),
                           " ",
                           i.jsx(LocalizedText, {
                             children: "individual row heights to the default",
@@ -867,11 +932,12 @@ function PasteSpecialDialog(e) {
                         children: [
                           i.jsx("input", {
                             type: "checkbox",
-                            checked: le,
-                            onChange: (event) => ce(event.target.checked),
+                            checked: resetColumnOverrides,
+                            onChange: (event) =>
+                              setResetColumnOverrides(event.target.checked),
                           }),
                           i.jsx(LocalizedText, { children: "Reset " }),
-                          se.toLocaleString(),
+                          customColumnWidthCount.toLocaleString(),
                           " ",
                           i.jsx(LocalizedText, {
                             children: "individual column widths to the default",
@@ -887,17 +953,20 @@ function PasteSpecialDialog(e) {
                           i.jsxs("p", {
                             children: [
                               (
-                                sheetOrThrow.rowCount - (he ? 0 : ge)
+                                sheetOrThrow.rowCount -
+                                (resetRowOverrides ? 0 : customRowHeightCount)
                               ).toLocaleString(),
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "rows inherit ",
                               }),
-                              te || "—",
+                              defaultRowHeightText || "—",
                               " ",
                               i.jsx(LocalizedText, { children: "px;" }),
                               " ",
-                              he ? 0 : ge.toLocaleString(),
+                              resetRowOverrides
+                                ? 0
+                                : customRowHeightCount.toLocaleString(),
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "individual heights remain.",
@@ -907,17 +976,22 @@ function PasteSpecialDialog(e) {
                           i.jsxs("p", {
                             children: [
                               (
-                                sheetOrThrow.colCount - (le ? 0 : se)
+                                sheetOrThrow.colCount -
+                                (resetColumnOverrides
+                                  ? 0
+                                  : customColumnWidthCount)
                               ).toLocaleString(),
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "columns inherit ",
                               }),
-                              oe || "—",
+                              defaultColumnWidthText || "—",
                               " ",
                               i.jsx(LocalizedText, { children: "px;" }),
                               " ",
-                              le ? 0 : se.toLocaleString(),
+                              resetColumnOverrides
+                                ? 0
+                                : customColumnWidthCount.toLocaleString(),
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "individual widths remain.",
@@ -936,19 +1010,19 @@ function PasteSpecialDialog(e) {
                       i.jsx("button", {
                         type: "button",
                         onClick: () =>
-                          ke(
+                          applyChange(
                             () =>
                               applySheetSizeEdits(
-                                a.current.workbook,
-                                a.current.sheetId,
+                                propsRef.current.workbook,
+                                propsRef.current.sheetId,
                                 {
-                                  rowHeight: Number(te),
-                                  columnWidth: Number(oe),
-                                  resetRowOverrides: he,
-                                  resetColumnOverrides: le,
+                                  rowHeight: Number(defaultRowHeightText),
+                                  columnWidth: Number(defaultColumnWidthText),
+                                  resetRowOverrides: resetRowOverrides,
+                                  resetColumnOverrides: resetColumnOverrides,
                                 },
                                 {
-                                  readOnly: a.current.readOnly,
+                                  readOnly: propsRef.current.readOnly,
                                   expectedSnapshot: expectedSnapshot,
                                 },
                               ),
@@ -961,7 +1035,7 @@ function PasteSpecialDialog(e) {
                     ],
                   }),
                   i.jsxs("fieldset", {
-                    disabled: we || Ee,
+                    disabled: isReadOnly || isStale,
                     children: [
                       i.jsx("legend", {
                         children: i.jsx(LocalizedText, {
@@ -990,42 +1064,49 @@ function PasteSpecialDialog(e) {
                       i.jsxs("div", {
                         className: "et-freeze-grid",
                         children: [
-                          ["horizontal", "vertical", "both"].map((Ze) =>
-                            i.jsx(
-                              "button",
-                              {
-                                type: "button",
-                                onClick: () =>
-                                  ke(
-                                    () =>
-                                      setSplitPanes(e.workbook, e.sheetId, {
-                                        row: rangeAddress.firstRow,
-                                        col: rangeAddress.firstCol,
-                                        ...(Ze !== "vertical"
-                                          ? { horizontal: 50 }
-                                          : {}),
-                                        ...(Ze !== "horizontal"
-                                          ? { vertical: 50 }
-                                          : {}),
-                                      }),
-                                    `Split worksheet ${Ze}`,
-                                  ),
-                                children:
-                                  Ze === "horizontal"
-                                    ? "Split top and bottom"
-                                    : Ze === "vertical"
-                                      ? "Split left and right"
-                                      : "Split into four panes",
-                              },
-                              Ze,
-                            ),
+                          ["horizontal", "vertical", "both"].map(
+                            (splitOrientation) =>
+                              i.jsx(
+                                "button",
+                                {
+                                  type: "button",
+                                  onClick: () =>
+                                    applyChange(
+                                      () =>
+                                        setSplitPanes(
+                                          props.workbook,
+                                          props.sheetId,
+                                          {
+                                            row: rangeAddress.firstRow,
+                                            col: rangeAddress.firstCol,
+                                            ...(splitOrientation !== "vertical"
+                                              ? { horizontal: 50 }
+                                              : {}),
+                                            ...(splitOrientation !==
+                                            "horizontal"
+                                              ? { vertical: 50 }
+                                              : {}),
+                                          },
+                                        ),
+                                      `Split worksheet ${splitOrientation}`,
+                                    ),
+                                  children:
+                                    splitOrientation === "horizontal"
+                                      ? "Split top and bottom"
+                                      : splitOrientation === "vertical"
+                                        ? "Split left and right"
+                                        : "Split into four panes",
+                                },
+                                splitOrientation,
+                              ),
                           ),
                           i.jsx("button", {
                             type: "button",
                             disabled: !sheetOrThrow.splitPanes,
                             onClick: () =>
-                              ke(
-                                () => setSplitPanes(e.workbook, e.sheetId),
+                              applyChange(
+                                () =>
+                                  setSplitPanes(props.workbook, props.sheetId),
                                 "Remove split panes",
                               ),
                             children: i.jsx(LocalizedText, {
@@ -1050,7 +1131,7 @@ function PasteSpecialDialog(e) {
                     ],
                   }),
                   i.jsxs("fieldset", {
-                    disabled: we || Ee,
+                    disabled: isReadOnly || isStale,
                     children: [
                       i.jsx("legend", {
                         children: i.jsx(LocalizedText, {
@@ -1070,26 +1151,31 @@ function PasteSpecialDialog(e) {
                           i.jsxs("button", {
                             type: "button",
                             onClick: () =>
-                              ke(
+                              applyChange(
                                 () =>
                                   setFreezePanesAtCell(
-                                    e.workbook,
-                                    e.sheetId,
-                                    l,
+                                    props.workbook,
+                                    props.sheetId,
+                                    anchorAddress,
                                   ),
-                                `Freeze panes at ${l}`,
+                                `Freeze panes at ${anchorAddress}`,
                               ),
                             children: [
                               i.jsx(LocalizedText, { children: "Freeze at " }),
-                              l,
+                              anchorAddress,
                             ],
                           }),
                           i.jsx("button", {
                             type: "button",
                             onClick: () =>
-                              ke(
+                              applyChange(
                                 () =>
-                                  setFreezePanes(e.workbook, e.sheetId, 1, 0),
+                                  setFreezePanes(
+                                    props.workbook,
+                                    props.sheetId,
+                                    1,
+                                    0,
+                                  ),
                                 "Freeze top row",
                               ),
                             children: i.jsx(LocalizedText, {
@@ -1099,9 +1185,14 @@ function PasteSpecialDialog(e) {
                           i.jsx("button", {
                             type: "button",
                             onClick: () =>
-                              ke(
+                              applyChange(
                                 () =>
-                                  setFreezePanes(e.workbook, e.sheetId, 0, 1),
+                                  setFreezePanes(
+                                    props.workbook,
+                                    props.sheetId,
+                                    0,
+                                    1,
+                                  ),
                                 "Freeze first column",
                               ),
                             children: i.jsx(LocalizedText, {
@@ -1111,9 +1202,14 @@ function PasteSpecialDialog(e) {
                           i.jsx("button", {
                             type: "button",
                             onClick: () =>
-                              ke(
+                              applyChange(
                                 () =>
-                                  setFreezePanes(e.workbook, e.sheetId, 0, 0),
+                                  setFreezePanes(
+                                    props.workbook,
+                                    props.sheetId,
+                                    0,
+                                    0,
+                                  ),
                                 "Unfreeze panes",
                               ),
                             disabled:
@@ -1143,7 +1239,7 @@ function PasteSpecialDialog(e) {
                     ],
                   }),
                   i.jsxs("fieldset", {
-                    disabled: we || Ee,
+                    disabled: isReadOnly || isStale,
                     children: [
                       i.jsx("legend", {
                         children: i.jsx(LocalizedText, {
@@ -1156,11 +1252,11 @@ function PasteSpecialDialog(e) {
                           i.jsx("button", {
                             type: "button",
                             onClick: () =>
-                              ke(
+                              applyChange(
                                 () =>
                                   setHiddenAxisRange(
-                                    e.workbook,
-                                    e.sheetId,
+                                    props.workbook,
+                                    props.sheetId,
                                     "row",
                                     rangeAddress.firstRow,
                                     rangeAddress.lastRow,
@@ -1175,11 +1271,11 @@ function PasteSpecialDialog(e) {
                           i.jsx("button", {
                             type: "button",
                             onClick: () =>
-                              ke(
+                              applyChange(
                                 () =>
                                   setHiddenAxisRange(
-                                    e.workbook,
-                                    e.sheetId,
+                                    props.workbook,
+                                    props.sheetId,
                                     "column",
                                     rangeAddress.firstCol,
                                     rangeAddress.lastCol,
@@ -1211,9 +1307,10 @@ function PasteSpecialDialog(e) {
                           }),
                           i.jsxs("select", {
                             "aria-label": text("Hidden items"),
-                            value: H,
+                            value: viewAxis,
                             onChange: (event) => {
-                              (Q(event.target.value), J(0));
+                              (setViewAxis(event.target.value),
+                                setHiddenPage(0));
                             },
                             lang: language("Hidden items"),
                             "data-ui-label": "Hidden items",
@@ -1230,56 +1327,61 @@ function PasteSpecialDialog(e) {
                           }),
                         ],
                       }),
-                      Pe.length
+                      hiddenIntervals.length
                         ? i.jsxs(i.Fragment, {
                             children: [
                               i.jsx("ul", {
-                                children: Pe.slice(
-                                  X$1 * 20,
-                                  (X$1 + 1) * 20,
-                                ).map((Ze) =>
-                                  i.jsxs(
-                                    "li",
-                                    {
-                                      children: [
-                                        i.jsx("span", {
-                                          children: $e(Ze.start, Ze.end),
-                                        }),
-                                        i.jsx("button", {
-                                          type: "button",
-                                          "aria-label": `Unhide ${$e(Ze.start, Ze.end).toLowerCase()}`,
-                                          disabled: we || Ee,
-                                          onClick: () =>
-                                            ke(
-                                              () =>
-                                                setHiddenAxisRange(
-                                                  e.workbook,
-                                                  e.sheetId,
-                                                  H,
-                                                  Ze.start,
-                                                  Ze.end,
-                                                  false,
-                                                ),
-                                              `Unhide ${H === "row" ? "rows" : "columns"}`,
+                                children: hiddenIntervals
+                                  .slice(X$1 * 20, (X$1 + 1) * 20)
+                                  .map((hiddenInterval) =>
+                                    i.jsxs(
+                                      "li",
+                                      {
+                                        children: [
+                                          i.jsx("span", {
+                                            children: formatAxisRange(
+                                              hiddenInterval.start,
+                                              hiddenInterval.end,
                                             ),
-                                          children: i.jsx(LocalizedText, {
-                                            children: "Unhide",
                                           }),
-                                        }),
-                                      ],
-                                    },
-                                    `${Ze.start}-${Ze.end}`,
+                                          i.jsx("button", {
+                                            type: "button",
+                                            "aria-label": `Unhide ${formatAxisRange(hiddenInterval.start, hiddenInterval.end).toLowerCase()}`,
+                                            disabled: isReadOnly || isStale,
+                                            onClick: () =>
+                                              applyChange(
+                                                () =>
+                                                  setHiddenAxisRange(
+                                                    props.workbook,
+                                                    props.sheetId,
+                                                    viewAxis,
+                                                    hiddenInterval.start,
+                                                    hiddenInterval.end,
+                                                    false,
+                                                  ),
+                                                `Unhide ${viewAxis === "row" ? "rows" : "columns"}`,
+                                              ),
+                                            children: i.jsx(LocalizedText, {
+                                              children: "Unhide",
+                                            }),
+                                          }),
+                                        ],
+                                      },
+                                      `${hiddenInterval.start}-${hiddenInterval.end}`,
+                                    ),
                                   ),
-                                ),
                               }),
-                              qe > 1 &&
+                              hiddenPageCount > 1 &&
                                 i.jsxs("div", {
                                   className: "et-pagination",
                                   children: [
                                     i.jsx("button", {
                                       type: "button",
                                       disabled: !X$1,
-                                      onClick: () => J((Ze) => Ze - 1),
+                                      onClick: () =>
+                                        setHiddenPage(
+                                          (currentPage) => currentPage - 1,
+                                        ),
                                       children: i.jsx(LocalizedText, {
                                         children: "Previous hidden items",
                                       }),
@@ -1294,13 +1396,16 @@ function PasteSpecialDialog(e) {
                                         i.jsx(LocalizedText, {
                                           children: "of ",
                                         }),
-                                        qe,
+                                        hiddenPageCount,
                                       ],
                                     }),
                                     i.jsx("button", {
                                       type: "button",
-                                      disabled: X$1 + 1 >= qe,
-                                      onClick: () => J((Ze) => Ze + 1),
+                                      disabled: X$1 + 1 >= hiddenPageCount,
+                                      onClick: () =>
+                                        setHiddenPage(
+                                          (currentPage) => currentPage + 1,
+                                        ),
                                       children: i.jsx(LocalizedText, {
                                         children: "Next hidden items",
                                       }),
@@ -1310,17 +1415,22 @@ function PasteSpecialDialog(e) {
                               i.jsxs("button", {
                                 type: "button",
                                 className: "et-unhide-all",
-                                disabled: we || Ee,
+                                disabled: isReadOnly || isStale,
                                 onClick: () =>
-                                  ke(
-                                    () => yQ(e.workbook, e.sheetId, H),
-                                    `Unhide all ${H === "row" ? "rows" : "columns"}`,
+                                  applyChange(
+                                    () =>
+                                      yQ(
+                                        props.workbook,
+                                        props.sheetId,
+                                        viewAxis,
+                                      ),
+                                    `Unhide all ${viewAxis === "row" ? "rows" : "columns"}`,
                                   ),
                                 children: [
                                   i.jsx(LocalizedText, {
                                     children: "Unhide all ",
                                   }),
-                                  H === "row" ? "rows" : "columns",
+                                  viewAxis === "row" ? "rows" : "columns",
                                 ],
                               }),
                             ],
@@ -1329,7 +1439,7 @@ function PasteSpecialDialog(e) {
                             className: "et-muted",
                             children: [
                               i.jsx(LocalizedText, { children: "No " }),
-                              H === "row" ? "rows" : "columns",
+                              viewAxis === "row" ? "rows" : "columns",
                               " ",
                               i.jsx(LocalizedText, { children: "are hidden." }),
                             ],
@@ -1338,7 +1448,7 @@ function PasteSpecialDialog(e) {
                   }),
                 ],
               }),
-            Te.plan &&
+            previewResult.plan &&
               i.jsxs("section", {
                 className: "et-preview",
                 "aria-label": text("Change preview"),
@@ -1351,7 +1461,7 @@ function PasteSpecialDialog(e) {
                       " ",
                       i.jsxs("span", {
                         children: [
-                          Te.plan.count.toLocaleString(),
+                          previewResult.plan.count.toLocaleString(),
                           " ",
                           i.jsx(LocalizedText, { children: "cells to change" }),
                         ],
@@ -1359,9 +1469,13 @@ function PasteSpecialDialog(e) {
                     ],
                   }),
                   i.jsxs("p", {
-                    children: [sheetOrThrow.name, "!", Te.plan.targetRange],
+                    children: [
+                      sheetOrThrow.name,
+                      "!",
+                      previewResult.plan.targetRange,
+                    ],
                   }),
-                  Te.plan.dependentCount > 0 &&
+                  previewResult.plan.dependentCount > 0 &&
                     i.jsxs("p", {
                       className: "et-muted",
                       children: [
@@ -1369,7 +1483,7 @@ function PasteSpecialDialog(e) {
                           children: "This operation also updates",
                         }),
                         " ",
-                        Te.plan.dependentCount.toLocaleString(),
+                        previewResult.plan.dependentCount.toLocaleString(),
                         " ",
                         i.jsx(LocalizedText, {
                           children:
@@ -1377,7 +1491,7 @@ function PasteSpecialDialog(e) {
                         }),
                       ],
                     }),
-                  Te.plan.previewPatches.length > 0
+                  previewResult.plan.previewPatches.length > 0
                     ? i.jsxs(i.Fragment, {
                         children: [
                           i.jsx("div", {
@@ -1406,11 +1520,14 @@ function PasteSpecialDialog(e) {
                                   }),
                                 }),
                                 i.jsx("tbody", {
-                                  children: Te.plan.previewPatches
-                                    .slice(Re * 12, (Re + 1) * 12)
+                                  children: previewResult.plan.previewPatches
+                                    .slice(
+                                      clampedPreviewPage * 12,
+                                      (clampedPreviewPage + 1) * 12,
+                                    )
                                     .map((patch) => {
                                       const sheetOrThrow = findSheetOrThrow(
-                                        e.workbook,
+                                        props.workbook,
                                         patch.sheetId,
                                       );
                                       return i.jsxs(
@@ -1419,21 +1536,21 @@ function PasteSpecialDialog(e) {
                                           children: [
                                             i.jsx("th", {
                                               children:
-                                                patch.sheetId === e.sheetId
+                                                patch.sheetId === props.sheetId
                                                   ? patch.address
                                                   : `${sheetOrThrow.name}!${patch.address}`,
                                             }),
                                             i.jsx("td", {
                                               children:
                                                 formatNumberWithPattern(
-                                                  ye(
+                                                  calculatedWorkbook(
                                                     patch.sheetId,
                                                     patch.address,
                                                   ),
                                                   sheetOrThrow.cells[
                                                     patch.address
                                                   ],
-                                                  e.workbook.datePolicy
+                                                  props.workbook.datePolicy
                                                     ?.dateSystem,
                                                 ) || "(blank)",
                                             }),
@@ -1442,7 +1559,7 @@ function PasteSpecialDialog(e) {
                                                 formatNumberWithPattern(
                                                   patch.cell.raw,
                                                   patch.cell,
-                                                  e.workbook.datePolicy
+                                                  props.workbook.datePolicy
                                                     ?.dateSystem,
                                                 ) || "(blank)",
                                                 JSON.stringify(
@@ -1473,7 +1590,7 @@ function PasteSpecialDialog(e) {
                               ],
                             }),
                           }),
-                          ht > 1 &&
+                          previewPageCount > 1 &&
                             i.jsxs("div", {
                               className: "et-pagination",
                               "aria-label": text("Preview pages"),
@@ -1482,8 +1599,11 @@ function PasteSpecialDialog(e) {
                               children: [
                                 i.jsx("button", {
                                   type: "button",
-                                  disabled: Re === 0,
-                                  onClick: () => W((Ze) => Ze - 1),
+                                  disabled: clampedPreviewPage === 0,
+                                  onClick: () =>
+                                    setPreviewPage(
+                                      (currentPage) => currentPage - 1,
+                                    ),
                                   children: i.jsx(LocalizedText, {
                                     children: "Previous changes",
                                   }),
@@ -1491,16 +1611,20 @@ function PasteSpecialDialog(e) {
                                 i.jsxs("span", {
                                   children: [
                                     i.jsx(LocalizedText, { children: "Page " }),
-                                    Re + 1,
+                                    clampedPreviewPage + 1,
                                     " ",
                                     i.jsx(LocalizedText, { children: "of " }),
-                                    ht,
+                                    previewPageCount,
                                   ],
                                 }),
                                 i.jsx("button", {
                                   type: "button",
-                                  disabled: Re + 1 >= ht,
-                                  onClick: () => W((Ze) => Ze + 1),
+                                  disabled:
+                                    clampedPreviewPage + 1 >= previewPageCount,
+                                  onClick: () =>
+                                    setPreviewPage(
+                                      (currentPage) => currentPage + 1,
+                                    ),
                                   children: i.jsx(LocalizedText, {
                                     children: "Next changes",
                                   }),
@@ -1518,12 +1642,12 @@ function PasteSpecialDialog(e) {
                       }),
                 ],
               }),
-            !Ee &&
-              (c || Te.error) &&
+            !isStale &&
+              (actionError || previewResult.error) &&
               i.jsx("p", {
                 className: "et-error",
                 role: "alert",
-                children: c || Te.error,
+                children: actionError || previewResult.error,
               }),
           ],
         }),
@@ -1532,19 +1656,23 @@ function PasteSpecialDialog(e) {
           children: [
             i.jsx("button", {
               type: "button",
-              onClick: e.onClose,
-              children: e.mode === "viewSettings" ? "Done" : "Cancel",
+              onClick: props.onClose,
+              children: props.mode === "viewSettings" ? "Done" : "Cancel",
             }),
-            e.mode !== "viewSettings" &&
+            props.mode !== "viewSettings" &&
               i.jsx("button", {
                 type: "button",
                 className: "et-primary",
-                disabled: we || Ee || !Te.plan || Te.plan.count === 0,
+                disabled:
+                  isReadOnly ||
+                  isStale ||
+                  !previewResult.plan ||
+                  previewResult.plan.count === 0,
                 onClick: onClick,
                 children:
-                  e.mode === "pasteSpecial"
+                  props.mode === "pasteSpecial"
                     ? "Paste"
-                    : E === "series"
+                    : fillMode === "series"
                       ? "Fill series"
                       : "Apply fill",
               }),
@@ -1554,25 +1682,25 @@ function PasteSpecialDialog(e) {
     }),
   });
 }
-function FillPreviewDialog(e) {
+function FillPreviewDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(e.workbook),
-    s = ne.useRef(e);
-  s.current = e;
-  const [mode, u] = ne.useState("copy"),
-    [l, c] = ne.useState(""),
-    [h, f] = ne.useState(0),
-    p = e.workbook !== a.current,
-    m = ne.useMemo(() => {
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    initialWorkbookRef = ne.useRef(props.workbook),
+    latestPropsRef = ne.useRef(props);
+  latestPropsRef.current = props;
+  const [mode, setMode] = ne.useState("copy"),
+    [actionError, setActionError] = ne.useState(""),
+    [previewPage, setPreviewPage] = ne.useState(0),
+    isWorkbookChanged = props.workbook !== initialWorkbookRef.current,
+    previewResult = ne.useMemo(() => {
       try {
         return {
           plan: buildFillHandlePreview(
-            e.workbook,
-            e.sheetId,
-            e.sourceRange,
-            e.targetRange,
+            props.workbook,
+            props.sheetId,
+            props.sourceRange,
+            props.targetRange,
             {
               mode: mode,
             },
@@ -1588,49 +1716,58 @@ function FillPreviewDialog(e) {
               : "The fill cannot be applied.",
         };
       }
-    }, [e.workbook, e.sheetId, e.sourceRange, e.targetRange, mode]),
-    plan = m.plan;
+    }, [
+      props.workbook,
+      props.sheetId,
+      props.sourceRange,
+      props.targetRange,
+      mode,
+    ]),
+    plan = previewResult.plan;
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      o.current?.focus(),
+      dialogRef.current?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
   const disabled =
-    e.readOnly ||
-    !!findSheetOrThrow(e.workbook, e.sheetId).protection?.enabled ||
-    p;
+    props.readOnly ||
+    !!findSheetOrThrow(props.workbook, props.sheetId).protection?.enabled ||
+    isWorkbookChanged;
   return i.jsx("div", {
     className: "et-backdrop",
     children: i.jsxs("section", {
-      ref: o,
+      ref: dialogRef,
       className: "et-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": n,
+      "aria-labelledby": titleId,
       tabIndex: -1,
       onKeyDown: (event) => {
         if (
-          (event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          (event.key === "Escape" && (event.preventDefault(), props.onClose()),
           event.key === "Tab")
         ) {
-          const E = Array.from(
-              o.current?.querySelectorAll(
+          const focusables = Array.from(
+              dialogRef.current?.querySelectorAll(
                 "button:not(:disabled),select:not(:disabled),input:not(:disabled)",
               ) ?? [],
             ),
-            A = E[0],
-            k = E.at(-1);
+            firstFocusable = focusables[0],
+            lastFocusable = focusables.at(-1);
           event.shiftKey &&
-          (document.activeElement === A || document.activeElement === o.current)
-            ? (event.preventDefault(), k == null || k.focus())
+          (document.activeElement === firstFocusable ||
+            document.activeElement === dialogRef.current)
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              (document.activeElement === k ||
-                document.activeElement === o.current) &&
-              (event.preventDefault(), A == null || A.focus());
+              (document.activeElement === lastFocusable ||
+                document.activeElement === dialogRef.current) &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -1638,12 +1775,12 @@ function FillPreviewDialog(e) {
           className: "et-header",
           children: [
             i.jsx("h2", {
-              id: n,
+              id: titleId,
               children: i.jsx(LocalizedText, { children: "Fill selection" }),
             }),
             i.jsx("button", {
               "aria-label": text("Close fill preview"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close fill preview"),
               "data-ui-label": "Close fill preview",
               children: "×",
@@ -1656,11 +1793,11 @@ function FillPreviewDialog(e) {
             i.jsxs("p", {
               children: [
                 i.jsx(LocalizedText, { children: "Extend " }),
-                i.jsx("strong", { children: e.sourceRange }),
+                i.jsx("strong", { children: props.sourceRange }),
                 " ",
                 i.jsx(LocalizedText, { children: "to" }),
                 " ",
-                i.jsx("strong", { children: e.targetRange }),
+                i.jsx("strong", { children: props.targetRange }),
                 i.jsx(LocalizedText, {
                   children:
                     ". Fill writes into the extension; dependent formula updates are included in the preview.",
@@ -1675,7 +1812,9 @@ function FillPreviewDialog(e) {
                   value: mode,
                   disabled: disabled,
                   onChange: (event) => {
-                    (u(event.target.value), f(0), c(""));
+                    (setMode(event.target.value),
+                      setPreviewPage(0),
+                      setActionError(""));
                   },
                   lang: language("Fill method"),
                   "data-ui-label": "Fill method",
@@ -1736,7 +1875,7 @@ function FillPreviewDialog(e) {
                         }),
                         i.jsx("tbody", {
                           children: plan.previewPatches
-                            .slice(h * 25, (h + 1) * 25)
+                            .slice(previewPage * 25, (previewPage + 1) * 25)
                             .map((patch) =>
                               i.jsxs(
                                 "tr",
@@ -1744,16 +1883,16 @@ function FillPreviewDialog(e) {
                                   children: [
                                     i.jsx("th", {
                                       children:
-                                        patch.sheetId === e.sheetId
+                                        patch.sheetId === props.sheetId
                                           ? patch.address
-                                          : `${findSheetOrThrow(e.workbook, patch.sheetId).name}!${patch.address}`,
+                                          : `${findSheetOrThrow(props.workbook, patch.sheetId).name}!${patch.address}`,
                                     }),
                                     i.jsx("td", {
                                       children:
                                         formatNumberWithPattern(
                                           patch.cell.raw,
                                           patch.cell,
-                                          e.workbook.datePolicy?.dateSystem,
+                                          props.workbook.datePolicy?.dateSystem,
                                         ) || "(blank)",
                                     }),
                                   ],
@@ -1770,8 +1909,8 @@ function FillPreviewDialog(e) {
                       className: "et-pagination",
                       children: [
                         i.jsx("button", {
-                          disabled: !h,
-                          onClick: () => f(h - 1),
+                          disabled: !previewPage,
+                          onClick: () => setPreviewPage(previewPage - 1),
                           children: i.jsx(LocalizedText, {
                             children: "Previous changes",
                           }),
@@ -1779,15 +1918,15 @@ function FillPreviewDialog(e) {
                         i.jsxs("span", {
                           children: [
                             i.jsx(LocalizedText, { children: "Page " }),
-                            h + 1,
+                            previewPage + 1,
                             " ",
                             i.jsx(LocalizedText, { children: "of " }),
                             Math.ceil(plan.count / 25),
                           ],
                         }),
                         i.jsx("button", {
-                          disabled: (h + 1) * 25 >= plan.count,
-                          onClick: () => f(h + 1),
+                          disabled: (previewPage + 1) * 25 >= plan.count,
+                          onClick: () => setPreviewPage(previewPage + 1),
                           children: i.jsx(LocalizedText, {
                             children: "Next changes",
                           }),
@@ -1796,15 +1935,15 @@ function FillPreviewDialog(e) {
                     }),
                 ],
               }),
-            (l || m.error || p) &&
+            (actionError || previewResult.error || isWorkbookChanged) &&
               i.jsx("p", {
                 className: "et-error",
                 role: "alert",
-                children: p
+                children: isWorkbookChanged
                   ? "The workbook changed. Cancel and review the fill again."
-                  : l || m.error,
+                  : actionError || previewResult.error,
               }),
-            e.readOnly &&
+            props.readOnly &&
               i.jsx("p", {
                 children: i.jsx(LocalizedText, {
                   children: "This workbook is read-only.",
@@ -1816,7 +1955,7 @@ function FillPreviewDialog(e) {
           className: "et-footer",
           children: [
             i.jsx("button", {
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
@@ -1824,18 +1963,22 @@ function FillPreviewDialog(e) {
               disabled: disabled || !plan || plan.count === 0,
               onClick: () => {
                 try {
-                  const y = s.current;
-                  if (y.workbook !== a.current)
+                  const latestProps = latestPropsRef.current;
+                  if (latestProps.workbook !== initialWorkbookRef.current)
                     throw Error("The workbook changed. Review the fill again.");
                   if (!plan) throw Error("Choose a valid fill first.");
-                  const w = applyCellPreview(y.workbook, plan, {
-                    readOnly: y.readOnly,
-                  });
-                  (y.onWorkbookChange(w, "Fill handle"),
-                    y.onSelectionChange(y.targetRange),
-                    y.onClose());
+                  const filledWorkbook = applyCellPreview(
+                    latestProps.workbook,
+                    plan,
+                    {
+                      readOnly: latestProps.readOnly,
+                    },
+                  );
+                  (latestProps.onWorkbookChange(filledWorkbook, "Fill handle"),
+                    latestProps.onSelectionChange(latestProps.targetRange),
+                    latestProps.onClose());
                 } catch (error) {
-                  c(
+                  setActionError(
                     error instanceof Error
                       ? error.message
                       : "The fill could not be applied.",
@@ -1858,13 +2001,14 @@ const pasteOperationLimits = {
   formulaCharacters: 1e7,
 };
 
-const rangeContainsRange = (e, r) =>
-    e.firstRow <= r.firstRow &&
-    e.lastRow >= r.lastRow &&
-    e.firstCol <= r.firstCol &&
-    e.lastCol >= r.lastCol,
+const rangeContainsRange = (outerRange, innerRange) =>
+    outerRange.firstRow <= innerRange.firstRow &&
+    outerRange.lastRow >= innerRange.lastRow &&
+    outerRange.firstCol <= innerRange.firstCol &&
+    outerRange.lastCol >= innerRange.lastCol,
   hasCellContent = (cell) =>
-    !!cell && (cell.raw !== null || Object.keys(cell).some((r) => r !== "raw"));
+    !!cell &&
+    (cell.raw !== null || Object.keys(cell).some((key) => key !== "raw"));
 
 function assertRangeWithinBoundary(sheetOrThrow, targetRange) {
   const rangeAddress = parseRangeAddress(targetRange);
@@ -1876,12 +2020,13 @@ function assertRangeWithinBoundary(sheetOrThrow, targetRange) {
   );
 }
 function assertCutSourceWithinLimit(sheetOrThrow, targetRange) {
-  const t = assertRangeWithinBoundary(sheetOrThrow, targetRange);
+  const rangeAddress = assertRangeWithinBoundary(sheetOrThrow, targetRange);
   return (
-    (t.lastRow - t.firstRow + 1) * (t.lastCol - t.firstCol + 1) >
+    (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+      (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
       pasteOperationLimits.sourceCells &&
       throwWorkbookError("Cut and move supports at most 500 source cells."),
-    t
+    rangeAddress
   );
 }
 function createCutSourceSnapshot(
@@ -1904,20 +2049,21 @@ function createCutSourceSnapshot(
     })
   );
 }
-function verifyCutSourceSnapshot(book, r, sourceSheetId, sourceRange) {
-  (!r ||
-    r.version !== 1 ||
-    r.workbookId !== book.id ||
-    r.revision !== book.revision ||
-    r.sheetId !== sourceSheetId ||
-    r.range !== formatSortRangeAddress(sourceRange) ||
-    r.snapshotGuard !== JSON.stringify(book)) &&
+function verifyCutSourceSnapshot(book, snapshot, sourceSheetId, sourceRange) {
+  (!snapshot ||
+    snapshot.version !== 1 ||
+    snapshot.workbookId !== book.id ||
+    snapshot.revision !== book.revision ||
+    snapshot.sheetId !== sourceSheetId ||
+    snapshot.range !== formatSortRangeAddress(sourceRange) ||
+    snapshot.snapshotGuard !== JSON.stringify(book)) &&
     throwWorkbookError(
       "The workbook changed after Cut. Cut the source again before moving it.",
     );
 }
-const isUnsafeStructuredReference = (e) =>
-    e.kind === "structured" && (!e.name || /\[\s*@|#This\s+Row/i.test(e.text)),
+const isUnsafeStructuredReference = (reference) =>
+    reference.kind === "structured" &&
+    (!reference.name || /\[\s*@|#This\s+Row/i.test(reference.text)),
   sheetNameReferencePattern = String.raw`(?:'(?:[^']|'')+'|[A-Za-z_\\\u0080-\uffff][A-Za-z0-9_.\\\u0080-\uffff]*)`,
   sheetNamePrefixPattern = new RegExp(`^(${sheetNameReferencePattern})!`),
   sheetRangePrefixPattern = new RegExp(
@@ -1925,69 +2071,75 @@ const isUnsafeStructuredReference = (e) =>
   ),
   identifierCharPattern = /[A-Za-z0-9_.\\\u0080-\uffff]/;
 function assertBalancedStructuredReference(refersTo, end) {
-  let t = 0,
-    n = end;
-  do (refersTo[n] === "[" && t++, refersTo[n] === "]" && t--, n++);
-  while (n < refersTo.length && t);
+  let depth = 0,
+    scanIndex = end;
+  do
+    (refersTo[scanIndex] === "[" && depth++,
+      refersTo[scanIndex] === "]" && depth--,
+      scanIndex++);
+  while (scanIndex < refersTo.length && depth);
   return (
-    t &&
+    depth &&
       throwWorkbookError(
         "An unbalanced structured reference prevents a safe move.",
       ),
-    n
+    scanIndex
   );
 }
 function assertFormulaReferencesMovable(refersTo) {
-  const r = [];
-  let t = 0;
-  for (; t < refersTo.length;) {
-    const start = t,
-      o = refersTo[t];
-    if (o === '"') {
-      for (t++; t < refersTo.length;)
-        if (refersTo[t++] === '"')
-          if (refersTo[t] === '"') t++;
+  const tokens = [];
+  let position = 0;
+  for (; position < refersTo.length;) {
+    const start = position,
+      character = refersTo[position];
+    if (character === '"') {
+      for (position++; position < refersTo.length;)
+        if (refersTo[position++] === '"')
+          if (refersTo[position] === '"') position++;
           else break;
       continue;
     }
-    const a = refersTo.slice(t),
-      s = t === 0 || !identifierCharPattern.test(refersTo[t - 1]);
+    const remainingText = refersTo.slice(position),
+      isTokenBoundary =
+        position === 0 || !identifierCharPattern.test(refersTo[position - 1]);
     if (
-      (s &&
-        sheetRangePrefixPattern.test(a) &&
+      (isTokenBoundary &&
+        sheetRangePrefixPattern.test(remainingText) &&
         throwWorkbookError(
           "Three-dimensional worksheet references must be replaced with explicit local references before moving cells.",
         ),
-      o === "#")
+      character === "#")
     ) {
-      const p = /^#[A-Za-z0-9/?]+[!?]?/.exec(a);
-      if (p) {
-        t += p[0].length;
+      const errorMatch = /^#[A-Za-z0-9/?]+[!?]?/.exec(remainingText);
+      if (errorMatch) {
+        position += errorMatch[0].length;
         continue;
       }
     }
     let sheet,
-      u = 0;
-    const l = s ? sheetNamePrefixPattern.exec(a) : null;
-    l &&
-      ((sheet = unquoteSheetName(l[1])),
+      prefixLength = 0;
+    const sheetPrefixMatch = isTokenBoundary
+      ? sheetNamePrefixPattern.exec(remainingText)
+      : null;
+    sheetPrefixMatch &&
+      ((sheet = unquoteSheetName(sheetPrefixMatch[1])),
       /[\[\]:]/.test(sheet) &&
         throwWorkbookError(
           "External or three-dimensional references prevent a safe range move.",
         ),
-      (u = l[0].length));
-    const c = a.slice(u),
-      h = s
+      (prefixLength = sheetPrefixMatch[0].length));
+    const referenceText = remainingText.slice(prefixLength),
+      a1Match = isTokenBoundary
         ? /^(?:\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?|\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}|\$?[1-9]\d*:\$?[1-9]\d*)/.exec(
-            c,
+            referenceText,
           )
         : null;
     if (
-      h &&
-      !identifierCharPattern.test(c[h[0].length] ?? "") &&
-      !/^\s*[(!]/.test(c.slice(h[0].length))
+      a1Match &&
+      !identifierCharPattern.test(referenceText[a1Match[0].length] ?? "") &&
+      !/^\s*[(!]/.test(referenceText.slice(a1Match[0].length))
     ) {
-      const end = t + u + h[0].length;
+      const end = position + prefixLength + a1Match[0].length;
       (refersTo[end] === "#" &&
         throwWorkbookError(
           "Dynamic spill references require an explicit stable range before moving cells.",
@@ -1996,116 +2148,123 @@ function assertFormulaReferencesMovable(refersTo) {
           throwWorkbookError(
             "Separately qualified range endpoints are not supported for a safe move.",
           ),
-        r.push({
+        tokens.push({
           start: start,
           end: end,
           text: refersTo.slice(start, end),
           kind: "reference",
           sheet: sheet,
-          reference: h[0],
+          reference: a1Match[0],
         }),
-        (t = end));
+        (position = end));
       continue;
     }
-    const f = s ? /^[A-Za-z_\\][A-Za-z0-9_.\\]*/.exec(c) : null;
-    if (f) {
-      const end = t + u + f[0].length,
-        m = refersTo.slice(end);
+    const nameMatch = isTokenBoundary
+      ? /^[A-Za-z_\\][A-Za-z0-9_.\\]*/.exec(referenceText)
+      : null;
+    if (nameMatch) {
+      const end = position + prefixLength + nameMatch[0].length,
+        textAfterReference = refersTo.slice(end);
       if (refersTo[end] === "[") {
-        const v = assertBalancedStructuredReference(refersTo, end);
-        (refersTo[v] === "!" &&
+        const structuredEnd = assertBalancedStructuredReference(refersTo, end);
+        (refersTo[structuredEnd] === "!" &&
           throwWorkbookError(
             "External workbook references prevent a safe move.",
           ),
-          r.push({
+          tokens.push({
             start: start,
-            end: v,
-            text: refersTo.slice(start, v),
+            end: structuredEnd,
+            text: refersTo.slice(start, structuredEnd),
             kind: "structured",
             sheet: sheet,
-            name: f[0],
+            name: nameMatch[0],
           }),
-          (t = v));
+          (position = structuredEnd));
         continue;
       }
-      if (/^\s*\(/.test(m)) {
-        (/^(?:_xlfn\.)?(?:INDIRECT|OFFSET|EVALUATE|HYPERLINK)$/i.test(f[0]) &&
-          r.push({
+      if (/^\s*\(/.test(textAfterReference)) {
+        (/^(?:_xlfn\.)?(?:INDIRECT|OFFSET|EVALUATE|HYPERLINK)$/i.test(
+          nameMatch[0],
+        ) &&
+          tokens.push({
             start: start,
             end: end,
-            text: f[0],
+            text: nameMatch[0],
             kind: "dynamic",
-            name: f[0],
+            name: nameMatch[0],
           }),
-          (t = end));
+          (position = end));
         continue;
       }
-      (r.push({
+      (tokens.push({
         start: start,
         end: end,
         text: refersTo.slice(start, end),
         kind: "name",
         sheet: sheet,
-        name: f[0],
+        name: nameMatch[0],
       }),
-        (t = end));
+        (position = end));
       continue;
     }
-    if (o === "[") {
-      const end = assertBalancedStructuredReference(refersTo, t);
+    if (character === "[") {
+      const end = assertBalancedStructuredReference(refersTo, position);
       (/^\s*(?:[^!+*/(),;]+)!/.test(refersTo.slice(end)) &&
         throwWorkbookError("External workbook references prevent a safe move."),
-        r.push({
+        tokens.push({
           start: start,
           end: end,
           text: refersTo.slice(start, end),
           kind: "structured",
         }),
-        (t = end));
+        (position = end));
       continue;
     }
     if (
-      (l &&
+      (sheetPrefixMatch &&
         throwWorkbookError(
           "A worksheet-qualified expression is not a supported reference for a safe move.",
         ),
-      o === "'")
+      character === "'")
     ) {
-      const p = /^'(?:[^']|'')*'/.exec(a);
-      if (p) {
-        (/\[[^\]]+\]/.test(p[0]) &&
-          refersTo[t + p[0].length] === "!" &&
+      const quotedSheetMatch = /^'(?:[^']|'')*'/.exec(remainingText);
+      if (quotedSheetMatch) {
+        (/\[[^\]]+\]/.test(quotedSheetMatch[0]) &&
+          refersTo[position + quotedSheetMatch[0].length] === "!" &&
           throwWorkbookError(
             "External workbook references prevent a safe move.",
           ),
-          (t += p[0].length));
+          (position += quotedSheetMatch[0].length));
         continue;
       }
     }
-    t++;
+    position++;
   }
-  return r;
+  return tokens;
 }
 function parseWholeColumnReference(reference) {
   if (/^\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}$/.test(reference)) {
-    const [r, t] = reference.split(":"),
-      n = _t(`${r}1`),
-      o = _t(`${t}1`);
+    const [startColumn, endColumn] = reference.split(":"),
+      startCell = _t(`${startColumn}1`),
+      endCell = _t(`${endColumn}1`);
     return {
       firstRow: 0,
       lastRow: workbookLimits.maxRows - 1,
-      firstCol: Math.min(n.col, o.col),
-      lastCol: Math.max(n.col, o.col),
+      firstCol: Math.min(startCell.col, endCell.col),
+      lastCol: Math.max(startCell.col, endCell.col),
     };
   }
   if (/^\$?\d+:\$?\d+$/.test(reference)) {
-    const [r, t] = reference.replace(/\$/g, "").split(":").map(Number);
+    const [startRow, endRow] = reference
+      .replace(/\$/g, "")
+      .split(":")
+      .map(Number);
     return (
-      (r > workbookLimits.maxRows || t > workbookLimits.maxRows) &&
+      (startRow > workbookLimits.maxRows || endRow > workbookLimits.maxRows) &&
         throwWorkbookError("A reference exceeds Excel's row boundary."),
       {
-        firstRow: Math.min(r, t) - 1,
-        lastRow: Math.max(r, t) - 1,
+        firstRow: Math.min(startRow, endRow) - 1,
+        lastRow: Math.max(startRow, endRow) - 1,
         firstCol: 0,
         lastCol: workbookLimits.maxCols - 1,
       }
@@ -2113,17 +2272,19 @@ function parseWholeColumnReference(reference) {
   }
   return parseRangeAddress(reference);
 }
-function parseMovableA1Rectangle(reference, r, t) {
+function parseMovableA1Rectangle(reference, rowOffset, columnOffset) {
   return reference
     .split(":")
-    .map((n) => {
-      const o = /^(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*)$/.exec(n);
-      o ||
+    .map((cellAddress) => {
+      const addressMatch = /^(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*)$/.exec(
+        cellAddress,
+      );
+      addressMatch ||
         throwWorkbookError(
           "Only complete A1 cell rectangles can move to a new location.",
         );
-      const a = _t(n);
-      return `${o[1]}${columnIndexToLetters(a.col + t)}${o[3]}${a.row + r + 1}`;
+      const cellPosition = _t(cellAddress);
+      return `${addressMatch[1]}${columnIndexToLetters(cellPosition.col + columnOffset)}${addressMatch[3]}${cellPosition.row + rowOffset + 1}`;
     })
     .join(":");
 }

@@ -37,68 +37,78 @@ import {
 } from "./16-transformation-recipe-engine.js";
 import { w2 } from "./41-automation-and-scripts.js";
 
-function CombinePopulationsDialog(e) {
+function CombinePopulationsDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(null),
-    s = ne.useRef(e.onClose);
-  s.current = e.onClose;
-  const [sheetId, u] = ne.useState(e.sheetId),
-    [l, c] = ne.useState(e.sheetId),
-    [range, f] = ne.useState(e.range),
-    [p, m] = ne.useState(""),
-    [mode, g] = ne.useState("append"),
-    [outputSheetName, y] = ne.useState("Combined population"),
-    [keys, E] = ne.useState([{ left: "", right: "" }]),
-    [normalization, k] = ne.useState({}),
-    [checked, I] = ne.useState(false),
-    [O, j] = ne.useState(0),
-    [z, V] = ne.useState("0.8"),
-    [D, B] = ne.useState(false),
-    [_, C] = ne.useState(null),
-    [T, N] = ne.useState(""),
-    [R, L] = ne.useState(""),
-    [$, U] = ne.useState(""),
-    [G, H] = ne.useState("output"),
-    [Q, X$1] = ne.useState(0),
-    J = {
-      includeHidden: !!e.allowHidden && D,
-      allowedSheetIds: e.allowedSheetIds,
-      readOnly: e.readOnly,
+    dialogId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    reviewRef = ne.useRef(null),
+    onCloseRef = ne.useRef(props.onClose);
+  onCloseRef.current = props.onClose;
+  const [sheetId, setSheetId] = ne.useState(props.sheetId),
+    [rightSheetId, setRightSheetId] = ne.useState(props.sheetId),
+    [range, setRange] = ne.useState(props.range),
+    [rightRange, setRightRange] = ne.useState(""),
+    [mode, setMode] = ne.useState("append"),
+    [outputSheetName, setOutputSheetName] = ne.useState("Combined population"),
+    [keys, setKeys] = ne.useState([{ left: "", right: "" }]),
+    [normalization, setNormalization] = ne.useState({}),
+    [checked, setChecked] = ne.useState(false),
+    [fuzzyKeyIndex, setFuzzyKeyIndex] = ne.useState(0),
+    [fuzzyThreshold, setFuzzyThreshold] = ne.useState("0.8"),
+    [includeHidden, setIncludeHidden] = ne.useState(false),
+    [preview, setPreview] = ne.useState(null),
+    [previewSelectionKey, setPreviewSelectionKey] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [errorContextKey, setErrorContextKey] = ne.useState(""),
+    [reviewView, setReviewView] = ne.useState("output"),
+    [pageIndex, X$1] = ne.useState(0),
+    sourceContext = {
+      includeHidden: !!props.allowHidden && includeHidden,
+      allowedSheetIds: props.allowedSheetIds,
+      readOnly: props.readOnly,
     },
-    q = [
+    allowedSheetIds = [
       ...new Set(
-        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+        props.allowedSheetIds ?? props.workbook.sheets.map((sheet) => sheet.id),
       ),
     ].sort(),
-    W = e.workbook.sheets.filter(
+    selectableSheets = props.workbook.sheets.filter(
       (sheet) =>
-        q.includes(sheet.id) &&
-        (J.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
+        allowedSheetIds.includes(sheet.id) &&
+        (sourceContext.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     ),
-    K = JSON.stringify([e.sheetId, e.range]),
-    te = JSON.stringify(e.workbook),
-    ae = JSON.stringify([te, K, q, J.includeHidden, e.readOnly]),
-    oe =
-      !!_ &&
-      !e.readOnly &&
-      T === K &&
-      _.snapshot === te &&
-      _.context.includeHidden === J.includeHidden &&
-      JSON.stringify(_.context.allowedSheetIds) === JSON.stringify(q);
+    selectionKey = JSON.stringify([props.sheetId, props.range]),
+    workbookSnapshot = JSON.stringify(props.workbook),
+    inputsKey = JSON.stringify([
+      workbookSnapshot,
+      selectionKey,
+      allowedSheetIds,
+      sourceContext.includeHidden,
+      props.readOnly,
+    ]),
+    isPreviewCurrent =
+      !!preview &&
+      !props.readOnly &&
+      previewSelectionKey === selectionKey &&
+      preview.snapshot === workbookSnapshot &&
+      preview.context.includeHidden === sourceContext.includeHidden &&
+      JSON.stringify(preview.context.allowedSheetIds) ===
+        JSON.stringify(allowedSheetIds);
   (ne.useEffect(() => {
-    var Re;
-    _ &&
-      oe &&
-      ((Re = a.current) == null ? undefined : Re.scrollIntoView)?.call(Re, {
+    var reviewElement;
+    preview &&
+      isPreviewCurrent &&
+      ((reviewElement = reviewRef.current) == null
+        ? undefined
+        : reviewElement.scrollIntoView
+      )?.call(reviewElement, {
         block: "start",
       });
-  }, [_, oe]),
+  }, [preview, isPreviewCurrent]),
     ne.useEffect(() => {
       const activeElement = document.activeElement;
       return (
-        o.current
+        dialogRef.current
           ?.querySelector('[data-ui-label="Combine operation"]')
           ?.focus(),
         () => {
@@ -107,27 +117,27 @@ function CombinePopulationsDialog(e) {
       );
     }, []));
   const onClick = () => {
-      (C(null), L(""), X$1(0));
+      (setPreview(null), setErrorMessage(""), X$1(0));
     },
-    he = (Re, Me) => {
-      (Re(Me), onClick());
+    updateInput = (setValue, nextValue) => {
+      (setValue(nextValue), onClick());
     },
-    Se = (Re) => {
-      (U(ae),
-        L(
-          Re instanceof Error
-            ? Re.message
+    handlePreviewError = (previewError) => {
+      (setErrorContextKey(inputsKey),
+        setErrorMessage(
+          previewError instanceof Error
+            ? previewError.message
             : "The populations could not be combined.",
         ));
     },
-    le = () => {
+    buildPreview = () => {
       try {
-        (C(
+        (setPreview(
           buildConsolidationOutput(
-            e.workbook,
+            props.workbook,
             {
               left: { sheetId: sheetId, range: range },
-              right: { sheetId: l, range: p },
+              right: { sheetId: rightSheetId, range: rightRange },
               mode: mode,
               ...(mode === "append"
                 ? {}
@@ -139,118 +149,135 @@ function CombinePopulationsDialog(e) {
                     ...(checked
                       ? {
                           fuzzy: {
-                            key: O,
-                            threshold: z.trim() ? Number(z) : NaN,
+                            key: fuzzyKeyIndex,
+                            threshold: fuzzyThreshold.trim()
+                              ? Number(fuzzyThreshold)
+                              : NaN,
                           },
                         }
                       : {}),
                   }),
               outputSheetName: outputSheetName,
             },
-            J,
+            sourceContext,
           ),
         ),
-          N(K),
-          L(""),
+          setPreviewSelectionKey(selectionKey),
+          setErrorMessage(""),
           X$1(0),
-          H("output"));
+          setReviewView("output"));
       } catch (error) {
-        (C(null), Se(error));
+        (setPreview(null), handlePreviewError(error));
       }
     },
-    ce = () => {
-      if (!(!_ || !oe))
+    applyCombination = () => {
+      if (!(!preview || !isPreviewCurrent))
         try {
-          const Re = assertConsolidationPreviewCurrent(e.workbook, _, J);
-          (e.onWorkbookChange(
-            Re,
-            `Combine populations: ${_.request.mode} → ${_.request.outputSheetName}`,
-            _.outputSheetId,
+          const nextWorkbook = assertConsolidationPreviewCurrent(
+            props.workbook,
+            preview,
+            sourceContext,
+          );
+          (props.onWorkbookChange(
+            nextWorkbook,
+            `Combine populations: ${preview.request.mode} → ${preview.request.outputSheetName}`,
+            preview.outputSheetId,
           ),
-            C(null),
-            e.onClose());
+            setPreview(null),
+            props.onClose());
         } catch (error) {
-          Se(error);
+          handlePreviewError(error);
         }
     },
-    ge = oe
-      ? G === "left"
-        ? ["Source row", "Match outcome", ..._.left.headers]
-        : G === "right"
-          ? ["Source row", "Match outcome", ..._.right.headers]
-          : G === "matches"
+    tableHeaders = isPreviewCurrent
+      ? reviewView === "left"
+        ? ["Source row", "Match outcome", ...preview.left.headers]
+        : reviewView === "right"
+          ? ["Source row", "Match outcome", ...preview.right.headers]
+          : reviewView === "matches"
             ? ["Left source", "Right source", "Similarity", "Explanation"]
-            : G === "normalization"
+            : reviewView === "normalization"
               ? ["Side", "Source", "Original keys", "Normalized keys"]
-              : G === "exceptions"
+              : reviewView === "exceptions"
                 ? ["Side", "Source", "Exception"]
-                : _.headers
+                : preview.headers
       : [],
-    se = oe
-      ? G === "left"
-        ? _.unmatchedLeft.map((Re) => [
-            Re.locator,
-            Re.unmatchedReason ?? "",
-            ...Re.values,
+    tableRows = isPreviewCurrent
+      ? reviewView === "left"
+        ? preview.unmatchedLeft.map((leftRecord) => [
+            leftRecord.locator,
+            leftRecord.unmatchedReason ?? "",
+            ...leftRecord.values,
           ])
-        : G === "right"
-          ? _.unmatchedRight.map((Re) => [
-              Re.locator,
-              Re.unmatchedReason ?? "",
-              ...Re.values,
+        : reviewView === "right"
+          ? preview.unmatchedRight.map((rightRecord) => [
+              rightRecord.locator,
+              rightRecord.unmatchedReason ?? "",
+              ...rightRecord.values,
             ])
-          : G === "matches"
-            ? (_.matching?.matches ?? []).map((Re) => [
-                Re.left,
-                Re.right,
-                Re.score,
-                Re.explanation,
+          : reviewView === "matches"
+            ? (preview.matching?.matches ?? []).map((match) => [
+                match.left,
+                match.right,
+                match.score,
+                match.explanation,
               ])
-            : G === "normalization"
-              ? (_.matching?.normalizedKeys ?? []).map((Re) => [
-                  Re.side,
-                  Re.locator,
-                  JSON.stringify(Re.original),
-                  JSON.stringify(Re.normalized),
-                ])
-              : G === "exceptions"
-                ? (_.matching?.exceptions ?? []).map((Re) => [
-                    Re.side,
-                    Re.locator,
-                    Re.reason,
+            : reviewView === "normalization"
+              ? (preview.matching?.normalizedKeys ?? []).map(
+                  (normalizedKey) => [
+                    normalizedKey.side,
+                    normalizedKey.locator,
+                    JSON.stringify(normalizedKey.original),
+                    JSON.stringify(normalizedKey.normalized),
+                  ],
+                )
+              : reviewView === "exceptions"
+                ? (preview.matching?.exceptions ?? []).map((exception) => [
+                    exception.side,
+                    exception.locator,
+                    exception.reason,
                   ])
-                : _.rows.map((row) => [...row.values, row.left, row.right])
+                : preview.rows.map((row) => [
+                    ...row.values,
+                    row.left,
+                    row.right,
+                  ])
       : [],
-    we = Math.max(1, Math.ceil(se.length / w2)),
-    Ee = Math.min(Q, we - 1);
+    pageCount = Math.max(1, Math.ceil(tableRows.length / w2)),
+    currentPage = Math.min(pageIndex, pageCount - 1);
   return i.jsx("div", {
     className: "pc-backdrop",
     onMouseDown: (event) => {
-      event.target === event.currentTarget && e.onClose();
+      event.target === event.currentTarget && props.onClose();
     },
     children: i.jsxs("section", {
-      ref: o,
+      ref: dialogRef,
       className: "pc-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": `${n}-title`,
+      "aria-labelledby": `${dialogId}-title`,
       onKeyDown: (event) => {
-        var ke, je;
+        var lastFocusable, firstFocusable;
         if (
           (event.stopPropagation(),
-          event.key === "Escape" && (event.preventDefault(), s.current()),
+          event.key === "Escape" &&
+            (event.preventDefault(), onCloseRef.current()),
           event.key === "Tab")
         ) {
-          const $e = [
-            ...(o.current?.querySelectorAll(
+          const focusableElements = [
+            ...(dialogRef.current?.querySelectorAll(
               "button:not(:disabled),input:not(:disabled),select:not(:disabled)",
             ) ?? []),
-          ].filter((Je) => !Je.hidden);
-          event.shiftKey && document.activeElement === $e[0]
-            ? (event.preventDefault(), (ke = $e.at(-1)) == null || ke.focus())
+          ].filter((element) => !element.hidden);
+          event.shiftKey && document.activeElement === focusableElements[0]
+            ? (event.preventDefault(),
+              (lastFocusable = focusableElements.at(-1)) == null ||
+                lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === $e.at(-1) &&
-              (event.preventDefault(), (je = $e[0]) == null || je.focus());
+              document.activeElement === focusableElements.at(-1) &&
+              (event.preventDefault(),
+              (firstFocusable = focusableElements[0]) == null ||
+                firstFocusable.focus());
         }
       },
       children: [
@@ -259,7 +286,7 @@ function CombinePopulationsDialog(e) {
             i.jsxs("div", {
               children: [
                 i.jsx("h2", {
-                  id: `${n}-title`,
+                  id: `${dialogId}-title`,
                   children: i.jsx(LocalizedText, {
                     children: "Combine populations",
                   }),
@@ -274,7 +301,7 @@ function CombinePopulationsDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close Combine populations"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close Combine populations"),
               "data-ui-label": "Close Combine populations",
               children: i.jsx(X, { size: 18 }),
@@ -292,10 +319,10 @@ function CombinePopulationsDialog(e) {
                     i.jsx(LocalizedText, { children: "Operation" }),
                     i.jsxs("select", {
                       "aria-label": text("Combine operation"),
-                      disabled: e.readOnly,
+                      disabled: props.readOnly,
                       value: mode,
                       onChange: (event) => {
-                        (g(event.target.value), onClick());
+                        (setMode(event.target.value), onClick());
                       },
                       lang: language("Combine operation"),
                       "data-ui-label": "Combine operation",
@@ -338,8 +365,9 @@ function CombinePopulationsDialog(e) {
                     i.jsx("input", {
                       "aria-label": text("Combined worksheet name"),
                       value: outputSheetName,
-                      disabled: e.readOnly,
-                      onChange: (event) => he(y, event.target.value),
+                      disabled: props.readOnly,
+                      onChange: (event) =>
+                        updateInput(setOutputSheetName, event.target.value),
                       lang: language("Combined worksheet name"),
                       "data-ui-label": "Combined worksheet name",
                     }),
@@ -349,17 +377,17 @@ function CombinePopulationsDialog(e) {
             }),
             i.jsx("div", {
               className: "pc-sources",
-              children: ["left", "right"].map((Re) => {
-                const Me = Re === "left" ? sheetId : l,
-                  ke = Re === "left" ? range : p;
+              children: ["left", "right"].map((side) => {
+                const sourceSheetId = side === "left" ? sheetId : rightSheetId,
+                  sourceRange = side === "left" ? range : rightRange;
                 return i.jsxs(
                   "fieldset",
                   {
-                    disabled: e.readOnly,
+                    disabled: props.readOnly,
                     children: [
                       i.jsxs("legend", {
                         children: [
-                          Re === "left" ? "Left" : "Right",
+                          side === "left" ? "Left" : "Right",
                           " ",
                           i.jsx(LocalizedText, { children: "source" }),
                         ],
@@ -368,20 +396,30 @@ function CombinePopulationsDialog(e) {
                         children: [
                           i.jsx(LocalizedText, { children: "Worksheet" }),
                           i.jsxs("select", {
-                            "aria-label": `${Re === "left" ? "Left" : "Right"} source worksheet`,
-                            value: W.some((je) => je.id === Me) ? Me : "",
+                            "aria-label": `${side === "left" ? "Left" : "Right"} source worksheet`,
+                            value: selectableSheets.some(
+                              (entry) => entry.id === sourceSheetId,
+                            )
+                              ? sourceSheetId
+                              : "",
                             onChange: (event) =>
-                              he(Re === "left" ? u : c, event.target.value),
+                              updateInput(
+                                side === "left" ? setSheetId : setRightSheetId,
+                                event.target.value,
+                              ),
                             children: [
                               i.jsx("option", {
                                 value: "",
                                 children: "Choose an allowed worksheet",
                               }),
-                              W.map((je) =>
+                              selectableSheets.map((worksheet) =>
                                 i.jsx(
                                   "option",
-                                  { value: je.id, children: je.name },
-                                  je.id,
+                                  {
+                                    value: worksheet.id,
+                                    children: worksheet.name,
+                                  },
+                                  worksheet.id,
                                 ),
                               ),
                             ],
@@ -392,32 +430,35 @@ function CombinePopulationsDialog(e) {
                         children: [
                           i.jsx(LocalizedText, { children: "Headed range" }),
                           i.jsx("input", {
-                            "aria-label": `${Re === "left" ? "Left" : "Right"} source range`,
-                            value: ke,
+                            "aria-label": `${side === "left" ? "Left" : "Right"} source range`,
+                            value: sourceRange,
                             placeholder: text("A1:D20"),
                             onChange: (event) =>
-                              he(Re === "left" ? f : m, event.target.value),
+                              updateInput(
+                                side === "left" ? setRange : setRightRange,
+                                event.target.value,
+                              ),
                             lang: language("A1:D20"),
                           }),
                         ],
                       }),
                     ],
                   },
-                  Re,
+                  side,
                 );
               }),
             }),
             mode !== "append" &&
               i.jsxs("fieldset", {
                 className: "pc-keys",
-                disabled: e.readOnly,
+                disabled: props.readOnly,
                 children: [
                   i.jsx("legend", {
                     children: i.jsx(LocalizedText, {
                       children: "Matching headers in priority order",
                     }),
                   }),
-                  keys.map((key, Me) =>
+                  keys.map((key, keyIndex) =>
                     i.jsxs(
                       "div",
                       {
@@ -428,14 +469,14 @@ function CombinePopulationsDialog(e) {
                               i.jsx(LocalizedText, {
                                 children: "Left header ",
                               }),
-                              Me + 1,
+                              keyIndex + 1,
                               i.jsx("input", {
-                                "aria-label": `Left key ${Me + 1}`,
+                                "aria-label": `Left key ${keyIndex + 1}`,
                                 value: key.left,
                                 onChange: (event) => {
-                                  (E(
-                                    keys.map((key, $e) =>
-                                      Me === $e
+                                  (setKeys(
+                                    keys.map((key, pairIndex) =>
+                                      keyIndex === pairIndex
                                         ? { ...key, left: event.target.value }
                                         : key,
                                     ),
@@ -450,14 +491,14 @@ function CombinePopulationsDialog(e) {
                               i.jsx(LocalizedText, {
                                 children: "Right header ",
                               }),
-                              Me + 1,
+                              keyIndex + 1,
                               i.jsx("input", {
-                                "aria-label": `Right key ${Me + 1}`,
+                                "aria-label": `Right key ${keyIndex + 1}`,
                                 value: key.right,
                                 onChange: (event) => {
-                                  (E(
-                                    keys.map((key, $e) =>
-                                      Me === $e
+                                  (setKeys(
+                                    keys.map((key, keyPairIndex) =>
+                                      keyIndex === keyPairIndex
                                         ? { ...key, right: event.target.value }
                                         : key,
                                     ),
@@ -469,10 +510,14 @@ function CombinePopulationsDialog(e) {
                           }),
                           i.jsx("button", {
                             disabled: keys.length === 1,
-                            "aria-label": `Remove key ${Me + 1}`,
+                            "aria-label": `Remove key ${keyIndex + 1}`,
                             onClick: () => {
-                              (E(keys.filter((key, je) => je !== Me)),
-                                j(0),
+                              (setKeys(
+                                keys.filter(
+                                  (key, position) => position !== keyIndex,
+                                ),
+                              ),
+                                setFuzzyKeyIndex(0),
                                 onClick());
                             },
                             children: i.jsx(LocalizedText, {
@@ -481,13 +526,13 @@ function CombinePopulationsDialog(e) {
                           }),
                         ],
                       },
-                      Me,
+                      keyIndex,
                     ),
                   ),
                   i.jsx("button", {
                     disabled: keys.length >= 8,
                     onClick: () => {
-                      (E([...keys, { left: "", right: "" }]), onClick());
+                      (setKeys([...keys, { left: "", right: "" }]), onClick());
                     },
                     children: i.jsx(LocalizedText, {
                       children: "Add matching key",
@@ -498,7 +543,7 @@ function CombinePopulationsDialog(e) {
             mode !== "append" &&
               i.jsxs("fieldset", {
                 className: "pc-keys",
-                disabled: e.readOnly,
+                disabled: props.readOnly,
                 children: [
                   i.jsx("legend", {
                     children: i.jsx(LocalizedText, {
@@ -518,7 +563,7 @@ function CombinePopulationsDialog(e) {
                         ["trim", "Trim surrounding whitespace"],
                         ["collapseWhitespace", "Collapse repeated whitespace"],
                         ["ignoreCase", "Ignore text case"],
-                      ].map(([Re, Me]) =>
+                      ].map(([normalizationKey, optionLabel]) =>
                         i.jsxs(
                           "label",
                           {
@@ -526,19 +571,19 @@ function CombinePopulationsDialog(e) {
                             children: [
                               i.jsx("input", {
                                 type: "checkbox",
-                                checked: !!normalization[Re],
+                                checked: !!normalization[normalizationKey],
                                 onChange: (event) => {
-                                  (k({
+                                  (setNormalization({
                                     ...normalization,
-                                    [Re]: event.target.checked,
+                                    [normalizationKey]: event.target.checked,
                                   }),
                                     onClick());
                                 },
                               }),
-                              Me,
+                              optionLabel,
                             ],
                           },
-                          Re,
+                          normalizationKey,
                         ),
                       ),
                       i.jsxs("label", {
@@ -550,7 +595,7 @@ function CombinePopulationsDialog(e) {
                             "aria-label": text("Key Unicode normalization"),
                             value: normalization.unicode ?? "",
                             onChange: (event) => {
-                              (k({
+                              (setNormalization({
                                 ...normalization,
                                 unicode: event.target.value
                                   ? event.target.value
@@ -583,7 +628,7 @@ function CombinePopulationsDialog(e) {
                         type: "checkbox",
                         checked: checked,
                         onChange: (event) => {
-                          (I(event.target.checked), onClick());
+                          (setChecked(event.target.checked), onClick());
                         },
                       }),
                       i.jsx(LocalizedText, {
@@ -602,20 +647,21 @@ function CombinePopulationsDialog(e) {
                             }),
                             i.jsx("select", {
                               "aria-label": text("Fuzzy key pair"),
-                              value: O,
+                              value: fuzzyKeyIndex,
                               onChange: (event) => {
-                                (j(Number(event.target.value)), onClick());
+                                (setFuzzyKeyIndex(Number(event.target.value)),
+                                  onClick());
                               },
                               lang: language("Fuzzy key pair"),
                               "data-ui-label": "Fuzzy key pair",
-                              children: keys.map((key, Me) =>
+                              children: keys.map((key, fuzzyPairIndex) =>
                                 i.jsxs(
                                   "option",
                                   {
-                                    value: Me,
+                                    value: fuzzyPairIndex,
                                     children: [
                                       "Pair ",
-                                      Me + 1,
+                                      fuzzyPairIndex + 1,
                                       ": ",
                                       key.left || "Left",
                                       " ↔",
@@ -623,7 +669,7 @@ function CombinePopulationsDialog(e) {
                                       key.right || "Right",
                                     ],
                                   },
-                                  Me,
+                                  fuzzyPairIndex,
                                 ),
                               ),
                             }),
@@ -639,9 +685,9 @@ function CombinePopulationsDialog(e) {
                               min: "0",
                               max: "1",
                               step: "0.01",
-                              value: z,
-                              onValueChange: (Re) => {
-                                (V(Re), onClick());
+                              value: fuzzyThreshold,
+                              onValueChange: (nextThreshold) => {
+                                (setFuzzyThreshold(nextThreshold), onClick());
                               },
                               lang: language("Fuzzy similarity threshold"),
                               "data-ui-label": "Fuzzy similarity threshold",
@@ -666,17 +712,17 @@ function CombinePopulationsDialog(e) {
                   "Headers match exactly; append may reorder columns. Join keys preserve types; selected text normalization is explicit. Blank keys do not match. Every record in each rectangle is included regardless of the current filter view. Output is a values snapshot with source row columns and notes.",
               }),
             }),
-            e.allowHidden &&
+            props.allowHidden &&
               i.jsxs("label", {
                 className: "pc-checkbox",
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
                     "aria-label": text("Include hidden source records"),
-                    checked: D,
-                    disabled: e.readOnly,
+                    checked: includeHidden,
+                    disabled: props.readOnly,
                     onChange: (event) => {
-                      (B(event.target.checked), onClick());
+                      (setIncludeHidden(event.target.checked), onClick());
                     },
                     lang: language("Include hidden source records"),
                     "data-ui-label": "Include hidden source records",
@@ -687,7 +733,7 @@ function CombinePopulationsDialog(e) {
                   }),
                 ],
               }),
-            e.readOnly &&
+            props.readOnly &&
               i.jsx("p", {
                 role: "status",
                 children: i.jsx(LocalizedText, {
@@ -695,20 +741,24 @@ function CombinePopulationsDialog(e) {
                     "The host is read-only. Preview and Apply are unavailable.",
                 }),
               }),
-            R &&
-              $ === ae &&
-              i.jsx("p", { className: "pc-error", role: "alert", children: R }),
+            errorMessage &&
+              errorContextKey === inputsKey &&
+              i.jsx("p", {
+                className: "pc-error",
+                role: "alert",
+                children: errorMessage,
+              }),
             i.jsxs("div", {
               className: "pc-actions",
               children: [
                 i.jsx("button", {
-                  disabled: e.readOnly,
-                  onClick: le,
+                  disabled: props.readOnly,
+                  onClick: buildPreview,
                   children: i.jsx(LocalizedText, {
                     children: "Preview combination",
                   }),
                 }),
-                _ &&
+                preview &&
                   i.jsx("button", {
                     onClick: onClick,
                     children: i.jsx(LocalizedText, {
@@ -717,8 +767,8 @@ function CombinePopulationsDialog(e) {
                   }),
               ],
             }),
-            _ &&
-              !oe &&
+            preview &&
+              !isPreviewCurrent &&
               i.jsx("p", {
                 role: "status",
                 children: i.jsx(LocalizedText, {
@@ -726,30 +776,34 @@ function CombinePopulationsDialog(e) {
                     "The workbook or host context changed. Preview details are withheld. Review a fresh preview.",
                 }),
               }),
-            oe &&
-              _ &&
+            isPreviewCurrent &&
+              preview &&
               i.jsxs("section", {
                 className: "pc-review",
-                ref: a,
+                ref: reviewRef,
                 "aria-label": text("Population combination preview"),
                 lang: language("Population combination preview"),
                 "data-ui-label": "Population combination preview",
                 children: [
                   i.jsxs("h3", {
-                    children: [_.request.outputSheetName, " · ", _.outputRange],
+                    children: [
+                      preview.request.outputSheetName,
+                      " · ",
+                      preview.outputRange,
+                    ],
                   }),
                   i.jsxs("p", {
                     children: [
                       i.jsx(LocalizedText, { children: "Left: " }),
-                      _.counts.leftRows,
+                      preview.counts.leftRows,
                       " ",
                       i.jsx(LocalizedText, { children: "records. Right:" }),
                       " ",
-                      _.counts.rightRows,
+                      preview.counts.rightRows,
                       " ",
                       i.jsx(LocalizedText, { children: "records. Output:" }),
                       " ",
-                      _.counts.outputRows,
+                      preview.counts.outputRows,
                       " ",
                       i.jsx(LocalizedText, { children: "records." }),
                     ],
@@ -757,13 +811,13 @@ function CombinePopulationsDialog(e) {
                   mode !== "append" &&
                     i.jsxs(i.Fragment, {
                       children: [
-                        _.keyProfiles.map((keyProfile, Me) =>
+                        preview.keyProfiles.map((keyProfile, keyProfileIndex) =>
                           i.jsxs(
                             "p",
                             {
                               children: [
                                 i.jsx(LocalizedText, { children: "Key " }),
-                                Me + 1,
+                                keyProfileIndex + 1,
                                 ": ",
                                 keyProfile.leftHeader,
                                 " (",
@@ -777,7 +831,7 @@ function CombinePopulationsDialog(e) {
                                 ").",
                               ],
                             },
-                            Me,
+                            keyProfileIndex,
                           ),
                         ),
                         i.jsxs("p", {
@@ -785,24 +839,24 @@ function CombinePopulationsDialog(e) {
                             i.jsx(LocalizedText, {
                               children: "Matched source rows: ",
                             }),
-                            _.counts.matchedLeftRows,
+                            preview.counts.matchedLeftRows,
                             " ",
                             i.jsx(LocalizedText, { children: "left /" }),
                             " ",
-                            _.counts.matchedRightRows,
+                            preview.counts.matchedRightRows,
                             " ",
                             i.jsx(LocalizedText, {
                               children: "right. Match pairs:",
                             }),
                             " ",
-                            _.counts.matchPairs,
+                            preview.counts.matchPairs,
                             i.jsx(LocalizedText, { children: ". Unmatched:" }),
                             " ",
-                            _.unmatchedLeft.length,
+                            preview.unmatchedLeft.length,
                             " ",
                             i.jsx(LocalizedText, { children: "left /" }),
                             " ",
-                            _.unmatchedRight.length,
+                            preview.unmatchedRight.length,
                             " ",
                             i.jsx(LocalizedText, { children: "right." }),
                           ],
@@ -812,49 +866,51 @@ function CombinePopulationsDialog(e) {
                             i.jsx(LocalizedText, {
                               children: "Duplicate key groups: ",
                             }),
-                            _.counts.duplicateLeftKeys,
+                            preview.counts.duplicateLeftKeys,
                             " ",
                             i.jsx(LocalizedText, { children: "left /" }),
                             " ",
-                            _.counts.duplicateRightKeys,
+                            preview.counts.duplicateRightKeys,
                             " ",
                             i.jsx(LocalizedText, {
                               children: "right. Many-to-many key groups: ",
                             }),
-                            _.counts.manyToManyKeys,
+                            preview.counts.manyToManyKeys,
                             i.jsx(LocalizedText, {
                               children: ". Extra many-to-many pairs: ",
                             }),
-                            _.counts.expandedMatchRows,
+                            preview.counts.expandedMatchRows,
                             ".",
                           ],
                         }),
-                        _.matching &&
+                        preview.matching &&
                           i.jsxs(i.Fragment, {
                             children: [
-                              i.jsx("p", { children: _.matching.policy }),
+                              i.jsx("p", { children: preview.matching.policy }),
                               i.jsxs("p", {
                                 children: [
                                   i.jsx(LocalizedText, {
                                     children: "Rows with multiple matches:",
                                   }),
                                   " ",
-                                  _.matching.ambiguousLeftRows,
+                                  preview.matching.ambiguousLeftRows,
                                   " ",
                                   i.jsx(LocalizedText, { children: "left /" }),
                                   " ",
-                                  _.matching.ambiguousRightRows,
+                                  preview.matching.ambiguousRightRows,
                                   " ",
                                   i.jsx(LocalizedText, {
                                     children:
                                       "right. Normalization collision groups:",
                                   }),
                                   " ",
-                                  _.matching.normalizationCollisionGroups.left,
+                                  preview.matching.normalizationCollisionGroups
+                                    .left,
                                   " ",
                                   i.jsx(LocalizedText, { children: "left /" }),
                                   " ",
-                                  _.matching.normalizationCollisionGroups.right,
+                                  preview.matching.normalizationCollisionGroups
+                                    .right,
                                   " ",
                                   i.jsx(LocalizedText, {
                                     children:
@@ -887,9 +943,9 @@ function CombinePopulationsDialog(e) {
                       i.jsx(LocalizedText, { children: "Review records" }),
                       i.jsxs("select", {
                         "aria-label": text("Population review view"),
-                        value: G,
+                        value: reviewView,
                         onChange: (event) => {
-                          (H(event.target.value), X$1(0));
+                          (setReviewView(event.target.value), X$1(0));
                         },
                         lang: language("Population review view"),
                         "data-ui-label": "Population review view",
@@ -905,7 +961,7 @@ function CombinePopulationsDialog(e) {
                                   value: "left",
                                   children: [
                                     "All unmatched left records (",
-                                    _.unmatchedLeft.length,
+                                    preview.unmatchedLeft.length,
                                     ")",
                                   ],
                                 }),
@@ -913,7 +969,7 @@ function CombinePopulationsDialog(e) {
                                   value: "right",
                                   children: [
                                     "All unmatched right records (",
-                                    _.unmatchedRight.length,
+                                    preview.unmatchedRight.length,
                                     ")",
                                   ],
                                 }),
@@ -921,7 +977,7 @@ function CombinePopulationsDialog(e) {
                                   value: "matches",
                                   children: [
                                     "All match scores and explanations (",
-                                    _.matching?.matches.length ?? 0,
+                                    preview.matching?.matches.length ?? 0,
                                     ")",
                                   ],
                                 }),
@@ -929,7 +985,8 @@ function CombinePopulationsDialog(e) {
                                   value: "normalization",
                                   children: [
                                     "Changed keys (",
-                                    _.matching?.normalizedKeys.length ?? 0,
+                                    preview.matching?.normalizedKeys.length ??
+                                      0,
                                     ")",
                                   ],
                                 }),
@@ -937,7 +994,7 @@ function CombinePopulationsDialog(e) {
                                   value: "exceptions",
                                   children: [
                                     "Match exceptions (",
-                                    _.matching?.exceptions.length ?? 0,
+                                    preview.matching?.exceptions.length ?? 0,
                                     ")",
                                   ],
                                 }),
@@ -957,38 +1014,44 @@ function CombinePopulationsDialog(e) {
                       children: [
                         i.jsx("thead", {
                           children: i.jsx("tr", {
-                            children: ge.map((Re, Me) =>
-                              i.jsx("th", { children: Re }, Me),
+                            children: tableHeaders.map((header, columnIndex) =>
+                              i.jsx("th", { children: header }, columnIndex),
                             ),
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: se
-                            .slice(Ee * w2, (Ee + 1) * w2)
-                            .map((Re, Me) =>
+                          children: tableRows
+                            .slice(currentPage * w2, (currentPage + 1) * w2)
+                            .map((tableRow, pageRowIndex) =>
                               i.jsx(
                                 "tr",
                                 {
-                                  children: Re.map((ke, je) =>
-                                    i.jsx(
-                                      "td",
-                                      {
-                                        title:
-                                          ke === null ? "Blank" : typeof ke,
-                                        children: formatCellValueForDisplay(ke),
-                                      },
-                                      je,
-                                    ),
+                                  children: tableRow.map(
+                                    (cellValue, cellIndex) =>
+                                      i.jsx(
+                                        "td",
+                                        {
+                                          title:
+                                            cellValue === null
+                                              ? "Blank"
+                                              : typeof cellValue,
+                                          children:
+                                            formatCellValueForDisplay(
+                                              cellValue,
+                                            ),
+                                        },
+                                        cellIndex,
+                                      ),
                                   ),
                                 },
-                                Ee * w2 + Me,
+                                currentPage * w2 + pageRowIndex,
                               ),
                             ),
                         }),
                       ],
                     }),
                   }),
-                  !se.length &&
+                  !tableRows.length &&
                     i.jsx("p", {
                       children: i.jsx(LocalizedText, {
                         children:
@@ -999,8 +1062,8 @@ function CombinePopulationsDialog(e) {
                     className: "pc-pages",
                     children: [
                       i.jsx("button", {
-                        disabled: !Ee,
-                        onClick: () => X$1(Ee - 1),
+                        disabled: !currentPage,
+                        onClick: () => X$1(currentPage - 1),
                         children: i.jsx(LocalizedText, {
                           children: "Previous records",
                         }),
@@ -1009,19 +1072,19 @@ function CombinePopulationsDialog(e) {
                         "aria-live": "polite",
                         children: [
                           i.jsx(LocalizedText, { children: "Page " }),
-                          Ee + 1,
+                          currentPage + 1,
                           " ",
                           i.jsx(LocalizedText, { children: "of " }),
-                          we,
+                          pageCount,
                           " · ",
-                          se.length,
+                          tableRows.length,
                           " ",
                           i.jsx(LocalizedText, { children: "records" }),
                         ],
                       }),
                       i.jsx("button", {
-                        disabled: Ee >= we - 1,
-                        onClick: () => X$1(Ee + 1),
+                        disabled: currentPage >= pageCount - 1,
+                        onClick: () => X$1(currentPage + 1),
                         children: i.jsx(LocalizedText, {
                           children: "Next records",
                         }),
@@ -1036,32 +1099,33 @@ function CombinePopulationsDialog(e) {
                   }),
                   i.jsx("button", {
                     onClick: () => {
-                      const Re = {
+                      const reviewExport = {
                           schemaVersion: 1,
-                          workbookId: _.next.id,
-                          revision: _.next.revision,
-                          request: _.request,
-                          context: _.context,
-                          left: _.left,
-                          right: _.right,
-                          counts: _.counts,
-                          headers: _.headers,
-                          rows: _.rows,
-                          unmatchedLeft: _.unmatchedLeft,
-                          unmatchedRight: _.unmatchedRight,
-                          keyProfiles: _.keyProfiles,
-                          matching: _.matching,
+                          workbookId: preview.next.id,
+                          revision: preview.next.revision,
+                          request: preview.request,
+                          context: preview.context,
+                          left: preview.left,
+                          right: preview.right,
+                          counts: preview.counts,
+                          headers: preview.headers,
+                          rows: preview.rows,
+                          unmatchedLeft: preview.unmatchedLeft,
+                          unmatchedRight: preview.unmatchedRight,
+                          keyProfiles: preview.keyProfiles,
+                          matching: preview.matching,
                         },
-                        Me = URL.createObjectURL(
-                          new Blob([JSON.stringify(Re, null, 2)], {
+                        objectUrl = URL.createObjectURL(
+                          new Blob([JSON.stringify(reviewExport, null, 2)], {
                             type: "application/json",
                           }),
                         ),
-                        ke = document.createElement("a");
-                      ((ke.href = Me),
-                        (ke.download = "Population-combine-review.json"),
-                        ke.click(),
-                        setTimeout(() => URL.revokeObjectURL(Me), 5e3));
+                        downloadLink = document.createElement("a");
+                      ((downloadLink.href = objectUrl),
+                        (downloadLink.download =
+                          "Population-combine-review.json"),
+                        downloadLink.click(),
+                        setTimeout(() => URL.revokeObjectURL(objectUrl), 5e3));
                     },
                     children: i.jsx(LocalizedText, {
                       children: "Save combination review",
@@ -1074,12 +1138,12 @@ function CombinePopulationsDialog(e) {
         i.jsxs("footer", {
           children: [
             i.jsx("button", {
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
-              disabled: !oe,
-              onClick: ce,
+              disabled: !isPreviewCurrent,
+              onClick: applyCombination,
               children: i.jsx(LocalizedText, {
                 children: "Create combined worksheet",
               }),
@@ -1091,68 +1155,72 @@ function CombinePopulationsDialog(e) {
   });
 }
 const Fv = 20,
-  stringifyJsonValue = (e) => JSON.stringify(e);
-function TextToColumnsDialog(e) {
+  stringifyJsonValue = (value) => JSON.stringify(value);
+function TextToColumnsDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(false),
-    [sourceSheetId, d] = ne.useState(e.sheetId),
-    [sourceRange, l] = ne.useState(e.range),
-    [separator, h] = ne.useState(","),
-    [custom, p] = ne.useState("|"),
-    [m, v] = ne.useState(false),
-    [destination, b] = ne.useState(
-      e.allowNewSheet === false ? "range" : "new-sheet",
+    dialogId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    isAppliedRef = ne.useRef(false),
+    [sourceSheetId, setSourceSheetId] = ne.useState(props.sheetId),
+    [sourceRange, setSourceRange] = ne.useState(props.range),
+    [separator, setSeparator] = ne.useState(","),
+    [custom, setCustom] = ne.useState("|"),
+    [hasHeader, setHasHeader] = ne.useState(false),
+    [destination, setDestination] = ne.useState(
+      props.allowNewSheet === false ? "range" : "new-sheet",
     ),
-    [y, w] = ne.useState(e.sheetId),
-    [E, A] = ne.useState(""),
-    [k, F] = ne.useState("Split text"),
-    [checked, O] = ne.useState(false),
-    [formats, z] = ne.useState([]),
-    [V, D] = ne.useState(0),
-    [B, _] = ne.useState(null),
-    [C, T] = ne.useState(0),
-    [N, R] = ne.useState(null),
+    [targetSheetId, setTargetSheetId] = ne.useState(props.sheetId),
+    [targetAddress, setTargetAddress] = ne.useState(""),
+    [outputSheetName, setOutputSheetName] = ne.useState("Split text"),
+    [checked, setIncludeHidden] = ne.useState(false),
+    [formats, setFormats] = ne.useState([]),
+    [fieldCount, setFieldCount] = ne.useState(0),
+    [pendingPreview, setPendingPreview] = ne.useState(null),
+    [previewPage, setPreviewPage] = ne.useState(0),
+    [previewError, setPreviewError] = ne.useState(null),
     allowedSheetIds = [
       ...new Set(
-        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+        props.allowedSheetIds ?? props.workbook.sheets.map((sheet) => sheet.id),
       ),
     ].sort(),
-    $ = {
-      readOnly: e.readOnly,
+    splitOptions = {
+      readOnly: props.readOnly,
       allowedSheetIds: allowedSheetIds,
-      includeHidden: !!e.allowHidden && checked,
-      allowNewSheet: e.allowNewSheet ?? true,
+      includeHidden: !!props.allowHidden && checked,
+      allowNewSheet: props.allowNewSheet ?? true,
     },
-    U = e.workbook.sheets.filter(
+    visibleSheets = props.workbook.sheets.filter(
       (sheet) =>
         allowedSheetIds.includes(sheet.id) &&
-        ($.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
+        (splitOptions.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     ),
-    G = JSON.stringify({
+    formKey = JSON.stringify({
       sourceSheetId: sourceSheetId,
       sourceRange: sourceRange,
       separator: separator,
       custom: custom,
-      header: m,
+      header: hasHeader,
       destination: destination,
-      targetSheetId: y,
-      targetAddress: E,
-      name: k,
+      targetSheetId: targetSheetId,
+      targetAddress: targetAddress,
+      name: outputSheetName,
       formats: formats,
-      options: $,
-      selection: [e.sheetId, e.range],
+      options: splitOptions,
+      selection: [props.sheetId, props.range],
     }),
-    H = B?.key === G && B.plan.snapshot === JSON.stringify(e.workbook),
-    Q = H ? B.plan : null;
+    isPreviewCurrent =
+      pendingPreview?.key === formKey &&
+      pendingPreview.plan.snapshot === JSON.stringify(props.workbook),
+    currentPlan = isPreviewCurrent ? pendingPreview.plan : null;
   (ne.useEffect(() => {
     const activeElement = document.activeElement,
-      oe = o.current?.querySelector('[data-ui-label="Source range"]');
+      sourceRangeInput = dialogRef.current?.querySelector(
+        '[data-ui-label="Source range"]',
+      );
     return (
-      (oe && !oe.matches(":disabled")
-        ? oe
-        : o.current?.querySelector("button")
+      (sourceRangeInput && !sourceRangeInput.matches(":disabled")
+        ? sourceRangeInput
+        : dialogRef.current?.querySelector("button")
       )?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
@@ -1160,21 +1228,28 @@ function TextToColumnsDialog(e) {
     );
   }, []),
     ne.useEffect(() => {
-      (d(e.sheetId), l(e.range), z([]), D(0), _(null), R(null));
-    }, [e.sheetId, e.range]));
+      (setSourceSheetId(props.sheetId),
+        setSourceRange(props.range),
+        setFormats([]),
+        setFieldCount(0),
+        setPendingPreview(null),
+        setPreviewError(null));
+    }, [props.sheetId, props.range]));
   const X$1 = () => {
-      (_(null), R(null), (a.current = false));
+      (setPendingPreview(null),
+        setPreviewError(null),
+        (isAppliedRef.current = false));
     },
-    J = (ae, oe) => {
-      (ae(oe), X$1());
+    updateSetting = (setState, nextValue) => {
+      (setState(nextValue), X$1());
     },
-    q = (ae) =>
-      R({
-        key: G,
-        snapshot: JSON.stringify(e.workbook),
+    recordPreviewError = (caughtError) =>
+      setPreviewError({
+        key: formKey,
+        snapshot: JSON.stringify(props.workbook),
         message:
-          ae instanceof Error
-            ? ae.message
+          caughtError instanceof Error
+            ? caughtError.message
             : "Text could not be split. Review the source and settings.",
       }),
     onClick = () => {
@@ -1184,67 +1259,87 @@ function TextToColumnsDialog(e) {
             sourceSheetId: sourceSheetId,
             sourceRange: sourceRange,
             delimiter: separator === "custom" ? custom : separator,
-            header: m ? "first-row" : "none",
+            header: hasHeader ? "first-row" : "none",
             formats: formats,
             destination:
               destination === "new-sheet"
-                ? { kind: "new-sheet", name: k }
-                : { kind: "range", sheetId: y, address: E },
+                ? { kind: "new-sheet", name: outputSheetName }
+                : {
+                    kind: "range",
+                    sheetId: targetSheetId,
+                    address: targetAddress,
+                  },
           },
-          textSplitResult = buildTextSplitResult(e.workbook, request, $);
-        (D(textSplitResult.width), T(0), _({ plan: textSplitResult, key: G }));
+          textSplitResult = buildTextSplitResult(
+            props.workbook,
+            request,
+            splitOptions,
+          );
+        (setFieldCount(textSplitResult.width),
+          setPreviewPage(0),
+          setPendingPreview({ plan: textSplitResult, key: formKey }));
       } catch (error) {
-        q(error);
+        recordPreviewError(error);
       }
     },
-    K = () => {
-      if (!(!Q || a.current || e.readOnly))
+    applyPreview = () => {
+      if (!(!currentPlan || isAppliedRef.current || props.readOnly))
         try {
-          const ae = applyTextSplitPreview(e.workbook, Q, $);
-          ((a.current = true),
-            e.onWorkbookChange(
-              ae,
-              `Text to Columns: ${Q.sourceSheetName}!${Q.request.sourceRange} → ${Q.targetSheetName}!${Q.targetRange}`,
+          const nextWorkbook = applyTextSplitPreview(
+            props.workbook,
+            currentPlan,
+            splitOptions,
+          );
+          ((isAppliedRef.current = true),
+            props.onWorkbookChange(
+              nextWorkbook,
+              `Text to Columns: ${currentPlan.sourceSheetName}!${currentPlan.request.sourceRange} → ${currentPlan.targetSheetName}!${currentPlan.targetRange}`,
             ),
-            _(null),
-            R(null));
+            setPendingPreview(null),
+            setPreviewError(null));
         } catch (error) {
-          q(error);
+          recordPreviewError(error);
         }
     },
-    te = (ae) => U.some((oe) => oe.id === ae);
+    isVisibleSheet = (sheetId) =>
+      visibleSheets.some((visibleSheet) => visibleSheet.id === sheetId);
   return i.jsx("div", {
     className: "ttc-backdrop",
     onMouseDown: (event) => {
-      event.target === event.currentTarget && e.onClose();
+      event.target === event.currentTarget && props.onClose();
     },
     children: i.jsxs("section", {
-      ref: o,
+      ref: dialogRef,
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": `${n}-title`,
+      "aria-labelledby": `${dialogId}-title`,
       className: "ttc-dialog",
       onKeyDown: (event) => {
-        var de, he;
+        var lastFocusable, firstFocusable;
         if (
           (event.stopPropagation(),
-          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Escape" && (event.preventDefault(), props.onClose()),
           event.key === "Tab")
         ) {
-          const Se = [
-            ...(o.current?.querySelectorAll("button,input,select,summary") ??
-              []),
+          const focusableElements = [
+            ...(dialogRef.current?.querySelectorAll(
+              "button,input,select,summary",
+            ) ?? []),
           ].filter(
-            (le) =>
-              !le.matches(":disabled") &&
-              !le.hidden &&
-              !le.closest("details:not([open]) > :not(summary)"),
+            (element) =>
+              !element.matches(":disabled") &&
+              !element.hidden &&
+              !element.closest("details:not([open]) > :not(summary)"),
           );
-          event.shiftKey && document.activeElement === Se[0]
-            ? (event.preventDefault(), (de = Se.at(-1)) == null || de.focus())
+          event.shiftKey && document.activeElement === focusableElements[0]
+            ? (event.preventDefault(),
+              (lastFocusable = focusableElements.at(-1)) == null ||
+                lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === Se.at(-1) &&
-              (event.preventDefault(), (he = Se[0]) == null || he.focus());
+              document.activeElement === focusableElements.at(-1) &&
+              (event.preventDefault(),
+              (firstFocusable = focusableElements[0]) == null ||
+                firstFocusable.focus());
         }
       },
       children: [
@@ -1253,7 +1348,7 @@ function TextToColumnsDialog(e) {
             i.jsxs("div", {
               children: [
                 i.jsx("h2", {
-                  id: `${n}-title`,
+                  id: `${dialogId}-title`,
                   children: i.jsx(LocalizedText, {
                     children: "Text to Columns",
                   }),
@@ -1268,7 +1363,7 @@ function TextToColumnsDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close Text to Columns"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close Text to Columns"),
               "data-ui-label": "Close Text to Columns",
               children: i.jsx(X, { size: 18 }),
@@ -1282,7 +1377,7 @@ function TextToColumnsDialog(e) {
           }),
         }),
         i.jsxs("fieldset", {
-          disabled: e.readOnly,
+          disabled: props.readOnly,
           className: "ttc-fields",
           children: [
             i.jsx("legend", {
@@ -1293,9 +1388,11 @@ function TextToColumnsDialog(e) {
                 i.jsx(LocalizedText, { children: "Source worksheet" }),
                 i.jsxs("select", {
                   "aria-label": text("Source worksheet"),
-                  value: te(sourceSheetId) ? sourceSheetId : "",
+                  value: isVisibleSheet(sourceSheetId) ? sourceSheetId : "",
                   onChange: (event) => {
-                    (J(d, event.target.value), z([]), D(0));
+                    (updateSetting(setSourceSheetId, event.target.value),
+                      setFormats([]),
+                      setFieldCount(0));
                   },
                   lang: language("Source worksheet"),
                   "data-ui-label": "Source worksheet",
@@ -1305,11 +1402,11 @@ function TextToColumnsDialog(e) {
                       disabled: true,
                       children: "Choose worksheet",
                     }),
-                    U.map((ae) =>
+                    visibleSheets.map((sourceSheet) =>
                       i.jsx(
                         "option",
-                        { value: ae.id, children: ae.name },
-                        ae.id,
+                        { value: sourceSheet.id, children: sourceSheet.name },
+                        sourceSheet.id,
                       ),
                     ),
                   ],
@@ -1323,7 +1420,9 @@ function TextToColumnsDialog(e) {
                   "aria-label": text("Source range"),
                   value: sourceRange,
                   onChange: (event) => {
-                    (J(l, event.target.value), z([]), D(0));
+                    (updateSetting(setSourceRange, event.target.value),
+                      setFormats([]),
+                      setFieldCount(0));
                   },
                   lang: language("Source range"),
                   "data-ui-label": "Source range",
@@ -1337,7 +1436,9 @@ function TextToColumnsDialog(e) {
                   "aria-label": text("Delimiter"),
                   value: separator,
                   onChange: (event) => {
-                    (J(h, event.target.value), z([]), D(0));
+                    (updateSetting(setSeparator, event.target.value),
+                      setFormats([]),
+                      setFieldCount(0));
                   },
                   lang: language("Delimiter"),
                   "data-ui-label": "Delimiter",
@@ -1362,7 +1463,9 @@ function TextToColumnsDialog(e) {
                     "aria-label": text("Custom delimiter"),
                     value: custom,
                     onChange: (event) => {
-                      (J(p, event.target.value), z([]), D(0));
+                      (updateSetting(setCustom, event.target.value),
+                        setFormats([]),
+                        setFieldCount(0));
                     },
                     lang: language("Custom delimiter"),
                     "data-ui-label": "Custom delimiter",
@@ -1374,9 +1477,9 @@ function TextToColumnsDialog(e) {
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: m,
+                  checked: hasHeader,
                   onChange: (event) => {
-                    (v(event.target.checked), X$1());
+                    (setHasHeader(event.target.checked), X$1());
                   },
                 }),
                 i.jsx(LocalizedText, {
@@ -1384,7 +1487,7 @@ function TextToColumnsDialog(e) {
                 }),
               ],
             }),
-            e.allowHidden &&
+            props.allowHidden &&
               i.jsxs("label", {
                 className: "ttc-check",
                 children: [
@@ -1392,7 +1495,7 @@ function TextToColumnsDialog(e) {
                     type: "checkbox",
                     checked: checked,
                     onChange: (event) => {
-                      (O(event.target.checked), X$1());
+                      (setIncludeHidden(event.target.checked), X$1());
                     },
                   }),
                   i.jsx(LocalizedText, { children: "Include hidden cells" }),
@@ -1404,13 +1507,14 @@ function TextToColumnsDialog(e) {
                 i.jsxs("select", {
                   "aria-label": text("Output destination"),
                   value: destination,
-                  onChange: (event) => J(b, event.target.value),
+                  onChange: (event) =>
+                    updateSetting(setDestination, event.target.value),
                   lang: language("Output destination"),
                   "data-ui-label": "Output destination",
                   children: [
                     i.jsx("option", {
                       value: "new-sheet",
-                      disabled: e.allowNewSheet === false,
+                      disabled: props.allowNewSheet === false,
                       children: "New worksheet",
                     }),
                     i.jsx("option", {
@@ -1427,8 +1531,9 @@ function TextToColumnsDialog(e) {
                     i.jsx(LocalizedText, { children: "Output worksheet name" }),
                     i.jsx("input", {
                       "aria-label": text("Output worksheet name"),
-                      value: k,
-                      onChange: (event) => J(F, event.target.value),
+                      value: outputSheetName,
+                      onChange: (event) =>
+                        updateSetting(setOutputSheetName, event.target.value),
                       lang: language("Output worksheet name"),
                       "data-ui-label": "Output worksheet name",
                     }),
@@ -1441,8 +1546,11 @@ function TextToColumnsDialog(e) {
                         i.jsx(LocalizedText, { children: "Output worksheet" }),
                         i.jsxs("select", {
                           "aria-label": text("Output worksheet"),
-                          value: te(y) ? y : "",
-                          onChange: (event) => J(w, event.target.value),
+                          value: isVisibleSheet(targetSheetId)
+                            ? targetSheetId
+                            : "",
+                          onChange: (event) =>
+                            updateSetting(setTargetSheetId, event.target.value),
                           lang: language("Output worksheet"),
                           "data-ui-label": "Output worksheet",
                           children: [
@@ -1451,11 +1559,14 @@ function TextToColumnsDialog(e) {
                               disabled: true,
                               children: "Choose worksheet",
                             }),
-                            U.map((ae) =>
+                            visibleSheets.map((outputSheet) =>
                               i.jsx(
                                 "option",
-                                { value: ae.id, children: ae.name },
-                                ae.id,
+                                {
+                                  value: outputSheet.id,
+                                  children: outputSheet.name,
+                                },
+                                outputSheet.id,
                               ),
                             ),
                           ],
@@ -1469,9 +1580,10 @@ function TextToColumnsDialog(e) {
                         }),
                         i.jsx("input", {
                           "aria-label": text("Output starting cell"),
-                          value: E,
+                          value: targetAddress,
                           placeholder: text("For example D1"),
-                          onChange: (event) => J(A, event.target.value),
+                          onChange: (event) =>
+                            updateSetting(setTargetAddress, event.target.value),
                           lang: language("Output starting cell"),
                           "data-ui-label": "Output starting cell",
                         }),
@@ -1481,9 +1593,9 @@ function TextToColumnsDialog(e) {
                 }),
           ],
         }),
-        !!V &&
+        !!fieldCount &&
           i.jsxs("fieldset", {
-            disabled: e.readOnly,
+            disabled: props.readOnly,
             className: "ttc-formats",
             children: [
               i.jsx("legend", {
@@ -1497,22 +1609,24 @@ function TextToColumnsDialog(e) {
                     "Choose a type for each field, then preview again. Heading fields remain text.",
                 }),
               }),
-              Array.from({ length: V }, (ae, oe) =>
+              Array.from({ length: fieldCount }, (ae, fieldIndex) =>
                 i.jsxs(
                   "label",
                   {
                     children: [
                       i.jsx(LocalizedText, { children: "Field " }),
-                      oe + 1,
+                      fieldIndex + 1,
                       i.jsxs("select", {
-                        "aria-label": `Field ${oe + 1} conversion`,
-                        value: formats[oe] ?? "text",
+                        "aria-label": `Field ${fieldIndex + 1} conversion`,
+                        value: formats[fieldIndex] ?? "text",
                         onChange: (event) => {
-                          const he = Array.from(
-                            { length: V },
-                            (Se, le) => formats[le] ?? "text",
+                          const nextFormats = Array.from(
+                            { length: fieldCount },
+                            (Se, formatIndex) => formats[formatIndex] ?? "text",
                           );
-                          ((he[oe] = event.target.value), z(he), X$1());
+                          ((nextFormats[fieldIndex] = event.target.value),
+                            setFormats(nextFormats),
+                            X$1());
                         },
                         children: [
                           i.jsx("option", { value: "text", children: "Text" }),
@@ -1524,33 +1638,33 @@ function TextToColumnsDialog(e) {
                       }),
                     ],
                   },
-                  oe,
+                  fieldIndex,
                 ),
               ),
             ],
           }),
         i.jsx("button", {
           className: "ttc-primary",
-          disabled: e.readOnly,
+          disabled: props.readOnly,
           onClick: onClick,
           children: i.jsx(LocalizedText, { children: "Preview split" }),
         }),
-        e.readOnly &&
+        props.readOnly &&
           i.jsx("p", {
             role: "status",
             children: i.jsx(LocalizedText, {
               children: "This workbook is read-only.",
             }),
           }),
-        N?.key === G &&
-          N.snapshot === JSON.stringify(e.workbook) &&
+        previewError?.key === formKey &&
+          previewError.snapshot === JSON.stringify(props.workbook) &&
           i.jsx("p", {
             className: "ttc-error",
             role: "alert",
-            children: N.message,
+            children: previewError.message,
           }),
-        B &&
-          !H &&
+        pendingPreview &&
+          !isPreviewCurrent &&
           i.jsx("p", {
             role: "status",
             children: i.jsx(LocalizedText, {
@@ -1558,7 +1672,7 @@ function TextToColumnsDialog(e) {
                 "The workbook, selection or permissions changed. Preview again.",
             }),
           }),
-        Q &&
+        currentPlan &&
           i.jsxs("section", {
             className: "ttc-preview",
             "aria-label": text("Text to Columns preview"),
@@ -1567,26 +1681,26 @@ function TextToColumnsDialog(e) {
             children: [
               i.jsxs("h3", {
                 children: [
-                  Q.height,
+                  currentPlan.height,
                   " ",
                   i.jsx(LocalizedText, { children: "source rows → " }),
-                  Q.width,
+                  currentPlan.width,
                   " ",
                   i.jsx(LocalizedText, { children: "output columns" }),
                 ],
               }),
               i.jsxs("p", {
                 children: [
-                  Q.sourceSheetName,
+                  currentPlan.sourceSheetName,
                   "!",
-                  Q.request.sourceRange,
+                  currentPlan.request.sourceRange,
                   " →",
                   " ",
-                  Q.targetSheetName,
+                  currentPlan.targetSheetName,
                   "!",
-                  Q.targetRange,
+                  currentPlan.targetRange,
                   ". ",
-                  Q.outputs.length,
+                  currentPlan.outputs.length,
                   " ",
                   i.jsx(LocalizedText, {
                     children:
@@ -1594,29 +1708,30 @@ function TextToColumnsDialog(e) {
                   }),
                 ],
               }),
-              !!Q.diagnostics.length &&
+              !!currentPlan.diagnostics.length &&
                 i.jsxs("details", {
                   children: [
                     i.jsxs("summary", {
                       children: [
-                        Q.diagnostics.length,
+                        currentPlan.diagnostics.length,
                         " ",
                         i.jsx(LocalizedText, { children: "split notices" }),
                       ],
                     }),
                     i.jsx("ul", {
-                      children: Q.diagnostics.map((diagnostic, oe) =>
-                        i.jsxs(
-                          "li",
-                          {
-                            children: [
-                              diagnostic.sourceAddress,
-                              ": ",
-                              diagnostic.message,
-                            ],
-                          },
-                          oe,
-                        ),
+                      children: currentPlan.diagnostics.map(
+                        (diagnostic, diagnosticIndex) =>
+                          i.jsxs(
+                            "li",
+                            {
+                              children: [
+                                diagnostic.sourceAddress,
+                                ": ",
+                                diagnostic.message,
+                              ],
+                            },
+                            diagnosticIndex,
+                          ),
                       ),
                     }),
                   ],
@@ -1628,13 +1743,16 @@ function TextToColumnsDialog(e) {
                     i.jsxs("caption", {
                       children: [
                         i.jsx(LocalizedText, { children: "Output cells " }),
-                        C * Fv + 1,
+                        previewPage * Fv + 1,
                         "–",
-                        Math.min((C + 1) * Fv, Q.outputs.length),
+                        Math.min(
+                          (previewPage + 1) * Fv,
+                          currentPlan.outputs.length,
+                        ),
                         " ",
                         i.jsx(LocalizedText, { children: "of" }),
                         " ",
-                        Q.outputs.length,
+                        currentPlan.outputs.length,
                       ],
                     }),
                     i.jsx("thead", {
@@ -1669,20 +1787,22 @@ function TextToColumnsDialog(e) {
                       }),
                     }),
                     i.jsx("tbody", {
-                      children: Q.outputs
-                        .slice(C * Fv, (C + 1) * Fv)
-                        .map((ae) =>
+                      children: currentPlan.outputs
+                        .slice(previewPage * Fv, (previewPage + 1) * Fv)
+                        .map((output) =>
                           i.jsxs(
                             "tr",
                             {
                               children: [
-                                i.jsx("td", { children: ae.sourceAddress }),
+                                i.jsx("td", { children: output.sourceAddress }),
                                 i.jsxs("td", {
                                   children: [
                                     i.jsx("code", {
-                                      children: stringifyJsonValue(ae.field),
+                                      children: stringifyJsonValue(
+                                        output.field,
+                                      ),
                                     }),
-                                    ae.padded &&
+                                    output.padded &&
                                       i.jsxs("span", {
                                         children: [
                                           " ",
@@ -1693,16 +1813,18 @@ function TextToColumnsDialog(e) {
                                       }),
                                   ],
                                 }),
-                                i.jsx("td", { children: ae.address }),
+                                i.jsx("td", { children: output.address }),
                                 i.jsxs("td", {
                                   children: [
                                     i.jsx("code", {
-                                      children: stringifyJsonValue(ae.cell.raw),
+                                      children: stringifyJsonValue(
+                                        output.cell.raw,
+                                      ),
                                     }),
                                     i.jsx("br", {}),
-                                    ae.type,
+                                    output.type,
                                     " · ",
-                                    ae.format,
+                                    output.format,
                                   ],
                                 }),
                                 i.jsx("td", {
@@ -1717,12 +1839,12 @@ function TextToColumnsDialog(e) {
                                       i.jsx("pre", {
                                         children: JSON.stringify(
                                           {
-                                            source: Q.sources.find(
+                                            source: currentPlan.sources.find(
                                               (source) =>
                                                 source.address ===
-                                                ae.sourceAddress,
+                                                output.sourceAddress,
                                             ),
-                                            output: ae.cell,
+                                            output: output.cell,
                                           },
                                           null,
                                           2,
@@ -1733,7 +1855,7 @@ function TextToColumnsDialog(e) {
                                 }),
                               ],
                             },
-                            ae.address,
+                            output.address,
                           ),
                         ),
                     }),
@@ -1744,8 +1866,8 @@ function TextToColumnsDialog(e) {
                 className: "ttc-pages",
                 children: [
                   i.jsx("button", {
-                    onClick: () => T(C - 1),
-                    disabled: C === 0,
+                    onClick: () => setPreviewPage(previewPage - 1),
+                    disabled: previewPage === 0,
                     children: i.jsx(LocalizedText, {
                       children: "Previous output cells",
                     }),
@@ -1753,15 +1875,16 @@ function TextToColumnsDialog(e) {
                   i.jsxs("span", {
                     children: [
                       i.jsx(LocalizedText, { children: "Page " }),
-                      C + 1,
+                      previewPage + 1,
                       " ",
                       i.jsx(LocalizedText, { children: "of " }),
-                      Math.ceil(Q.outputs.length / Fv),
+                      Math.ceil(currentPlan.outputs.length / Fv),
                     ],
                   }),
                   i.jsx("button", {
-                    onClick: () => T(C + 1),
-                    disabled: (C + 1) * Fv >= Q.outputs.length,
+                    onClick: () => setPreviewPage(previewPage + 1),
+                    disabled:
+                      (previewPage + 1) * Fv >= currentPlan.outputs.length,
                     children: i.jsx(LocalizedText, {
                       children: "Next output cells",
                     }),
@@ -1771,15 +1894,15 @@ function TextToColumnsDialog(e) {
               i.jsxs("footer", {
                 children: [
                   i.jsx("button", {
-                    onClick: () => _(null),
+                    onClick: () => setPendingPreview(null),
                     children: i.jsx(LocalizedText, {
                       children: "Cancel split preview",
                     }),
                   }),
                   i.jsx("button", {
                     className: "ttc-primary",
-                    onClick: K,
-                    disabled: e.readOnly,
+                    onClick: applyPreview,
+                    disabled: props.readOnly,
                     children: i.jsx(LocalizedText, { children: "Apply split" }),
                   }),
                 ],
@@ -1795,7 +1918,7 @@ function TextToColumnsDialog(e) {
         }),
         i.jsx("footer", {
           children: i.jsx("button", {
-            onClick: e.onClose,
+            onClick: props.onClose,
             children: i.jsx(LocalizedText, { children: "Close" }),
           }),
         }),
@@ -1803,34 +1926,34 @@ function TextToColumnsDialog(e) {
     }),
   });
 }
-const formatFormulaLiteral = (e) =>
-  typeof e == "string"
-    ? `"${e.replaceAll('"', '""')}"`
-    : typeof e == "boolean"
-      ? e
+const formatFormulaLiteral = (value) =>
+  typeof value == "string"
+    ? `"${value.replaceAll('"', '""')}"`
+    : typeof value == "boolean"
+      ? value
         ? "TRUE"
         : "FALSE"
-      : String(e);
-function buildTextCleanupFormula(steps, r) {
-  let t = r;
-  for (const n of validateTextCleanupSteps(steps)) {
-    const o = n.args.map(formatFormulaLiteral);
-    (["FIND", "SEARCH"].includes(n.function)
-      ? o.splice(1, 0, t)
-      : n.function === "TEXTJOIN"
-        ? o.splice(2, 0, t)
-        : o.unshift(t),
-      (t = `${n.function}(${o.join(",")})`));
+      : String(value);
+function buildTextCleanupFormula(steps, sourceReference) {
+  let expression = sourceReference;
+  for (const step of validateTextCleanupSteps(steps)) {
+    const formattedArgs = step.args.map(formatFormulaLiteral);
+    (["FIND", "SEARCH"].includes(step.function)
+      ? formattedArgs.splice(1, 0, expression)
+      : step.function === "TEXTJOIN"
+        ? formattedArgs.splice(2, 0, expression)
+        : formattedArgs.unshift(expression),
+      (expression = `${step.function}(${formattedArgs.join(",")})`));
   }
-  return `=${t}`;
+  return `=${expression}`;
 }
 function validateTextCleanupRequest(request) {
   if (
     !request ||
     typeof request != "object" ||
     Object.keys(request).some(
-      (n) =>
-        !["sourceSheetId", "sourceRange", "outputName", "steps"].includes(n),
+      (key) =>
+        !["sourceSheetId", "sourceRange", "outputName", "steps"].includes(key),
     ) ||
     typeof request.sourceSheetId != "string" ||
     typeof request.sourceRange != "string" ||
@@ -1856,44 +1979,51 @@ function validateTextCleanupRequest(request) {
     steps: validateTextCleanupSteps(request.steps),
   };
 }
-function previewTextCleanup(workbook, request, t = {}) {
-  const context = validateTextToColumnsPermissions(workbook, t),
-    o = validateTextCleanupRequest(request);
+function previewTextCleanup(workbook, request, options = {}) {
+  const context = validateTextToColumnsPermissions(workbook, options),
+    cleanupRequest = validateTextCleanupRequest(request);
   if (!context.allowNewSheet || workbook.structureProtection?.enabled)
     throw Error("Creating an output worksheet is not permitted.");
-  const sheet = workbook.sheets.find((sheet) => sheet.id === o.sourceSheetId);
+  const sheet = workbook.sheets.find(
+    (sheet) => sheet.id === cleanupRequest.sourceSheetId,
+  );
   if (!sheet) throw Error("Choose an existing source worksheet.");
-  assertSelectionInAuthorizedSheet(sheet, o.sourceRange, context);
-  const rangeAddress = parseRangeAddress(o.sourceRange),
-    d = rangeAddress.lastRow - rangeAddress.firstRow + 1;
-  if (rangeAddress.firstCol !== rangeAddress.lastCol || d > 500)
+  assertSelectionInAuthorizedSheet(sheet, cleanupRequest.sourceRange, context);
+  const rangeAddress = parseRangeAddress(cleanupRequest.sourceRange),
+    rowCount = rangeAddress.lastRow - rangeAddress.firstRow + 1;
+  if (rangeAddress.firstCol !== rangeAddress.lastCol || rowCount > 500)
     throw Error("Select one source column containing at most 500 cells.");
   if (
     sheet.merges?.some((merge) => {
-      const y = parseRangeAddress(merge);
+      const mergeRange = parseRangeAddress(merge);
       return (
-        y.firstRow <= rangeAddress.lastRow &&
-        y.lastRow >= rangeAddress.firstRow &&
-        y.firstCol <= rangeAddress.lastCol &&
-        y.lastCol >= rangeAddress.firstCol
+        mergeRange.firstRow <= rangeAddress.lastRow &&
+        mergeRange.lastRow >= rangeAddress.firstRow &&
+        mergeRange.firstCol <= rangeAddress.lastCol &&
+        mergeRange.lastCol >= rangeAddress.firstCol
       );
     })
   )
     throw Error("Unmerge the source before cleaning text.");
   if (
     workbook.sheets.some(
-      (sheet) => sheet.name.toLowerCase() === o.outputName.toLowerCase(),
+      (sheet) =>
+        sheet.name.toLowerCase() === cleanupRequest.outputName.toLowerCase(),
     )
   )
     throw Error("The output worksheet name is already used.");
   if (
-    (assertOutputNameUnreferenced(workbook, o.outputName),
+    (assertOutputNameUnreferenced(workbook, cleanupRequest.outputName),
     discoverArrayFormulaAnchors(
       workbook,
-      [{ sheet: sheet, range: o.sourceRange }],
+      [{ sheet: sheet, range: cleanupRequest.sourceRange }],
       context,
     ),
-    workbook.sheets.reduce((b, y) => b + Object.keys(y.cells).length, 0) + d >
+    workbook.sheets.reduce(
+      (total, worksheet) => total + Object.keys(worksheet.cells).length,
+      0,
+    ) +
+      rowCount >
       workbookLimits.maxCells)
   )
     throw Error("Cleanup output exceeds the 100,000 stored-cell budget.");
@@ -1902,9 +2032,9 @@ function previewTextCleanup(workbook, request, t = {}) {
     errors = [],
     worksheetRecord = createWorksheetRecord("Text calculation");
   worksheetRecord.id = "text-calculation";
-  let f = 0;
-  for (let b = 0; b < d; b++) {
-    const sourceAddress = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + b + 1}`,
+  let sourceCharacterCount = 0;
+  for (let rowOffset = 0; rowOffset < rowCount; rowOffset++) {
+    const sourceAddress = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + rowOffset + 1}`,
       cell = sheet.cells[sourceAddress];
     if (
       cell &&
@@ -1915,30 +2045,35 @@ function previewTextCleanup(workbook, request, t = {}) {
       throw Error(
         `Source ${sourceAddress} is a formula. Create a reviewed values snapshot before cleanup.`,
       );
-    if ((f += String(cell?.raw ?? "").length) > 2e5)
+    if ((sourceCharacterCount += String(cell?.raw ?? "").length) > 2e5)
       throw Error(
         "Source text exceeds the 200,000-character processing budget.",
       );
-    worksheetRecord.cells[`A${b + 1}`] = {
+    worksheetRecord.cells[`A${rowOffset + 1}`] = {
       raw: cell?.raw ?? null,
       literal: true,
     };
-    const textCleanupFormula = buildTextCleanupFormula(o.steps, `A${b + 1}`);
+    const textCleanupFormula = buildTextCleanupFormula(
+      cleanupRequest.steps,
+      `A${rowOffset + 1}`,
+    );
     if (textCleanupFormula.length > fileImportLimits.maxFormulaLength)
       throw Error(
         "The cleanup recipe exceeds the 4,096-character formula budget.",
       );
     (formulas.push(textCleanupFormula),
-      (worksheetRecord.cells[`B${b + 1}`] = { raw: textCleanupFormula }));
+      (worksheetRecord.cells[`B${rowOffset + 1}`] = {
+        raw: textCleanupFormula,
+      }));
     const rowOrigin = findRowOrigin(
       workbook,
       sheet.id,
-      rangeAddress.firstRow + b,
+      rangeAddress.firstRow + rowOffset,
     );
     rows.push({
       sourceAddress: sourceAddress,
       ...(cell ? { original: structuredClone(cell) } : {}),
-      outputAddress: `A${b + 1}`,
+      outputAddress: `A${rowOffset + 1}`,
       result: null,
       ...(rowOrigin ? { origin: rowOrigin } : {}),
     });
@@ -1951,22 +2086,25 @@ function previewTextCleanup(workbook, request, t = {}) {
     sheets: [worksheetRecord],
     events: [],
   });
-  rows.forEach((row, y) => {
-    ((row.result = workbookWithSettings(worksheetRecord.id, `B${y + 1}`)),
+  rows.forEach((row, rowIndex) => {
+    ((row.result = workbookWithSettings(
+      worksheetRecord.id,
+      `B${rowIndex + 1}`,
+    )),
       workbookWithSettings.evaluateFormula(
         worksheetRecord.id,
-        `C${y + 1}`,
-        `=ISERROR(B${y + 1})`,
+        `C${rowIndex + 1}`,
+        `=ISERROR(B${rowIndex + 1})`,
       ) === true &&
         errors.push({
           sourceAddress: row.sourceAddress,
           error: String(row.result),
         }));
   });
-  const m = {
+  const preview = {
     snapshot: JSON.stringify(workbook),
     context: context,
-    request: o,
+    request: cleanupRequest,
     sourceSheetName: sheet.name,
     rows: rows,
     formulas: formulas,
@@ -1977,7 +2115,7 @@ function previewTextCleanup(workbook, request, t = {}) {
       [
         ...(workbook.textCleanups ?? []),
         buildTextCleanupEvidence(
-          m,
+          preview,
           workbook.id,
           workbook.revision,
           "preview-record",
@@ -1987,52 +2125,56 @@ function previewTextCleanup(workbook, request, t = {}) {
       ],
       {},
     ),
-    m
+    preview
   );
 }
 function buildTextCleanupEvidence(
-  e,
+  preview,
   workbookId,
   revision,
-  n,
+  recordId,
   outputSheetId,
   createdAt,
 ) {
   return {
-    id: n,
+    id: recordId,
     workbookId: workbookId,
     sourceRevision: revision,
-    sourceSheetId: e.request.sourceSheetId,
-    sourceSheetName: e.sourceSheetName,
+    sourceSheetId: preview.request.sourceSheetId,
+    sourceSheetName: preview.sourceSheetName,
     outputSheetId: outputSheetId,
-    outputSheetName: e.request.outputName,
+    outputSheetName: preview.request.outputName,
     createdAt: createdAt,
-    steps: structuredClone(e.request.steps),
+    steps: structuredClone(preview.request.steps),
     semantics: "unicode-v2-en-US-explicit-separators",
-    rows: structuredClone(e.rows),
+    rows: structuredClone(preview.rows),
   };
 }
-function createTextCleanupOutput(workbook, r, t = {}) {
-  if (r.snapshot !== JSON.stringify(workbook))
+function createTextCleanupOutput(workbook, preview, options = {}) {
+  if (preview.snapshot !== JSON.stringify(workbook))
     throw Error(
       "The workbook changed after the cleanup preview. Preview again.",
     );
-  const n = previewTextCleanup(workbook, r.request, t);
-  if (JSON.stringify(n) !== JSON.stringify(r))
+  const replayedPreview = previewTextCleanup(
+    workbook,
+    preview.request,
+    options,
+  );
+  if (JSON.stringify(replayedPreview) !== JSON.stringify(preview))
     throw Error(
       "The cleanup preview or authorized context changed. Preview again.",
     );
-  if (r.errors.length)
+  if (preview.errors.length)
     throw Error(
       "Resolve every cleanup error before creating output. No cells were changed.",
     );
-  const worksheetRecord = createWorksheetRecord(r.request.outputName),
-    a = crypto.randomUUID();
-  for (const row of r.rows) {
+  const worksheetRecord = createWorksheetRecord(preview.request.outputName),
+    evidenceId = crypto.randomUUID();
+  for (const row of preview.rows) {
     const cell = {
       raw: row.result,
-      note: `Text cleanup evidence: ${a}
-Source at revision ${workbook.revision}: ${JSON.stringify(r.sourceSheetName)}!${row.sourceAddress}
+      note: `Text cleanup evidence: ${evidenceId}
+Source at revision ${workbook.revision}: ${JSON.stringify(preview.sourceSheetName)}!${row.sourceAddress}
 Original value and recipe retained in native text cleanup history.`,
     };
     (typeof cell.raw == "string" &&
@@ -2040,10 +2182,10 @@ Original value and recipe retained in native text cleanup history.`,
       (worksheetRecord.cells[row.outputAddress] = cell));
   }
   const textCleanupEvidence = buildTextCleanupEvidence(
-    r,
+    preview,
     workbook.id,
     workbook.revision,
-    a,
+    evidenceId,
     worksheetRecord.id,
     new Date().toISOString(),
   );
@@ -2053,10 +2195,15 @@ Original value and recipe retained in native text cleanup history.`,
     textCleanups: [...(workbook.textCleanups ?? []), textCleanupEvidence],
   });
 }
-const createTextFunctionField = (e, r = "", t, optional = false) => ({
-    label: e,
-    value: r,
-    kind: t,
+const createTextFunctionField = (
+    label,
+    defaultValue = "",
+    kind,
+    optional = false,
+  ) => ({
+    label: label,
+    value: defaultValue,
+    kind: kind,
     optional: optional,
   }),
   textFunctionFieldSpecs = {
@@ -2109,12 +2256,14 @@ const createTextFunctionField = (e, r = "", t, optional = false) => ({
       createTextFunctionField("Match end", "0", "number"),
     ],
   },
-  getTextFunctionSpec = (e) => ({
-    name: e,
-    fields: (textFunctionFieldSpecs[e] ?? []).map((r) => ({ ...r })),
+  getTextFunctionSpec = (functionName) => ({
+    name: functionName,
+    fields: (textFunctionFieldSpecs[functionName] ?? []).map((field) => ({
+      ...field,
+    })),
   }),
-  stringifyEscapedJson = (e) =>
-    JSON.stringify(e).replaceAll(" ", "\\u00a0").replaceAll(" ", "\\u202f");
+  stringifyEscapedJson = (value) =>
+    JSON.stringify(value).replaceAll(" ", "\\u00a0").replaceAll(" ", "\\u202f");
 
 export {
   createTextFunctionField,

@@ -18,10 +18,10 @@ import {
   numberFormatToIntlOptions,
 } from "./01-cell-styles-and-themes.js";
 
-function validateNumberFormatSettings(e) {
-  (!ZQ(e) ||
-    Object.keys(e).some(
-      (a) =>
+function validateNumberFormatSettings(settings) {
+  (!ZQ(settings) ||
+    Object.keys(settings).some(
+      (key) =>
         ![
           "category",
           "locale",
@@ -31,196 +31,242 @@ function validateNumberFormatSettings(e) {
           "scale",
           "negative",
           "pattern",
-        ].includes(a),
+        ].includes(key),
     )) &&
     throwWorkbookError(
       "Number format must be a supported plain settings object.",
     );
-  const r = e;
-  Uv.includes(r.category) ||
+  const rawSettings = settings;
+  Uv.includes(rawSettings.category) ||
     throwWorkbookError("Choose a supported number format category.");
-  const category = r.category,
-    locale = r.locale ?? "en-US";
+  const category = rawSettings.category,
+    locale = rawSettings.locale ?? "en-US";
   supportedNumberLocales.includes(locale) ||
     throwWorkbookError("Choose one of the supported display locales.");
-  const o = { category: category, locale: locale };
+  const normalizedSettings = { category: category, locale: locale };
   if (numericFormatKinds.has(category)) {
     if (category === "currency" || category === "accounting") {
-      const u = r.currency ?? "USD";
-      (supportedCurrencyCodes.includes(u) ||
+      const currencyCode = rawSettings.currency ?? "USD";
+      (supportedCurrencyCodes.includes(currencyCode) ||
         throwWorkbookError("Choose a supported currency."),
-        (o.currency = u));
+        (normalizedSettings.currency = currencyCode));
     } else
-      r.currency !== undefined &&
+      rawSettings.currency !== undefined &&
         throwWorkbookError(
           "Currency applies only to Currency or Accounting formats.",
         );
-    const s = r.decimals ?? (o.currency === "JPY" ? 0 : 2);
-    ((typeof s != "number" || !Number.isInteger(s) || s < 0 || s > 12) &&
+    const decimalPlaces =
+      rawSettings.decimals ?? (normalizedSettings.currency === "JPY" ? 0 : 2);
+    ((typeof decimalPlaces != "number" ||
+      !Number.isInteger(decimalPlaces) ||
+      decimalPlaces < 0 ||
+      decimalPlaces > 12) &&
       throwWorkbookError("Choose 0–12 decimal places."),
-      (o.decimals = s),
-      r.useGrouping !== undefined &&
-        typeof r.useGrouping != "boolean" &&
+      (normalizedSettings.decimals = decimalPlaces),
+      rawSettings.useGrouping !== undefined &&
+        typeof rawSettings.useGrouping != "boolean" &&
         throwWorkbookError("The grouping option must be true or false."),
-      (o.useGrouping = r.useGrouping ?? category !== "percent"));
-    const d = r.scale ?? 1;
-    ((![1, 1e3, 1e6].includes(d) || (category === "percent" && d !== 1)) &&
+      (normalizedSettings.useGrouping =
+        rawSettings.useGrouping ?? category !== "percent"));
+    const scale = rawSettings.scale ?? 1;
+    ((![1, 1e3, 1e6].includes(scale) ||
+      (category === "percent" && scale !== 1)) &&
       throwWorkbookError(
         "Choose units, thousands or millions; percentages use units.",
       ),
-      (o.scale = d),
-      r.negative !== undefined &&
-        (typeof r.negative != "string" ||
-          !["minus", "parentheses"].includes(r.negative)) &&
+      (normalizedSettings.scale = scale),
+      rawSettings.negative !== undefined &&
+        (typeof rawSettings.negative != "string" ||
+          !["minus", "parentheses"].includes(rawSettings.negative)) &&
         throwWorkbookError("Choose minus signs or parentheses for negatives."),
       category === "accounting" &&
-        r.negative !== undefined &&
-        r.negative !== "parentheses" &&
+        rawSettings.negative !== undefined &&
+        rawSettings.negative !== "parentheses" &&
         throwWorkbookError("Accounting negatives use parentheses."),
-      (o.negative =
-        category === "accounting" ? "parentheses" : (r.negative ?? "minus")),
-      r.pattern !== undefined &&
+      (normalizedSettings.negative =
+        category === "accounting"
+          ? "parentheses"
+          : (rawSettings.negative ?? "minus")),
+      rawSettings.pattern !== undefined &&
         throwWorkbookError(
           "Use the Custom category to enter a format pattern.",
         ));
   } else if (
-    ([r.currency, r.decimals, r.useGrouping, r.scale, r.negative].some(
-      (a) => a !== undefined,
-    ) &&
+    ([
+      rawSettings.currency,
+      rawSettings.decimals,
+      rawSettings.useGrouping,
+      rawSettings.scale,
+      rawSettings.negative,
+    ].some((settingValue) => settingValue !== undefined) &&
       throwWorkbookError(
         "These numeric settings do not apply to the chosen category.",
       ),
     dateTimeFormatKinds.has(category) || category === "custom")
   ) {
-    const a =
+    const defaultPattern =
         category === "custom" ? "0.00" : builtInDateTimeFormats[category][0],
-      s = r.pattern ?? a;
-    ((typeof s != "string" ||
-      !s ||
-      s.length > 200 ||
-      /[\u0000-\u001f\u007f]/.test(s)) &&
+      pattern = rawSettings.pattern ?? defaultPattern;
+    ((typeof pattern != "string" ||
+      !pattern ||
+      pattern.length > 200 ||
+      /[\u0000-\u001f\u007f]/.test(pattern)) &&
       throwWorkbookError(
         "Enter a format pattern of 1–200 characters without control characters.",
       ),
-      (o.pattern = s));
-    const d = validateNumberFormatCode(o.pattern);
+      (normalizedSettings.pattern = pattern));
+    const patternInfo = validateNumberFormatCode(normalizedSettings.pattern);
     if (category !== "custom") {
-      d.kind !== "temporal" &&
+      patternInfo.kind !== "temporal" &&
         throwWorkbookError(
           "Choose a date, time or elapsed-time pattern for this category.",
         );
-      const u = d.category;
-      u !== category &&
+      const patternCategory = patternInfo.category;
+      patternCategory !== category &&
         throwWorkbookError(
-          `This pattern is a ${u} format. Choose the matching category or Custom.`,
+          `This pattern is a ${patternCategory} format. Choose the matching category or Custom.`,
         );
     }
   } else
-    r.pattern !== undefined &&
+    rawSettings.pattern !== undefined &&
       throwWorkbookError("General does not accept a custom pattern.");
-  return o;
+  return normalizedSettings;
 }
-function renderTextSectionPattern(textSection, r) {
+function renderTextSectionPattern(textSection, replacementText) {
   return textSection.replace(
     /"([^"]*)"|\\(.)|@/g,
-    (t, n, o) => n ?? o ?? (t === "@" ? r : t),
+    (matchedText, quotedText, escapedChar) =>
+      quotedText ??
+      escapedChar ??
+      (matchedText === "@" ? replacementText : matchedText),
   );
 }
-const getLocaleDecimalSeparator = (e) =>
-  new Intl.NumberFormat(e).formatToParts(1.1).find((t) => t.type === "decimal")
-    ?.value ?? ".";
-function formatNumericSection(e, r, locale) {
-  const n = e < 0 && r.sections.length > 1,
+const getLocaleDecimalSeparator = (locale) =>
+  new Intl.NumberFormat(locale)
+    .formatToParts(1.1)
+    .find((part) => part.type === "decimal")?.value ?? ".";
+function formatNumericSection(value, compiledFormat, locale) {
+  const isNegativeSection = value < 0 && compiledFormat.sections.length > 1,
     { parsed, divisor } =
-      r.sections[e === 0 && r.sections.length > 2 ? 2 : n ? 1 : 0];
+      compiledFormat.sections[
+        value === 0 && compiledFormat.sections.length > 2
+          ? 2
+          : isNegativeSection
+            ? 1
+            : 0
+      ];
   if (!parsed.hasNumber) return parsed.prefix + parsed.suffix;
-  const s = (Math.abs(e) / divisor) * (parsed.percent ? 100 : 1);
-  if (!Number.isFinite(s)) return "#NUM!";
-  let d = new Intl.NumberFormat(locale, {
+  const scaledValue = (Math.abs(value) / divisor) * (parsed.percent ? 100 : 1);
+  if (!Number.isFinite(scaledValue)) return "#NUM!";
+  let formattedDigits = new Intl.NumberFormat(locale, {
     minimumFractionDigits: parsed.minDecimals,
     maximumFractionDigits: parsed.maxDecimals,
     minimumIntegerDigits: Math.max(1, parsed.minIntegerDigits),
     useGrouping: parsed.grouping,
-  }).format(s);
+  }).format(scaledValue);
   return (
     parsed.minIntegerDigits ||
-      (d === "0" && !parsed.minDecimals
-        ? (d = "")
-        : d.startsWith(`0${getLocaleDecimalSeparator(locale)}`) &&
-          (d = d.slice(1))),
-    (e < 0 && !n ? "-" : "") + parsed.prefix + d + parsed.suffix
+      (formattedDigits === "0" && !parsed.minDecimals
+        ? (formattedDigits = "")
+        : formattedDigits.startsWith(`0${getLocaleDecimalSeparator(locale)}`) &&
+          (formattedDigits = formattedDigits.slice(1))),
+    (value < 0 && !isNegativeSection ? "-" : "") +
+      parsed.prefix +
+      formattedDigits +
+      parsed.suffix
   );
 }
-function formatTemporalSerialValue(e, r, locale, n) {
-  const o = r.category === "duration",
-    a = 2958465 - (n === "1904" && !o ? 1462 : 0);
-  if (Math.abs(e) >= a + 1 || (!o && e < 0)) return "#NUM!";
-  const s = r.category !== "date",
-    d = 10 ** r.fraction,
-    u = r.tokens.some(
+function formatTemporalSerialValue(
+  serialValue,
+  compiledFormat,
+  locale,
+  dateSystem,
+) {
+  const isDuration = compiledFormat.category === "duration",
+    maxSerial = 2958465 - (dateSystem === "1904" && !isDuration ? 1462 : 0);
+  if (
+    Math.abs(serialValue) >= maxSerial + 1 ||
+    (!isDuration && serialValue < 0)
+  )
+    return "#NUM!";
+  const isNotDateCategory = compiledFormat.category !== "date",
+    fractionScale = 10 ** compiledFormat.fraction,
+    hasSecondToken = compiledFormat.tokens.some(
       (token) =>
         token.kind === "second" ||
         (token.kind === "elapsed" && token.text.startsWith("s")),
     ),
-    l = s
-      ? u
-        ? Math.round(Math.abs(e) * 86400 * d) / d
-        : Math.floor(Math.abs(e) * 86400)
-      : Math.floor(e) * 86400;
-  let c = Math.floor(l / 86400),
-    h = l - c * 86400;
-  if (c > a) return "#NUM!";
-  const f = Math.round(h * 1e3),
-    p = Math.floor(f / 36e5),
-    m = Math.floor(f / 6e4) % 60,
-    v = Math.floor(f / 1e3) % 60,
-    g = Math.floor((f % 1e3) / 10 ** (3 - r.fraction)),
-    b = n === "1900" && c === 60,
-    y =
-      n === "1904"
-        ? Date.UTC(1904, 0, 1) + c * 864e5
-        : Date.UTC(1899, 11, 31) + (c > 60 ? c - 1 : c) * 864e5,
-    w = new Date(y),
-    E = b ? 1900 : w.getUTCFullYear(),
-    A = b ? 1 : w.getUTCMonth(),
-    k = b ? 29 : w.getUTCDate(),
-    F = r.tokens.some((token) => token.kind === "ampm"),
-    I = (j, z) => String(j).padStart(z, "0"),
-    O = r.tokens
+    totalSeconds = isNotDateCategory
+      ? hasSecondToken
+        ? Math.round(Math.abs(serialValue) * 86400 * fractionScale) /
+          fractionScale
+        : Math.floor(Math.abs(serialValue) * 86400)
+      : Math.floor(serialValue) * 86400;
+  let dayNumber = Math.floor(totalSeconds / 86400),
+    secondsOfDay = totalSeconds - dayNumber * 86400;
+  if (dayNumber > maxSerial) return "#NUM!";
+  const millisecondsOfDay = Math.round(secondsOfDay * 1e3),
+    hours = Math.floor(millisecondsOfDay / 36e5),
+    minutes = Math.floor(millisecondsOfDay / 6e4) % 60,
+    seconds = Math.floor(millisecondsOfDay / 1e3) % 60,
+    fractionDigits = Math.floor(
+      (millisecondsOfDay % 1e3) / 10 ** (3 - compiledFormat.fraction),
+    ),
+    isPhantomLeapDay = dateSystem === "1900" && dayNumber === 60,
+    utcTimestamp =
+      dateSystem === "1904"
+        ? Date.UTC(1904, 0, 1) + dayNumber * 864e5
+        : Date.UTC(1899, 11, 31) +
+          (dayNumber > 60 ? dayNumber - 1 : dayNumber) * 864e5,
+    dateValue = new Date(utcTimestamp),
+    year = isPhantomLeapDay ? 1900 : dateValue.getUTCFullYear(),
+    monthIndex = isPhantomLeapDay ? 1 : dateValue.getUTCMonth(),
+    dayOfMonth = isPhantomLeapDay ? 29 : dateValue.getUTCDate(),
+    hasAmPmToken = compiledFormat.tokens.some((token) => token.kind === "ampm"),
+    padNumber = (number, width) => String(number).padStart(width, "0"),
+    formattedText = compiledFormat.tokens
       .map((token) => {
         switch (token.kind) {
           case "literal":
             return token.text;
           case "year":
-            return token.text.length === 2 ? I(E % 100, 2) : I(E, 4);
+            return token.text.length === 2
+              ? padNumber(year % 100, 2)
+              : padNumber(year, 4);
           case "month":
             return token.text.length < 3
-              ? I(A + 1, token.text.length)
+              ? padNumber(monthIndex + 1, token.text.length)
               : new Intl.DateTimeFormat(locale, {
                   month: token.text.length === 3 ? "short" : "long",
                   timeZone: "UTC",
-                }).format(new Date(Date.UTC(2e3, A, 1)));
+                }).format(new Date(Date.UTC(2e3, monthIndex, 1)));
           case "day":
-            return I(k, token.text.length);
+            return padNumber(dayOfMonth, token.text.length);
           case "hour":
-            return I(F ? p % 12 || 12 : p, token.text.length);
+            return padNumber(
+              hasAmPmToken ? hours % 12 || 12 : hours,
+              token.text.length,
+            );
           case "minute":
-            return I(m, token.text.length);
+            return padNumber(minutes, token.text.length);
           case "second":
-            return I(v, token.text.length);
+            return padNumber(seconds, token.text.length);
           case "fraction":
-            return getLocaleDecimalSeparator(locale) + I(g, r.fraction);
+            return (
+              getLocaleDecimalSeparator(locale) +
+              padNumber(fractionDigits, compiledFormat.fraction)
+            );
           case "ampm": {
-            const z = p < 12 ? "AM" : "PM",
-              V = token.text.length === 3 ? z[0] : z;
+            const meridiem = hours < 12 ? "AM" : "PM",
+              meridiemText = token.text.length === 3 ? meridiem[0] : meridiem;
             return token.text === token.text.toLowerCase()
-              ? V.toLowerCase()
-              : V;
+              ? meridiemText.toLowerCase()
+              : meridiemText;
           }
           case "elapsed":
-            return I(
+            return padNumber(
               Math.floor(
-                l /
+                totalSeconds /
                   (token.text[0] === "h"
                     ? 3600
                     : token.text[0] === "m"
@@ -232,60 +278,87 @@ function formatTemporalSerialValue(e, r, locale, n) {
         }
       })
       .join("");
-  return (o && e < 0 ? "-" : "") + O;
+  return (isDuration && serialValue < 0 ? "-" : "") + formattedText;
 }
-function formatCellValueWithNumberFormat(e, r, t = "1900") {
-  const n = validateNumberFormatSettings(r);
-  if (e === null) return { text: "" };
-  if (typeof e == "boolean") return { text: e ? "TRUE" : "FALSE" };
-  if (typeof e == "string") {
-    if (n.category === "custom" && !/^#[A-Z0-9/?!]+$/.test(e)) {
-      const c = validateNumberFormatCode(n.pattern);
-      if (c.kind === "numeric" && c.textSection !== undefined)
-        return { text: renderTextSectionPattern(c.textSection, e) };
+function formatCellValueWithNumberFormat(
+  value,
+  numberFormatSettings,
+  dateSystem = "1900",
+) {
+  const settings = validateNumberFormatSettings(numberFormatSettings);
+  if (value === null) return { text: "" };
+  if (typeof value == "boolean") return { text: value ? "TRUE" : "FALSE" };
+  if (typeof value == "string") {
+    if (settings.category === "custom" && !/^#[A-Z0-9/?!]+$/.test(value)) {
+      const textPatternInfo = validateNumberFormatCode(settings.pattern);
+      if (
+        textPatternInfo.kind === "numeric" &&
+        textPatternInfo.textSection !== undefined
+      )
+        return {
+          text: renderTextSectionPattern(textPatternInfo.textSection, value),
+        };
     }
-    return { text: e };
+    return { text: value };
   }
-  if (!Number.isFinite(e)) return { text: "#NUM!" };
-  if (n.category === "general")
+  if (!Number.isFinite(value)) return { text: "#NUM!" };
+  if (settings.category === "general")
     return {
-      text: new Intl.NumberFormat(n.locale, {
+      text: new Intl.NumberFormat(settings.locale, {
         maximumSignificantDigits: 15,
         useGrouping: false,
-      }).format(e === 0 ? 0 : e),
+      }).format(value === 0 ? 0 : value),
     };
-  if (n.pattern) {
-    const c = validateNumberFormatCode(n.pattern);
+  if (settings.pattern) {
+    const patternInfo = validateNumberFormatCode(settings.pattern);
     return {
       text:
-        c.kind === "temporal"
-          ? formatTemporalSerialValue(e, c, n.locale, t)
-          : formatNumericSection(e, c, n.locale),
+        patternInfo.kind === "temporal"
+          ? formatTemporalSerialValue(
+              value,
+              patternInfo,
+              settings.locale,
+              dateSystem,
+            )
+          : formatNumericSection(value, patternInfo, settings.locale),
     };
   }
-  const o = e / (n.scale ?? 1),
-    a = n.scale === 1e3 ? " K" : n.scale === 1e6 ? " M" : "";
-  if (n.category === "percent" && !Number.isFinite(o * 100))
+  const scaledValue = value / (settings.scale ?? 1),
+    scaleSuffix =
+      settings.scale === 1e3 ? " K" : settings.scale === 1e6 ? " M" : "";
+  if (settings.category === "percent" && !Number.isFinite(scaledValue * 100))
     return { text: "#NUM!" };
-  const s = {
-    minimumFractionDigits: n.decimals,
-    maximumFractionDigits: n.decimals,
-    useGrouping: n.useGrouping,
+  const formatOptions = {
+    minimumFractionDigits: settings.decimals,
+    maximumFractionDigits: settings.decimals,
+    useGrouping: settings.useGrouping,
   };
-  if (n.category === "accounting") {
-    const h = new Intl.NumberFormat(n.locale, {
-        ...s,
+  if (settings.category === "accounting") {
+    const currencyParts = new Intl.NumberFormat(settings.locale, {
+        ...formatOptions,
         style: "currency",
-        currency: n.currency,
-      }).formatToParts(Math.abs(o)),
-      symbol = h.find((g) => g.type === "currency")?.value ?? n.currency,
+        currency: settings.currency,
+      }).formatToParts(Math.abs(scaledValue)),
+      symbol =
+        currencyParts.find((part) => part.type === "currency")?.value ??
+        settings.currency,
       symbolPosition =
-        h.findIndex((g) => g.type === "currency") <
-        h.findIndex((g) => g.type === "integer")
+        currencyParts.findIndex(
+          (currencyPart) => currencyPart.type === "currency",
+        ) <
+        currencyParts.findIndex((integerPart) => integerPart.type === "integer")
           ? "start"
           : "end",
-      m = new Intl.NumberFormat(n.locale, s).format(Math.abs(o)),
-      amount = (o === 0 ? "-" : o < 0 ? `(${m})` : m) + a;
+      absoluteAmountText = new Intl.NumberFormat(
+        settings.locale,
+        formatOptions,
+      ).format(Math.abs(scaledValue)),
+      amount =
+        (scaledValue === 0
+          ? "-"
+          : scaledValue < 0
+            ? `(${absoluteAmountText})`
+            : absoluteAmountText) + scaleSuffix;
     return {
       text:
         symbolPosition === "start"
@@ -298,16 +371,21 @@ function formatCellValueWithNumberFormat(e, r, t = "1900") {
       },
     };
   }
-  const d = o < 0 && n.negative === "parentheses",
-    u = new Intl.NumberFormat(n.locale, {
-      ...s,
-      ...(n.category === "currency"
-        ? { style: "currency", currency: n.currency }
-        : n.category === "percent"
+  const isParenthesizedNegative =
+      scaledValue < 0 && settings.negative === "parentheses",
+    formattedNumber = new Intl.NumberFormat(settings.locale, {
+      ...formatOptions,
+      ...(settings.category === "currency"
+        ? { style: "currency", currency: settings.currency }
+        : settings.category === "percent"
           ? { style: "percent" }
           : {}),
-    }).format(d ? Math.abs(o) : o);
-  return { text: (d ? `(${u})` : u) + a };
+    }).format(isParenthesizedNegative ? Math.abs(scaledValue) : scaledValue);
+  return {
+    text:
+      (isParenthesizedNegative ? `(${formattedNumber})` : formattedNumber) +
+      scaleSuffix,
+  };
 }
 function getImportedNumberFormatWarning(cell) {
   if (cell) {
@@ -349,33 +427,53 @@ const lcidByLocale = {
   "en-IN": "4009",
 };
 function buildNumberFormatCode(numberFormat) {
-  const r = validateNumberFormatSettings(numberFormat),
-    t = r.locale === "en-US" ? "" : `[$-${lcidByLocale[r.locale]}]`;
-  if (r.category === "general") return "General";
-  if (r.pattern) return t + r.pattern;
-  const n = r.decimals ? "." + "0".repeat(r.decimals) : "",
-    o = r.scale === 1e3 ? "," : r.scale === 1e6 ? ",," : "",
-    a = r.scale === 1e3 ? '" K"' : r.scale === 1e6 ? '" M"' : "",
-    s = (r.useGrouping ? "#,##0" : "0") + n + o;
-  if (r.category === "percent") return t + s + "%";
-  if (r.category === "currency" || r.category === "accounting") {
+  const settings = validateNumberFormatSettings(numberFormat),
+    localePrefix =
+      settings.locale === "en-US" ? "" : `[$-${lcidByLocale[settings.locale]}]`;
+  if (settings.category === "general") return "General";
+  if (settings.pattern) return localePrefix + settings.pattern;
+  const decimalPattern = settings.decimals
+      ? "." + "0".repeat(settings.decimals)
+      : "",
+    scalingCommas =
+      settings.scale === 1e3 ? "," : settings.scale === 1e6 ? ",," : "",
+    scaleSuffixLiteral =
+      settings.scale === 1e3 ? '" K"' : settings.scale === 1e6 ? '" M"' : "",
+    numberPattern =
+      (settings.useGrouping ? "#,##0" : "0") + decimalPattern + scalingCommas;
+  if (settings.category === "percent")
+    return localePrefix + numberPattern + "%";
+  if (settings.category === "currency" || settings.category === "accounting") {
     const accounting = formatCellValueWithNumberFormat(1, {
-        ...r,
+        ...settings,
         category: "accounting",
         negative: "parentheses",
       }).accounting,
-      u = `"${accounting.symbol.replace(/"/g, '""')}"`;
-    if (r.category === "accounting") {
-      const c = "?".repeat(r.decimals);
+      quotedSymbol = `"${accounting.symbol.replace(/"/g, '""')}"`;
+    if (settings.category === "accounting") {
+      const placeholderDigits = "?".repeat(settings.decimals);
       return accounting.symbolPosition === "start"
-        ? `${t}_(${u}* ${s}${a}_);_(${u}* (${s}${a});_(${u}* "-"${c}_);_(@_)`
-        : `${t}_(${s}${a}* ${u}_);_((${s}${a})* ${u});_("-"${c}* ${u}_);_(@_)`;
+        ? `${localePrefix}_(${quotedSymbol}* ${numberPattern}${scaleSuffixLiteral}_);_(${quotedSymbol}* (${numberPattern}${scaleSuffixLiteral});_(${quotedSymbol}* "-"${placeholderDigits}_);_(@_)`
+        : `${localePrefix}_(${numberPattern}${scaleSuffixLiteral}* ${quotedSymbol}_);_((${numberPattern}${scaleSuffixLiteral})* ${quotedSymbol});_("-"${placeholderDigits}* ${quotedSymbol}_);_(@_)`;
     }
-    const l =
-      accounting.symbolPosition === "start" ? u + s + a : s + a + '" "' + u;
-    return t + l + (r.negative === "parentheses" ? `;(${l})` : "");
+    const currencyPattern =
+      accounting.symbolPosition === "start"
+        ? quotedSymbol + numberPattern + scaleSuffixLiteral
+        : numberPattern + scaleSuffixLiteral + '" "' + quotedSymbol;
+    return (
+      localePrefix +
+      currencyPattern +
+      (settings.negative === "parentheses" ? `;(${currencyPattern})` : "")
+    );
   }
-  return t + s + a + (r.negative === "parentheses" ? `;(${s}${a})` : "");
+  return (
+    localePrefix +
+    numberPattern +
+    scaleSuffixLiteral +
+    (settings.negative === "parentheses"
+      ? `;(${numberPattern}${scaleSuffixLiteral})`
+      : "")
+  );
 }
 const FormulaParser = unwrapDefaultExport(qre);
 // The parser library joins operands of "&" with JavaScript's own number
@@ -390,66 +488,90 @@ unwrapDefaultExport(formulaOperators).Infix.concatOp = (
 ) =>
   coerceValueToText(leftIsArray ? left[0][0] : left) +
   coerceValueToText(rightIsArray ? right[0][0] : right);
-function toSignedDecimalParts(e) {
-  const [r, t = "0"] = Math.abs(e).toString().split("e"),
-    [n, o = ""] = r.split(".");
+function toSignedDecimalParts(value) {
+  const [mantissaText, exponentText = "0"] = Math.abs(value)
+      .toString()
+      .split("e"),
+    [integerDigits, fractionDigits = ""] = mantissaText.split(".");
   return {
-    coefficient: BigInt(n + o) * (e < 0 ? -1n : 1n),
-    exponent: Number(t) - o.length,
+    coefficient:
+      BigInt(integerDigits + fractionDigits) * (value < 0 ? -1n : 1n),
+    exponent: Number(exponentText) - fractionDigits.length,
   };
 }
-function sumDecimalParts(e) {
-  const r = new Map();
-  for (const a of e) {
-    if (!Number.isFinite(a)) return;
-    const { coefficient, exponent } = toSignedDecimalParts(a);
-    r.set(exponent, (r.get(exponent) ?? 0n) + coefficient);
+function sumDecimalParts(values) {
+  const coefficientsByExponent = new Map();
+  for (const value of values) {
+    if (!Number.isFinite(value)) return;
+    const { coefficient, exponent } = toSignedDecimalParts(value);
+    coefficientsByExponent.set(
+      exponent,
+      (coefficientsByExponent.get(exponent) ?? 0n) + coefficient,
+    );
   }
-  const t = [...r].filter(([, a]) => a !== 0n);
-  if (!t.length) return { coefficient: 0n, exponent: 0 };
-  const exponent = t.reduce((a, [s]) => Math.min(a, s), 1 / 0);
+  const nonZeroEntries = [...coefficientsByExponent].filter(
+    ([, summedCoefficient]) => summedCoefficient !== 0n,
+  );
+  if (!nonZeroEntries.length) return { coefficient: 0n, exponent: 0 };
+  const exponent = nonZeroEntries.reduce(
+    (minExponent, [exponentKey]) => Math.min(minExponent, exponentKey),
+    1 / 0,
+  );
   return {
-    coefficient: t.reduce(
-      (a, [s, d]) => a + d * 10n ** BigInt(s - exponent),
+    coefficient: nonZeroEntries.reduce(
+      (total, [entryExponent, entryCoefficient]) =>
+        total + entryCoefficient * 10n ** BigInt(entryExponent - exponent),
       0n,
     ),
     exponent: exponent,
   };
 }
-function sumDecimalPartsToNumber(e) {
-  const r = sumDecimalParts(e);
-  return r ? +`${r.coefficient}e${r.exponent}` : NaN;
+function sumDecimalPartsToNumber(values) {
+  const decimalSum = sumDecimalParts(values);
+  return decimalSum ? +`${decimalSum.coefficient}e${decimalSum.exponent}` : NaN;
 }
-function exactAverageOfNumbers(e) {
-  if (!e.length) return NaN;
-  const r = sumDecimalParts(e);
-  if (!r) return NaN;
-  const t = r.coefficient < 0n ? "-" : "",
-    n = r.coefficient < 0n ? -r.coefficient : r.coefficient,
-    o = BigInt(e.length),
-    a = n / o,
-    s = (((n % o) * 10n ** 40n) / o).toString().padStart(40, "0");
-  return +`${t}${a}.${s}e${r.exponent}`;
+function exactAverageOfNumbers(values) {
+  if (!values.length) return NaN;
+  const decimalSum = sumDecimalParts(values);
+  if (!decimalSum) return NaN;
+  const signText = decimalSum.coefficient < 0n ? "-" : "",
+    absoluteCoefficient =
+      decimalSum.coefficient < 0n
+        ? -decimalSum.coefficient
+        : decimalSum.coefficient,
+    valueCount = BigInt(values.length),
+    wholePart = absoluteCoefficient / valueCount,
+    fractionText = (
+      ((absoluteCoefficient % valueCount) * 10n ** 40n) /
+      valueCount
+    )
+      .toString()
+      .padStart(40, "0");
+  return +`${signText}${wholePart}.${fractionText}e${decimalSum.exponent}`;
 }
-function exactProductOfNumbers(e) {
-  if (e.some((n) => !Number.isFinite(n))) return NaN;
-  if (e.some((n) => n === 0)) return 0;
-  let r = 1n,
-    t = 0;
-  for (const n of e) {
-    const signedDecimalParts = toSignedDecimalParts(n);
+function exactProductOfNumbers(values) {
+  if (values.some((candidate) => !Number.isFinite(candidate))) return NaN;
+  if (values.some((operand) => operand === 0)) return 0;
+  let productCoefficient = 1n,
+    productExponent = 0;
+  for (const factor of values) {
+    const signedDecimalParts = toSignedDecimalParts(factor);
     if (
-      ((r *= signedDecimalParts.coefficient),
-      (t += signedDecimalParts.exponent),
-      e.length > 255)
+      ((productCoefficient *= signedDecimalParts.coefficient),
+      (productExponent += signedDecimalParts.exponent),
+      values.length > 255)
     ) {
-      const a = r < 0n,
-        s = (a ? -r : r).toString();
-      s.length > 80 &&
-        ((t += s.length - 80), (r = BigInt(s.slice(0, 80)) * (a ? -1n : 1n)));
+      const isNegativeProduct = productCoefficient < 0n,
+        digitsText = (
+          isNegativeProduct ? -productCoefficient : productCoefficient
+        ).toString();
+      digitsText.length > 80 &&
+        ((productExponent += digitsText.length - 80),
+        (productCoefficient =
+          BigInt(digitsText.slice(0, 80)) * (isNegativeProduct ? -1n : 1n)));
     }
   }
-  return +`${r}e${t}`;
+  return +`${productCoefficient}e${productExponent}`;
 }
 const notArithmeticSentinel = Symbol("not-arithmetic"),
   arithmeticFunctionNames = new Set([
@@ -462,118 +584,157 @@ const notArithmeticSentinel = Symbol("not-arithmetic"),
     "FLOOR",
     "SUMPRODUCT",
   ]);
-function toUnsignedDecimalParts(e) {
-  const [r, t = "0"] = Math.abs(e).toString().split("e"),
-    [n, o = ""] = r.split(".");
-  return { coefficient: BigInt(n + o), exponent: Number(t) - o.length };
+function toUnsignedDecimalParts(value) {
+  const [mantissaText, exponentText = "0"] = Math.abs(value)
+      .toString()
+      .split("e"),
+    [integerDigits, fractionDigits = ""] = mantissaText.split(".");
+  return {
+    coefficient: BigInt(integerDigits + fractionDigits),
+    exponent: Number(exponentText) - fractionDigits.length,
+  };
 }
-function roundQuotientWithMode(coefficient, r, t) {
-  const n = coefficient / r,
-    o = coefficient % r;
+function roundQuotientWithMode(coefficient, divisor, roundingMode) {
+  const quotient = coefficient / divisor,
+    remainder = coefficient % divisor;
   return (
-    n +
-    (o !== 0n && (t === "away" || (t === "nearest" && o * 2n >= r)) ? 1n : 0n)
+    quotient +
+    (remainder !== 0n &&
+    (roundingMode === "away" ||
+      (roundingMode === "nearest" && remainder * 2n >= divisor))
+      ? 1n
+      : 0n)
   );
 }
-function roundDecimalToDigits(e, r, t) {
-  if (((r = Math.trunc(r)), e === 0 || r >= 324)) return e;
-  if (r <= -309) return t === "away" ? 1 / 0 : 0;
-  const unsignedDecimalParts = toUnsignedDecimalParts(e),
-    o = unsignedDecimalParts.exponent + r;
-  if (o >= 0) return e;
-  const a = roundQuotientWithMode(
+function roundDecimalToDigits(value, digits, roundingMode) {
+  if (((digits = Math.trunc(digits)), value === 0 || digits >= 324))
+    return value;
+  if (digits <= -309) return roundingMode === "away" ? 1 / 0 : 0;
+  const unsignedDecimalParts = toUnsignedDecimalParts(value),
+    roundingExponent = unsignedDecimalParts.exponent + digits;
+  if (roundingExponent >= 0) return value;
+  const roundedCoefficient = roundQuotientWithMode(
     unsignedDecimalParts.coefficient,
-    10n ** BigInt(-o),
-    t,
+    10n ** BigInt(-roundingExponent),
+    roundingMode,
   );
-  return Math.sign(e) * +`${a}e${-r}`;
+  return Math.sign(value) * +`${roundedCoefficient}e${-digits}`;
 }
-function roundToNearestMultiple(e, r, t) {
-  const unsignedDecimalParts = toUnsignedDecimalParts(e),
-    o = toUnsignedDecimalParts(r),
-    a = Math.min(unsignedDecimalParts.exponent, o.exponent),
+function roundToNearestMultiple(value, multiple, roundingMode) {
+  const unsignedDecimalParts = toUnsignedDecimalParts(value),
+    multipleParts = toUnsignedDecimalParts(multiple),
+    commonExponent = Math.min(
+      unsignedDecimalParts.exponent,
+      multipleParts.exponent,
+    ),
     coefficient =
       unsignedDecimalParts.coefficient *
-      10n ** BigInt(unsignedDecimalParts.exponent - a),
-    d = o.coefficient * 10n ** BigInt(o.exponent - a),
-    u = roundQuotientWithMode(coefficient, d, t);
-  return Math.sign(e) * +`${u * o.coefficient}e${o.exponent}`;
+      10n ** BigInt(unsignedDecimalParts.exponent - commonExponent),
+    multipleCoefficient =
+      multipleParts.coefficient *
+      10n ** BigInt(multipleParts.exponent - commonExponent),
+    multipleCount = roundQuotientWithMode(
+      coefficient,
+      multipleCoefficient,
+      roundingMode,
+    );
+  return (
+    Math.sign(value) *
+    +`${multipleCount * multipleParts.coefficient}e${multipleParts.exponent}`
+  );
 }
-function evaluateArithmeticFunction(e, r, t) {
-  if (!arithmeticFunctionNames.has(e)) return notArithmeticSentinel;
-  const { retrieve, issue, isIssue } = t,
-    s = r.map(retrieve),
-    d = (p) => (Number.isFinite(p) ? (p === 0 ? 0 : p) : issue("#NUM!"));
-  if (e === "SUMPRODUCT") {
-    if (!r.length || r.length > 255) return issue("#VALUE!");
-    const p = s.map((b) =>
-        Array.isArray(b) ? (b.every(Array.isArray) ? b : [b]) : [[b]],
+function evaluateArithmeticFunction(functionName, args, context) {
+  if (!arithmeticFunctionNames.has(functionName)) return notArithmeticSentinel;
+  const { retrieve, issue, isIssue } = context,
+    retrievedArgs = args.map(retrieve),
+    toFiniteResult = (value) =>
+      Number.isFinite(value) ? (value === 0 ? 0 : value) : issue("#NUM!");
+  if (functionName === "SUMPRODUCT") {
+    if (!args.length || args.length > 255) return issue("#VALUE!");
+    const normalizedArgs = retrievedArgs.map((retrievedArg) =>
+        Array.isArray(retrievedArg)
+          ? retrievedArg.every(Array.isArray)
+            ? retrievedArg
+            : [retrievedArg]
+          : [[retrievedArg]],
       ),
-      m = p[0].length,
-      v = p[0][0]?.length ?? 0;
+      rowCount = normalizedArgs[0].length,
+      columnCount = normalizedArgs[0][0]?.length ?? 0;
     if (
-      !m ||
-      !v ||
-      p.some((b) => b.length !== m || b.some((y) => y.length !== v))
+      !rowCount ||
+      !columnCount ||
+      normalizedArgs.some(
+        (matrix) =>
+          matrix.length !== rowCount ||
+          matrix.some((row) => row.length !== columnCount),
+      )
     )
       return issue("#VALUE!");
-    if (m * v * p.length > 1e5) return issue("#LIMIT!");
-    const g = [];
-    for (let b = 0; b < m; b++)
-      for (let y = 0; y < v; y++) {
-        const w = [];
-        for (const A of p) {
-          const k = A[b][y];
-          if (isIssue(k)) return k;
-          w.push(typeof k == "number" ? k : 0);
+    if (rowCount * columnCount * normalizedArgs.length > 1e5)
+      return issue("#LIMIT!");
+    const productTerms = [];
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex++)
+      for (let columnIndex = 0; columnIndex < columnCount; columnIndex++) {
+        const cellFactors = [];
+        for (const normalizedArg of normalizedArgs) {
+          const cellValue = normalizedArg[rowIndex][columnIndex];
+          if (isIssue(cellValue)) return cellValue;
+          cellFactors.push(typeof cellValue == "number" ? cellValue : 0);
         }
-        const E = exactProductOfNumbers(w);
-        if (!Number.isFinite(E)) return issue("#NUM!");
-        g.push(E);
+        const cellProduct = exactProductOfNumbers(cellFactors);
+        if (!Number.isFinite(cellProduct)) return issue("#NUM!");
+        productTerms.push(cellProduct);
       }
-    return d(sumDecimalPartsToNumber(g));
+    return toFiniteResult(sumDecimalPartsToNumber(productTerms));
   }
-  if (r.length < (e === "TRUNC" ? 1 : 2) || r.length > 2)
+  if (args.length < (functionName === "TRUNC" ? 1 : 2) || args.length > 2)
     return issue("#VALUE!");
-  const u = [];
-  for (const p of s) {
-    if (isIssue(p)) return p;
+  const numericArgs = [];
+  for (const argValue of retrievedArgs) {
+    if (isIssue(argValue)) return argValue;
     if (
-      Array.isArray(p) ||
-      (typeof p == "string" &&
-        !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(p.trim()))
+      Array.isArray(argValue) ||
+      (typeof argValue == "string" &&
+        !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(argValue.trim()))
     )
       return issue("#VALUE!");
-    const m = p == null ? 0 : Number(p);
-    if (!Number.isFinite(m)) return issue("#NUM!");
-    u.push(m);
+    const numericValue = argValue == null ? 0 : Number(argValue);
+    if (!Number.isFinite(numericValue)) return issue("#NUM!");
+    numericArgs.push(numericValue);
   }
-  const [l, c = 0] = u;
-  if (["ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC"].includes(e))
-    return d(
+  const [sourceNumber, secondNumber = 0] = numericArgs;
+  if (["ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC"].includes(functionName))
+    return toFiniteResult(
       roundDecimalToDigits(
-        l,
-        c,
-        e === "ROUND" ? "nearest" : e === "ROUNDUP" ? "away" : "toward",
+        sourceNumber,
+        secondNumber,
+        functionName === "ROUND"
+          ? "nearest"
+          : functionName === "ROUNDUP"
+            ? "away"
+            : "toward",
       ),
     );
-  if (l === 0 || c === 0) return 0;
+  if (sourceNumber === 0 || secondNumber === 0) return 0;
   if (
-    (e === "MROUND" && Math.sign(l) !== Math.sign(c)) ||
-    (e === "FLOOR" && l > 0 && c < 0)
+    (functionName === "MROUND" &&
+      Math.sign(sourceNumber) !== Math.sign(secondNumber)) ||
+    (functionName === "FLOOR" && sourceNumber > 0 && secondNumber < 0)
   )
     return issue("#NUM!");
-  const h =
-    e === "MROUND"
+  const roundingMode =
+    functionName === "MROUND"
       ? "nearest"
-      : e === "CEILING"
-        ? l < 0 && c > 0
+      : functionName === "CEILING"
+        ? sourceNumber < 0 && secondNumber > 0
           ? "toward"
           : "away"
-        : l < 0 && c > 0
+        : sourceNumber < 0 && secondNumber > 0
           ? "away"
           : "toward";
-  return d(roundToNearestMultiple(l, c, h));
+  return toFiniteResult(
+    roundToNearestMultiple(sourceNumber, secondNumber, roundingMode),
+  );
 }
 const XL = ["LINEST", "LOGEST", "TREND", "GROWTH"],
   notRegressionSentinel = Symbol("not-regression"),
@@ -584,342 +745,577 @@ const XL = ["LINEST", "LOGEST", "TREND", "GROWTH"],
     work: 4e6,
     output: 1e4,
   },
-  dotProductWithCompensation = (e, r) => {
-    let t = 0,
-      n = 0;
-    for (let o = 0; o < e.length; o++) {
-      const a = e[o] * r[o],
-        s = t + a;
-      ((n += Math.abs(t) >= Math.abs(a) ? t - s + a : a - s + t), (t = s));
+  dotProductWithCompensation = (leftValues, rightValues) => {
+    let sum = 0,
+      compensation = 0;
+    for (let index = 0; index < leftValues.length; index++) {
+      const product = leftValues[index] * rightValues[index],
+        nextSum = sum + product;
+      ((compensation +=
+        Math.abs(sum) >= Math.abs(product)
+          ? sum - nextSum + product
+          : product - nextSum + sum),
+        (sum = nextSum));
     }
-    return t + n;
+    return sum + compensation;
   };
-function evaluateRegressionFunction(e, r, t) {
-  if (!XL.includes(e)) return notRegressionSentinel;
-  const n = (se = "#VALUE!") => {
-      throw t.issue(se);
+function evaluateRegressionFunction(functionName, args, context) {
+  if (!XL.includes(functionName)) return notRegressionSentinel;
+  const fail = (errorCode = "#VALUE!") => {
+      throw context.issue(errorCode);
     },
-    o = (se) => (Number.isFinite(se) ? se : n("#NUM!"));
-  (!r.length || r.length > 4 || r[0] == null) && n();
-  let a = 0;
-  const s = (se) => {
-      if (t.isIssue(se)) throw se;
-      const we = Array.isArray(se)
-          ? se.every(Array.isArray)
-            ? se
-            : [se]
-          : [[se]],
-        Ee = we[0]?.length ?? 0;
+    toFiniteNumber = (value) =>
+      Number.isFinite(value) ? value : fail("#NUM!");
+  (!args.length || args.length > 4 || args[0] == null) && fail();
+  let totalCells = 0;
+  const readNumericMatrix = (rawValue) => {
+      if (context.isIssue(rawValue)) throw rawValue;
+      const rows = Array.isArray(rawValue)
+          ? rawValue.every(Array.isArray)
+            ? rawValue
+            : [rawValue]
+          : [[rawValue]],
+        columnCount = rows[0]?.length ?? 0;
       return (
-        (!we.length || !Ee || we.some((ye) => ye.length !== Ee)) && n(),
-        (a += we.length * Ee),
-        a > regressionSizeLimits.values && n("#LIMIT!"),
-        we.map((ye) =>
-          ye.map((Te) => {
-            if (t.isIssue(Te)) throw Te;
-            return (typeof Te != "number" && n(), o(Te));
+        (!rows.length ||
+          !columnCount ||
+          rows.some((row) => row.length !== columnCount)) &&
+          fail(),
+        (totalCells += rows.length * columnCount),
+        totalCells > regressionSizeLimits.values && fail("#LIMIT!"),
+        rows.map((row) =>
+          row.map((cell) => {
+            if (context.isIssue(cell)) throw cell;
+            return (typeof cell != "number" && fail(), toFiniteNumber(cell));
           }),
         )
       );
     },
-    d = (se, we) => {
-      if (se == null) return we;
-      const Ee = t.retrieve(se);
-      if (t.isIssue(Ee)) throw Ee;
-      return Ee == null
+    readFlag = (reference, defaultValue) => {
+      if (reference == null) return defaultValue;
+      const retrievedValue = context.retrieve(reference);
+      if (context.isIssue(retrievedValue)) throw retrievedValue;
+      return retrievedValue == null
         ? false
-        : typeof Ee == "boolean"
-          ? Ee
-          : typeof Ee == "number"
-            ? o(Ee) !== 0
-            : typeof Ee == "string" && /^(true|false)$/i.test(Ee)
-              ? /^true$/i.test(Ee)
-              : n();
+        : typeof retrievedValue == "boolean"
+          ? retrievedValue
+          : typeof retrievedValue == "number"
+            ? toFiniteNumber(retrievedValue) !== 0
+            : typeof retrievedValue == "string" &&
+                /^(true|false)$/i.test(retrievedValue)
+              ? /^true$/i.test(retrievedValue)
+              : fail();
     },
-    u = e === "TREND" || e === "GROWTH",
-    l = e === "LOGEST" || e === "GROWTH",
-    c = d(r[u ? 3 : 2], true),
-    h = !u && d(r[3], false),
-    f = s(t.retrieve(r[0])),
-    p = f.length * f[0].length;
-  p > regressionSizeLimits.observations && n("#LIMIT!");
-  const m = f.flat();
-  l && m.some((se) => se <= 0) && n("#NUM!");
-  const v = l ? m.map(Math.log) : m,
-    g =
-      r[1] == null
-        ? f.map((se, we) => se.map((Ee, Ae) => we * se.length + Ae + 1))
-        : s(t.retrieve(r[1])),
-    b = g.length === f.length && g[0].length === f[0].length,
-    y = f.length === 1;
-  let w;
-  if (b) w = g.flat().map((se) => [se]);
-  else if (f[0].length === 1 && g.length === p) w = g;
-  else if (y && g[0].length === p)
-    w = Array.from({ length: p }, (se, we) => g.map((Ee) => Ee[we]));
-  else return n("#REF!");
-  const E = w[0].length;
-  (E > regressionSizeLimits.predictors ||
-    p * E * E > regressionSizeLimits.work) &&
-    n("#LIMIT!");
-  const A = Array.from({ length: E }, (se, we) =>
-      c ? exactAverageOfNumbers(w.map((Ee) => Ee[we])) : 0,
+    isTrendOrGrowth = functionName === "TREND" || functionName === "GROWTH",
+    isLogarithmic = functionName === "LOGEST" || functionName === "GROWTH",
+    hasIntercept = readFlag(args[isTrendOrGrowth ? 3 : 2], true),
+    hasStatistics = !isTrendOrGrowth && readFlag(args[3], false),
+    knownYs = readNumericMatrix(context.retrieve(args[0])),
+    observationCount = knownYs.length * knownYs[0].length;
+  observationCount > regressionSizeLimits.observations && fail("#LIMIT!");
+  const flatKnownYs = knownYs.flat();
+  isLogarithmic && flatKnownYs.some((value) => value <= 0) && fail("#NUM!");
+  const responseValues = isLogarithmic
+      ? flatKnownYs.map(Math.log)
+      : flatKnownYs,
+    knownXs =
+      args[1] == null
+        ? knownYs.map((row, rowIndex) =>
+            row.map(
+              (Ee, columnIndex) => rowIndex * row.length + columnIndex + 1,
+            ),
+          )
+        : readNumericMatrix(context.retrieve(args[1])),
+    hasMatchingXShape =
+      knownXs.length === knownYs.length &&
+      knownXs[0].length === knownYs[0].length,
+    isSingleRowY = knownYs.length === 1;
+  let predictorRows;
+  if (hasMatchingXShape) predictorRows = knownXs.flat().map((value) => [value]);
+  else if (knownYs[0].length === 1 && knownXs.length === observationCount)
+    predictorRows = knownXs;
+  else if (isSingleRowY && knownXs[0].length === observationCount)
+    predictorRows = Array.from(
+      { length: observationCount },
+      (se, predictorIndex) => knownXs.map((row) => row[predictorIndex]),
+    );
+  else return fail("#REF!");
+  const predictorCount = predictorRows[0].length;
+  (predictorCount > regressionSizeLimits.predictors ||
+    observationCount * predictorCount * predictorCount >
+      regressionSizeLimits.work) &&
+    fail("#LIMIT!");
+  const predictorMeans = Array.from(
+      { length: predictorCount },
+      (se, predictorIndex) =>
+        hasIntercept
+          ? exactAverageOfNumbers(
+              predictorRows.map((row) => row[predictorIndex]),
+            )
+          : 0,
     ),
-    k = c ? exactAverageOfNumbers(v) : 0,
-    F = v.map((se) => o(se - k)),
-    I = Math.max(...F.map(Math.abs)) || 1,
-    O = F.map((se) => se / I),
-    j = [],
-    z = Array.from({ length: E }, (se, we) => {
-      const Ee = w.map((ye) => o(ye[we] - A[we])),
-        Ae = Math.max(...Ee.map(Math.abs)) || 1;
-      return (j.push(Ae), Ee.map((ye) => ye / Ae));
-    }),
-    V = z.map((se) => [...se]),
-    D = Array.from({ length: E }, (se, we) => we),
-    B = Array.from({ length: E }, () => Array(E).fill(0)),
-    _ = [],
-    C = [],
-    T =
+    responseMean = hasIntercept ? exactAverageOfNumbers(responseValues) : 0,
+    centeredResponses = responseValues.map((value) =>
+      toFiniteNumber(value - responseMean),
+    ),
+    responseScale = Math.max(...centeredResponses.map(Math.abs)) || 1,
+    scaledResponses = centeredResponses.map((value) => value / responseScale),
+    predictorScales = [],
+    scaledColumns = Array.from(
+      { length: predictorCount },
+      (se, predictorIndex) => {
+        const centeredColumn = predictorRows.map((row) =>
+            toFiniteNumber(
+              row[predictorIndex] - predictorMeans[predictorIndex],
+            ),
+          ),
+          columnScale = Math.max(...centeredColumn.map(Math.abs)) || 1;
+        return (
+          predictorScales.push(columnScale),
+          centeredColumn.map((value) => value / columnScale)
+        );
+      },
+    ),
+    initialScaledColumns = scaledColumns.map((column) => [...column]),
+    columnOrder = Array.from({ length: predictorCount }, (se, index) => index),
+    triangularFactor = Array.from({ length: predictorCount }, () =>
+      Array(predictorCount).fill(0),
+    ),
+    orthonormalBasis = [],
+    projections = [],
+    rankTolerance =
       1e-12 *
       Math.max(
         1,
-        ...z.map((se) => Math.sqrt(dotProductWithCompensation(se, se))),
+        ...scaledColumns.map((column) =>
+          Math.sqrt(dotProductWithCompensation(column, column)),
+        ),
       );
-  let N = 0;
-  for (let se = 0; se < E; se++) {
-    let we = se;
-    for (let Ae = se + 1; Ae < E; Ae++)
-      dotProductWithCompensation(z[Ae], z[Ae]) >
-        dotProductWithCompensation(z[we], z[we]) && (we = Ae);
-    (([z[se], z[we]] = [z[we], z[se]]), ([D[se], D[we]] = [D[we], D[se]]));
-    for (let Ae = 0; Ae < se; Ae++)
-      [B[Ae][se], B[Ae][we]] = [B[Ae][we], B[Ae][se]];
-    const Ee = Math.sqrt(dotProductWithCompensation(z[se], z[se]));
-    if (Ee <= T) break;
-    ((B[se][se] = Ee),
-      _.push(z[se].map((Ae) => Ae / Ee)),
-      C.push(dotProductWithCompensation(_[se], O)),
-      N++);
-    for (let Ae = se + 1; Ae < E; Ae++)
-      for (let ye = 0; ye < 2; ye++) {
-        const Te = dotProductWithCompensation(_[se], z[Ae]);
-        ((B[se][Ae] += Te),
-          (z[Ae] = z[Ae].map((Pe, qe) => Pe - Te * _[se][qe])));
+  let rank = 0;
+  for (let pivotIndex = 0; pivotIndex < predictorCount; pivotIndex++) {
+    let pivotColumn = pivotIndex;
+    for (
+      let scanIndex = pivotIndex + 1;
+      scanIndex < predictorCount;
+      scanIndex++
+    )
+      dotProductWithCompensation(
+        scaledColumns[scanIndex],
+        scaledColumns[scanIndex],
+      ) >
+        dotProductWithCompensation(
+          scaledColumns[pivotColumn],
+          scaledColumns[pivotColumn],
+        ) && (pivotColumn = scanIndex);
+    (([scaledColumns[pivotIndex], scaledColumns[pivotColumn]] = [
+      scaledColumns[pivotColumn],
+      scaledColumns[pivotIndex],
+    ]),
+      ([columnOrder[pivotIndex], columnOrder[pivotColumn]] = [
+        columnOrder[pivotColumn],
+        columnOrder[pivotIndex],
+      ]));
+    for (let priorRowIndex = 0; priorRowIndex < pivotIndex; priorRowIndex++)
+      [
+        triangularFactor[priorRowIndex][pivotIndex],
+        triangularFactor[priorRowIndex][pivotColumn],
+      ] = [
+        triangularFactor[priorRowIndex][pivotColumn],
+        triangularFactor[priorRowIndex][pivotIndex],
+      ];
+    const pivotNorm = Math.sqrt(
+      dotProductWithCompensation(
+        scaledColumns[pivotIndex],
+        scaledColumns[pivotIndex],
+      ),
+    );
+    if (pivotNorm <= rankTolerance) break;
+    ((triangularFactor[pivotIndex][pivotIndex] = pivotNorm),
+      orthonormalBasis.push(
+        scaledColumns[pivotIndex].map((value) => value / pivotNorm),
+      ),
+      projections.push(
+        dotProductWithCompensation(
+          orthonormalBasis[pivotIndex],
+          scaledResponses,
+        ),
+      ),
+      rank++);
+    for (
+      let laterColumnIndex = pivotIndex + 1;
+      laterColumnIndex < predictorCount;
+      laterColumnIndex++
+    )
+      for (let passIndex = 0; passIndex < 2; passIndex++) {
+        const projectionCoefficient = dotProductWithCompensation(
+          orthonormalBasis[pivotIndex],
+          scaledColumns[laterColumnIndex],
+        );
+        ((triangularFactor[pivotIndex][laterColumnIndex] +=
+          projectionCoefficient),
+          (scaledColumns[laterColumnIndex] = scaledColumns[
+            laterColumnIndex
+          ].map(
+            (value, elementIndex) =>
+              value -
+              projectionCoefficient *
+                orthonormalBasis[pivotIndex][elementIndex],
+          )));
       }
   }
-  const R = (se) => {
-      const we = Array(N).fill(0);
-      for (let Ee = N - 1; Ee >= 0; Ee--) {
-        let Ae = se[Ee];
-        for (let ye = Ee + 1; ye < N; ye++) Ae -= B[Ee][ye] * we[ye];
-        we[Ee] = o(Ae / B[Ee][Ee]);
+  const solveUpperTriangular = (rhsVector) => {
+      const solution = Array(rank).fill(0);
+      for (let rowIndex = rank - 1; rowIndex >= 0; rowIndex--) {
+        let residual = rhsVector[rowIndex];
+        for (let columnIndex = rowIndex + 1; columnIndex < rank; columnIndex++)
+          residual -=
+            triangularFactor[rowIndex][columnIndex] * solution[columnIndex];
+        solution[rowIndex] = toFiniteNumber(
+          residual / triangularFactor[rowIndex][rowIndex],
+        );
       }
-      return we;
+      return solution;
     },
-    L = Array(E).fill(0);
-  R(C).forEach((se, we) => (L[D[we]] = se));
-  const $ = L.map((se, we) => o(se * (I / j[we]))),
-    U = c ? o(k - dotProductWithCompensation($, A)) : 0,
-    G = (se) => {
-      const we = o(Math.exp(se));
-      return we > 0 ? we : n("#NUM!");
+    scaledCoefficients = Array(predictorCount).fill(0);
+  solveUpperTriangular(projections).forEach(
+    (scaledCoefficient, pivotPosition) =>
+      (scaledCoefficients[columnOrder[pivotPosition]] = scaledCoefficient),
+  );
+  const coefficients = scaledCoefficients.map(
+      (scaledCoefficient, predictorIndex) =>
+        toFiniteNumber(
+          scaledCoefficient * (responseScale / predictorScales[predictorIndex]),
+        ),
+    ),
+    interceptValue = hasIntercept
+      ? toFiniteNumber(
+          responseMean -
+            dotProductWithCompensation(coefficients, predictorMeans),
+        )
+      : 0,
+    exponentiate = (exponent) => {
+      const expValue = toFiniteNumber(Math.exp(exponent));
+      return expValue > 0 ? expValue : fail("#NUM!");
     };
-  if (u) {
-    const se = r[2] == null ? g : s(t.retrieve(r[2]));
-    let we, Ee, Ae;
-    if (E === 1)
-      ((we = se.flat().map((Te) => [Te])),
-        (Ee = se.length),
-        (Ae = se[0].length));
-    else if (!y && se[0].length === E) ((we = se), (Ee = we.length), (Ae = 1));
-    else if (y && se.length === E)
-      ((we = Array.from({ length: se[0].length }, (Te, Pe) =>
-        se.map((qe) => qe[Pe]),
+  if (isTrendOrGrowth) {
+    const newXMatrix =
+      args[2] == null ? knownXs : readNumericMatrix(context.retrieve(args[2]));
+    let predictionRows, outputRowCount, outputColumnCount;
+    if (predictorCount === 1)
+      ((predictionRows = newXMatrix.flat().map((value) => [value])),
+        (outputRowCount = newXMatrix.length),
+        (outputColumnCount = newXMatrix[0].length));
+    else if (!isSingleRowY && newXMatrix[0].length === predictorCount)
+      ((predictionRows = newXMatrix),
+        (outputRowCount = predictionRows.length),
+        (outputColumnCount = 1));
+    else if (isSingleRowY && newXMatrix.length === predictorCount)
+      ((predictionRows = Array.from(
+        { length: newXMatrix[0].length },
+        (Te, columnIndex) => newXMatrix.map((row) => row[columnIndex]),
       )),
-        (Ee = 1),
-        (Ae = we.length));
-    else return n("#REF!");
-    Ee * Ae > regressionSizeLimits.output && n("#LIMIT!");
-    const ye = we.map((Te) => {
-      const Pe = o(
-        k +
+        (outputRowCount = 1),
+        (outputColumnCount = predictionRows.length));
+    else return fail("#REF!");
+    outputRowCount * outputColumnCount > regressionSizeLimits.output &&
+      fail("#LIMIT!");
+    const predictions = predictionRows.map((predictionRow) => {
+      const predictedValue = toFiniteNumber(
+        responseMean +
           dotProductWithCompensation(
-            L,
-            Te.map((qe, ht) => o(qe - A[ht]) / j[ht]),
+            scaledCoefficients,
+            predictionRow.map(
+              (newXValue, predictorIndex) =>
+                toFiniteNumber(newXValue - predictorMeans[predictorIndex]) /
+                predictorScales[predictorIndex],
+            ),
           ) *
-            I,
+            responseScale,
       );
-      return l ? G(Pe) : Pe;
+      return isLogarithmic ? exponentiate(predictedValue) : predictedValue;
     });
-    return Array.from({ length: Ee }, (Te, Pe) =>
-      ye.slice(Pe * Ae, (Pe + 1) * Ae),
+    return Array.from({ length: outputRowCount }, (Te, outputRowIndex) =>
+      predictions.slice(
+        outputRowIndex * outputColumnCount,
+        (outputRowIndex + 1) * outputColumnCount,
+      ),
     );
   }
-  const H = [...$]
+  const coefficientRow = [...coefficients]
     .reverse()
-    .concat(U)
-    .map((se) => (l ? G(se) : se));
-  if (!h) return [H];
-  const Q = O.map(
-    (se, we) =>
-      se -
+    .concat(interceptValue)
+    .map((value) => (isLogarithmic ? exponentiate(value) : value));
+  if (!hasStatistics) return [coefficientRow];
+  const scaledResiduals = scaledResponses.map(
+    (scaledResponse, observationIndex) =>
+      scaledResponse -
       dotProductWithCompensation(
-        L,
-        V.map((Ee) => Ee[we]),
+        scaledCoefficients,
+        initialScaledColumns.map(
+          (scaledColumn) => scaledColumn[observationIndex],
+        ),
       ),
   );
-  let X = dotProductWithCompensation(Q, Q);
-  const J = dotProductWithCompensation(O, O);
-  X <= 1e-26 * Math.max(J, Number.MIN_VALUE) && (X = 0);
-  const q = p - N - Number(c),
-    W = q > 0 ? Math.sqrt(X / q) : null,
-    K = () => t.issue("#N/A"),
-    te = () => t.issue("#DIV/0!"),
-    ae = Array.from({ length: N }, (se, we) =>
-      R(Array.from({ length: N }, (Ee, Ae) => (Ae === we ? 1 : 0))),
+  let residualSumSquares = dotProductWithCompensation(
+    scaledResiduals,
+    scaledResiduals,
+  );
+  const totalSumSquares = dotProductWithCompensation(
+    scaledResponses,
+    scaledResponses,
+  );
+  residualSumSquares <= 1e-26 * Math.max(totalSumSquares, Number.MIN_VALUE) &&
+    (residualSumSquares = 0);
+  const residualDegrees = observationCount - rank - Number(hasIntercept),
+    standardError =
+      residualDegrees > 0
+        ? Math.sqrt(residualSumSquares / residualDegrees)
+        : null,
+    notAvailableError = () => context.issue("#N/A"),
+    divisionByZeroError = () => context.issue("#DIV/0!"),
+    inverseColumns = Array.from({ length: rank }, (se, unitIndex) =>
+      solveUpperTriangular(
+        Array.from({ length: rank }, (Ee, elementIndex) =>
+          elementIndex === unitIndex ? 1 : 0,
+        ),
+      ),
     ),
-    oe = Array(E).fill(0);
-  for (let se = 0; se < N; se++)
-    oe[D[se]] =
-      W === null
-        ? te()
-        : o(Math.hypot(...ae.map((we) => we[se])) * W * (I / j[D[se]]));
-  const de = D.slice(0, N).map((se) => A[se] / j[se]),
-    he =
-      1 / p +
-      ae.reduce((se, we) => se + dotProductWithCompensation(de, we) ** 2, 0),
-    Se = [...oe]
+    coefficientStandardErrors = Array(predictorCount).fill(0);
+  for (let rankIndex = 0; rankIndex < rank; rankIndex++)
+    coefficientStandardErrors[columnOrder[rankIndex]] =
+      standardError === null
+        ? divisionByZeroError()
+        : toFiniteNumber(
+            Math.hypot(
+              ...inverseColumns.map(
+                (inverseColumn) => inverseColumn[rankIndex],
+              ),
+            ) *
+              standardError *
+              (responseScale / predictorScales[columnOrder[rankIndex]]),
+          );
+  const scaledMeans = columnOrder
+      .slice(0, rank)
+      .map(
+        (predictorIndex) =>
+          predictorMeans[predictorIndex] / predictorScales[predictorIndex],
+      ),
+    interceptVariance =
+      1 / observationCount +
+      inverseColumns.reduce(
+        (total, inverseVector) =>
+          total + dotProductWithCompensation(scaledMeans, inverseVector) ** 2,
+        0,
+      ),
+    standardErrorRow = [...coefficientStandardErrors]
       .reverse()
-      .concat(c ? (W === null ? te() : o(Math.sqrt(he) * W * I)) : K()),
-    le = Math.max(0, J - X),
-    ce = (se) => o(se * I * I),
-    ge = (se, we) => [se, we, ...Array.from({ length: E - 1 }, K)];
+      .concat(
+        hasIntercept
+          ? standardError === null
+            ? divisionByZeroError()
+            : toFiniteNumber(
+                Math.sqrt(interceptVariance) * standardError * responseScale,
+              )
+          : notAvailableError(),
+      ),
+    regressionSumSquares = Math.max(0, totalSumSquares - residualSumSquares),
+    unscaleSumSquares = (scaledSumSquares) =>
+      toFiniteNumber(scaledSumSquares * responseScale * responseScale),
+    buildStatsRow = (firstValue, secondValue) => [
+      firstValue,
+      secondValue,
+      ...Array.from({ length: predictorCount - 1 }, notAvailableError),
+    ];
   return [
-    H,
-    Se,
-    ge(
-      J ? Math.max(0, Math.min(1, le / J)) : te(),
-      W === null ? te() : o(W * I),
+    coefficientRow,
+    standardErrorRow,
+    buildStatsRow(
+      totalSumSquares
+        ? Math.max(0, Math.min(1, regressionSumSquares / totalSumSquares))
+        : divisionByZeroError(),
+      standardError === null
+        ? divisionByZeroError()
+        : toFiniteNumber(standardError * responseScale),
     ),
-    ge(q > 0 && N && X ? o(le / N / (X / q)) : te(), q),
-    ge(ce(le), ce(X)),
+    buildStatsRow(
+      residualDegrees > 0 && rank && residualSumSquares
+        ? toFiniteNumber(
+            regressionSumSquares /
+              rank /
+              (residualSumSquares / residualDegrees),
+          )
+        : divisionByZeroError(),
+      residualDegrees,
+    ),
+    buildStatsRow(
+      unscaleSumSquares(regressionSumSquares),
+      unscaleSumSquares(residualSumSquares),
+    ),
   ];
 }
 const significanceTestFunctionNames = ["T.TEST", "Z.TEST"],
   notInferenceSentinel = Symbol("not-inference");
-function evaluateSignificanceTestFunction(e, r, t) {
-  if (!significanceTestFunctionNames.includes(e)) return notInferenceSentinel;
-  const n = (I = "#VALUE!") => {
-      throw t.issue(I);
+function evaluateSignificanceTestFunction(functionName, args, context) {
+  if (!significanceTestFunctionNames.includes(functionName))
+    return notInferenceSentinel;
+  const fail = (errorCode = "#VALUE!") => {
+      throw context.issue(errorCode);
     },
-    o = (I) => (Number.isFinite(I) ? I : n("#NUM!"));
-  ((e === "T.TEST" && r.length !== 4) ||
-    (e === "Z.TEST" && (r.length < 2 || r.length > 3))) &&
-    n();
-  const a = r.map(t.retrieve);
-  let s = 0;
-  const d = (I) => {
-      if (Array.isArray(I)) return I.flatMap(d);
-      if ((++s > 4e4 && n("#LIMIT!"), t.isIssue(I))) throw I;
-      return (typeof I == "number" && o(I), [I]);
+    requireFinite = (candidate) =>
+      Number.isFinite(candidate) ? candidate : fail("#NUM!");
+  ((functionName === "T.TEST" && args.length !== 4) ||
+    (functionName === "Z.TEST" && (args.length < 2 || args.length > 3))) &&
+    fail();
+  const retrievedArgs = args.map(context.retrieve);
+  let valueCount = 0;
+  const flattenValues = (element) => {
+      if (Array.isArray(element)) return element.flatMap(flattenValues);
+      if ((++valueCount > 4e4 && fail("#LIMIT!"), context.isIssue(element)))
+        throw element;
+      return (typeof element == "number" && requireFinite(element), [element]);
     },
-    u = (I) => {
-      if (t.isIssue(I)) throw I;
-      if (Array.isArray(I) || I == null || (typeof I == "string" && !I.trim()))
-        return n();
-      const O = Number(I);
-      return Number.isFinite(O) ? O : n();
+    toNumberArgument = (argument) => {
+      if (context.isIssue(argument)) throw argument;
+      if (
+        Array.isArray(argument) ||
+        argument == null ||
+        (typeof argument == "string" && !argument.trim())
+      )
+        return fail();
+      const numericArgument = Number(argument);
+      return Number.isFinite(numericArgument) ? numericArgument : fail();
     },
-    l = (I) => I.filter((O) => typeof O == "number"),
-    c = (I) => {
-      if (I.length < 2) return n("#DIV/0!");
-      const mean = exactAverageOfNumbers(I);
+    onlyNumbers = (rawValues) =>
+      rawValues.filter((entry) => typeof entry == "number"),
+    meanAndVariance = (sample) => {
+      if (sample.length < 2) return fail("#DIV/0!");
+      const mean = exactAverageOfNumbers(sample);
       return {
         mean: mean,
-        variance: o(
-          sumDecimalPartsToNumber(I.map((j) => (j - mean) ** 2)) /
-            (I.length - 1),
+        variance: requireFinite(
+          sumDecimalPartsToNumber(
+            sample.map((sampleValue) => (sampleValue - mean) ** 2),
+          ) /
+            (sample.length - 1),
         ),
       };
     },
-    h = (I) => {
-      if (t.isIssue(I)) throw I;
-      return typeof I != "number" ||
-        !Number.isFinite(I) ||
-        I < -1e-12 ||
-        I > 1 + 1e-12
-        ? n("#NUM!")
-        : Math.max(0, Math.min(1, I));
+    toProbability = (probability) => {
+      if (context.isIssue(probability)) throw probability;
+      return typeof probability != "number" ||
+        !Number.isFinite(probability) ||
+        probability < -1e-12 ||
+        probability > 1 + 1e-12
+        ? fail("#NUM!")
+        : Math.max(0, Math.min(1, probability));
     },
-    f = d(a[0]);
-  if (e === "Z.TEST") {
-    const I = l(f),
-      O = I.length;
-    if (!O) return n("#N/A");
-    const j = u(a[1]),
-      z = Math.max(Math.abs(j), ...I.map(Math.abs)) || 1,
-      V = I.map((C) => C / z),
-      D = r[2] == null ? Math.sqrt(c(V).variance) : u(a[2]) / z;
-    if (D < 0) return n("#NUM!");
-    if (!D) return n("#DIV/0!");
-    const B = o(((exactAverageOfNumbers(V) - j / z) / D) * Math.sqrt(O)),
-      _ = t.distribution("ERFC", [B / Math.SQRT2]);
-    if (t.isIssue(_)) throw _;
-    return typeof _ == "number" ? h(_ / 2) : n("#NUM!");
+    firstSample = flattenValues(retrievedArgs[0]);
+  if (functionName === "Z.TEST") {
+    const numericSample = onlyNumbers(firstSample),
+      sampleCount = numericSample.length;
+    if (!sampleCount) return fail("#N/A");
+    const testValue = toNumberArgument(retrievedArgs[1]),
+      scale =
+        Math.max(Math.abs(testValue), ...numericSample.map(Math.abs)) || 1,
+      scaledSample = numericSample.map((numericItem) => numericItem / scale),
+      scaledSigma =
+        args[2] == null
+          ? Math.sqrt(meanAndVariance(scaledSample).variance)
+          : toNumberArgument(retrievedArgs[2]) / scale;
+    if (scaledSigma < 0) return fail("#NUM!");
+    if (!scaledSigma) return fail("#DIV/0!");
+    const zStatistic = requireFinite(
+        ((exactAverageOfNumbers(scaledSample) - testValue / scale) /
+          scaledSigma) *
+          Math.sqrt(sampleCount),
+      ),
+      erfcResult = context.distribution("ERFC", [zStatistic / Math.SQRT2]);
+    if (context.isIssue(erfcResult)) throw erfcResult;
+    return typeof erfcResult == "number"
+      ? toProbability(erfcResult / 2)
+      : fail("#NUM!");
   }
-  const p = d(a[1]),
-    m = Math.trunc(u(a[2])),
-    v = Math.trunc(u(a[3]));
-  ((![1, 2].includes(m) || ![1, 2, 3].includes(v)) && n("#NUM!"),
-    v === 1 && f.length !== p.length && n("#N/A"));
-  let g, b;
-  if (v === 1) {
-    const I = f
-      .map((O, j) => [O, p[j]])
-      .filter((O) => O.every((j) => typeof j == "number"));
-    ((g = I.map((O) => O[0])), (b = I.map((O) => O[1])));
-  } else ((g = l(f)), (b = l(p)));
-  (g.length < 2 || b.length < 2) && n("#DIV/0!");
-  const y = Math.max(...g.map(Math.abs), ...b.map(Math.abs)) || 1;
-  ((g = g.map((I) => I / y)), (b = b.map((I) => I / y)));
-  let w, E, A;
-  if (v === 1) {
-    const I = c(g.map((O, j) => O - b[j]));
-    ((w = I.mean), (E = I.variance / g.length), (A = g.length - 1));
+  const secondSample = flattenValues(retrievedArgs[1]),
+    tails = Math.trunc(toNumberArgument(retrievedArgs[2])),
+    testType = Math.trunc(toNumberArgument(retrievedArgs[3]));
+  ((![1, 2].includes(tails) || ![1, 2, 3].includes(testType)) && fail("#NUM!"),
+    testType === 1 &&
+      firstSample.length !== secondSample.length &&
+      fail("#N/A"));
+  let firstValues, secondValues;
+  if (testType === 1) {
+    const pairs = firstSample
+      .map((firstItem, firstIndex) => [firstItem, secondSample[firstIndex]])
+      .filter((candidatePair) =>
+        candidatePair.every((pairValue) => typeof pairValue == "number"),
+      );
+    ((firstValues = pairs.map((pair) => pair[0])),
+      (secondValues = pairs.map((pair) => pair[1])));
+  } else
+    ((firstValues = onlyNumbers(firstSample)),
+      (secondValues = onlyNumbers(secondSample)));
+  (firstValues.length < 2 || secondValues.length < 2) && fail("#DIV/0!");
+  const normalizer =
+    Math.max(...firstValues.map(Math.abs), ...secondValues.map(Math.abs)) || 1;
+  ((firstValues = firstValues.map((sampleNumber) => sampleNumber / normalizer)),
+    (secondValues = secondValues.map(
+      (sampleNumber) => sampleNumber / normalizer,
+    )));
+  let meanDifference, squaredStandardError, degreesOfFreedom;
+  if (testType === 1) {
+    const differenceStats = meanAndVariance(
+      firstValues.map(
+        (firstNumber, valueIndex) => firstNumber - secondValues[valueIndex],
+      ),
+    );
+    ((meanDifference = differenceStats.mean),
+      (squaredStandardError = differenceStats.variance / firstValues.length),
+      (degreesOfFreedom = firstValues.length - 1));
   } else {
-    const I = c(g),
-      O = c(b);
-    if (((w = I.mean - O.mean), v === 2))
-      ((A = g.length + b.length - 2),
-        (E =
-          (((g.length - 1) * I.variance + (b.length - 1) * O.variance) / A) *
-          (1 / g.length + 1 / b.length)));
+    const firstStats = meanAndVariance(firstValues),
+      secondStats = meanAndVariance(secondValues);
+    if (((meanDifference = firstStats.mean - secondStats.mean), testType === 2))
+      ((degreesOfFreedom = firstValues.length + secondValues.length - 2),
+        (squaredStandardError =
+          (((firstValues.length - 1) * firstStats.variance +
+            (secondValues.length - 1) * secondStats.variance) /
+            degreesOfFreedom) *
+          (1 / firstValues.length + 1 / secondValues.length)));
     else {
-      const j = I.variance / g.length,
-        z = O.variance / b.length;
-      ((E = j + z),
-        (A = E ** 2 / (j ** 2 / (g.length - 1) + z ** 2 / (b.length - 1))));
+      const firstMeanVariance = firstStats.variance / firstValues.length,
+        secondMeanVariance = secondStats.variance / secondValues.length;
+      ((squaredStandardError = firstMeanVariance + secondMeanVariance),
+        (degreesOfFreedom =
+          squaredStandardError ** 2 /
+          (firstMeanVariance ** 2 / (firstValues.length - 1) +
+            secondMeanVariance ** 2 / (secondValues.length - 1))));
     }
   }
-  E || n("#DIV/0!");
-  const k = o(Math.abs(w) / Math.sqrt(E));
-  o(A);
-  const F = t.distribution("BETA.DIST", [A / (A + k * k), A / 2, 0.5, true]);
-  return (h(F) * m) / 2;
+  squaredStandardError || fail("#DIV/0!");
+  const tStatistic = requireFinite(
+    Math.abs(meanDifference) / Math.sqrt(squaredStandardError),
+  );
+  requireFinite(degreesOfFreedom);
+  const betaProbability = context.distribution("BETA.DIST", [
+    degreesOfFreedom / (degreesOfFreedom + tStatistic * tStatistic),
+    degreesOfFreedom / 2,
+    0.5,
+    true,
+  ]);
+  return (toProbability(betaProbability) * tails) / 2;
 }
 const specialistFunctionNames = ["CONVERT", "SLOPE", "RSQ", "STEYX", "PEARSON"],
   notSpecialistSentinel = Symbol("not-specialist"),
   conversionUnits = [],
   addConversionUnitSymbols = (
-    e,
+    symbolList,
     dimension,
     factor,
     metric = false,
     offset = 0,
     power = 1,
   ) => {
-    for (const symbol of e.split("|"))
+    for (const symbol of symbolList.split("|"))
       conversionUnits.push({
         symbol: symbol,
         dimension: dimension,
@@ -993,7 +1389,7 @@ addConversionUnitSymbols("uk_gal", "volume", 0.00454609);
 addConversionUnitSymbols("uk_qt", "volume", 0.00454609 / 4);
 addConversionUnitSymbols("uk_pt", "volume", 0.00454609 / 8);
 addConversionUnitSymbols("barrel", "volume", 0.003785411784 * 42);
-for (const [e, r] of [
+for (const [unitSymbol, unitFactor] of [
   ["m", 1],
   ["in", 0.0254],
   ["ft", 0.3048],
@@ -1003,18 +1399,18 @@ for (const [e, r] of [
   ["ang", 1e-10],
 ])
   (addConversionUnitSymbols(
-    `${e}2|${e}^2`,
+    `${unitSymbol}2|${unitSymbol}^2`,
     "area",
-    r ** 2,
-    e === "m" || e === "ang",
+    unitFactor ** 2,
+    unitSymbol === "m" || unitSymbol === "ang",
     0,
     2,
   ),
     addConversionUnitSymbols(
-      `${e}3|${e}^3`,
+      `${unitSymbol}3|${unitSymbol}^3`,
       "volume",
-      r ** 3,
-      e === "m" || e === "ang",
+      unitFactor ** 3,
+      unitSymbol === "m" || unitSymbol === "ang",
       0,
       3,
     ));
@@ -1069,27 +1465,29 @@ function findConversionUnit(symbol) {
     (conversionUnit) => conversionUnit.symbol === symbol,
   );
   if (conversionUnit) return { ...conversionUnit };
-  for (const [t, n] of Object.entries(binaryPrefixExponents)) {
-    if (!symbol.startsWith(t)) continue;
+  for (const [binaryPrefix, binaryExponent] of Object.entries(
+    binaryPrefixExponents,
+  )) {
+    if (!symbol.startsWith(binaryPrefix)) continue;
     const conversionUnit = conversionUnits.find(
       (conversionUnit) =>
-        conversionUnit.symbol === symbol.slice(t.length) &&
+        conversionUnit.symbol === symbol.slice(binaryPrefix.length) &&
         conversionUnit.dimension === "information",
     );
     if (conversionUnit)
       return {
         ...conversionUnit,
         symbol: symbol,
-        factor: conversionUnit.factor * 2 ** n,
+        factor: conversionUnit.factor * 2 ** binaryExponent,
       };
   }
-  for (const t of Object.keys(siPrefixPowersOfTen).sort(
-    (n, o) => o.length - n.length,
+  for (const siPrefix of Object.keys(siPrefixPowersOfTen).sort(
+    (leftPrefix, rightPrefix) => rightPrefix.length - leftPrefix.length,
   )) {
-    if (!symbol.startsWith(t)) continue;
+    if (!symbol.startsWith(siPrefix)) continue;
     const conversionUnit = conversionUnits.find(
       (conversionUnit) =>
-        conversionUnit.symbol === symbol.slice(t.length) &&
+        conversionUnit.symbol === symbol.slice(siPrefix.length) &&
         conversionUnit.metric,
     );
     if (conversionUnit)
@@ -1098,89 +1496,143 @@ function findConversionUnit(symbol) {
         symbol: symbol,
         factor:
           conversionUnit.factor *
-          10 ** (siPrefixPowersOfTen[t] * conversionUnit.power),
+          10 ** (siPrefixPowersOfTen[siPrefix] * conversionUnit.power),
       };
   }
 }
-function evaluateSpecialistFunction(e, r, t) {
-  if (!specialistFunctionNames.includes(e)) return notSpecialistSentinel;
-  const n = (j = "#VALUE!") => {
-    throw t.issue(j);
+function evaluateSpecialistFunction(functionName, args, context) {
+  if (!specialistFunctionNames.includes(functionName))
+    return notSpecialistSentinel;
+  const fail = (errorCode = "#VALUE!") => {
+    throw context.issue(errorCode);
   };
-  (r.length !== (e === "CONVERT" ? 3 : 2) || r.some((j) => j == null)) && n();
-  const o = r.map(t.retrieve);
-  let a = 0;
-  const s = (j) => {
-    if (Array.isArray(j)) {
-      for (const z of j) s(z);
+  (args.length !== (functionName === "CONVERT" ? 3 : 2) ||
+    args.some((argument) => argument == null)) &&
+    fail();
+  const resolvedArgs = args.map(context.retrieve);
+  let visitedCount = 0;
+  const checkValue = (value) => {
+    if (Array.isArray(value)) {
+      for (const element of value) checkValue(element);
       return;
     }
-    if ((++a > 4e4 && n("#LIMIT!"), t.isIssue(j))) throw j;
-    typeof j == "number" && !Number.isFinite(j) && n("#NUM!");
+    if ((++visitedCount > 4e4 && fail("#LIMIT!"), context.isIssue(value)))
+      throw value;
+    typeof value == "number" && !Number.isFinite(value) && fail("#NUM!");
   };
-  o.forEach(s);
-  const d = (j) => (Number.isFinite(j) ? j : n("#NUM!"));
-  if (e === "CONVERT") {
-    const [j, symbol, V] = o;
+  resolvedArgs.forEach(checkValue);
+  const requireFinite = (numericValue) =>
+    Number.isFinite(numericValue) ? numericValue : fail("#NUM!");
+  if (functionName === "CONVERT") {
+    const [amount, symbol, targetSymbol] = resolvedArgs;
     (typeof symbol != "string" ||
-      typeof V != "string" ||
-      Array.isArray(j) ||
-      j == null ||
-      (typeof j == "string" && !j.trim())) &&
-      n();
-    const D = Number(j);
-    Number.isFinite(D) || n();
+      typeof targetSymbol != "string" ||
+      Array.isArray(amount) ||
+      amount == null ||
+      (typeof amount == "string" && !amount.trim())) &&
+      fail();
+    const numericAmount = Number(amount);
+    Number.isFinite(numericAmount) || fail();
     const conversionUnit = findConversionUnit(symbol),
-      _ = findConversionUnit(V);
+      targetUnit = findConversionUnit(targetSymbol);
     return (
-      (!conversionUnit || !_ || conversionUnit.dimension !== _.dimension) &&
-        n("#N/A"),
-      conversionUnit.offset === _.offset
-        ? d(D * (conversionUnit.factor / _.factor))
-        : d(
-            (D * conversionUnit.factor + conversionUnit.offset - _.offset) /
-              _.factor,
+      (!conversionUnit ||
+        !targetUnit ||
+        conversionUnit.dimension !== targetUnit.dimension) &&
+        fail("#N/A"),
+      conversionUnit.offset === targetUnit.offset
+        ? requireFinite(
+            numericAmount * (conversionUnit.factor / targetUnit.factor),
+          )
+        : requireFinite(
+            (numericAmount * conversionUnit.factor +
+              conversionUnit.offset -
+              targetUnit.offset) /
+              targetUnit.factor,
           )
     );
   }
-  const u = (j) => (Array.isArray(j) ? j.flat(1 / 0) : [j]),
-    l = u(o[0]),
-    c = u(o[1]);
-  l.length !== c.length && n("#N/A");
-  const h = l
-      .map((j, z) => [j, c[z]])
-      .filter((j) => j.every((z) => typeof z == "number")),
-    f = h.length;
-  (!f && e === "SLOPE" && n("#N/A"),
-    f < (e === "STEYX" ? 3 : 2) && n("#DIV/0!"));
-  const p = h.map((j) => j[0]),
-    m = h.map((j) => j[1]),
-    v = exactAverageOfNumbers(p),
-    g = exactAverageOfNumbers(m),
-    b = m.map((j) => d(j - g)),
-    y = p.map((j) => d(j - v)),
-    w = Math.max(...b.map(Math.abs)),
-    E = Math.max(...y.map(Math.abs));
-  if (((!w || (!E && (e === "RSQ" || e === "PEARSON"))) && n("#DIV/0!"), !E))
+  const flattenToArray = (input) =>
+      Array.isArray(input) ? input.flat(1 / 0) : [input],
+    knownYValues = flattenToArray(resolvedArgs[0]),
+    knownXValues = flattenToArray(resolvedArgs[1]);
+  knownYValues.length !== knownXValues.length && fail("#N/A");
+  const numericPairs = knownYValues
+      .map((knownY, pairIndex) => [knownY, knownXValues[pairIndex]])
+      .filter((pair) =>
+        pair.every((pairValue) => typeof pairValue == "number"),
+      ),
+    pairCount = numericPairs.length;
+  (!pairCount && functionName === "SLOPE" && fail("#N/A"),
+    pairCount < (functionName === "STEYX" ? 3 : 2) && fail("#DIV/0!"));
+  const pairedYs = numericPairs.map((pair) => pair[0]),
+    pairedXs = numericPairs.map((pair) => pair[1]),
+    meanY = exactAverageOfNumbers(pairedYs),
+    meanX = exactAverageOfNumbers(pairedXs),
+    xDeviations = pairedXs.map((xValue) => requireFinite(xValue - meanX)),
+    yDeviations = pairedYs.map((yValue) => requireFinite(yValue - meanY)),
+    maxXDeviation = Math.max(...xDeviations.map(Math.abs)),
+    maxYDeviation = Math.max(...yDeviations.map(Math.abs));
+  if (
+    ((!maxXDeviation ||
+      (!maxYDeviation &&
+        (functionName === "RSQ" || functionName === "PEARSON"))) &&
+      fail("#DIV/0!"),
+    !maxYDeviation)
+  )
     return 0;
-  const A = b.map((j) => j / w),
-    k = y.map((j) => j / E),
-    F = sumDecimalPartsToNumber(A.map((j) => j * j)),
-    I = sumDecimalPartsToNumber(k.map((j) => j * j)),
-    O = sumDecimalPartsToNumber(A.map((j, z) => j * k[z]));
-  return e === "SLOPE"
-    ? d((O / F) * (E / w))
-    : e === "PEARSON"
-      ? Math.max(-1, Math.min(1, O / Math.sqrt(F * I)))
-      : e === "RSQ"
-        ? Math.min(1, Math.max(0, (O / F) * (O / I)))
-        : d(
+  const scaledXDeviations = xDeviations.map(
+      (xDeviation) => xDeviation / maxXDeviation,
+    ),
+    scaledYDeviations = yDeviations.map(
+      (yDeviation) => yDeviation / maxYDeviation,
+    ),
+    sumSquaredX = sumDecimalPartsToNumber(
+      scaledXDeviations.map(
+        (scaledXDeviation) => scaledXDeviation * scaledXDeviation,
+      ),
+    ),
+    sumSquaredY = sumDecimalPartsToNumber(
+      scaledYDeviations.map(
+        (scaledYDeviation) => scaledYDeviation * scaledYDeviation,
+      ),
+    ),
+    crossProductSum = sumDecimalPartsToNumber(
+      scaledXDeviations.map(
+        (scaledXDeviation, valueIndex) =>
+          scaledXDeviation * scaledYDeviations[valueIndex],
+      ),
+    );
+  return functionName === "SLOPE"
+    ? requireFinite(
+        (crossProductSum / sumSquaredX) * (maxYDeviation / maxXDeviation),
+      )
+    : functionName === "PEARSON"
+      ? Math.max(
+          -1,
+          Math.min(1, crossProductSum / Math.sqrt(sumSquaredX * sumSquaredY)),
+        )
+      : functionName === "RSQ"
+        ? Math.min(
+            1,
+            Math.max(
+              0,
+              (crossProductSum / sumSquaredX) * (crossProductSum / sumSquaredY),
+            ),
+          )
+        : requireFinite(
             Math.sqrt(
               sumDecimalPartsToNumber(
-                k.map((j, z) => (j - (O / F) * A[z]) ** 2),
+                scaledYDeviations.map(
+                  (scaledYDeviation, valueIndex) =>
+                    (scaledYDeviation -
+                      (crossProductSum / sumSquaredX) *
+                        scaledXDeviations[valueIndex]) **
+                    2,
+                ),
               ) /
-                (f - 2),
-            ) * E,
+                (pairCount - 2),
+            ) * maxYDeviation,
           );
 }
 const statisticalFunctionNames = [
@@ -1221,27 +1673,38 @@ const statisticalFunctionNames = [
     "PERMUTATIONA",
   ],
   notStatisticalSentinel = Symbol("not-statistical-function"),
-  isReferenceArgument = (e) => !!e && typeof e == "object" && "ref" in e;
-function sumWithKahanCompensation(e) {
-  let r = 0,
-    t = 0;
-  for (const n of e) {
-    const o = r + n;
-    ((t += Math.abs(r) >= Math.abs(n) ? r - o + n : n - o + r), (r = o));
+  isReferenceArgument = (value) =>
+    !!value && typeof value == "object" && "ref" in value;
+function sumWithKahanCompensation(values) {
+  let sum = 0,
+    compensation = 0;
+  for (const value of values) {
+    const nextSum = sum + value;
+    ((compensation +=
+      Math.abs(sum) >= Math.abs(value)
+        ? sum - nextSum + value
+        : value - nextSum + sum),
+      (sum = nextSum));
   }
-  return r + t;
+  return sum + compensation;
 }
-function evaluateStatisticalFunction(e, r, t) {
-  if (!statisticalFunctionNames.includes(e)) return notStatisticalSentinel;
-  const n = (O = "#VALUE!") => {
-      throw t.issue(O);
+function evaluateStatisticalFunction(
+  functionName,
+  argumentList,
+  evaluationContext,
+) {
+  if (!statisticalFunctionNames.includes(functionName))
+    return notStatisticalSentinel;
+  const raiseError = (errorCode = "#VALUE!") => {
+      throw evaluationContext.issue(errorCode);
     },
-    o = e.startsWith("RANK"),
-    a = e.startsWith("PERCENTILE"),
-    s = e.startsWith("QUARTILE"),
-    d = e === "TRIMMEAN",
-    u = e === "PERMUT" || e === "PERMUTATIONA",
-    l = [
+    isRankFunction = functionName.startsWith("RANK"),
+    isPercentileFunction = functionName.startsWith("PERCENTILE"),
+    isQuartileFunction = functionName.startsWith("QUARTILE"),
+    isTrimmeanFunction = functionName === "TRIMMEAN",
+    isPermutFunction =
+      functionName === "PERMUT" || functionName === "PERMUTATIONA",
+    isAVariantFunction = [
       "AVERAGEA",
       "MAXA",
       "MINA",
@@ -1249,300 +1712,481 @@ function evaluateStatisticalFunction(e, r, t) {
       "STDEVPA",
       "VARA",
       "VARPA",
-    ].includes(e);
+    ].includes(functionName);
   if (
-    !r.length ||
-    r.length > 255 ||
-    (e === "COUNTBLANK" && r.length !== 1) ||
-    ((a || s || d || u) && r.length !== 2) ||
-    (o && (r.length < 2 || r.length > 3))
+    !argumentList.length ||
+    argumentList.length > 255 ||
+    (functionName === "COUNTBLANK" && argumentList.length !== 1) ||
+    ((isPercentileFunction ||
+      isQuartileFunction ||
+      isTrimmeanFunction ||
+      isPermutFunction) &&
+      argumentList.length !== 2) ||
+    (isRankFunction && (argumentList.length < 2 || argumentList.length > 3))
   )
-    return n();
-  const c = r.map(t.retrieve);
-  let h = 0;
-  const f = (O) => {
-    if (Array.isArray(O)) {
-      for (const j of O) f(j);
+    return raiseError();
+  const argumentValues = argumentList.map(evaluationContext.retrieve);
+  let visitedValueCount = 0;
+  const visitValue = (visitedValue) => {
+    if (Array.isArray(visitedValue)) {
+      for (const nestedItem of visitedValue) visitValue(nestedItem);
       return;
     }
     if (
-      (++h > 1e5 && n("#LIMIT!"),
-      t.isIssue(O) &&
+      (++visitedValueCount > 1e5 && raiseError("#LIMIT!"),
+      evaluationContext.isIssue(visitedValue) &&
         ["#LIMIT!", "#CYCLE!", "#BLOCKED!", "#ERROR!"].includes(
-          String(O.error),
+          String(visitedValue.error),
         ))
     )
-      throw O;
+      throw visitedValue;
   };
-  for (const O of c) f(O);
-  const p = (O) => (Number.isFinite(O) ? O : n("#NUM!")),
-    m = (O, j) => {
-      if (O === undefined && j !== undefined) return j;
-      if (t.isIssue(O)) throw O;
-      if (O == null) return 0;
-      if (Array.isArray(O) || (typeof O == "string" && !O.trim())) return n();
-      const z = Number(O);
-      return Number.isFinite(z) ? z : n();
+  for (const argumentValue of argumentValues) visitValue(argumentValue);
+  const requireFiniteNumber = (numericInput) =>
+      Number.isFinite(numericInput) ? numericInput : raiseError("#NUM!"),
+    coerceNumericArgument = (rawValue, fallbackValue) => {
+      if (rawValue === undefined && fallbackValue !== undefined)
+        return fallbackValue;
+      if (evaluationContext.isIssue(rawValue)) throw rawValue;
+      if (rawValue == null) return 0;
+      if (
+        Array.isArray(rawValue) ||
+        (typeof rawValue == "string" && !rawValue.trim())
+      )
+        return raiseError();
+      const parsedNumber = Number(rawValue);
+      return Number.isFinite(parsedNumber) ? parsedNumber : raiseError();
     };
-  if (e === "COUNTA")
-    return c.flatMap(flattenNestedValues).filter((O) => O != null).length;
-  if (e === "COUNTBLANK")
-    return c.flatMap(flattenNestedValues).filter((O) => O == null || O === "")
-      .length;
-  const v = o ? 1 : 0;
-  if (u) {
-    const O = Math.trunc(m(c[0])),
-      j = Math.trunc(m(c[1]));
-    if (O < 0 || j < 0 || (e === "PERMUT" && j > O) || (!O && j > 0))
-      return n("#NUM!");
-    if (!j) return 1;
-    if (e === "PERMUTATIONA") return p(O ** j);
-    if (j > 170) return n("#NUM!");
-    let z = 1;
-    for (let V = 0; V < j; V++) z = p(z * (O - V));
-    return z;
+  if (functionName === "COUNTA")
+    return argumentValues
+      .flatMap(flattenNestedValues)
+      .filter((flatValue) => flatValue != null).length;
+  if (functionName === "COUNTBLANK")
+    return argumentValues
+      .flatMap(flattenNestedValues)
+      .filter((flatCell) => flatCell == null || flatCell === "").length;
+  const primaryIndex = isRankFunction ? 1 : 0;
+  if (isPermutFunction) {
+    const totalCount = Math.trunc(coerceNumericArgument(argumentValues[0])),
+      chosenCount = Math.trunc(coerceNumericArgument(argumentValues[1]));
+    if (
+      totalCount < 0 ||
+      chosenCount < 0 ||
+      (functionName === "PERMUT" && chosenCount > totalCount) ||
+      (!totalCount && chosenCount > 0)
+    )
+      return raiseError("#NUM!");
+    if (!chosenCount) return 1;
+    if (functionName === "PERMUTATIONA")
+      return requireFiniteNumber(totalCount ** chosenCount);
+    if (chosenCount > 170) return raiseError("#NUM!");
+    let permutationCount = 1;
+    for (let termIndex = 0; termIndex < chosenCount; termIndex++)
+      permutationCount = requireFiniteNumber(
+        permutationCount * (totalCount - termIndex),
+      );
+    return permutationCount;
   }
-  const g = o || a || s || d ? [c[v]] : c,
-    b = [];
-  for (const [O, j] of g.entries()) {
-    const z =
-      Array.isArray(j) || isReferenceArgument(r[o || a || s || d ? v : O]);
-    for (const V of flattenNestedValues(j)) {
-      if (t.isIssue(V)) {
-        if (e === "COUNT") continue;
-        throw V;
+  const selectedValues =
+      isRankFunction ||
+      isPercentileFunction ||
+      isQuartileFunction ||
+      isTrimmeanFunction
+        ? [argumentValues[primaryIndex]]
+        : argumentValues,
+    numericValues = [];
+  for (const [valueIndex, selectedValue] of selectedValues.entries()) {
+    const isRangeArgument =
+      Array.isArray(selectedValue) ||
+      isReferenceArgument(
+        argumentList[
+          isRankFunction ||
+          isPercentileFunction ||
+          isQuartileFunction ||
+          isTrimmeanFunction
+            ? primaryIndex
+            : valueIndex
+        ],
+      );
+    for (const cellValue of flattenNestedValues(selectedValue)) {
+      if (evaluationContext.isIssue(cellValue)) {
+        if (functionName === "COUNT") continue;
+        throw cellValue;
       }
-      if (typeof V == "number") b.push(p(V));
-      else if (l && z && V != null)
-        if (typeof V == "boolean") b.push(Number(V));
-        else if (typeof V == "string") b.push(0);
-        else return n();
-      else if (!z && V != null) {
-        if (typeof V == "boolean") b.push(Number(V));
-        else if (typeof V == "string" && V.trim() && Number.isFinite(Number(V)))
-          b.push(Number(V));
-        else if (e !== "COUNT") return n();
+      if (typeof cellValue == "number")
+        numericValues.push(requireFiniteNumber(cellValue));
+      else if (isAVariantFunction && isRangeArgument && cellValue != null)
+        if (typeof cellValue == "boolean")
+          numericValues.push(Number(cellValue));
+        else if (typeof cellValue == "string") numericValues.push(0);
+        else return raiseError();
+      else if (!isRangeArgument && cellValue != null) {
+        if (typeof cellValue == "boolean")
+          numericValues.push(Number(cellValue));
+        else if (
+          typeof cellValue == "string" &&
+          cellValue.trim() &&
+          Number.isFinite(Number(cellValue))
+        )
+          numericValues.push(Number(cellValue));
+        else if (functionName !== "COUNT") return raiseError();
       }
     }
   }
-  if (e === "COUNT") return b.length;
-  if (e === "AVERAGE" || e === "AVERAGEA")
-    return b.length ? p(exactAverageOfNumbers(b)) : n("#DIV/0!");
-  if (e === "MIN" || e === "MINA")
-    return b.length ? b.reduce((O, j) => Math.min(O, j)) : 0;
-  if (e === "MAX" || e === "MAXA")
-    return b.length ? b.reduce((O, j) => Math.max(O, j)) : 0;
-  if (e.startsWith("STDEV") || e.startsWith("VAR")) {
-    const O = e.endsWith(".S") || e === "STDEVA" || e === "VARA";
-    if (b.length < (O ? 2 : 1)) return n("#DIV/0!");
-    const j = exactAverageOfNumbers(b);
-    let z = b.map((_) => _ - j),
-      V = z.reduce((_, C) => Math.max(_, Math.abs(C)), 0);
+  if (functionName === "COUNT") return numericValues.length;
+  if (functionName === "AVERAGE" || functionName === "AVERAGEA")
+    return numericValues.length
+      ? requireFiniteNumber(exactAverageOfNumbers(numericValues))
+      : raiseError("#DIV/0!");
+  if (functionName === "MIN" || functionName === "MINA")
+    return numericValues.length
+      ? numericValues.reduce((smallest, candidate) =>
+          Math.min(smallest, candidate),
+        )
+      : 0;
+  if (functionName === "MAX" || functionName === "MAXA")
+    return numericValues.length
+      ? numericValues.reduce((largest, nextValue) =>
+          Math.max(largest, nextValue),
+        )
+      : 0;
+  if (functionName.startsWith("STDEV") || functionName.startsWith("VAR")) {
+    const isSampleStatistic =
+      functionName.endsWith(".S") ||
+      functionName === "STDEVA" ||
+      functionName === "VARA";
+    if (numericValues.length < (isSampleStatistic ? 2 : 1))
+      return raiseError("#DIV/0!");
+    const averageValue = exactAverageOfNumbers(numericValues);
+    let deviations = numericValues.map(
+        (numericItem) => numericItem - averageValue,
+      ),
+      scaleFactor = deviations.reduce(
+        (largestAbs, deviation) => Math.max(largestAbs, Math.abs(deviation)),
+        0,
+      );
     if (
-      (Number.isFinite(V)
-        ? V && (z = z.map((_) => _ / V))
-        : ((V = b.reduce((_, C) => Math.max(_, Math.abs(C)), 0)),
-          (z = b.map((_) => _ / V - j / V))),
-      !V)
+      (Number.isFinite(scaleFactor)
+        ? scaleFactor &&
+          (deviations = deviations.map(
+            (deviationItem) => deviationItem / scaleFactor,
+          ))
+        : ((scaleFactor = numericValues.reduce(
+            (largestAbsSoFar, valueItem) =>
+              Math.max(largestAbsSoFar, Math.abs(valueItem)),
+            0,
+          )),
+          (deviations = numericValues.map(
+            (numericEntry) =>
+              numericEntry / scaleFactor - averageValue / scaleFactor,
+          ))),
+      !scaleFactor)
     )
       return 0;
-    const D =
-        sumWithKahanCompensation(z.map((_) => _ * _)) /
-        (b.length - (O ? 1 : 0)),
-      B = Math.sqrt(D) * V;
-    return p(e.startsWith("STDEV") ? B : B * B);
-  }
-  if (e === "SKEW" || e === "SKEW.P") {
-    const O = b.length;
-    if (O < 3) return n("#DIV/0!");
-    const j = exactAverageOfNumbers(b),
-      z = b.reduce((C, T) => Math.max(C, Math.abs(T)), 0);
-    if (!z) return n("#DIV/0!");
-    const V = b.map((C) => C / z - j / z),
-      D = sumWithKahanCompensation(V.map((C) => C * C));
-    if (!D) return n("#DIV/0!");
-    const _ = sumWithKahanCompensation(V.map((C) => C ** 3)) / D ** 1.5;
-    return p(
-      e === "SKEW.P" ? _ * Math.sqrt(O) : (_ * O * Math.sqrt(O - 1)) / (O - 2),
+    const variance =
+        sumWithKahanCompensation(
+          deviations.map(
+            (scaledDeviation) => scaledDeviation * scaledDeviation,
+          ),
+        ) /
+        (numericValues.length - (isSampleStatistic ? 1 : 0)),
+      standardDeviation = Math.sqrt(variance) * scaleFactor;
+    return requireFiniteNumber(
+      functionName.startsWith("STDEV")
+        ? standardDeviation
+        : standardDeviation * standardDeviation,
     );
   }
-  if ((b.sort((O, j) => O - j), d)) {
-    const O = m(c[1]);
-    if (O < 0 || O >= 1 || !b.length) return n("#NUM!");
-    const j = Math.floor((b.length * O) / 2);
-    return p(exactAverageOfNumbers(b.slice(j, b.length - j)));
+  if (functionName === "SKEW" || functionName === "SKEW.P") {
+    const numericCount = numericValues.length;
+    if (numericCount < 3) return raiseError("#DIV/0!");
+    const meanValue = exactAverageOfNumbers(numericValues),
+      maxAbsValue = numericValues.reduce(
+        (accumulatedMax, absItem) =>
+          Math.max(accumulatedMax, Math.abs(absItem)),
+        0,
+      );
+    if (!maxAbsValue) return raiseError("#DIV/0!");
+    const centeredValues = numericValues.map(
+        (skewItem) => skewItem / maxAbsValue - meanValue / maxAbsValue,
+      ),
+      sumOfSquares = sumWithKahanCompensation(
+        centeredValues.map((centeredItem) => centeredItem * centeredItem),
+      );
+    if (!sumOfSquares) return raiseError("#DIV/0!");
+    const rawSkew =
+      sumWithKahanCompensation(
+        centeredValues.map((centeredEntry) => centeredEntry ** 3),
+      ) /
+      sumOfSquares ** 1.5;
+    return requireFiniteNumber(
+      functionName === "SKEW.P"
+        ? rawSkew * Math.sqrt(numericCount)
+        : (rawSkew * numericCount * Math.sqrt(numericCount - 1)) /
+            (numericCount - 2),
+    );
   }
-  if (o) {
-    const O = m(c[0]),
-      j = m(c[2], 0),
-      z = b.indexOf(O),
-      V = b.lastIndexOf(O);
-    return z < 0
-      ? n("#N/A")
-      : j
-        ? 1 + (e === "RANK.AVG" ? (z + V) / 2 : z)
-        : b.length - (e === "RANK.AVG" ? (z + V) / 2 : V);
+  if (
+    (numericValues.sort((leftValue, rightValue) => leftValue - rightValue),
+    isTrimmeanFunction)
+  ) {
+    const trimFraction = coerceNumericArgument(argumentValues[1]);
+    if (trimFraction < 0 || trimFraction >= 1 || !numericValues.length)
+      return raiseError("#NUM!");
+    const trimCount = Math.floor((numericValues.length * trimFraction) / 2);
+    return requireFiniteNumber(
+      exactAverageOfNumbers(
+        numericValues.slice(trimCount, numericValues.length - trimCount),
+      ),
+    );
   }
-  if (e === "MODE.MULT") {
-    const O = new Map();
-    let j = 1;
-    for (const V of b) {
-      const D = (O.get(V) ?? 0) + 1;
-      (O.set(V, D), (j = Math.max(j, D)));
+  if (isRankFunction) {
+    const rankedValue = coerceNumericArgument(argumentValues[0]),
+      orderFlag = coerceNumericArgument(argumentValues[2], 0),
+      firstIndex = numericValues.indexOf(rankedValue),
+      lastIndex = numericValues.lastIndexOf(rankedValue);
+    return firstIndex < 0
+      ? raiseError("#N/A")
+      : orderFlag
+        ? 1 +
+          (functionName === "RANK.AVG"
+            ? (firstIndex + lastIndex) / 2
+            : firstIndex)
+        : numericValues.length -
+          (functionName === "RANK.AVG"
+            ? (firstIndex + lastIndex) / 2
+            : lastIndex);
+  }
+  if (functionName === "MODE.MULT") {
+    const frequencyByValue = new Map();
+    let maxFrequency = 1;
+    for (const numericValue of numericValues) {
+      const frequency = (frequencyByValue.get(numericValue) ?? 0) + 1;
+      (frequencyByValue.set(numericValue, frequency),
+        (maxFrequency = Math.max(maxFrequency, frequency)));
     }
-    if (j === 1) return n("#N/A");
-    const z = [...O].filter(([, V]) => V === j).map(([V]) => [V]);
-    return z.length > 1e4 ? n("#LIMIT!") : z;
+    if (maxFrequency === 1) return raiseError("#N/A");
+    const modeValues = [...frequencyByValue]
+      .filter(([, entryCount]) => entryCount === maxFrequency)
+      .map(([modeValue]) => [modeValue]);
+    return modeValues.length > 1e4 ? raiseError("#LIMIT!") : modeValues;
   }
-  if (e === "MODE" || e === "MODE.SNGL") {
-    let O = 0,
-      j = 1,
-      z = 0,
-      V;
-    for (const D of b)
-      ((z = D === V ? z + 1 : 1), z > j && ((j = z), (O = D)), (V = D));
-    return j > 1 ? O : n("#N/A");
+  if (functionName === "MODE" || functionName === "MODE.SNGL") {
+    let bestValue = 0,
+      bestCount = 1,
+      runLength = 0,
+      previousValue;
+    for (const currentValue of numericValues)
+      ((runLength = currentValue === previousValue ? runLength + 1 : 1),
+        runLength > bestCount &&
+          ((bestCount = runLength), (bestValue = currentValue)),
+        (previousValue = currentValue));
+    return bestCount > 1 ? bestValue : raiseError("#N/A");
   }
-  if (!b.length) return n("#NUM!");
-  if (e === "MEDIAN") {
-    const O = Math.floor(b.length / 2);
-    return b.length % 2 || b[O - 1] === b[O] ? b[O] : b[O - 1] / 2 + b[O] / 2;
+  if (!numericValues.length) return raiseError("#NUM!");
+  if (functionName === "MEDIAN") {
+    const middleIndex = Math.floor(numericValues.length / 2);
+    return numericValues.length % 2 ||
+      numericValues[middleIndex - 1] === numericValues[middleIndex]
+      ? numericValues[middleIndex]
+      : numericValues[middleIndex - 1] / 2 + numericValues[middleIndex] / 2;
   }
-  const y = m(c[1]),
-    w = s ? Math.trunc(y) / 4 : y,
-    E = e.endsWith(".EXC");
-  if (w < 0 || w > 1 || (E && (w === 0 || w === 1))) return n("#NUM!");
-  const A = E ? w * (b.length + 1) - 1 : w * (b.length - 1);
-  if (A < 0 || A > b.length - 1) return n("#NUM!");
-  const k = Math.floor(A),
-    F = Math.ceil(A),
-    I = A - k;
-  return b[k] === b[F] ? b[k] : p(b[k] * (1 - I) + b[F] * I);
+  const quantileArgument = coerceNumericArgument(argumentValues[1]),
+    quantile = isQuartileFunction
+      ? Math.trunc(quantileArgument) / 4
+      : quantileArgument,
+    isExclusive = functionName.endsWith(".EXC");
+  if (
+    quantile < 0 ||
+    quantile > 1 ||
+    (isExclusive && (quantile === 0 || quantile === 1))
+  )
+    return raiseError("#NUM!");
+  const fractionalIndex = isExclusive
+    ? quantile * (numericValues.length + 1) - 1
+    : quantile * (numericValues.length - 1);
+  if (fractionalIndex < 0 || fractionalIndex > numericValues.length - 1)
+    return raiseError("#NUM!");
+  const lowerIndex = Math.floor(fractionalIndex),
+    upperIndex = Math.ceil(fractionalIndex),
+    interpolationWeight = fractionalIndex - lowerIndex;
+  return numericValues[lowerIndex] === numericValues[upperIndex]
+    ? numericValues[lowerIndex]
+    : requireFiniteNumber(
+        numericValues[lowerIndex] * (1 - interpolationWeight) +
+          numericValues[upperIndex] * interpolationWeight,
+      );
 }
 const ownedLookupFunctionNames = ["LOOKUP", "CHOOSE"],
   notOwnedLookupSentinel = Symbol("not an owned lookup function");
-function evaluateLookupFunction(e, r, t) {
-  if (!["VLOOKUP", "HLOOKUP", "LOOKUP", "CHOOSE"].includes(e))
+function evaluateLookupFunction(functionName, args, context) {
+  if (!["VLOOKUP", "HLOOKUP", "LOOKUP", "CHOOSE"].includes(functionName))
     return notOwnedLookupSentinel;
-  const n = (v = "#VALUE!") => {
-      throw t.issue(v);
+  const fail = (errorCode = "#VALUE!") => {
+      throw context.issue(errorCode);
     },
-    o = (v) => {
-      if (t.isIssue(v)) throw v;
-      return (Array.isArray(v) && n(), v);
+    scalarArgument = (value) => {
+      if (context.isIssue(value)) throw value;
+      return (Array.isArray(value) && fail(), value);
     },
-    a = (v) => {
-      if (t.isIssue(v)) throw v;
-      v === undefined && n();
-      const g = Array.isArray(v) ? (v.every(Array.isArray) ? v : [v]) : [[v]];
+    matrixArgument = (value) => {
+      if (context.isIssue(value)) throw value;
+      value === undefined && fail();
+      const matrix = Array.isArray(value)
+        ? value.every(Array.isArray)
+          ? value
+          : [value]
+        : [[value]];
       return (
-        (!g.length ||
-          !g[0].length ||
-          g.some((b) => b.length !== g[0].length)) &&
-          n(),
-        g.length * g[0].length > 2e4 && n("#LIMIT!"),
-        g
+        (!matrix.length ||
+          !matrix[0].length ||
+          matrix.some((row) => row.length !== matrix[0].length)) &&
+          fail(),
+        matrix.length * matrix[0].length > 2e4 && fail("#LIMIT!"),
+        matrix
       );
     },
-    s = (v) => (v.length !== 1 && v[0].length !== 1 && n(), v.flat());
-  if (e === "CHOOSE") {
-    (r.length < 2 || r.length > 255) && n();
-    const v = o(t.retrieve(r[0]));
-    typeof v == "string" && !v.trim() && n();
-    const g = Math.trunc(Number(v));
-    return ((!Number.isFinite(g) || g < 1 || g >= r.length) && n(), r[g] ?? 0);
-  }
-  (r.length < (e === "LOOKUP" ? 2 : 3) ||
-    r.length > (e === "LOOKUP" ? 3 : 4)) &&
-    n();
-  const d = o(t.retrieve(r[0]));
-  d === undefined && n();
-  const u = a(t.retrieve(r[1]));
-  let l,
-    c,
-    h = true;
-  if (e === "LOOKUP")
-    r.length === 3
-      ? ((l = s(u)), (c = s(a(t.retrieve(r[2])))), l.length !== c.length && n())
-      : u[0].length > u.length
-        ? ((l = u[0]), (c = u[u.length - 1]))
-        : ((l = u.map((v) => v[0])), (c = u.map((v) => v[v.length - 1])));
-  else {
-    const v = o(t.retrieve(r[2]));
-    typeof v == "string" && !v.trim() && n();
-    const g = Math.trunc(Number(v));
-    ((!Number.isFinite(g) || g < 1) && n(),
-      g > (e === "VLOOKUP" ? u[0].length : u.length) && n("#REF!"));
-    const b = r[3] == null ? true : o(t.retrieve(r[3]));
-    (typeof b == "string" && !/^(true|false)$/i.test(b) && n(),
-      (h = typeof b == "string" ? b.toLowerCase() === "true" : !!b),
-      (l = e === "VLOOKUP" ? u.map((y) => y[0]) : u[0]),
-      (c = e === "VLOOKUP" ? u.map((y) => y[g - 1]) : u[g - 1]));
-  }
-  const f = l.find(t.isIssue);
-  if (f) throw f;
-  const p = (v) => (typeof v == "string" ? v.toLowerCase() : v);
-  let m = -1;
-  if (h) {
-    (!["number", "string", "boolean"].includes(typeof d) ||
-      l.some((b) => typeof b != typeof d)) &&
-      n();
-    const v = l.map(p),
-      g = p(d);
-    (v.some((b, y) => y > 0 && b < v[y - 1]) && n(),
-      v.forEach((b, y) => {
-        b <= g && (m = y);
-      }));
-  } else {
-    let v = 0;
-    const g = typeof d == "string" && /[?*~]/.test(d);
-    m = l.findIndex((b) =>
-      g
-        ? typeof b != "string"
-          ? false
-          : ((v += b.length * d.length),
-            v > 1e5 && n("#LIMIT!"),
-            t.matches(b, `=${d}`))
-        : p(b) === p(d),
+    vectorArgument = (matrix) => (
+      matrix.length !== 1 && matrix[0].length !== 1 && fail(),
+      matrix.flat()
+    );
+  if (functionName === "CHOOSE") {
+    (args.length < 2 || args.length > 255) && fail();
+    const chooseIndexValue = scalarArgument(context.retrieve(args[0]));
+    typeof chooseIndexValue == "string" && !chooseIndexValue.trim() && fail();
+    const chooseIndex = Math.trunc(Number(chooseIndexValue));
+    return (
+      (!Number.isFinite(chooseIndex) ||
+        chooseIndex < 1 ||
+        chooseIndex >= args.length) &&
+        fail(),
+      args[chooseIndex] ?? 0
     );
   }
-  return m < 0 ? n("#N/A") : (c[m] ?? 0);
+  (args.length < (functionName === "LOOKUP" ? 2 : 3) ||
+    args.length > (functionName === "LOOKUP" ? 3 : 4)) &&
+    fail();
+  const lookupValue = scalarArgument(context.retrieve(args[0]));
+  lookupValue === undefined && fail();
+  const table = matrixArgument(context.retrieve(args[1]));
+  let lookupVector,
+    resultVector,
+    isApproximate = true;
+  if (functionName === "LOOKUP")
+    args.length === 3
+      ? ((lookupVector = vectorArgument(table)),
+        (resultVector = vectorArgument(
+          matrixArgument(context.retrieve(args[2])),
+        )),
+        lookupVector.length !== resultVector.length && fail())
+      : table[0].length > table.length
+        ? ((lookupVector = table[0]), (resultVector = table[table.length - 1]))
+        : ((lookupVector = table.map((row) => row[0])),
+          (resultVector = table.map((row) => row[row.length - 1])));
+  else {
+    const returnIndexValue = scalarArgument(context.retrieve(args[2]));
+    typeof returnIndexValue == "string" && !returnIndexValue.trim() && fail();
+    const returnIndex = Math.trunc(Number(returnIndexValue));
+    ((!Number.isFinite(returnIndex) || returnIndex < 1) && fail(),
+      returnIndex >
+        (functionName === "VLOOKUP" ? table[0].length : table.length) &&
+        fail("#REF!"));
+    const rangeLookupValue =
+      args[3] == null ? true : scalarArgument(context.retrieve(args[3]));
+    (typeof rangeLookupValue == "string" &&
+      !/^(true|false)$/i.test(rangeLookupValue) &&
+      fail(),
+      (isApproximate =
+        typeof rangeLookupValue == "string"
+          ? rangeLookupValue.toLowerCase() === "true"
+          : !!rangeLookupValue),
+      (lookupVector =
+        functionName === "VLOOKUP" ? table.map((row) => row[0]) : table[0]),
+      (resultVector =
+        functionName === "VLOOKUP"
+          ? table.map((row) => row[returnIndex - 1])
+          : table[returnIndex - 1]));
+  }
+  const lookupIssue = lookupVector.find(context.isIssue);
+  if (lookupIssue) throw lookupIssue;
+  const normalizeCase = (value) =>
+    typeof value == "string" ? value.toLowerCase() : value;
+  let matchIndex = -1;
+  if (isApproximate) {
+    (!["number", "string", "boolean"].includes(typeof lookupValue) ||
+      lookupVector.some((entry) => typeof entry != typeof lookupValue)) &&
+      fail();
+    const normalizedVector = lookupVector.map(normalizeCase),
+      normalizedLookupValue = normalizeCase(lookupValue);
+    (normalizedVector.some(
+      (normalizedEntry, entryIndex) =>
+        entryIndex > 0 && normalizedEntry < normalizedVector[entryIndex - 1],
+    ) && fail(),
+      normalizedVector.forEach((normalizedEntry, entryIndex) => {
+        normalizedEntry <= normalizedLookupValue && (matchIndex = entryIndex);
+      }));
+  } else {
+    let comparisonCost = 0;
+    const hasWildcard =
+      typeof lookupValue == "string" && /[?*~]/.test(lookupValue);
+    matchIndex = lookupVector.findIndex((entry) =>
+      hasWildcard
+        ? typeof entry != "string"
+          ? false
+          : ((comparisonCost += entry.length * lookupValue.length),
+            comparisonCost > 1e5 && fail("#LIMIT!"),
+            context.matches(entry, `=${lookupValue}`))
+        : normalizeCase(entry) === normalizeCase(lookupValue),
+    );
+  }
+  return matchIndex < 0 ? fail("#N/A") : (resultVector[matchIndex] ?? 0);
 }
 const notOwnedLogicalSentinel = Symbol("not an owned logical function");
-function evaluateLogicalFunction(e, r, t) {
-  if (!["AND", "OR", "XOR", "NOT"].includes(e)) return notOwnedLogicalSentinel;
-  const n = () => {
-    throw t.issue("#VALUE!");
+function evaluateLogicalFunction(functionName, args, context) {
+  if (!["AND", "OR", "XOR", "NOT"].includes(functionName))
+    return notOwnedLogicalSentinel;
+  const fail = () => {
+    throw context.issue("#VALUE!");
   };
-  (!r.length || r.length > 255 || (e === "NOT" && r.length !== 1)) && n();
-  const o = [];
-  let a = 0;
-  const s = (d, u) => {
-    if (++a > 1e5) throw t.issue("#LIMIT!");
-    if (t.isIssue(d)) throw d;
-    if (Array.isArray(d)) (e === "NOT" && n(), d.forEach((l) => s(l, true)));
-    else if (typeof d == "boolean" || typeof d == "number") o.push(!!d);
-    else if (d == null) u || o.push(false);
-    else if (typeof d == "string") {
-      if (u) return;
-      (/^(true|false)$/i.test(d) || n(), o.push(d.toLowerCase() === "true"));
-    } else n();
+  (!args.length ||
+    args.length > 255 ||
+    (functionName === "NOT" && args.length !== 1)) &&
+    fail();
+  const booleans = [];
+  let visitCount = 0;
+  const collectBooleans = (value, isFromReference) => {
+    if (++visitCount > 1e5) throw context.issue("#LIMIT!");
+    if (context.isIssue(value)) throw value;
+    if (Array.isArray(value))
+      (functionName === "NOT" && fail(),
+        value.forEach((element) => collectBooleans(element, true)));
+    else if (typeof value == "boolean" || typeof value == "number")
+      booleans.push(!!value);
+    else if (value == null) isFromReference || booleans.push(false);
+    else if (typeof value == "string") {
+      if (isFromReference) return;
+      (/^(true|false)$/i.test(value) || fail(),
+        booleans.push(value.toLowerCase() === "true"));
+    } else fail();
   };
   return (
-    r.forEach((d) =>
-      s(
-        t.retrieve(d),
-        e !== "NOT" && !!d && typeof d == "object" && "ref" in d,
+    args.forEach((argument) =>
+      collectBooleans(
+        context.retrieve(argument),
+        functionName !== "NOT" &&
+          !!argument &&
+          typeof argument == "object" &&
+          "ref" in argument,
       ),
     ),
-    o.length || n(),
-    e === "NOT"
-      ? !o[0]
-      : e === "AND"
-        ? o.every(Boolean)
-        : e === "OR"
-          ? o.some(Boolean)
-          : o.filter(Boolean).length % 2 === 1
+    booleans.length || fail(),
+    functionName === "NOT"
+      ? !booleans[0]
+      : functionName === "AND"
+        ? booleans.every(Boolean)
+        : functionName === "OR"
+          ? booleans.some(Boolean)
+          : booleans.filter(Boolean).length % 2 === 1
   );
 }
 const modernFunctionNames = [
@@ -1614,22 +2258,31 @@ const modernFunctionNames = [
     "XLOOKUP",
   ],
   notModernFunctionSentinel = Symbol("not a modern function"),
-  toMatrixArgument = (e) =>
-    Array.isArray(e) ? (e.every(Array.isArray) ? e : [e]) : [[e]],
-  compareSortValues = (e, r) =>
-    typeof e == "number" && typeof r == "number"
-      ? e - r
-      : coerceValueToText(e)
+  toMatrixArgument = (value) =>
+    Array.isArray(value)
+      ? value.every(Array.isArray)
+        ? value
+        : [value]
+      : [[value]],
+  compareSortValues = (leftValue, rightValue) =>
+    typeof leftValue == "number" && typeof rightValue == "number"
+      ? leftValue - rightValue
+      : coerceValueToText(leftValue)
           .toLowerCase()
-          .localeCompare(coerceValueToText(r).toLowerCase()),
-  valuesEqualIgnoringCase = (e, r) =>
-    typeof e == "string" && typeof r == "string"
-      ? e.toLowerCase() === r.toLowerCase()
-      : e === r,
-  compareSortKeyWithDirection = (e, r, t) => {
-    if (e == null || r == null) return e == null ? (r == null ? 0 : 1) : -1;
-    const n = (o) => (typeof o == "number" ? 0 : typeof o == "string" ? 1 : 2);
-    return (n(e) - n(r) || compareSortValues(e, r)) * t;
+          .localeCompare(coerceValueToText(rightValue).toLowerCase()),
+  valuesEqualIgnoringCase = (leftValue, rightValue) =>
+    typeof leftValue == "string" && typeof rightValue == "string"
+      ? leftValue.toLowerCase() === rightValue.toLowerCase()
+      : leftValue === rightValue,
+  compareSortKeyWithDirection = (leftKey, rightKey, sortDirection) => {
+    if (leftKey == null || rightKey == null)
+      return leftKey == null ? (rightKey == null ? 0 : 1) : -1;
+    const typeRank = (value) =>
+      typeof value == "number" ? 0 : typeof value == "string" ? 1 : 2;
+    return (
+      (typeRank(leftKey) - typeRank(rightKey) ||
+        compareSortValues(leftKey, rightKey)) * sortDirection
+    );
   };
 
 export {

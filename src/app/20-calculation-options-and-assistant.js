@@ -59,28 +59,28 @@ import {
 } from "./04-cell-input-paste-and-fill.js";
 import { numericPrecisionPolicy } from "./08-xlsx-import-export-and-preservation.js";
 
-function CalculationOptionsDialog(e) {
+function CalculationOptionsDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    [, a] = ne.useState(0),
-    { report } = getWorkbookCalculation(e.workbook),
-    [d, u] = ne.useState(report.settings),
-    [l, c] = ne.useState(""),
-    [h, f] = ne.useState(""),
-    [p, m] = ne.useState(0),
-    [datePolicy, g] = ne.useState(() =>
-      normalizeDatePolicy(e.workbook.datePolicy),
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    [, setRecalcVersion] = ne.useState(0),
+    { report } = getWorkbookCalculation(props.workbook),
+    [draftSettings, setDraftSettings] = ne.useState(report.settings),
+    [actionError, setActionError] = ne.useState(""),
+    [formulaFilter, setFormulaFilter] = ne.useState(""),
+    [pageIndex, setPageIndex] = ne.useState(0),
+    [datePolicy, setDatePolicy] = ne.useState(() =>
+      normalizeDatePolicy(props.workbook.datePolicy),
     );
   (ne.useEffect(() => {
-    (u(getWorkbookCalculation(e.workbook).report.settings),
-      g(normalizeDatePolicy(e.workbook.datePolicy)),
-      m(0));
-  }, [e.workbook]),
+    (setDraftSettings(getWorkbookCalculation(props.workbook).report.settings),
+      setDatePolicy(normalizeDatePolicy(props.workbook.datePolicy)),
+      setPageIndex(0));
+  }, [props.workbook]),
     ne.useEffect(() => {
       const activeElement = document.activeElement;
       return (
-        o.current
+        dialogRef.current
           ?.querySelector('[data-ui-label="Close Calculation Options"]')
           ?.focus(),
         () => {
@@ -88,90 +88,94 @@ function CalculationOptionsDialog(e) {
         }
       );
     }, []));
-  const b = (j) => {
+  const runAction = (action) => {
       try {
-        (j(), c(""));
+        (action(), setActionError(""));
       } catch (error) {
-        c(
+        setActionError(
           error instanceof Error ? error.message : "Calculation action failed.",
         );
       }
     },
     onClick = () =>
-      b(() => {
-        if (e.onCalculate) {
-          e.onCalculate();
+      runAction(() => {
+        if (props.onCalculate) {
+          props.onCalculate();
           return;
         }
-        (refreshCalculationReport(e.workbook),
-          a((z) => z + 1),
-          e.onCalculated?.());
+        (refreshCalculationReport(props.workbook),
+          setRecalcVersion((previousVersion) => previousVersion + 1),
+          props.onCalculated?.());
       }),
-    w = () =>
-      b(() => {
-        if (e.readOnly)
+    applySettings = () =>
+      runAction(() => {
+        if (props.readOnly)
           throw Error(
             "This host is read-only. Calculation settings cannot be changed.",
           );
-        e.onWorkbookChange(
+        props.onWorkbookChange(
           {
-            ...withCalculationSettings(e.workbook, d),
+            ...withCalculationSettings(props.workbook, draftSettings),
             datePolicy: normalizeDatePolicy(datePolicy),
           },
-          `Set calculation to ${d.mode}; iteration ${d.iterative ? "enabled" : "disabled"}; dates ${datePolicy.dateSystem} ${datePolicy.textDateOrder}, time zone ${datePolicy.timeZone}`,
+          `Set calculation to ${draftSettings.mode}; iteration ${draftSettings.iterative ? "enabled" : "disabled"}; dates ${datePolicy.dateSystem} ${datePolicy.textDateOrder}, time zone ${datePolicy.timeZone}`,
         );
       }),
-    E = () =>
-      b(() => {
+    downloadEvidence = () =>
+      runAction(() => {
         const calculationEvidence = buildCalculationEvidence(
-          e.workbook,
+          props.workbook,
           report,
         );
-        if (e.onExport) {
-          e.onExport(calculationEvidence);
+        if (props.onExport) {
+          props.onExport(calculationEvidence);
           return;
         }
-        const z = URL.createObjectURL(
+        const evidenceUrl = URL.createObjectURL(
             new Blob([calculationEvidence], { type: "application/json" }),
           ),
-          V = document.createElement("a");
-        ((V.href = z),
-          (V.download = "Calculation-evidence.json"),
-          V.click(),
-          setTimeout(() => URL.revokeObjectURL(z), 1e3));
+          downloadLink = document.createElement("a");
+        ((downloadLink.href = evidenceUrl),
+          (downloadLink.download = "Calculation-evidence.json"),
+          downloadLink.click(),
+          setTimeout(() => URL.revokeObjectURL(evidenceUrl), 1e3));
       }),
-    A = report.cells.filter((cell) =>
-      `${e.workbook.sheets.find((sheet) => sheet.id === cell.sheetId)?.name}!${cell.address} ${cell.formula} ${cell.status} ${cell.result.value}`
+    matchingCells = report.cells.filter((cell) =>
+      `${props.workbook.sheets.find((sheet) => sheet.id === cell.sheetId)?.name}!${cell.address} ${cell.formula} ${cell.status} ${cell.result.value}`
         .toLowerCase()
-        .includes(h.toLowerCase()),
+        .includes(formulaFilter.toLowerCase()),
     ),
-    k = A.slice(p * 100, (p + 1) * 100),
+    pageCells = matchingCells.slice(pageIndex * 100, (pageIndex + 1) * 100),
     onKeyDown = (event) => {
-      var V, D;
+      var lastFocusable, firstFocusable;
       if (
-        (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+        (event.key === "Escape" && (event.stopPropagation(), props.onClose()),
         event.key !== "Tab")
       )
         return;
-      const z = [
-        ...o.current.querySelectorAll(
+      const focusableElements = [
+        ...dialogRef.current.querySelectorAll(
           'button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]',
         ),
       ];
-      event.shiftKey && document.activeElement === z[0]
-        ? (event.preventDefault(), (V = z.at(-1)) == null || V.focus())
+      event.shiftKey && document.activeElement === focusableElements[0]
+        ? (event.preventDefault(),
+          (lastFocusable = focusableElements.at(-1)) == null ||
+            lastFocusable.focus())
         : !event.shiftKey &&
-          document.activeElement === z.at(-1) &&
-          (event.preventDefault(), (D = z[0]) == null || D.focus());
+          document.activeElement === focusableElements.at(-1) &&
+          (event.preventDefault(),
+          (firstFocusable = focusableElements[0]) == null ||
+            firstFocusable.focus());
     };
   return i.jsx("div", {
     className: "fw-backdrop",
     children: i.jsxs("section", {
-      ref: o,
+      ref: dialogRef,
       className: "fw-dialog rc-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": `${n}-title`,
+      "aria-labelledby": `${titleId}-title`,
       onKeyDown: onKeyDown,
       children: [
         i.jsxs("header", {
@@ -179,7 +183,7 @@ function CalculationOptionsDialog(e) {
             i.jsxs("div", {
               children: [
                 i.jsx("h2", {
-                  id: `${n}-title`,
+                  id: `${titleId}-title`,
                   children: i.jsx(LocalizedText, {
                     children: "Calculation Options",
                   }),
@@ -194,7 +198,7 @@ function CalculationOptionsDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close Calculation Options"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close Calculation Options"),
               "data-ui-label": "Close Calculation Options",
               children: i.jsx(X, { size: 18 }),
@@ -202,7 +206,7 @@ function CalculationOptionsDialog(e) {
           ],
         }),
         i.jsxs("fieldset", {
-          disabled: e.readOnly,
+          disabled: props.readOnly,
           className: "rc-settings",
           children: [
             i.jsx("legend", {
@@ -213,8 +217,12 @@ function CalculationOptionsDialog(e) {
                 i.jsx(LocalizedText, { children: "Calculation mode" }),
                 i.jsxs("select", {
                   "aria-label": text("Calculation mode"),
-                  value: d.mode,
-                  onChange: (event) => u({ ...d, mode: event.target.value }),
+                  value: draftSettings.mode,
+                  onChange: (event) =>
+                    setDraftSettings({
+                      ...draftSettings,
+                      mode: event.target.value,
+                    }),
                   lang: language("Calculation mode"),
                   "data-ui-label": "Calculation mode",
                   children: [
@@ -231,9 +239,12 @@ function CalculationOptionsDialog(e) {
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: d.iterative,
+                  checked: draftSettings.iterative,
                   onChange: (event) =>
-                    u({ ...d, iterative: event.target.checked }),
+                    setDraftSettings({
+                      ...draftSettings,
+                      iterative: event.target.checked,
+                    }),
                 }),
                 i.jsx(LocalizedText, {
                   children: "Enable iterative calculation",
@@ -247,8 +258,12 @@ function CalculationOptionsDialog(e) {
                   "aria-label": text("Maximum iterations"),
                   min: 1,
                   max: 1e3,
-                  value: d.maxIterations,
-                  onValueChange: (j) => u({ ...d, maxIterations: Number(j) }),
+                  value: draftSettings.maxIterations,
+                  onValueChange: (value) =>
+                    setDraftSettings({
+                      ...draftSettings,
+                      maxIterations: Number(value),
+                    }),
                 }),
               ],
             }),
@@ -260,8 +275,12 @@ function CalculationOptionsDialog(e) {
                   min: 0,
                   max: 1,
                   step: "0.000001",
-                  value: d.maxChange,
-                  onValueChange: (j) => u({ ...d, maxChange: Number(j) }),
+                  value: draftSettings.maxChange,
+                  onValueChange: (value) =>
+                    setDraftSettings({
+                      ...draftSettings,
+                      maxChange: Number(value),
+                    }),
                 }),
               ],
             }),
@@ -272,8 +291,12 @@ function CalculationOptionsDialog(e) {
                   "aria-label": text("Time budget (ms)"),
                   min: 1,
                   max: 1e4,
-                  value: d.timeBudgetMs,
-                  onValueChange: (j) => u({ ...d, timeBudgetMs: Number(j) }),
+                  value: draftSettings.timeBudgetMs,
+                  onValueChange: (value) =>
+                    setDraftSettings({
+                      ...draftSettings,
+                      timeBudgetMs: Number(value),
+                    }),
                 }),
               ],
             }),
@@ -285,9 +308,13 @@ function CalculationOptionsDialog(e) {
                   min: 1,
                   max: 128,
                   value:
-                    d.memoryBudgetMiB ??
+                    draftSettings.memoryBudgetMiB ??
                     calculationBudgetDefaults.defaultMemoryBudgetMiB,
-                  onValueChange: (j) => u({ ...d, memoryBudgetMiB: Number(j) }),
+                  onValueChange: (value) =>
+                    setDraftSettings({
+                      ...draftSettings,
+                      memoryBudgetMiB: Number(value),
+                    }),
                 }),
               ],
             }),
@@ -300,8 +327,13 @@ function CalculationOptionsDialog(e) {
                   max: 1e7,
                   step: 1e3,
                   value:
-                    d.workBudget ?? calculationBudgetDefaults.defaultWorkBudget,
-                  onValueChange: (j) => u({ ...d, workBudget: Number(j) }),
+                    draftSettings.workBudget ??
+                    calculationBudgetDefaults.defaultWorkBudget,
+                  onValueChange: (value) =>
+                    setDraftSettings({
+                      ...draftSettings,
+                      workBudget: Number(value),
+                    }),
                 }),
               ],
             }),
@@ -312,7 +344,10 @@ function CalculationOptionsDialog(e) {
                   "aria-label": text("Workbook date system"),
                   value: datePolicy.dateSystem,
                   onChange: (event) =>
-                    g({ ...datePolicy, dateSystem: event.target.value }),
+                    setDatePolicy({
+                      ...datePolicy,
+                      dateSystem: event.target.value,
+                    }),
                   lang: language("Workbook date system"),
                   "data-ui-label": "Workbook date system",
                   children: [
@@ -343,7 +378,10 @@ function CalculationOptionsDialog(e) {
                   "aria-label": text("Text date order"),
                   value: datePolicy.textDateOrder,
                   onChange: (event) =>
-                    g({ ...datePolicy, textDateOrder: event.target.value }),
+                    setDatePolicy({
+                      ...datePolicy,
+                      textDateOrder: event.target.value,
+                    }),
                   lang: language("Text date order"),
                   "data-ui-label": "Text date order",
                   children: [
@@ -366,7 +404,10 @@ function CalculationOptionsDialog(e) {
                   "aria-label": text("Calculation time zone"),
                   value: datePolicy.timeZone,
                   onChange: (event) =>
-                    g({ ...datePolicy, timeZone: event.target.value }),
+                    setDatePolicy({
+                      ...datePolicy,
+                      timeZone: event.target.value,
+                    }),
                   placeholder: text("UTC or America/New_York"),
                   lang: language("Calculation time zone"),
                   "data-ui-label": "Calculation time zone",
@@ -374,14 +415,14 @@ function CalculationOptionsDialog(e) {
               ],
             }),
             i.jsx("button", {
-              onClick: w,
+              onClick: applySettings,
               children: i.jsx(LocalizedText, {
                 children: "Apply calculation settings",
               }),
             }),
           ],
         }),
-        e.readOnly &&
+        props.readOnly &&
           i.jsx("p", {
             children: i.jsx(LocalizedText, {
               children:
@@ -397,15 +438,15 @@ function CalculationOptionsDialog(e) {
             }),
             report.execution?.mode === "worker" &&
               report.execution.state === "pending" &&
-              e.onCancelCalculation &&
+              props.onCancelCalculation &&
               i.jsx("button", {
-                onClick: e.onCancelCalculation,
+                onClick: props.onCancelCalculation,
                 children: i.jsx(LocalizedText, {
                   children: "Cancel calculation",
                 }),
               }),
             i.jsx("button", {
-              onClick: E,
+              onClick: downloadEvidence,
               children: i.jsx(LocalizedText, {
                 children: "Download calculation evidence",
               }),
@@ -415,9 +456,9 @@ function CalculationOptionsDialog(e) {
                 i.jsx(LocalizedText, { children: "Find formula" }),
                 i.jsx("input", {
                   "aria-label": text("Find formula results"),
-                  value: h,
+                  value: formulaFilter,
                   onChange: (event) => {
-                    (f(event.target.value), m(0));
+                    (setFormulaFilter(event.target.value), setPageIndex(0));
                   },
                   lang: language("Find formula results"),
                   "data-ui-label": "Find formula results",
@@ -426,7 +467,7 @@ function CalculationOptionsDialog(e) {
             }),
           ],
         }),
-        l && i.jsx("p", { role: "alert", children: l }),
+        actionError && i.jsx("p", { role: "alert", children: actionError }),
         i.jsxs("p", {
           role: "status",
           children: [
@@ -622,11 +663,11 @@ function CalculationOptionsDialog(e) {
               " ",
               report.cycles
                 .slice(0, 10)
-                .map((j) =>
-                  j
-                    .map((z) => {
-                      const V = z.lastIndexOf(":");
-                      return `${e.workbook.sheets.find((sheet) => sheet.id === z.slice(0, V))?.name ?? "(removed sheet)"}!${z.slice(V + 1)}`;
+                .map((cycle) =>
+                  cycle
+                    .map((cycleNode) => {
+                      const separatorIndex = cycleNode.lastIndexOf(":");
+                      return `${props.workbook.sheets.find((sheet) => sheet.id === cycleNode.slice(0, separatorIndex))?.name ?? "(removed sheet)"}!${cycleNode.slice(separatorIndex + 1)}`;
                     })
                     .join(" → "),
                 )
@@ -673,7 +714,7 @@ function CalculationOptionsDialog(e) {
                 }),
               }),
               i.jsx("tbody", {
-                children: k.map((j) =>
+                children: pageCells.map((reportCell) =>
                   i.jsxs(
                     "tr",
                     {
@@ -681,132 +722,142 @@ function CalculationOptionsDialog(e) {
                         i.jsx("td", {
                           children: i.jsxs("button", {
                             onClick: () => {
-                              (e.onNavigate?.(j.sheetId, j.address),
-                                e.onClose());
+                              (props.onNavigate?.(
+                                reportCell.sheetId,
+                                reportCell.address,
+                              ),
+                                props.onClose());
                             },
                             children: [
-                              e.workbook.sheets.find(
-                                (sheet) => sheet.id === j.sheetId,
+                              props.workbook.sheets.find(
+                                (sheet) => sheet.id === reportCell.sheetId,
                               )?.name,
                               "!",
-                              j.address,
+                              reportCell.address,
                             ],
                           }),
                         }),
-                        i.jsx("td", { children: j.formula }),
+                        i.jsx("td", { children: reportCell.formula }),
                         i.jsxs("td", {
                           children: [
-                            String(j.result.value ?? "(blank)"),
+                            String(reportCell.result.value ?? "(blank)"),
                             " (",
-                            j.result.type,
+                            reportCell.result.type,
                             ")",
                           ],
                         }),
                         i.jsxs("td", {
                           children: [
-                            j.status,
+                            reportCell.status,
                             " / ",
-                            j.evaluations,
-                            j.financial?.map((D, B) =>
-                              i.jsxs(
-                                "details",
-                                {
-                                  children: [
-                                    i.jsxs("summary", {
-                                      children: [
-                                        D.functionName,
-                                        " ",
-                                        i.jsx(LocalizedText, {
-                                          children: "financial details — ",
-                                        }),
-                                        D.status,
-                                      ],
-                                    }),
-                                    i.jsx("p", { children: D.message }),
-                                    i.jsx("p", { children: D.convention }),
-                                    D.solver &&
-                                      i.jsxs(i.Fragment, {
+                            reportCell.evaluations,
+                            reportCell.financial?.map(
+                              (financialDetail, detailIndex) =>
+                                i.jsxs(
+                                  "details",
+                                  {
+                                    children: [
+                                      i.jsxs("summary", {
                                         children: [
-                                          i.jsxs("p", {
-                                            children: [
-                                              i.jsx(LocalizedText, {
-                                                children: "Guess ",
-                                              }),
-                                              D.guess,
-                                              "; ",
-                                              D.solver.evaluations,
-                                              " ",
-                                              i.jsx(LocalizedText, {
-                                                children:
-                                                  "equation evaluations. Bounded search: ",
-                                              }),
-                                              D.solver.status,
-                                              i.jsx(LocalizedText, {
-                                                children: ". Candidate roots:",
-                                              }),
-                                              " ",
-                                              D.solver.candidates
-                                                .map((candidate) =>
-                                                  candidate.rate.toPrecision(
-                                                    12,
-                                                  ),
-                                                )
-                                                .join(", ") || "None",
-                                              ".",
-                                            ],
+                                          financialDetail.functionName,
+                                          " ",
+                                          i.jsx(LocalizedText, {
+                                            children: "financial details — ",
                                           }),
-                                          D.solver.selected &&
+                                          financialDetail.status,
+                                        ],
+                                      }),
+                                      i.jsx("p", {
+                                        children: financialDetail.message,
+                                      }),
+                                      i.jsx("p", {
+                                        children: financialDetail.convention,
+                                      }),
+                                      financialDetail.solver &&
+                                        i.jsxs(i.Fragment, {
+                                          children: [
                                             i.jsxs("p", {
                                               children: [
                                                 i.jsx(LocalizedText, {
-                                                  children: "Selected rate",
+                                                  children: "Guess ",
                                                 }),
+                                                financialDetail.guess,
+                                                "; ",
+                                                financialDetail.solver
+                                                  .evaluations,
                                                 " ",
-                                                D.solver.selected.rate.toPrecision(
-                                                  12,
-                                                ),
                                                 i.jsx(LocalizedText, {
                                                   children:
-                                                    "; equation residual",
+                                                    "equation evaluations. Bounded search: ",
                                                 }),
-                                                " ",
-                                                D.solver.selected.residual.toPrecision(
-                                                  6,
-                                                ),
+                                                financialDetail.solver.status,
                                                 i.jsx(LocalizedText, {
                                                   children:
-                                                    "; relative residual",
+                                                    ". Candidate roots:",
                                                 }),
                                                 " ",
-                                                D.solver.selected.relativeResidual.toExponential(
-                                                  3,
-                                                ),
+                                                financialDetail.solver.candidates
+                                                  .map((candidate) =>
+                                                    candidate.rate.toPrecision(
+                                                      12,
+                                                    ),
+                                                  )
+                                                  .join(", ") || "None",
                                                 ".",
                                               ],
                                             }),
-                                          i.jsx("p", {
-                                            children: i.jsx(LocalizedText, {
-                                              children:
-                                                "Root discovery is not exhaustive. Repeated calls of the same function in this cell retain the last diagnostic; use Evaluate Formula for the expression trace.",
+                                            financialDetail.solver.selected &&
+                                              i.jsxs("p", {
+                                                children: [
+                                                  i.jsx(LocalizedText, {
+                                                    children: "Selected rate",
+                                                  }),
+                                                  " ",
+                                                  financialDetail.solver.selected.rate.toPrecision(
+                                                    12,
+                                                  ),
+                                                  i.jsx(LocalizedText, {
+                                                    children:
+                                                      "; equation residual",
+                                                  }),
+                                                  " ",
+                                                  financialDetail.solver.selected.residual.toPrecision(
+                                                    6,
+                                                  ),
+                                                  i.jsx(LocalizedText, {
+                                                    children:
+                                                      "; relative residual",
+                                                  }),
+                                                  " ",
+                                                  financialDetail.solver.selected.relativeResidual.toExponential(
+                                                    3,
+                                                  ),
+                                                  ".",
+                                                ],
+                                              }),
+                                            i.jsx("p", {
+                                              children: i.jsx(LocalizedText, {
+                                                children:
+                                                  "Root discovery is not exhaustive. Repeated calls of the same function in this cell retain the last diagnostic; use Evaluate Formula for the expression trace.",
+                                              }),
                                             }),
-                                          }),
-                                        ],
-                                      }),
-                                  ],
-                                },
-                                `${D.functionName}-${B}`,
-                              ),
+                                          ],
+                                        }),
+                                    ],
+                                  },
+                                  `${financialDetail.functionName}-${detailIndex}`,
+                                ),
                             ),
                           ],
                         }),
                         i.jsx("td", {
-                          children: j.lastKnown
-                            ? `${String(j.lastKnown.result.value)} at revision ${j.lastKnown.revision} — historical only`
+                          children: reportCell.lastKnown
+                            ? `${String(reportCell.lastKnown.result.value)} at revision ${reportCell.lastKnown.revision} — historical only`
                             : "None retained",
                         }),
                       ],
                     },
-                    `${j.sheetId}:${j.address}`,
+                    `${reportCell.sheetId}:${reportCell.address}`,
                   ),
                 ),
               }),
@@ -817,28 +868,28 @@ function CalculationOptionsDialog(e) {
           className: "fw-toolbar",
           children: [
             i.jsx("button", {
-              disabled: p === 0,
-              onClick: () => m((j) => j - 1),
+              disabled: pageIndex === 0,
+              onClick: () => setPageIndex((currentPage) => currentPage - 1),
               children: i.jsx(LocalizedText, { children: "Previous results" }),
             }),
             i.jsxs("span", {
               children: [
-                A.length ? p * 100 + 1 : 0,
+                matchingCells.length ? pageIndex * 100 + 1 : 0,
                 "–",
-                Math.min((p + 1) * 100, A.length),
+                Math.min((pageIndex + 1) * 100, matchingCells.length),
                 " ",
                 i.jsx(LocalizedText, { children: "of " }),
-                A.length,
+                matchingCells.length,
               ],
             }),
             i.jsx("button", {
-              disabled: (p + 1) * 100 >= A.length,
-              onClick: () => m((j) => j + 1),
+              disabled: (pageIndex + 1) * 100 >= matchingCells.length,
+              onClick: () => setPageIndex((currentPage) => currentPage + 1),
               children: i.jsx(LocalizedText, { children: "Next results" }),
             }),
           ],
         }),
-        e.workbook.importedCalculationCaches &&
+        props.workbook.importedCalculationCaches &&
           i.jsxs("details", {
             children: [
               i.jsxs("summary", {
@@ -847,26 +898,26 @@ function CalculationOptionsDialog(e) {
                     children: "Imported cache evidence —",
                   }),
                   " ",
-                  e.workbook.importedCalculationCaches.entries.length,
+                  props.workbook.importedCalculationCaches.entries.length,
                   " ",
                   i.jsx(LocalizedText, { children: "source formulas" }),
                 ],
               }),
               i.jsxs("p", {
                 children: [
-                  e.workbook.importedCalculationCaches.fileName,
+                  props.workbook.importedCalculationCaches.fileName,
                   " ",
                   i.jsx(LocalizedText, { children: "· SHA-256" }),
                   " ",
-                  e.workbook.importedCalculationCaches.sourceSha256,
+                  props.workbook.importedCalculationCaches.sourceSha256,
                 ],
               }),
               i.jsxs("p", {
                 children: [
                   i.jsx(LocalizedText, { children: "Imported " }),
-                  e.workbook.importedCalculationCaches.importedAt,
+                  props.workbook.importedCalculationCaches.importedAt,
                   i.jsx(LocalizedText, { children: "; source mode " }),
-                  e.workbook.importedCalculationCaches.sourceSettings.mode,
+                  props.workbook.importedCalculationCaches.sourceSettings.mode,
                   i.jsx(LocalizedText, {
                     children:
                       ". Source caches and settings remain historical, unverified evidence. Download calculation evidence for every typed cache comparison, including missing caches and changed formulas. Original XLSX bytes are not retained by this field.",
@@ -887,95 +938,119 @@ function CalculationOptionsDialog(e) {
 }
 function GridContextMenu({
   x: left,
-  y,
+  y: menuTop,
   label,
   actions,
   workbook,
   selection,
   onClose,
 }) {
-  const d = ne.useRef(null),
-    u = ne.useRef({ workbook, snapshot: JSON.stringify(workbook), selection }),
-    [l, c] = ne.useState({ left: left, top: y }),
-    f =
-      u.current.workbook !== workbook ||
-      u.current.snapshot !== JSON.stringify(workbook) ||
-      u.current.selection !== selection
+  const menuRef = ne.useRef(null),
+    openedContext = ne.useRef({
+      workbook,
+      snapshot: JSON.stringify(workbook),
+      selection,
+    }),
+    [position, setPosition] = ne.useState({ left: left, top: menuTop }),
+    staleReason =
+      openedContext.current.workbook !== workbook ||
+      openedContext.current.snapshot !== JSON.stringify(workbook) ||
+      openedContext.current.selection !== selection
         ? "The workbook or selection changed. Close and reopen this menu."
         : undefined;
   return (
     ne.useLayoutEffect(() => {
-      const p = d.current?.getBoundingClientRect();
-      p &&
-        c({
-          left: Math.max(8, Math.min(left, window.innerWidth - p.width - 8)),
-          top: Math.max(8, Math.min(y, window.innerHeight - p.height - 8)),
+      const menuRect = menuRef.current?.getBoundingClientRect();
+      menuRect &&
+        setPosition({
+          left: Math.max(
+            8,
+            Math.min(left, window.innerWidth - menuRect.width - 8),
+          ),
+          top: Math.max(
+            8,
+            Math.min(menuTop, window.innerHeight - menuRect.height - 8),
+          ),
         });
-    }, [left, y]),
+    }, [left, menuTop]),
     ne.useEffect(() => {
-      let p = false;
-      const m = requestAnimationFrame(() =>
-          d.current?.querySelector("button")?.focus(),
+      let hasInsideInteraction = false;
+      const focusFrameId = requestAnimationFrame(() =>
+          menuRef.current?.querySelector("button")?.focus(),
         ),
-        v = (g) => {
-          d.current?.contains(g.target)
-            ? (p = true)
-            : (g.type !== "focusin" || p) && onClose(false);
+        handleDocumentEvent = (event) => {
+          menuRef.current?.contains(event.target)
+            ? (hasInsideInteraction = true)
+            : (event.type !== "focusin" || hasInsideInteraction) &&
+              onClose(false);
         };
       return (
-        document.addEventListener("pointerdown", v),
-        document.addEventListener("focusin", v),
+        document.addEventListener("pointerdown", handleDocumentEvent),
+        document.addEventListener("focusin", handleDocumentEvent),
         () => {
-          (cancelAnimationFrame(m),
-            document.removeEventListener("pointerdown", v),
-            document.removeEventListener("focusin", v));
+          (cancelAnimationFrame(focusFrameId),
+            document.removeEventListener("pointerdown", handleDocumentEvent),
+            document.removeEventListener("focusin", handleDocumentEvent));
         }
       );
     }, [onClose]),
     i.jsxs("div", {
-      ref: d,
+      ref: menuRef,
       className: "lg-grid-context",
       role: "menu",
       "aria-label": `${label} commands`,
-      style: l,
+      style: position,
       onContextMenu: (event) => event.preventDefault(),
-      onKeyDown: (p) => {
-        if (p.defaultPrevented || p.ctrlKey || p.metaKey || p.altKey) return;
-        const m = Array.from(
-            p.currentTarget.querySelectorAll('[role="menuitem"]'),
+      onKeyDown: (event) => {
+        if (
+          event.defaultPrevented ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.altKey
+        )
+          return;
+        const menuItems = Array.from(
+            event.currentTarget.querySelectorAll('[role="menuitem"]'),
           ),
-          v = m.indexOf(document.activeElement);
-        if (["ArrowDown", "ArrowUp", "Home", "End"].includes(p.key)) {
-          (p.preventDefault(), p.stopPropagation());
-          const b =
-            p.key === "Home"
+          activeIndex = menuItems.indexOf(document.activeElement);
+        if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+          (event.preventDefault(), event.stopPropagation());
+          const nextIndex =
+            event.key === "Home"
               ? 0
-              : p.key === "End"
-                ? m.length - 1
-                : (v + (p.key === "ArrowDown" ? 1 : m.length - 1)) % m.length;
-          m[b]?.focus();
+              : event.key === "End"
+                ? menuItems.length - 1
+                : (activeIndex +
+                    (event.key === "ArrowDown" ? 1 : menuItems.length - 1)) %
+                  menuItems.length;
+          menuItems[nextIndex]?.focus();
         } else
-          (p.key === "Escape" || p.key === "Tab") &&
-            (p.preventDefault(), p.stopPropagation(), onClose(true));
+          (event.key === "Escape" || event.key === "Tab") &&
+            (event.preventDefault(), event.stopPropagation(), onClose(true));
       },
       children: [
         i.jsx("strong", { children: label }),
-        actions.map((action, m) => {
-          const v = f ?? action.reason;
+        actions.map((action, actionIndex) => {
+          const disabledReason = staleReason ?? action.reason;
           return i.jsxs(
             "button",
             {
               type: "button",
               role: "menuitem",
-              tabIndex: m === 0 ? 0 : -1,
+              tabIndex: actionIndex === 0 ? 0 : -1,
               "aria-label": action.name,
-              "aria-disabled": !!v,
-              "aria-description": v,
-              title: v ? `${action.name}: ${v}` : action.name,
+              "aria-disabled": !!disabledReason,
+              "aria-description": disabledReason,
+              title: disabledReason
+                ? `${action.name}: ${disabledReason}`
+                : action.name,
               onClick: () => {
-                v || (onClose(true), action.run());
+                disabledReason || (onClose(true), action.run());
               },
-              children: [action.name, v && i.jsx("small", { children: v })],
+              children: [
+                action.name,
+                disabledReason && i.jsx("small", { children: disabledReason }),
+              ],
             },
             action.name,
           );
@@ -1001,16 +1076,16 @@ function WorkbookCapacityLimits() {
       }),
       i.jsx("dl", {
         className: "lg-capacity-list",
-        children: workbookLimitTable.map(([t, n]) =>
+        children: workbookLimitTable.map(([limitLabel, limitValue]) =>
           i.jsxs(
             "div",
             {
               children: [
-                i.jsx("dt", { children: t }),
-                i.jsx("dd", { children: n }),
+                i.jsx("dt", { children: limitLabel }),
+                i.jsx("dd", { children: limitValue }),
               ],
             },
-            t,
+            limitLabel,
           ),
         ),
       }),
@@ -1042,97 +1117,104 @@ const attachmentAcceptAttribute = Object.keys(attachmentMediaTypes)
   .map((attachmentMediaType) => `.${attachmentMediaType}`)
   .join(",");
 
-function readAttachmentBytes(e, signal) {
-  return new Promise((t, n) => {
-    const o = new FileReader();
-    let a = false;
-    const s = (l, c) => {
-        a ||
-          ((a = true),
-          clearTimeout(u),
-          signal?.removeEventListener("abort", d),
-          c ? n(c) : t(new Uint8Array(l)));
+function readAttachmentBytes(file, signal) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    let isSettled = false;
+    const settle = (buffer, error) => {
+        isSettled ||
+          ((isSettled = true),
+          clearTimeout(timeoutId),
+          signal?.removeEventListener("abort", handleAbort),
+          error ? reject(error) : resolve(new Uint8Array(buffer)));
       },
-      d = () => {
-        (s(
+      handleAbort = () => {
+        (settle(
           undefined,
           new DOMException("File preparation cancelled.", "AbortError"),
         ),
-          o.abort());
+          reader.abort());
       },
-      u = setTimeout(() => {
-        (s(
+      timeoutId = setTimeout(() => {
+        (settle(
           undefined,
           new Error("Reading the attachment timed out. Try a smaller file."),
         ),
-          o.abort());
+          reader.abort());
       }, 15e3);
-    ((o.onload = () => s(o.result)),
-      (o.onerror = () =>
-        s(
+    ((reader.onload = () => settle(reader.result)),
+      (reader.onerror = () =>
+        settle(
           undefined,
           new Error("The attachment could not be read. Select it again."),
         )),
-      (o.onabort = () =>
-        s(
+      (reader.onabort = () =>
+        settle(
           undefined,
           new DOMException("File preparation cancelled.", "AbortError"),
         )),
-      signal?.addEventListener("abort", d, { once: true }),
-      signal?.aborted ? d() : o.readAsArrayBuffer(e));
+      signal?.addEventListener("abort", handleAbort, { once: true }),
+      signal?.aborted ? handleAbort() : reader.readAsArrayBuffer(file));
   });
 }
-async function prepareChatAttachment(e, signal) {
+async function prepareChatAttachment(file, signal) {
   assertCondition(
-    isSafeAttachmentFilename(e.name),
+    isSafeAttachmentFilename(file.name),
     "Use a filename of 1–180 characters without path or control characters.",
   );
-  const fileExtension = getFileExtension(e.name);
+  const fileExtension = getFileExtension(file.name);
   (assertCondition(
     Object.hasOwn(attachmentMediaTypes, fileExtension),
     "Supported attachments: TXT, Markdown, CSV, TSV, JSON, PDF, DOCX, XLSX, PNG, JPEG and WebP.",
   ),
     assertCondition(
-      e.size > 0 && e.size <= assistantRequestLimits.fileBytes,
+      file.size > 0 && file.size <= assistantRequestLimits.fileBytes,
       "Each attachment must be nonempty and no larger than 5 MB.",
     ));
-  const attachmentBytes = await readAttachmentBytes(e, signal);
+  const attachmentBytes = await readAttachmentBytes(file, signal);
   assertCondition(
-    attachmentBytes.length === e.size &&
+    attachmentBytes.length === file.size &&
       matchesFileSignature(attachmentBytes, fileExtension),
     "The file content does not match its extension. Choose the original supported file.",
   );
-  let o;
+  let attachmentData;
   const encoding = textAttachmentExtensions.has(fileExtension)
     ? "utf8"
     : "base64";
   if (encoding === "utf8") {
     try {
-      o = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
-        attachmentBytes,
-      );
+      attachmentData = new TextDecoder("utf-8", {
+        fatal: true,
+        ignoreBOM: true,
+      }).decode(attachmentBytes);
     } catch {
       throw new Error(
         "Text attachments must use UTF-8 encoding. Save the file as UTF-8 and try again.",
       );
     }
     assertCondition(
-      !o.includes("\0"),
+      !attachmentData.includes("\0"),
       "This appears to be a binary file. Choose a supported document or UTF-8 text file.",
     );
   } else {
-    let s = "";
-    for (let d = 0; d < attachmentBytes.length; d += 8192)
-      s += String.fromCharCode(...attachmentBytes.subarray(d, d + 8192));
-    o = btoa(s);
+    let binaryString = "";
+    for (
+      let byteOffset = 0;
+      byteOffset < attachmentBytes.length;
+      byteOffset += 8192
+    )
+      binaryString += String.fromCharCode(
+        ...attachmentBytes.subarray(byteOffset, byteOffset + 8192),
+      );
+    attachmentData = btoa(binaryString);
   }
   return {
     id: crypto.randomUUID(),
-    name: e.name,
+    name: file.name,
     mediaType: attachmentMediaTypes[fileExtension],
     size: attachmentBytes.length,
     encoding: encoding,
-    data: o,
+    data: attachmentData,
   };
 }
 
@@ -1145,28 +1227,29 @@ function isAbortOrTimeoutError(error) {
         ? new LLMRequestError("cancelled")
         : new LLMRequestError("unavailable");
 }
-async function raceWithAbortSignal(e, signal, timeoutMs = 3e4) {
+async function raceWithAbortSignal(operation, signal, timeoutMs = 3e4) {
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 12e4)
     throw new LLMRequestError("invalid_request");
   if (signal?.aborted) throw new LLMRequestError("cancelled");
-  const n = new AbortController();
-  let o;
-  const a = new Promise((l, c) => {
-      o = c;
+  const controller = new AbortController();
+  let rejectRace;
+  const abortPromise = new Promise((resolve, reject) => {
+      rejectRace = reject;
     }),
-    s = (l) => {
-      const c = new LLMRequestError(l);
-      (o(c), n.abort(c));
+    abortRace = (reasonCode) => {
+      const abortError = new LLMRequestError(reasonCode);
+      (rejectRace(abortError), controller.abort(abortError));
     },
-    d = () => s("cancelled");
-  signal?.addEventListener("abort", d, { once: true });
-  const u = setTimeout(() => s("timeout"), timeoutMs);
+    handleAbort = () => abortRace("cancelled");
+  signal?.addEventListener("abort", handleAbort, { once: true });
+  const timeoutId = setTimeout(() => abortRace("timeout"), timeoutMs);
   try {
-    return await Promise.race([a, e(n.signal)]);
+    return await Promise.race([abortPromise, operation(controller.signal)]);
   } catch (error) {
     throw isAbortOrTimeoutError(error);
   } finally {
-    (clearTimeout(u), signal?.removeEventListener("abort", d));
+    (clearTimeout(timeoutId),
+      signal?.removeEventListener("abort", handleAbort));
   }
 }
 
@@ -1203,16 +1286,17 @@ function validateCalculationClock(assistantSelectionContext) {
       (assertNoUnexpectedFields(calculationClock, Object.keys(localDateTime)),
         assertCondition(
           Object.entries(localDateTime).every(
-            ([l, c]) => calculationClock[l] === c,
+            ([fieldName, expectedValue]) =>
+              calculationClock[fieldName] === expectedValue,
           ),
           "clock policy/value mismatch",
         ));
     }
-    for (const d of ["workbookId", "sheetId", "sheetName"])
+    for (const identityField of ["workbookId", "sheetId", "sheetName"])
       assertCondition(
-        typeof assistantSelectionContext[d] == "string" &&
-          assistantSelectionContext[d].length > 0 &&
-          assistantSelectionContext[d].length <= 200,
+        typeof assistantSelectionContext[identityField] == "string" &&
+          assistantSelectionContext[identityField].length > 0 &&
+          assistantSelectionContext[identityField].length <= 200,
         "identity",
       );
     (assertCondition(
@@ -1225,45 +1309,47 @@ function validateCalculationClock(assistantSelectionContext) {
           assistantSelectionContext.range.length <= 64,
         "range",
       ));
-    const t = assistantSelectionContext.range.split(":");
-    assertCondition(t.length <= 2, "range");
-    const cellAddress = parseCellAddress(t[0]),
-      o = parseCellAddress(t[1] ?? t[0]),
-      a = (o.row - cellAddress.row + 1) * (o.col - cellAddress.col + 1);
+    const rangeParts = assistantSelectionContext.range.split(":");
+    assertCondition(rangeParts.length <= 2, "range");
+    const cellAddress = parseCellAddress(rangeParts[0]),
+      endAddress = parseCellAddress(rangeParts[1] ?? rangeParts[0]),
+      cellCount =
+        (endAddress.row - cellAddress.row + 1) *
+        (endAddress.col - cellAddress.col + 1);
     (assertCondition(
-      o.row >= cellAddress.row &&
-        o.col >= cellAddress.col &&
-        a <= workbookLimits.maxLLMCells,
+      endAddress.row >= cellAddress.row &&
+        endAddress.col >= cellAddress.col &&
+        cellCount <= workbookLimits.maxLLMCells,
       "bounds",
     ),
       assertCondition(
         Array.isArray(assistantSelectionContext.cells) &&
-          assistantSelectionContext.cells.length === a,
+          assistantSelectionContext.cells.length === cellCount,
         "population",
       ));
-    const s = new Set();
+    const seenAddresses = new Set();
     for (const cell of assistantSelectionContext.cells) {
       (assertCondition(isPlainRecord(cell), "cell"),
         assertNoUnexpectedFields(cell, ["address", "raw", "value"]),
         assertCondition(
-          typeof cell.address == "string" && !s.has(cell.address),
+          typeof cell.address == "string" && !seenAddresses.has(cell.address),
           "address",
         ));
-      const u = parseCellAddress(cell.address);
+      const parsedAddress = parseCellAddress(cell.address);
       (assertCondition(
-        u.row >= cellAddress.row &&
-          u.row <= o.row &&
-          u.col >= cellAddress.col &&
-          u.col <= o.col,
+        parsedAddress.row >= cellAddress.row &&
+          parsedAddress.row <= endAddress.row &&
+          parsedAddress.col >= cellAddress.col &&
+          parsedAddress.col <= endAddress.col,
         "scope",
       ),
-        s.add(cell.address));
-      for (const l of [cell.raw, cell.value])
+        seenAddresses.add(cell.address));
+      for (const scalarValue of [cell.raw, cell.value])
         assertCondition(
-          l === null ||
-            typeof l == "boolean" ||
-            (typeof l == "number" && Number.isFinite(l)) ||
-            (typeof l == "string" && l.length <= 32767),
+          scalarValue === null ||
+            typeof scalarValue == "boolean" ||
+            (typeof scalarValue == "number" && Number.isFinite(scalarValue)) ||
+            (typeof scalarValue == "string" && scalarValue.length <= 32767),
           "value",
         );
     }

@@ -50,7 +50,8 @@ function EditorRibbonBar({
     onUndo: () => navigationActions.undoOrRedo(),
     onRedo: () => navigationActions.undoOrRedo(true),
     onImport: () => importExportState.importFileInputRef.current?.click(),
-    onExport: (fe) => void fileAndAnalysisActions.exportWorkbookAs(fe),
+    onExport: (exportFormat) =>
+      void fileAndAnalysisActions.exportWorkbookAs(exportFormat),
     onNew: () => navigationActions.replaceActiveWorkbook(createBlankWorkbook()),
     onDemo: () =>
       navigationActions.replaceActiveWorkbook(buildSampleLedgerWorkbook()),
@@ -105,13 +106,16 @@ function EditorRibbonBar({
     onCopy: () => void clipboardAndFindActions.copyOrCutSelection(false),
     onCut: () => void clipboardAndFindActions.copyOrCutSelection(true),
     onPaste: () => void clipboardAndFindActions.pasteFromClipboard(),
-    onFind: () => findReplaceState.setIsFindBarVisible((fe) => !fe),
-    onSort: (fe) => {
+    onFind: () =>
+      findReplaceState.setIsFindBarVisible(
+        (isFindBarVisible) => !isFindBarVisible,
+      ),
+    onSort: (sortDirection) => {
       (filterSortState.setActiveColumnSort(
-        fe
+        sortDirection
           ? {
               col: _t(selectionState.activeCellAddress).col,
-              direction: fe === "asc" ? 1 : -1,
+              direction: sortDirection === "asc" ? 1 : -1,
             }
           : null,
       ),
@@ -120,12 +124,23 @@ function EditorRibbonBar({
           (selectionState.gridContainerRef.current.scrollTop = 0));
     },
     onToggleFilter: () => {
-      (filterSortState.setIsFilterBarVisible((fe) => !fe),
+      (filterSortState.setIsFilterBarVisible(
+        (isFilterBarVisible) => !isFilterBarVisible,
+      ),
         filterSortState.setFilterValueSearch(""));
     },
-    onShowFormulas: () => viewDisplayState.setIsShowingFormulas((fe) => !fe),
-    onGridlines: () => viewDisplayState.setIsGridlinesVisible((fe) => !fe),
-    onHeadings: () => viewDisplayState.setIsHeadingsVisible((fe) => !fe),
+    onShowFormulas: () =>
+      viewDisplayState.setIsShowingFormulas(
+        (isShowingFormulas) => !isShowingFormulas,
+      ),
+    onGridlines: () =>
+      viewDisplayState.setIsGridlinesVisible(
+        (isGridlinesVisible) => !isGridlinesVisible,
+      ),
+    onHeadings: () =>
+      viewDisplayState.setIsHeadingsVisible(
+        (isHeadingsVisible) => !isHeadingsVisible,
+      ),
     onFreeze: navigationActions.toggleFreezeTopRow,
     onZoom: navigationActions.applyZoomPercent,
     onPanel: dialogState.setSidePanelKind,

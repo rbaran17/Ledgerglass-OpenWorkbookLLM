@@ -26,14 +26,15 @@ function EditorSheetTabs({
         children: [
           activeWorkbook.sheets
             .filter((sheet) => !sheet.hidden)
-            .map((fe) =>
+            .map((sheet) =>
               i.jsx(
                 "button",
                 {
-                  "aria-current": fe.id === activeSheet.id ? "true" : undefined,
-                  className: fe.id === activeSheet.id ? "active" : "",
-                  "data-sheet-id": fe.id,
-                  tabIndex: fe.id === activeSheet.id ? 0 : -1,
+                  "aria-current":
+                    sheet.id === activeSheet.id ? "true" : undefined,
+                  className: sheet.id === activeSheet.id ? "active" : "",
+                  "data-sheet-id": sheet.id,
+                  tabIndex: sheet.id === activeSheet.id ? 0 : -1,
                   onPointerDown: (event) => {
                     formulaEntryState.activeCellEditRef.current?.value.startsWith(
                       "=",
@@ -55,53 +56,59 @@ function EditorSheetTabs({
                     )
                       return;
                     event.preventDefault();
-                    const Be = activeWorkbook.sheets.filter(
+                    const visibleSheets = activeWorkbook.sheets.filter(
                         (sheet) => !sheet.hidden,
                       ),
-                      Ue = Be.findIndex((gt) => gt.id === fe.id),
-                      Xe =
+                      currentSheetIndex = visibleSheets.findIndex(
+                        (visibleSheet) => visibleSheet.id === sheet.id,
+                      ),
+                      targetSheet =
                         event.key === "Home"
-                          ? Be[0]
+                          ? visibleSheets[0]
                           : event.key === "End"
-                            ? Be.at(-1)
-                            : Be[
-                                (Ue +
+                            ? visibleSheets.at(-1)
+                            : visibleSheets[
+                                (currentSheetIndex +
                                   (event.key === "ArrowRight"
                                     ? 1
-                                    : Be.length - 1)) %
-                                  Be.length
+                                    : visibleSheets.length - 1)) %
+                                  visibleSheets.length
                               ];
-                    (navigationActions.switchActiveWorksheet(Xe.id),
+                    (navigationActions.switchActiveWorksheet(targetSheet.id),
                       requestAnimationFrame(() =>
                         Array.from(
                           selectionState.appRootRef.current?.querySelectorAll(
                             "[data-sheet-id]",
                           ) ?? [],
                         )
-                          .find((wt) => wt.dataset.sheetId === Xe.id)
+                          .find(
+                            (tabButton) =>
+                              tabButton.dataset.sheetId === targetSheet.id,
+                          )
                           ?.focus(),
                       ));
                   },
-                  onClick: () => navigationActions.switchActiveWorksheet(fe.id),
-                  style: fe.tabColor
+                  onClick: () =>
+                    navigationActions.switchActiveWorksheet(sheet.id),
+                  style: sheet.tabColor
                     ? {
-                        boxShadow: `inset 0 -3px ${fe.tabColor}`,
+                        boxShadow: `inset 0 -3px ${sheet.tabColor}`,
                       }
                     : undefined,
                   onDoubleClick: () => {
                     cellEditActions.commitCellEdit() &&
-                      (navigationState.setTabBarSheetId(fe.id),
+                      (navigationState.setTabBarSheetId(sheet.id),
                       dialogState.setActiveDialogMode("sheets"));
                   },
                   onContextMenu: (event) => {
                     (event.preventDefault(),
                       cellEditActions.commitCellEdit() &&
-                        (navigationState.setTabBarSheetId(fe.id),
+                        (navigationState.setTabBarSheetId(sheet.id),
                         dialogState.setActiveDialogMode("sheets")));
                   },
-                  children: fe.name,
+                  children: sheet.name,
                 },
-                fe.id,
+                sheet.id,
               ),
             ),
           i.jsx("button", {

@@ -22,45 +22,51 @@ import {
   filterOperatorLabels,
 } from "./18-transformation-recipes-dialog.js";
 
-function FilterViewsDialog(e) {
+function FilterViewsDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(null),
-    [s, d] = ne.useState(() =>
-      e.definition
-        ? structuredClone(e.definition)
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    previewRef = ne.useRef(null),
+    [draftDefinition, setDraftDefinition] = ne.useState(() =>
+      props.definition
+        ? structuredClone(props.definition)
         : {
-            range: resolveTableDataRange(e.workbook, e.sheetId, e.range),
+            range: resolveTableDataRange(
+              props.workbook,
+              props.sheetId,
+              props.range,
+            ),
             columns: [],
           },
     ),
-    [u, l] = ne.useState(e.column ?? parseRangeAddress(s.range).firstCol),
-    [c, h] = ne.useState(""),
-    [f, p] = ne.useState(null),
-    [m, v] = ne.useState(""),
-    [g, b] = ne.useState(""),
-    [y, w] = ne.useState(""),
-    [E, A] = ne.useState(""),
-    k = e.workbook.savedFilterViews?.find(
-      (savedFilterView) => savedFilterView.id === g,
+    [selectedColumn, setSelectedColumn] = ne.useState(
+      props.column ?? parseRangeAddress(draftDefinition.range).firstCol,
     ),
-    F =
-      !!e.onWorkbookChange &&
-      !e.readOnly &&
-      !e.workbook.structureProtection?.enabled &&
-      !e.workbook.sheets.find((sheet) => sheet.id === e.sheetId)?.protection
-        ?.enabled,
-    I =
-      !!e.onWorkbookChange &&
-      !e.readOnly &&
-      !e.workbook.structureProtection?.enabled &&
-      !!k &&
-      !e.workbook.sheets.find((sheet) => sheet.id === k.sheetId)?.protection
-        ?.enabled,
-    O = ne.useMemo(() => {
+    [valueSearch, setValueSearch] = ne.useState(""),
+    [preview, setPreview] = ne.useState(null),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [selectedViewId, setSelectedViewId] = ne.useState(""),
+    [viewName, setViewName] = ne.useState(""),
+    [statusMessage, setStatusMessage] = ne.useState(""),
+    selectedView = props.workbook.savedFilterViews?.find(
+      (savedFilterView) => savedFilterView.id === selectedViewId,
+    ),
+    canEditFilters =
+      !!props.onWorkbookChange &&
+      !props.readOnly &&
+      !props.workbook.structureProtection?.enabled &&
+      !props.workbook.sheets.find((sheet) => sheet.id === props.sheetId)
+        ?.protection?.enabled,
+    canUpdateSelectedView =
+      !!props.onWorkbookChange &&
+      !props.readOnly &&
+      !props.workbook.structureProtection?.enabled &&
+      !!selectedView &&
+      !props.workbook.sheets.find((sheet) => sheet.id === selectedView.sheetId)
+        ?.protection?.enabled,
+    columnOptions = ne.useMemo(() => {
       try {
-        const rangeAddress = parseRangeAddress(s.range);
+        const rangeAddress = parseRangeAddress(draftDefinition.range);
         return Array.from(
           {
             length: Math.min(
@@ -68,22 +74,28 @@ function FilterViewsDialog(e) {
               rangeAddress.lastCol - rangeAddress.firstCol + 1,
             ),
           },
-          (de, he) => {
-            const column = rangeAddress.firstCol + he;
+          (de, columnOffset) => {
+            const column = rangeAddress.firstCol + columnOffset;
             return {
               column: column,
-              label: `${columnIndexToLetters(column)} · ${String(e.workbook.sheets.find((sheet) => sheet.id === e.sheetId)?.cells[`${columnIndexToLetters(column)}${rangeAddress.firstRow + 1}`]?.raw ?? "Column")}`,
+              label: `${columnIndexToLetters(column)} · ${String(props.workbook.sheets.find((sheet) => sheet.id === props.sheetId)?.cells[`${columnIndexToLetters(column)}${rangeAddress.firstRow + 1}`]?.raw ?? "Column")}`,
             };
           },
         );
       } catch {
         return [];
       }
-    }, [s.range, e.workbook, e.sheetId]),
-    j = ne.useMemo(() => {
+    }, [draftDefinition.range, props.workbook, props.sheetId]),
+    facetState = ne.useMemo(() => {
       try {
         return {
-          result: buildFilterFacetValues(e.workbook, e.sheetId, s, u, c),
+          result: buildFilterFacetValues(
+            props.workbook,
+            props.sheetId,
+            draftDefinition,
+            selectedColumn,
+            valueSearch,
+          ),
           error: "",
         };
       } catch (error) {
@@ -93,113 +105,180 @@ function FilterViewsDialog(e) {
             error instanceof Error ? error.message : "Cannot inspect values.",
         };
       }
-    }, [e.workbook, e.sheetId, s, u, c]),
-    z = s.columns.find((column) => column.column === u) ?? { column: u },
-    V =
-      f?.book === e.workbook && f.definition === JSON.stringify(s)
-        ? f.result
+    }, [
+      props.workbook,
+      props.sheetId,
+      draftDefinition,
+      selectedColumn,
+      valueSearch,
+    ]),
+    columnCriterion = draftDefinition.columns.find(
+      (column) => column.column === selectedColumn,
+    ) ?? { column: selectedColumn },
+    currentPreview =
+      preview?.book === props.workbook &&
+      preview.definition === JSON.stringify(draftDefinition)
+        ? preview.result
         : null;
-  function D() {
-    if (!V)
+  function getPreviewedFilter() {
+    if (!currentPreview)
       throw Error(
         "Preview the current population before saving or applying a view.",
       );
-    const oe = applyFilterConditions(e.workbook, e.sheetId, s);
-    if (JSON.stringify(oe.context) !== JSON.stringify(V.context))
+    const filterResult = applyFilterConditions(
+      props.workbook,
+      props.sheetId,
+      draftDefinition,
+    );
+    if (
+      JSON.stringify(filterResult.context) !==
+      JSON.stringify(currentPreview.context)
+    )
       throw Error(
         "Population membership changed. Preview again before saving or applying.",
       );
-    return oe;
+    return filterResult;
   }
-  function B(oe = false) {
+  function saveFilterView(replaceExisting = false) {
     try {
-      if (!F || (oe && (!k || k.sheetId !== e.sheetId)))
+      if (
+        !canEditFilters ||
+        (replaceExisting &&
+          (!selectedView || selectedView.sheetId !== props.sheetId))
+      )
         throw Error("This saved view cannot be changed here.");
-      const de = D(),
+      const validatedFilter = getPreviewedFilter(),
         savedFilterView = createSavedFilterView(
-          e.workbook,
-          e.sheetId,
-          de.context.definition,
-          y,
-          oe ? g : undefined,
+          props.workbook,
+          props.sheetId,
+          validatedFilter.context.definition,
+          viewName,
+          replaceExisting ? selectedViewId : undefined,
         );
-      (e.onWorkbookChange(
+      (props.onWorkbookChange(
         savedFilterView,
-        oe ? "Replace saved filter criteria" : "Save named filter view",
+        replaceExisting
+          ? "Replace saved filter criteria"
+          : "Save named filter view",
       ),
-        b(savedFilterView.savedFilterViews.at(-1).id),
-        p(null),
-        v(""),
-        A(
+        setSelectedViewId(savedFilterView.savedFilterViews.at(-1).id),
+        setPreview(null),
+        setErrorMessage(""),
+        setStatusMessage(
           "Saved in the native workbook. Preview again to apply; saved counts are historical and source cells are unchanged.",
         ));
     } catch (error) {
-      v(error instanceof Error ? error.message : "Cannot save this view.");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Cannot save this view.",
+      );
     }
   }
   ne.useEffect(() => {
-    var oe;
-    f &&
-      ((oe = a.current) == null ? undefined : oe.scrollIntoView)?.call(oe, {
+    var previewElement;
+    preview &&
+      ((previewElement = previewRef.current) == null
+        ? undefined
+        : previewElement.scrollIntoView
+      )?.call(previewElement, {
         block: "nearest",
       });
-  }, [f]);
-  function _(oe) {
-    (d((de) => ({
-      ...de,
-      columns: [...de.columns.filter((column) => column.column !== u), oe],
+  }, [preview]);
+  function upsertColumnCriterion(criterion) {
+    (setDraftDefinition((previousDraft) => ({
+      ...previousDraft,
+      columns: [
+        ...previousDraft.columns.filter(
+          (column) => column.column !== selectedColumn,
+        ),
+        criterion,
+      ],
     })),
-      v(""));
+      setErrorMessage(""));
   }
-  function C(oe) {
+  function toggleFilterValue(cellValue) {
     const filterFacetValues = buildFilterFacetValues(
-      e.workbook,
-      e.sheetId,
-      s,
-      u,
+      props.workbook,
+      props.sheetId,
+      draftDefinition,
+      selectedColumn,
     );
-    if (z.values === undefined && filterFacetValues.truncated) {
-      v(
+    if (columnCriterion.values === undefined && filterFacetValues.truncated) {
+      setErrorMessage(
         "Choose Select no values first, then select specific values, or use a custom condition.",
       );
       return;
     }
-    const he = z.values ?? filterFacetValues.values.map((value) => value.value),
-      Se = comparableCellValueKey(oe, s.caseSensitive),
-      le = he.some((ce) => comparableCellValueKey(ce, s.caseSensitive) === Se);
-    _({
-      ...z,
-      values: le
-        ? he.filter((ce) => comparableCellValueKey(ce, s.caseSensitive) !== Se)
-        : [...he, oe],
+    const selectedValues =
+        columnCriterion.values ??
+        filterFacetValues.values.map((value) => value.value),
+      valueKey = comparableCellValueKey(
+        cellValue,
+        draftDefinition.caseSensitive,
+      ),
+      isValueSelected = selectedValues.some(
+        (selectedValue) =>
+          comparableCellValueKey(
+            selectedValue,
+            draftDefinition.caseSensitive,
+          ) === valueKey,
+      );
+    upsertColumnCriterion({
+      ...columnCriterion,
+      values: isValueSelected
+        ? selectedValues.filter(
+            (selectedValue) =>
+              comparableCellValueKey(
+                selectedValue,
+                draftDefinition.caseSensitive,
+              ) !== valueKey,
+          )
+        : [...selectedValues, cellValue],
     });
   }
-  function T(oe, de, he) {
-    d((Se) => ({
-      ...Se,
-      advanced: Se.advanced?.map((ce, ge) =>
-        ge === oe ? ce.map((se, we) => (we === de ? he : se)) : ce,
+  function updateAdvancedCondition(groupIndex, conditionIndex, nextCondition) {
+    setDraftDefinition((previousDraft) => ({
+      ...previousDraft,
+      advanced: previousDraft.advanced?.map(
+        (conditionGroup, currentGroupIndex) =>
+          currentGroupIndex === groupIndex
+            ? conditionGroup.map((condition, currentConditionIndex) =>
+                currentConditionIndex === conditionIndex
+                  ? nextCondition
+                  : condition,
+              )
+            : conditionGroup,
       ),
     }));
   }
-  function N(oe, de, he, Se = false) {
+  function renderConditionEditor(
+    condition,
+    onConditionChange,
+    conditionLabel,
+    showColumn = false,
+  ) {
     return i.jsxs("div", {
       className: "lg-filter-condition",
       children: [
-        Se &&
+        showColumn &&
           i.jsxs("label", {
             children: [
               i.jsx(LocalizedText, { children: "Column" }),
               i.jsx("select", {
-                "aria-label": `${he} column`,
-                value: oe.column,
+                "aria-label": `${conditionLabel} column`,
+                value: condition.column,
                 onChange: (event) =>
-                  de({ ...oe, column: Number(event.target.value) }),
-                children: O.map((le) =>
+                  onConditionChange({
+                    ...condition,
+                    column: Number(event.target.value),
+                  }),
+                children: columnOptions.map((columnOption) =>
                   i.jsx(
                     "option",
-                    { value: le.column, children: le.label },
-                    le.column,
+                    {
+                      value: columnOption.column,
+                      children: columnOption.label,
+                    },
+                    columnOption.column,
                   ),
                 ),
               }),
@@ -209,26 +288,26 @@ function FilterViewsDialog(e) {
           children: [
             i.jsx(LocalizedText, { children: "Type" }),
             i.jsx("select", {
-              "aria-label": `${he} type`,
-              value: oe.type,
+              "aria-label": `${conditionLabel} type`,
+              value: condition.type,
               onChange: (event) =>
-                de({
-                  ...oe,
+                onConditionChange({
+                  ...condition,
                   type: event.target.value,
                   operator: "equals",
                   value: event.target.value === "number" ? 0 : "",
                 }),
-              children: ["value", "text", "number", "date"].map((le) =>
+              children: ["value", "text", "number", "date"].map((typeOption) =>
                 i.jsx(
                   "option",
                   {
-                    value: le,
+                    value: typeOption,
                     children:
-                      le === "value"
+                      typeOption === "value"
                         ? "Typed value"
-                        : le[0].toUpperCase() + le.slice(1),
+                        : typeOption[0].toUpperCase() + typeOption.slice(1),
                   },
-                  le,
+                  typeOption,
                 ),
               ),
             }),
@@ -238,47 +317,63 @@ function FilterViewsDialog(e) {
           children: [
             i.jsx(LocalizedText, { children: "Comparison" }),
             i.jsx("select", {
-              "aria-label": `${he} comparison`,
-              value: oe.operator,
-              onChange: (event) => de({ ...oe, operator: event.target.value }),
+              "aria-label": `${conditionLabel} comparison`,
+              value: condition.operator,
+              onChange: (event) =>
+                onConditionChange({
+                  ...condition,
+                  operator: event.target.value,
+                }),
               children: Object.entries(filterOperatorLabels)
                 .filter(
-                  ([le]) =>
-                    oe.type === "text" ||
+                  ([operatorKey]) =>
+                    condition.type === "text" ||
                     [
                       "equals",
                       "notEquals",
                       "blank",
                       "notBlank",
-                      ...(oe.type === "value"
+                      ...(condition.type === "value"
                         ? []
                         : ["gt", "gte", "lt", "lte"]),
-                    ].includes(le),
+                    ].includes(operatorKey),
                 )
-                .map(([le, ce]) =>
-                  i.jsx("option", { value: le, children: ce }, le),
+                .map(([operatorKey, operatorLabel]) =>
+                  i.jsx(
+                    "option",
+                    { value: operatorKey, children: operatorLabel },
+                    operatorKey,
+                  ),
                 ),
             }),
           ],
         }),
-        !["blank", "notBlank"].includes(oe.operator) &&
+        !["blank", "notBlank"].includes(condition.operator) &&
           i.jsxs("label", {
             children: [
               i.jsx(LocalizedText, { children: "Value" }),
-              oe.type === "number"
+              condition.type === "number"
                 ? i.jsx(LocalizedNumberField, {
-                    "aria-label": `${he} value`,
-                    value: typeof oe.value == "number" ? oe.value : "",
-                    onValueChange: (le) => de({ ...oe, value: Number(le) }),
+                    "aria-label": `${conditionLabel} value`,
+                    value:
+                      typeof condition.value == "number" ? condition.value : "",
+                    onValueChange: (numberValue) =>
+                      onConditionChange({
+                        ...condition,
+                        value: Number(numberValue),
+                      }),
                   })
                 : i.jsx("input", {
-                    "aria-label": `${he} value`,
-                    value: String(oe.value ?? ""),
+                    "aria-label": `${conditionLabel} value`,
+                    value: String(condition.value ?? ""),
                     type: "text",
                     placeholder:
-                      oe.type === "date" ? "2026-09-17" : "Match value",
+                      condition.type === "date" ? "2026-09-17" : "Match value",
                     onChange: (event) =>
-                      de({ ...oe, value: event.target.value }),
+                      onConditionChange({
+                        ...condition,
+                        value: event.target.value,
+                      }),
                   }),
             ],
           }),
@@ -289,7 +384,7 @@ function FilterViewsDialog(e) {
     ne.useEffect(() => {
       const activeElement = document.activeElement;
       return (
-        o.current?.focus(),
+        dialogRef.current?.focus(),
         () => {
           activeElement?.isConnected && activeElement.focus();
         }
@@ -301,27 +396,33 @@ function FilterViewsDialog(e) {
         className: "lg-filter-dialog",
         role: "dialog",
         "aria-modal": "true",
-        "aria-labelledby": n,
-        ref: o,
+        "aria-labelledby": titleId,
+        ref: dialogRef,
         tabIndex: -1,
         onKeyDown: (event) => {
-          var he, Se;
+          var lastFocusable, firstFocusable;
           if (
             (event.stopPropagation(),
-            event.key === "Escape" && (event.preventDefault(), e.onClose()),
+            event.key === "Escape" && (event.preventDefault(), props.onClose()),
             event.key === "Tab")
           ) {
-            const le = [
-              ...(o.current?.querySelectorAll(
+            const focusableElements = [
+              ...(dialogRef.current?.querySelectorAll(
                 'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
               ) ?? []),
             ];
             event.shiftKey &&
-            [le[0], o.current].includes(document.activeElement)
-              ? (event.preventDefault(), (he = le.at(-1)) == null || he.focus())
+            [focusableElements[0], dialogRef.current].includes(
+              document.activeElement,
+            )
+              ? (event.preventDefault(),
+                (lastFocusable = focusableElements.at(-1)) == null ||
+                  lastFocusable.focus())
               : !event.shiftKey &&
-                document.activeElement === le.at(-1) &&
-                (event.preventDefault(), (Se = le[0]) == null || Se.focus());
+                document.activeElement === focusableElements.at(-1) &&
+                (event.preventDefault(),
+                (firstFocusable = focusableElements[0]) == null ||
+                  firstFocusable.focus());
           }
         },
         children: [
@@ -330,7 +431,7 @@ function FilterViewsDialog(e) {
               i.jsxs("div", {
                 children: [
                   i.jsx("h2", {
-                    id: n,
+                    id: titleId,
                     children: i.jsx(LocalizedText, {
                       children: "Filter population",
                     }),
@@ -345,7 +446,7 @@ function FilterViewsDialog(e) {
               }),
               i.jsx("button", {
                 "aria-label": text("Close population filter"),
-                onClick: e.onClose,
+                onClick: props.onClose,
                 lang: language("Close population filter"),
                 "data-ui-label": "Close population filter",
                 children: "×",
@@ -370,7 +471,7 @@ function FilterViewsDialog(e) {
                       i.jsx(LocalizedText, {
                         children: "Saved filter views (",
                       }),
-                      e.workbook.savedFilterViews?.length ?? 0,
+                      props.workbook.savedFilterViews?.length ?? 0,
                       ")",
                     ],
                   }),
@@ -388,17 +489,17 @@ function FilterViewsDialog(e) {
                           i.jsx(LocalizedText, { children: "Saved view" }),
                           i.jsxs("select", {
                             "aria-label": text("Saved filter view"),
-                            value: g,
+                            value: selectedViewId,
                             onChange: (event) => {
-                              (b(event.target.value),
-                                w(
-                                  e.workbook.savedFilterViews?.find(
+                              (setSelectedViewId(event.target.value),
+                                setViewName(
+                                  props.workbook.savedFilterViews?.find(
                                     (savedFilterView) =>
                                       savedFilterView.id === event.target.value,
                                   )?.name ?? "",
                                 ),
-                                A(""),
-                                v(""));
+                                setStatusMessage(""),
+                                setErrorMessage(""));
                             },
                             lang: language("Saved filter view"),
                             "data-ui-label": "Saved filter view",
@@ -407,7 +508,7 @@ function FilterViewsDialog(e) {
                                 value: "",
                                 children: "Choose a saved view",
                               }),
-                              e.workbook.savedFilterViews?.map(
+                              props.workbook.savedFilterViews?.map(
                                 (savedFilterView) =>
                                   i.jsxs(
                                     "option",
@@ -417,7 +518,7 @@ function FilterViewsDialog(e) {
                                         savedFilterView.name,
                                         " ·",
                                         " ",
-                                        e.workbook.sheets.find(
+                                        props.workbook.sheets.find(
                                           (sheet) =>
                                             sheet.id ===
                                             savedFilterView.sheetId,
@@ -438,8 +539,9 @@ function FilterViewsDialog(e) {
                           i.jsx("input", {
                             "aria-label": text("Filter view name"),
                             maxLength: 80,
-                            value: y,
-                            onChange: (event) => w(event.target.value),
+                            value: viewName,
+                            onChange: (event) =>
+                              setViewName(event.target.value),
                             lang: language("Filter view name"),
                             "data-ui-label": "Filter view name",
                           }),
@@ -447,40 +549,40 @@ function FilterViewsDialog(e) {
                       }),
                     ],
                   }),
-                  k &&
+                  selectedView &&
                     i.jsxs("p", {
                       children: [
                         i.jsx(LocalizedText, { children: "Saved range " }),
-                        k.definition.range,
+                        selectedView.definition.range,
                         " ·",
                         " ",
-                        k.population.visibleRows,
+                        selectedView.population.visibleRows,
                         " ",
                         i.jsx(LocalizedText, { children: "visible /" }),
                         " ",
-                        k.population.totalRows,
+                        selectedView.population.totalRows,
                         " ",
                         i.jsx(LocalizedText, {
                           children: "total at source revision",
                         }),
                         " ",
-                        k.sourceRevision,
+                        selectedView.sourceRevision,
                         i.jsx(LocalizedText, {
                           children: ". Current revision",
                         }),
                         " ",
-                        e.workbook.revision,
+                        props.workbook.revision,
                         i.jsx(LocalizedText, {
                           children:
                             ". These are historical counts, not current results.",
                         }),
-                        k.sourceWorkbookId !== e.workbook.id &&
+                        selectedView.sourceWorkbookId !== props.workbook.id &&
                           " The preview was saved in the original workbook; this is an independent copy.",
-                        k.sheetId !== e.sheetId &&
+                        selectedView.sheetId !== props.sheetId &&
                           " Open the source worksheet to load these criteria. A missing worksheet must be restored first.",
-                        JSON.stringify(k.datePolicy) !==
+                        JSON.stringify(selectedView.datePolicy) !==
                           JSON.stringify(
-                            normalizeDatePolicy(e.workbook.datePolicy),
+                            normalizeDatePolicy(props.workbook.datePolicy),
                           ) &&
                           " Date policy changed. Check all date criteria against the current workbook policy.",
                       ],
@@ -489,16 +591,23 @@ function FilterViewsDialog(e) {
                     className: "lg-filter-actions",
                     children: [
                       i.jsx("button", {
-                        disabled: !k || k.sheetId !== e.sheetId,
+                        disabled:
+                          !selectedView ||
+                          selectedView.sheetId !== props.sheetId,
                         onClick: () => {
-                          !k ||
-                            k.sheetId !== e.sheetId ||
-                            (d(structuredClone(k.definition)),
-                            l(parseRangeAddress(k.definition.range).firstCol),
-                            h(""),
-                            p(null),
-                            v(""),
-                            A(
+                          !selectedView ||
+                            selectedView.sheetId !== props.sheetId ||
+                            (setDraftDefinition(
+                              structuredClone(selectedView.definition),
+                            ),
+                            setSelectedColumn(
+                              parseRangeAddress(selectedView.definition.range)
+                                .firstCol,
+                            ),
+                            setValueSearch(""),
+                            setPreview(null),
+                            setErrorMessage(""),
+                            setStatusMessage(
                               "Criteria loaded for review. Saved coordinates do not move with inserted, deleted or sorted records. Check the range and headers, then preview current results.",
                             ));
                         },
@@ -507,39 +616,46 @@ function FilterViewsDialog(e) {
                         }),
                       }),
                       i.jsx("button", {
-                        disabled: !F || !V || !y.trim(),
-                        onClick: () => B(),
+                        disabled:
+                          !canEditFilters ||
+                          !currentPreview ||
+                          !viewName.trim(),
+                        onClick: () => saveFilterView(),
                         children: i.jsx(LocalizedText, {
                           children: "Save as new view",
                         }),
                       }),
                       i.jsx("button", {
                         disabled:
-                          !F ||
-                          !V ||
-                          !k ||
-                          k.sheetId !== e.sheetId ||
-                          !y.trim(),
-                        onClick: () => B(true),
+                          !canEditFilters ||
+                          !currentPreview ||
+                          !selectedView ||
+                          selectedView.sheetId !== props.sheetId ||
+                          !viewName.trim(),
+                        onClick: () => saveFilterView(true),
                         children: i.jsx(LocalizedText, {
                           children: "Replace saved criteria",
                         }),
                       }),
                       i.jsx("button", {
-                        disabled: !I || !y.trim(),
+                        disabled: !canUpdateSelectedView || !viewName.trim(),
                         onClick: () => {
                           try {
-                            if (!I) return;
-                            (e.onWorkbookChange(
-                              addSavedFilterView(e.workbook, g, y),
+                            if (!canUpdateSelectedView) return;
+                            (props.onWorkbookChange(
+                              addSavedFilterView(
+                                props.workbook,
+                                selectedViewId,
+                                viewName,
+                              ),
                               "Rename saved filter view",
                             ),
-                              A(
+                              setStatusMessage(
                                 "Saved view renamed. Its criteria and historical counts are unchanged.",
                               ),
-                              v(""));
+                              setErrorMessage(""));
                           } catch (error) {
-                            v(
+                            setErrorMessage(
                               error instanceof Error
                                 ? error.message
                                 : "Cannot rename this view.",
@@ -551,22 +667,25 @@ function FilterViewsDialog(e) {
                         }),
                       }),
                       i.jsx("button", {
-                        disabled: !I,
+                        disabled: !canUpdateSelectedView,
                         onClick: () => {
                           try {
-                            if (!I) return;
-                            (e.onWorkbookChange(
-                              removeSavedFilterView(e.workbook, g),
+                            if (!canUpdateSelectedView) return;
+                            (props.onWorkbookChange(
+                              removeSavedFilterView(
+                                props.workbook,
+                                selectedViewId,
+                              ),
                               "Delete saved filter view",
                             ),
-                              b(""),
-                              w(""),
-                              A(
+                              setSelectedViewId(""),
+                              setViewName(""),
+                              setStatusMessage(
                                 "Saved view deleted. Source cells and criteria in this editor are retained. Undo can restore the saved view.",
                               ),
-                              v(""));
+                              setErrorMessage(""));
                           } catch (error) {
-                            v(
+                            setErrorMessage(
                               error instanceof Error
                                 ? error.message
                                 : "Cannot delete this view.",
@@ -579,14 +698,15 @@ function FilterViewsDialog(e) {
                       }),
                     ],
                   }),
-                  !F &&
+                  !canEditFilters &&
                     i.jsx("p", {
                       children: i.jsx(LocalizedText, {
                         children:
                           "Saving is unavailable in this read-only, protected or view-only host. Loading, previewing and applying session views remain available.",
                       }),
                     }),
-                  E && i.jsx("p", { role: "status", children: E }),
+                  statusMessage &&
+                    i.jsx("p", { role: "status", children: statusMessage }),
                 ],
               }),
               i.jsxs("div", {
@@ -597,10 +717,10 @@ function FilterViewsDialog(e) {
                       i.jsx(LocalizedText, { children: "Population range" }),
                       i.jsx("input", {
                         "aria-label": text("Population range"),
-                        value: s.range,
+                        value: draftDefinition.range,
                         onChange: (event) =>
-                          d((de) => ({
-                            ...de,
+                          setDraftDefinition((previousDraft) => ({
+                            ...previousDraft,
                             range: event.target.value,
                             columns: [],
                             advanced: [],
@@ -616,17 +736,21 @@ function FilterViewsDialog(e) {
                       i.jsx(LocalizedText, { children: "Column" }),
                       i.jsx("select", {
                         "aria-label": text("Filter column"),
-                        value: u,
+                        value: selectedColumn,
                         onChange: (event) => {
-                          (l(Number(event.target.value)), h(""));
+                          (setSelectedColumn(Number(event.target.value)),
+                            setValueSearch(""));
                         },
                         lang: language("Filter column"),
                         "data-ui-label": "Filter column",
-                        children: O.map((oe) =>
+                        children: columnOptions.map((columnOption) =>
                           i.jsx(
                             "option",
-                            { value: oe.column, children: oe.label },
-                            oe.column,
+                            {
+                              value: columnOption.column,
+                              children: columnOption.label,
+                            },
+                            columnOption.column,
                           ),
                         ),
                       }),
@@ -636,10 +760,10 @@ function FilterViewsDialog(e) {
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
-                        checked: !!s.caseSensitive,
+                        checked: !!draftDefinition.caseSensitive,
                         onChange: (event) =>
-                          d((de) => ({
-                            ...de,
+                          setDraftDefinition((previousDraft) => ({
+                            ...previousDraft,
                             caseSensitive: event.target.checked,
                           })),
                       }),
@@ -661,8 +785,8 @@ function FilterViewsDialog(e) {
                       i.jsx("input", {
                         "aria-label": text("Search filter values"),
                         placeholder: text("Search available values"),
-                        value: c,
-                        onChange: (event) => h(event.target.value),
+                        value: valueSearch,
+                        onChange: (event) => setValueSearch(event.target.value),
                         lang: language("Search filter values"),
                         "data-ui-label": "Search filter values",
                       }),
@@ -670,13 +794,21 @@ function FilterViewsDialog(e) {
                         className: "lg-filter-actions",
                         children: [
                           i.jsx("button", {
-                            onClick: () => _({ ...z, values: undefined }),
+                            onClick: () =>
+                              upsertColumnCriterion({
+                                ...columnCriterion,
+                                values: undefined,
+                              }),
                             children: i.jsx(LocalizedText, {
                               children: "Select all values",
                             }),
                           }),
                           i.jsx("button", {
-                            onClick: () => _({ ...z, values: [] }),
+                            onClick: () =>
+                              upsertColumnCriterion({
+                                ...columnCriterion,
+                                values: [],
+                              }),
                             children: i.jsx(LocalizedText, {
                               children: "Select no values",
                             }),
@@ -689,16 +821,19 @@ function FilterViewsDialog(e) {
                             "Other column and advanced criteria limit available values. Search narrows this list only. Manual hiding does not change the value list.",
                         }),
                       }),
-                      j.error &&
-                        i.jsx("p", { role: "alert", children: j.error }),
-                      j.result?.truncated &&
+                      facetState.error &&
+                        i.jsx("p", {
+                          role: "alert",
+                          children: facetState.error,
+                        }),
+                      facetState.result?.truncated &&
                         i.jsxs("p", {
                           role: "status",
                           children: [
                             i.jsx(LocalizedText, {
                               children: "Showing 1,000 of ",
                             }),
-                            j.result.distinct,
+                            facetState.result.distinct,
                             " ",
                             i.jsx(LocalizedText, {
                               children:
@@ -712,21 +847,24 @@ function FilterViewsDialog(e) {
                         "aria-label": text("Value slicer"),
                         lang: language("Value slicer"),
                         "data-ui-label": "Value slicer",
-                        children: j.result?.values.map((value) => {
-                          const de =
-                            z.values === undefined ||
-                            z.values.some(
-                              (Se) =>
-                                comparableCellValueKey(Se, s.caseSensitive) ===
-                                value.key,
+                        children: facetState.result?.values.map((value) => {
+                          const isSelected =
+                            columnCriterion.values === undefined ||
+                            columnCriterion.values.some(
+                              (selectedValue) =>
+                                comparableCellValueKey(
+                                  selectedValue,
+                                  draftDefinition.caseSensitive,
+                                ) === value.key,
                             );
                           return i.jsxs(
                             "button",
                             {
-                              "aria-pressed": de,
+                              "aria-pressed": isSelected,
                               disabled:
-                                z.values === undefined && !!j.result?.truncated,
-                              onClick: () => C(value.value),
+                                columnCriterion.values === undefined &&
+                                !!facetState.result?.truncated,
+                              onClick: () => toggleFilterValue(value.value),
                               children: [
                                 i.jsxs("span", {
                                   children: [
@@ -752,10 +890,10 @@ function FilterViewsDialog(e) {
                       }),
                       i.jsx("button", {
                         onClick: () =>
-                          d((oe) => ({
-                            ...oe,
-                            columns: oe.columns.filter(
-                              (column) => column.column !== u,
+                          setDraftDefinition((previousDraft) => ({
+                            ...previousDraft,
+                            columns: previousDraft.columns.filter(
+                              (column) => column.column !== selectedColumn,
                             ),
                           })),
                         children: i.jsx(LocalizedText, {
@@ -777,58 +915,65 @@ function FilterViewsDialog(e) {
                             "Column filters intersect. Value selections and custom conditions both apply.",
                         }),
                       }),
-                      (z.conditions ?? []).map((oe, de) =>
-                        i.jsxs(
-                          "div",
-                          {
-                            children: [
-                              N(
-                                oe,
-                                (he) =>
-                                  _({
-                                    ...z,
-                                    conditions: z.conditions?.map(
-                                      (condition, ce) =>
-                                        ce === de ? he : condition,
-                                    ),
-                                  }),
-                                `Column condition ${de + 1}`,
-                              ),
-                              i.jsxs("button", {
-                                onClick: () =>
-                                  _({
-                                    ...z,
-                                    conditions: z.conditions?.filter(
-                                      (condition, le) => le !== de,
-                                    ),
-                                  }),
-                                children: [
-                                  i.jsx(LocalizedText, {
-                                    children: "Remove condition ",
-                                  }),
-                                  de + 1,
-                                ],
-                              }),
-                            ],
-                          },
-                          de,
-                        ),
+                      (columnCriterion.conditions ?? []).map(
+                        (condition, conditionIndex) =>
+                          i.jsxs(
+                            "div",
+                            {
+                              children: [
+                                renderConditionEditor(
+                                  condition,
+                                  (nextCondition) =>
+                                    upsertColumnCriterion({
+                                      ...columnCriterion,
+                                      conditions:
+                                        columnCriterion.conditions?.map(
+                                          (condition, candidateIndex) =>
+                                            candidateIndex === conditionIndex
+                                              ? nextCondition
+                                              : condition,
+                                        ),
+                                    }),
+                                  `Column condition ${conditionIndex + 1}`,
+                                ),
+                                i.jsxs("button", {
+                                  onClick: () =>
+                                    upsertColumnCriterion({
+                                      ...columnCriterion,
+                                      conditions:
+                                        columnCriterion.conditions?.filter(
+                                          (condition, candidateIndex) =>
+                                            candidateIndex !== conditionIndex,
+                                        ),
+                                    }),
+                                  children: [
+                                    i.jsx(LocalizedText, {
+                                      children: "Remove condition ",
+                                    }),
+                                    conditionIndex + 1,
+                                  ],
+                                }),
+                              ],
+                            },
+                            conditionIndex,
+                          ),
                       ),
                       i.jsx("button", {
-                        disabled: (z.conditions?.length ?? 0) >= 2,
+                        disabled:
+                          (columnCriterion.conditions?.length ?? 0) >= 2,
                         onClick: () =>
-                          _({
-                            ...z,
+                          upsertColumnCriterion({
+                            ...columnCriterion,
                             conditions: [
-                              ...(z.conditions ?? []),
-                              createDefaultFilterCriterion(u),
+                              ...(columnCriterion.conditions ?? []),
+                              createDefaultFilterCriterion(selectedColumn),
                             ],
                           }),
                         children: i.jsx(LocalizedText, {
                           children: "Add column condition",
                         }),
                       }),
-                      (z.conditions?.length ?? 0) > 1 &&
+                      (columnCriterion.conditions?.length ?? 0) > 1 &&
                         i.jsxs("label", {
                           children: [
                             i.jsx(LocalizedText, {
@@ -836,9 +981,12 @@ function FilterViewsDialog(e) {
                             }),
                             i.jsxs("select", {
                               "aria-label": text("Combine column conditions"),
-                              value: z.join ?? "and",
+                              value: columnCriterion.join ?? "and",
                               onChange: (event) =>
-                                _({ ...z, join: event.target.value }),
+                                upsertColumnCriterion({
+                                  ...columnCriterion,
+                                  join: event.target.value,
+                                }),
                               lang: language("Combine column conditions"),
                               "data-ui-label": "Combine column conditions",
                               children: [
@@ -877,7 +1025,7 @@ function FilterViewsDialog(e) {
                         "Meet every condition within a group (AND), and at least one group (OR). These groups also intersect with all column filters.",
                     }),
                   }),
-                  s.advanced?.map((oe, de) =>
+                  draftDefinition.advanced?.map((conditionGroup, groupIndex) =>
                     i.jsxs(
                       "div",
                       {
@@ -886,28 +1034,40 @@ function FilterViewsDialog(e) {
                           i.jsxs("strong", {
                             children: [
                               i.jsx(LocalizedText, { children: "OR group " }),
-                              de + 1,
+                              groupIndex + 1,
                             ],
                           }),
-                          oe.map((he, Se) =>
+                          conditionGroup.map((condition, conditionIndex) =>
                             i.jsxs(
                               "div",
                               {
                                 children: [
-                                  N(
-                                    he,
-                                    (le) => T(de, Se, le),
-                                    `Group ${de + 1} condition ${Se + 1}`,
+                                  renderConditionEditor(
+                                    condition,
+                                    (nextCondition) =>
+                                      updateAdvancedCondition(
+                                        groupIndex,
+                                        conditionIndex,
+                                        nextCondition,
+                                      ),
+                                    `Group ${groupIndex + 1} condition ${conditionIndex + 1}`,
                                     true,
                                   ),
                                   i.jsxs("button", {
                                     onClick: () =>
-                                      d((le) => ({
-                                        ...le,
-                                        advanced: le.advanced
-                                          ?.map((ge, se) =>
-                                            se === de
-                                              ? ge.filter((we, Ee) => Ee !== Se)
+                                      setDraftDefinition((previousDraft) => ({
+                                        ...previousDraft,
+                                        advanced: previousDraft.advanced
+                                          ?.map((ge, candidateGroupIndex) =>
+                                            candidateGroupIndex === groupIndex
+                                              ? ge.filter(
+                                                  (
+                                                    we,
+                                                    candidateConditionIndex,
+                                                  ) =>
+                                                    candidateConditionIndex !==
+                                                    conditionIndex,
+                                                )
                                               : ge,
                                           )
                                           .filter((ge) => ge.length),
@@ -916,63 +1076,70 @@ function FilterViewsDialog(e) {
                                       i.jsx(LocalizedText, {
                                         children: "Remove group ",
                                       }),
-                                      de + 1,
+                                      groupIndex + 1,
                                       " ",
                                       i.jsx(LocalizedText, {
                                         children: "condition ",
                                       }),
-                                      Se + 1,
+                                      conditionIndex + 1,
                                     ],
                                   }),
                                 ],
                               },
-                              Se,
+                              conditionIndex,
                             ),
                           ),
                           i.jsxs("button", {
                             onClick: () =>
-                              d((he) => ({
-                                ...he,
-                                advanced: he.advanced?.map((le, ce) =>
-                                  ce === de
-                                    ? [...le, createDefaultFilterCriterion(u)]
-                                    : le,
+                              setDraftDefinition((previousDraft) => ({
+                                ...previousDraft,
+                                advanced: previousDraft.advanced?.map(
+                                  (le, candidateGroupIndex) =>
+                                    candidateGroupIndex === groupIndex
+                                      ? [
+                                          ...le,
+                                          createDefaultFilterCriterion(
+                                            selectedColumn,
+                                          ),
+                                        ]
+                                      : le,
                                 ),
                               })),
                             children: [
                               i.jsx(LocalizedText, {
                                 children: "Add AND condition to group ",
                               }),
-                              de + 1,
+                              groupIndex + 1,
                             ],
                           }),
                           i.jsxs("button", {
                             onClick: () =>
-                              d((he) => ({
-                                ...he,
-                                advanced: he.advanced?.filter(
-                                  (le, ce) => ce !== de,
+                              setDraftDefinition((previousDraft) => ({
+                                ...previousDraft,
+                                advanced: previousDraft.advanced?.filter(
+                                  (le, candidateGroupIndex) =>
+                                    candidateGroupIndex !== groupIndex,
                                 ),
                               })),
                             children: [
                               i.jsx(LocalizedText, {
                                 children: "Remove group ",
                               }),
-                              de + 1,
+                              groupIndex + 1,
                             ],
                           }),
                         ],
                       },
-                      de,
+                      groupIndex,
                     ),
                   ),
                   i.jsx("button", {
                     onClick: () =>
-                      d((oe) => ({
-                        ...oe,
+                      setDraftDefinition((previousDraft) => ({
+                        ...previousDraft,
                         advanced: [
-                          ...(oe.advanced ?? []),
-                          [createDefaultFilterCriterion(u)],
+                          ...(previousDraft.advanced ?? []),
+                          [createDefaultFilterCriterion(selectedColumn)],
                         ],
                       })),
                     children: i.jsx(LocalizedText, {
@@ -983,9 +1150,12 @@ function FilterViewsDialog(e) {
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
-                        checked: !!s.unique,
+                        checked: !!draftDefinition.unique,
                         onChange: (event) =>
-                          d((de) => ({ ...de, unique: event.target.checked })),
+                          setDraftDefinition((previousDraft) => ({
+                            ...previousDraft,
+                            unique: event.target.checked,
+                          })),
                       }),
                       i.jsx(LocalizedText, {
                         children:
@@ -1000,8 +1170,8 @@ function FilterViewsDialog(e) {
                 children: [
                   i.jsx("button", {
                     onClick: () =>
-                      d((oe) => ({
-                        ...oe,
+                      setDraftDefinition((previousDraft) => ({
+                        ...previousDraft,
                         columns: [],
                         advanced: [],
                         unique: false,
@@ -1013,24 +1183,24 @@ function FilterViewsDialog(e) {
                   i.jsx("button", {
                     onClick: () => {
                       try {
-                        const oe = applyFilterConditions(
-                          e.workbook,
-                          e.sheetId,
-                          s,
+                        const filterResult = applyFilterConditions(
+                          props.workbook,
+                          props.sheetId,
+                          draftDefinition,
                         );
-                        (p({
-                          book: e.workbook,
-                          definition: JSON.stringify(s),
-                          result: oe,
+                        (setPreview({
+                          book: props.workbook,
+                          definition: JSON.stringify(draftDefinition),
+                          result: filterResult,
                         }),
-                          v(""));
+                          setErrorMessage(""));
                       } catch (error) {
-                        (v(
+                        (setErrorMessage(
                           error instanceof Error
                             ? error.message
                             : "Filter preview failed.",
                         ),
-                          p(null));
+                          setPreview(null));
                       }
                     },
                     children: i.jsx(LocalizedText, {
@@ -1039,41 +1209,42 @@ function FilterViewsDialog(e) {
                   }),
                 ],
               }),
-              m && i.jsx("p", { role: "alert", children: m }),
-              V &&
+              errorMessage &&
+                i.jsx("p", { role: "alert", children: errorMessage }),
+              currentPreview &&
                 i.jsxs("div", {
                   className: "lg-filter-preview",
                   role: "status",
-                  ref: a,
+                  ref: previewRef,
                   children: [
                     i.jsxs("strong", {
                       children: [
-                        V.context.visibleRows,
+                        currentPreview.context.visibleRows,
                         " ",
                         i.jsx(LocalizedText, { children: "visible / " }),
-                        V.context.totalRows,
+                        currentPreview.context.totalRows,
                         " ",
                         i.jsx(LocalizedText, { children: "total data rows" }),
                       ],
                     }),
                     i.jsxs("p", {
                       children: [
-                        V.context.matchedRows,
+                        currentPreview.context.matchedRows,
                         " ",
                         i.jsx(LocalizedText, { children: "match criteria ·" }),
                         " ",
-                        V.context.filteredRows,
+                        currentPreview.context.filteredRows,
                         " ",
                         i.jsx(LocalizedText, { children: "filtered out ·" }),
                         " ",
-                        V.context.hiddenMatchingRows,
+                        currentPreview.context.hiddenMatchingRows,
                         " ",
                         i.jsx(LocalizedText, {
                           children: "matching rows manually hidden.",
                         }),
                       ],
                     }),
-                    V.context.visibleRows === 0
+                    currentPreview.context.visibleRows === 0
                       ? i.jsx("p", {
                           children: i.jsx(LocalizedText, {
                             children:
@@ -1086,8 +1257,10 @@ function FilterViewsDialog(e) {
                               children: "Original worksheet rows:",
                             }),
                             " ",
-                            V.context.visibleSourceRows.slice(0, 25).join(", "),
-                            V.context.visibleRows > 25
+                            currentPreview.context.visibleSourceRows
+                              .slice(0, 25)
+                              .join(", "),
+                            currentPreview.context.visibleRows > 25
                               ? " … (first 25 shown)"
                               : "",
                           ],
@@ -1099,24 +1272,24 @@ function FilterViewsDialog(e) {
           i.jsxs("footer", {
             children: [
               i.jsx("button", {
-                onClick: e.onClose,
+                onClick: props.onClose,
                 children: i.jsx(LocalizedText, { children: "Cancel" }),
               }),
               i.jsx("button", {
                 className: "lg-filter-primary",
-                disabled: !V,
+                disabled: !currentPreview,
                 onClick: () => {
-                  if (V)
+                  if (currentPreview)
                     try {
-                      const oe = D();
-                      e.onApply(oe.context.definition);
+                      const validatedFilter = getPreviewedFilter();
+                      props.onApply(validatedFilter.context.definition);
                     } catch (error) {
-                      (v(
+                      (setErrorMessage(
                         error instanceof Error
                           ? error.message
                           : "Filter apply failed.",
                       ),
-                        p(null));
+                        setPreview(null));
                     }
                 },
                 children: i.jsx(LocalizedText, {
@@ -1137,13 +1310,13 @@ function ValidationReviewDialog({
   onCancel,
   onRetry,
 }) {
-  const a = ne.useRef(null),
-    s = error.issues.some(
+  const dialogRef = ne.useRef(null),
+    hasStopIssue = error.issues.some(
       (issue) => issue.style === "stop" || issue.evaluationError,
     );
   return (
     ne.useEffect(() => {
-      a.current?.querySelector("button")?.focus();
+      dialogRef.current?.querySelector("button")?.focus();
     }, []),
     i.jsx("div", {
       className: "wt-backdrop",
@@ -1154,30 +1327,33 @@ function ValidationReviewDialog({
           event.key === "Escape" && onCancel(),
           event.key === "Tab")
         ) {
-          const l = [
-              ...(a.current?.querySelectorAll("button:not(:disabled)") ?? []),
+          const focusableButtons = [
+              ...(dialogRef.current?.querySelectorAll(
+                "button:not(:disabled)",
+              ) ?? []),
             ],
-            c = l[0],
-            h = l.at(-1);
-          event.shiftKey && document.activeElement === c
-            ? (event.preventDefault(), h == null || h.focus())
+            firstButton = focusableButtons[0],
+            lastButton = focusableButtons.at(-1);
+          event.shiftKey && document.activeElement === firstButton
+            ? (event.preventDefault(), lastButton == null || lastButton.focus())
             : !event.shiftKey &&
-              document.activeElement === h &&
-              (event.preventDefault(), c == null || c.focus());
+              document.activeElement === lastButton &&
+              (event.preventDefault(),
+              firstButton == null || firstButton.focus());
         }
       },
       children: i.jsxs("div", {
         className: "wt-dialog",
         role: "alertdialog",
         "aria-modal": "true",
-        "aria-label": s
+        "aria-label": hasStopIssue
           ? "Data validation stopped this change"
           : "Review validation warnings",
-        ref: a,
+        ref: dialogRef,
         children: [
           i.jsx("header", {
             children: i.jsx("h2", {
-              children: s
+              children: hasStopIssue
                 ? "Correct invalid entries"
                 : "Review validation warnings",
             }),
@@ -1189,7 +1365,7 @@ function ValidationReviewDialog({
                 children: [
                   i.jsx(LocalizedText, { children: "No cells have changed." }),
                   " ",
-                  s
+                  hasStopIssue
                     ? "Correct these entries or discard the entire batch."
                     : "Accepting keeps the invalid entries and records your decision for the complete batch.",
                 ],
@@ -1201,25 +1377,31 @@ function ValidationReviewDialog({
                   i.jsx(LocalizedText, { children: "rule violations" }),
                 ],
               }),
-              error.issues.slice(0, 500).map((d, u) =>
+              error.issues.slice(0, 500).map((issue, issueIndex) =>
                 i.jsxs(
                   "div",
                   {
                     children: [
                       i.jsxs("strong", {
-                        children: [d.sheetName, "!", d.address, " · ", d.style],
+                        children: [
+                          issue.sheetName,
+                          "!",
+                          issue.address,
+                          " · ",
+                          issue.style,
+                        ],
                       }),
                       i.jsxs("p", {
                         children: [
-                          i.jsxs("strong", { children: [d.title, ": "] }),
-                          d.message,
+                          i.jsxs("strong", { children: [issue.title, ": "] }),
+                          issue.message,
                           " ",
-                          d.reason,
+                          issue.reason,
                         ],
                       }),
                     ],
                   },
-                  u,
+                  issueIndex,
                 ),
               ),
             ],
@@ -1234,7 +1416,7 @@ function ValidationReviewDialog({
                 onClick: onCancel,
                 children: i.jsx(LocalizedText, { children: "Discard changes" }),
               }),
-              !s &&
+              !hasStopIssue &&
                 i.jsx("button", {
                   disabled: readOnly,
                   onClick: onAccept,

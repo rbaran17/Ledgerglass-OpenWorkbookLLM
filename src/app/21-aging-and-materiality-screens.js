@@ -37,49 +37,65 @@ import {
 
 async function requestAssistantAnswer(
   adapter,
-  r,
+  prompt,
   assistantSelectionContext,
-  n = {},
+  options = {},
 ) {
-  if (n.reliability) {
-    const { reliability, ...c } = n;
+  if (options.reliability) {
+    const { reliability, ...remainingOptions } = options;
     return reliability.run("provider", "request", () =>
-      requestAssistantAnswer(adapter, r, assistantSelectionContext, c),
+      requestAssistantAnswer(
+        adapter,
+        prompt,
+        assistantSelectionContext,
+        remainingOptions,
+      ),
     );
   }
   if (
-    typeof r != "string" ||
-    !r.trim() ||
-    r.length > 1e4 ||
+    typeof prompt != "string" ||
+    !prompt.trim() ||
+    prompt.length > 1e4 ||
     !Array.isArray(assistantSelectionContext?.cells) ||
     assistantSelectionContext.cells.length > workbookLimits.maxLLMCells
   )
     throw new LLMRequestError("invalid_request");
   validateCalculationClock(assistantSelectionContext);
-  const o = structuredClone(assistantSelectionContext),
-    a = n.conversation ? parseAssistantChatRequest(n.conversation) : undefined;
+  const selectionContextCopy = structuredClone(assistantSelectionContext),
+    chatRequest = options.conversation
+      ? parseAssistantChatRequest(options.conversation)
+      : undefined;
   if (
-    (a?.attachments.length ||
-      a?.messages.some((message) => message.attachments?.length)) &&
+    (chatRequest?.attachments.length ||
+      chatRequest?.messages.some((message) => message.attachments?.length)) &&
     !adapter.chat?.attachments
   )
     throw new Error(
       "This provider does not support file attachments. Remove the files or use a chat-enabled host adapter.",
     );
-  if (a?.messages.length && !adapter.chat?.history)
+  if (chatRequest?.messages.length && !adapter.chat?.history)
     throw new Error(
       "This provider does not support conversation history. Start a new chat or use a chat-enabled host adapter.",
     );
-  const s = await raceWithAbortSignal(
-    (l) =>
-      a
-        ? adapter.propose(r, structuredClone(o), l, structuredClone(a))
-        : adapter.propose(r, structuredClone(o), l),
-    n.signal,
-    n.timeoutMs,
+  const proposal = await raceWithAbortSignal(
+    (abortSignal) =>
+      chatRequest
+        ? adapter.propose(
+            prompt,
+            structuredClone(selectionContextCopy),
+            abortSignal,
+            structuredClone(chatRequest),
+          )
+        : adapter.propose(
+            prompt,
+            structuredClone(selectionContextCopy),
+            abortSignal,
+          ),
+    options.signal,
+    options.timeoutMs,
   );
   try {
-    return validateAssistantProposal(s, o);
+    return validateAssistantProposal(proposal, selectionContextCopy);
   } catch {
     throw new LLMRequestError("malformed_response");
   }
@@ -88,56 +104,61 @@ const materialityScreenLimits = { sourceCells: 500, pageSize: 20 },
   Tz = new WeakMap();
 
 const cde = 864e5;
-function parseStrictIsoDate(e) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) return null;
-  const r = Date.parse(`${e}T00:00:00.000Z`);
-  return Number.isFinite(r) && new Date(r).toISOString().slice(0, 10) === e
-    ? r
+function parseStrictIsoDate(dateText) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return null;
+  const timestamp = Date.parse(`${dateText}T00:00:00.000Z`);
+  return Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString().slice(0, 10) === dateText
+    ? timestamp
     : null;
 }
-function normalizeDateToIso(e) {
-  return typeof e == "string"
-    ? parseStrictIsoDate(e) === null
+function normalizeDateToIso(dateValue) {
+  return typeof dateValue == "string"
+    ? parseStrictIsoDate(dateValue) === null
       ? null
-      : e
-    : typeof e != "number" ||
-        !Number.isInteger(e) ||
-        e < 1 ||
-        e > 2958465 ||
-        e === 60
+      : dateValue
+    : typeof dateValue != "number" ||
+        !Number.isInteger(dateValue) ||
+        dateValue < 1 ||
+        dateValue > 2958465 ||
+        dateValue === 60
       ? null
-      : new Date(Date.UTC(1899, 11, 31) + (e > 60 ? e - 1 : e) * cde)
+      : new Date(
+          Date.UTC(1899, 11, 31) +
+            (dateValue > 60 ? dateValue - 1 : dateValue) * cde,
+        )
           .toISOString()
           .slice(0, 10);
 }
-function normalizeScreenHostScope(workbook, r) {
+function normalizeScreenHostScope(workbook, scopeOptions) {
   return (
-    r.includeHidden !== undefined &&
-      typeof r.includeHidden != "boolean" &&
+    scopeOptions.includeHidden !== undefined &&
+      typeof scopeOptions.includeHidden != "boolean" &&
       failWithMessage("Include hidden must be boolean."),
-    r.readOnly !== undefined &&
-      typeof r.readOnly != "boolean" &&
+    scopeOptions.readOnly !== undefined &&
+      typeof scopeOptions.readOnly != "boolean" &&
       failWithMessage("Read-only must be boolean."),
-    r.allowedSheetIds !== undefined &&
-      (!Array.isArray(r.allowedSheetIds) ||
-        r.allowedSheetIds.some(
+    scopeOptions.allowedSheetIds !== undefined &&
+      (!Array.isArray(scopeOptions.allowedSheetIds) ||
+        scopeOptions.allowedSheetIds.some(
           (allowedSheetId) =>
             typeof allowedSheetId != "string" ||
             !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
         )) &&
       failWithMessage("The materiality screen host context is invalid."),
     {
-      includeHidden: !!r.includeHidden,
+      includeHidden: !!scopeOptions.includeHidden,
       allowedSheetIds: [
         ...new Set(
-          r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id),
+          scopeOptions.allowedSheetIds ??
+            workbook.sheets.map((sheet) => sheet.id),
         ),
       ].sort(),
     }
   );
 }
-function normalizeMaterialityConfig(workbook, r) {
-  const t = [
+function normalizeMaterialityConfig(workbook, config) {
+  const allowedKeys = [
     "sheetId",
     "range",
     "headers",
@@ -151,109 +172,119 @@ function normalizeMaterialityConfig(workbook, r) {
     "effectiveFrom",
     "effectiveTo",
   ];
-  ((!r ||
-    typeof r != "object" ||
-    Object.keys(r).some((a) => !t.includes(a)) ||
-    t.some((a) => !(a in r))) &&
+  ((!config ||
+    typeof config != "object" ||
+    Object.keys(config).some(
+      (unknownKey) => !allowedKeys.includes(unknownKey),
+    ) ||
+    allowedKeys.some((missingKey) => !(missingKey in config))) &&
     failWithMessage(
       "Provide a complete, supported materiality screen configuration.",
     ),
-    (typeof r.sheetId != "string" ||
-      !workbook.sheets.some((sheet) => sheet.id === r.sheetId)) &&
+    (typeof config.sheetId != "string" ||
+      !workbook.sheets.some((sheet) => sheet.id === config.sheetId)) &&
       failWithMessage("The source worksheet no longer exists."),
-    (typeof r.range != "string" ||
+    (typeof config.range != "string" ||
       !/^\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/.test(
-        r.range,
+        config.range,
       )) &&
       failWithMessage("Choose one rectangular A1 source range."));
-  const rangeAddress = parseRangeAddress(r.range);
+  const rangeAddress = parseRangeAddress(config.range);
   ((rangeAddress.lastRow - rangeAddress.firstRow + 1) *
     (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
     materialityScreenLimits.sourceCells &&
     failWithMessage(
       "The materiality screen supports at most 500 selected source cells.",
     ),
-    (typeof r.headers != "boolean" ||
-      rangeAddress.lastRow - rangeAddress.firstRow + 1 <= Number(r.headers)) &&
+    (typeof config.headers != "boolean" ||
+      rangeAddress.lastRow - rangeAddress.firstRow + 1 <=
+        Number(config.headers)) &&
       failWithMessage(
         "Choose a source range with at least one data row and valid header handling.",
       ));
-  const o = [r.amountColumn, r.currencyColumn, r.dateColumn];
+  const columnIndexes = [
+    config.amountColumn,
+    config.currencyColumn,
+    config.dateColumn,
+  ];
   return (
-    (o.some(
-      (a) =>
-        !Number.isInteger(a) ||
-        a < rangeAddress.firstCol ||
-        a > rangeAddress.lastCol,
+    (columnIndexes.some(
+      (columnIndex) =>
+        !Number.isInteger(columnIndex) ||
+        columnIndex < rangeAddress.firstCol ||
+        columnIndex > rangeAddress.lastCol,
     ) ||
-      new Set(o).size !== 3) &&
+      new Set(columnIndexes).size !== 3) &&
       failWithMessage(
         "Choose three distinct amount, currency and date columns inside the source range.",
       ),
-    (typeof r.threshold != "number" ||
-      !Number.isFinite(r.threshold) ||
-      r.threshold < 0) &&
+    (typeof config.threshold != "number" ||
+      !Number.isFinite(config.threshold) ||
+      config.threshold < 0) &&
       failWithMessage("Threshold must be a finite, nonnegative number."),
-    (!["absolute", "signed"].includes(r.amountMode) ||
-      !["gt", "gte", "lt", "lte", "eq"].includes(r.comparator)) &&
+    (!["absolute", "signed"].includes(config.amountMode) ||
+      !["gt", "gte", "lt", "lte", "eq"].includes(config.comparator)) &&
       failWithMessage(
         "Choose an absolute or signed amount and a supported comparison rule.",
       ),
-    (typeof r.currency != "string" || !/^[A-Za-z]{3}$/.test(r.currency)) &&
+    (typeof config.currency != "string" ||
+      !/^[A-Za-z]{3}$/.test(config.currency)) &&
       failWithMessage(
         "Declare a three-letter currency identifier; no currency conversion is performed.",
       ),
-    (typeof r.effectiveFrom != "string" ||
-      typeof r.effectiveTo != "string" ||
-      parseStrictIsoDate(r.effectiveFrom) === null ||
-      parseStrictIsoDate(r.effectiveTo) === null ||
-      r.effectiveFrom > r.effectiveTo) &&
+    (typeof config.effectiveFrom != "string" ||
+      typeof config.effectiveTo != "string" ||
+      parseStrictIsoDate(config.effectiveFrom) === null ||
+      parseStrictIsoDate(config.effectiveTo) === null ||
+      config.effectiveFrom > config.effectiveTo) &&
       failWithMessage(
         "Choose valid ISO start and end dates in chronological order.",
       ),
     {
-      sheetId: r.sheetId,
+      sheetId: config.sheetId,
       range: `${formatCellAddress(rangeAddress.firstRow, rangeAddress.firstCol)}:${formatCellAddress(rangeAddress.lastRow, rangeAddress.lastCol)}`,
-      headers: r.headers,
-      amountColumn: r.amountColumn,
-      currencyColumn: r.currencyColumn,
-      dateColumn: r.dateColumn,
-      currency: r.currency.toUpperCase(),
-      threshold: r.threshold,
-      amountMode: r.amountMode,
-      comparator: r.comparator,
-      effectiveFrom: r.effectiveFrom,
-      effectiveTo: r.effectiveTo,
+      headers: config.headers,
+      amountColumn: config.amountColumn,
+      currencyColumn: config.currencyColumn,
+      dateColumn: config.dateColumn,
+      currency: config.currency.toUpperCase(),
+      threshold: config.threshold,
+      amountMode: config.amountMode,
+      comparator: config.comparator,
+      effectiveFrom: config.effectiveFrom,
+      effectiveTo: config.effectiveTo,
     }
   );
 }
-function resolveMaterialitySourceRange(workbook, r, screenHostScope) {
-  const sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+function resolveMaterialitySourceRange(workbook, config, screenHostScope) {
+  const sheet = workbook.sheets.find((sheet) => sheet.id === config.sheetId);
   (!sheet || !screenHostScope.allowedSheetIds.includes(sheet.id)) &&
     failWithMessage("The source is outside the authorized host context.");
-  const rangeAddress = parseRangeAddress(r.range);
+  const rangeAddress = parseRangeAddress(config.range);
   return (
     !screenHostScope.includeHidden &&
       (sheet.hidden ||
         sheet.veryHidden ||
         cn(sheet, "row").some(
-          (a) =>
-            a.start <= rangeAddress.lastRow && a.end >= rangeAddress.firstRow,
+          (rowSpan) =>
+            rowSpan.start <= rangeAddress.lastRow &&
+            rowSpan.end >= rangeAddress.firstRow,
         ) ||
         cn(sheet, "column").some(
-          (a) =>
-            a.start <= rangeAddress.lastCol && a.end >= rangeAddress.firstCol,
+          (columnSpan) =>
+            columnSpan.start <= rangeAddress.lastCol &&
+            columnSpan.end >= rangeAddress.firstCol,
         )) &&
       failWithMessage(
         "The source range includes hidden content. Explicitly include hidden content only within authorized host scope.",
       ),
-    (sheet.merges ?? []).some((a) => {
-      const s = parseRangeAddress(a);
+    (sheet.merges ?? []).some((mergeRange) => {
+      const mergeAddress = parseRangeAddress(mergeRange);
       return (
-        s.firstRow <= rangeAddress.lastRow &&
-        s.lastRow >= rangeAddress.firstRow &&
-        s.firstCol <= rangeAddress.lastCol &&
-        s.lastCol >= rangeAddress.firstCol
+        mergeAddress.firstRow <= rangeAddress.lastRow &&
+        mergeAddress.lastRow >= rangeAddress.firstRow &&
+        mergeAddress.firstCol <= rangeAddress.lastCol &&
+        mergeAddress.lastCol >= rangeAddress.firstCol
       );
     }) &&
       failWithMessage(
@@ -265,73 +296,82 @@ function resolveMaterialitySourceRange(workbook, r, screenHostScope) {
 function inspectScreenFormulaCells(
   workbook,
   materialitySourceRange,
-  t,
+  cellAddresses,
   screenHostScope,
 ) {
-  const o = t.filter((g) =>
-      isFormulaInputValue(materialitySourceRange.cells[g]),
+  const formulaAddresses = cellAddresses.filter((candidateAddress) =>
+      isFormulaInputValue(materialitySourceRange.cells[candidateAddress]),
     ),
-    a = new Map(
-      t.map((g) => [g, materialitySourceRange.cells[g]?.raw ?? null]),
+    rawValueByAddress = new Map(
+      cellAddresses.map((address) => [
+        address,
+        materialitySourceRange.cells[address]?.raw ?? null,
+      ]),
     );
-  if (!o.length) return a;
-  const s = JSON.stringify(workbook);
-  let d = "";
+  if (!formulaAddresses.length) return rawValueByAddress;
+  const workbookJson = JSON.stringify(workbook);
+  let isolatedSheetId = "";
   for (
-    let g = 0;
-    g < 4 &&
-    ((d = `_ms_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`),
-    !!s.toLowerCase().includes(d.toLowerCase()));
-    g++
+    let attempt = 0;
+    attempt < 4 &&
+    ((isolatedSheetId = `_ms_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`),
+    !!workbookJson.toLowerCase().includes(isolatedSheetId.toLowerCase()));
+    attempt++
   )
-    d = "";
-  d || failWithMessage("A private calculation context could not be isolated.");
-  const u = {
-    id: d,
-    name: d,
+    isolatedSheetId = "";
+  isolatedSheetId ||
+    failWithMessage("A private calculation context could not be isolated.");
+  const inspectionSheet = {
+    id: isolatedSheetId,
+    name: isolatedSheetId,
     rowCount: workbookLimits.maxRows,
     colCount: workbookLimits.maxCols,
     cells: {
       A1: {
-        raw: `=SUM(${o.map((g) => `'${materialitySourceRange.name.replace(/'/g, "''")}'!${g}`).join(",")})`,
+        raw: `=SUM(${formulaAddresses.map((formulaAddress) => `'${materialitySourceRange.name.replace(/'/g, "''")}'!${formulaAddress}`).join(",")})`,
       },
     },
   };
-  String(u.cells.A1.raw).length > 8192 &&
+  String(inspectionSheet.cells.A1.raw).length > 8192 &&
     failWithMessage(
       "The selected formulas exceed the bounded calculation inspection length.",
     );
-  const l = inspectFormulaDependencies(
+  const dependencyGraph = inspectFormulaDependencies(
       {
         ...workbook,
         sheets: [
-          u,
+          inspectionSheet,
           ...workbook.sheets.map((sheet) =>
             sheet.veryHidden ? { ...sheet, hidden: true } : sheet,
           ),
         ],
       },
       {
-        sheetId: u.id,
+        sheetId: inspectionSheet.id,
         address: "A1",
         direction: "precedents",
         depth: 8,
         includeHidden: screenHostScope.includeHidden,
-        allowedSheetIds: [...screenHostScope.allowedSheetIds, u.id],
+        allowedSheetIds: [
+          ...screenHostScope.allowedSheetIds,
+          inspectionSheet.id,
+        ],
         limits: { maxNodes: 1e3, maxFormulaCells: 5e3, maxReferences: 1e4 },
       },
     ),
-    c = new Set(l.nodes.map((node) => node.key));
-  (l.coverage.truncated ||
-    l.coverage.depthLimited ||
-    l.cycles.length ||
-    l.issues.some(
-      (issue) => issue.from === l.target.key || c.has(issue.from),
+    closureKeys = new Set(dependencyGraph.nodes.map((node) => node.key));
+  (dependencyGraph.coverage.truncated ||
+    dependencyGraph.coverage.depthLimited ||
+    dependencyGraph.cycles.length ||
+    dependencyGraph.issues.some(
+      (issue) =>
+        issue.from === dependencyGraph.target.key ||
+        closureKeys.has(issue.from),
     )) &&
     failWithMessage(
       "Formula fields require a complete supported static dependency closure within the visible authorized context (1,000 cells, depth 8, 5,000 scanned formulas).",
     );
-  const h = new Set([
+  const volatileFunctionNames = new Set([
     ...matrixResultFunctionNames,
     "ISFORMULA",
     "INDEX",
@@ -352,7 +392,7 @@ function inspectScreenFormulaCells(
     "EVALUATE",
     "GET.CELL",
   ]);
-  for (const node of l.nodes) {
+  for (const node of dependencyGraph.nodes) {
     const cell = workbook.sheets.find((sheet) => sheet.id === node.sheetId)
       ?.cells[node.address];
     if (
@@ -362,41 +402,42 @@ function inspectScreenFormulaCells(
         ),
       isFormulaInputValue(cell))
     ) {
-      const y = resolveDefinedNameValue(
+      const resolvedFormula = resolveDefinedNameValue(
         String(cell.raw),
         workbook,
         node.sheetId,
       ).replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, "");
-      (/[{}#]/.test(y) ||
-        [...y.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)].some((w) =>
-          h.has(
-            w[1]
-              .toUpperCase()
-              .replace(/^_XLFN\./, "")
-              .replace(/^_XLWS\./, ""),
-          ),
+      (/[{}#]/.test(resolvedFormula) ||
+        [...resolvedFormula.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)].some(
+          (functionMatch) =>
+            volatileFunctionNames.has(
+              functionMatch[1]
+                .toUpperCase()
+                .replace(/^_XLFN\./, "")
+                .replace(/^_XLWS\./, ""),
+            ),
         )) &&
         failWithMessage(
           "The screen excludes volatile, dynamic-reference and array/spill formulas. Use supported scalar values or formulas.",
         );
     }
   }
-  const f = {
+  const scopedWorkbook = {
       ...workbook,
       sheets: workbook.sheets
         .filter((sheet) => screenHostScope.allowedSheetIds.includes(sheet.id))
-        .map((g) => ({
-          ...g,
+        .map((scopedSheet) => ({
+          ...scopedSheet,
           cells: Object.fromEntries(
-            Object.entries(g.cells).filter(([b]) =>
-              c.has(buildCompositeKey(g.id, b)),
+            Object.entries(scopedSheet.cells).filter(([cellAddress]) =>
+              closureKeys.has(buildCompositeKey(scopedSheet.id, cellAddress)),
             ),
           ),
         })),
     },
-    workbookWithSettings = calculateWorkbookWithSettings(f);
-  for (const node of l.nodes) {
-    const b = workbookWithSettings(node.sheetId, node.address);
+    workbookWithSettings = calculateWorkbookWithSettings(scopedWorkbook);
+  for (const node of dependencyGraph.nodes) {
+    const computedValue = workbookWithSettings(node.sheetId, node.address);
     (workbookWithSettings.getOperationalErrors().length &&
       failWithMessage(
         "An operational calculation limit or cycle prevents screening, even when a formula handles the visible error.",
@@ -410,29 +451,29 @@ function inspectScreenFormulaCells(
           node.address
         ],
       ) &&
-        typeof b == "string" &&
-        /^#(?:[A-Z0-9_/.]+[!?]?)/.test(b) &&
+        typeof computedValue == "string" &&
+        /^#(?:[A-Z0-9_/.]+[!?]?)/.test(computedValue) &&
         failWithMessage(
           "A selected formula or dependency has a calculation error. Correct it before screening.",
         ),
       node.sheetId === materialitySourceRange.id &&
-        o.includes(node.address) &&
-        a.set(node.address, b));
+        formulaAddresses.includes(node.address) &&
+        rawValueByAddress.set(node.address, computedValue));
   }
-  return a;
+  return rawValueByAddress;
 }
-const compareAmountToThreshold = (e, r, t) =>
-  t === "gt"
-    ? e > r
-    : t === "gte"
-      ? e >= r
-      : t === "lt"
-        ? e < r
-        : t === "lte"
-          ? e <= r
-          : e === r;
-function normalizeMaterialityRequest(workbook, r, t = {}) {
-  const materialityConfig = normalizeMaterialityConfig(workbook, r);
+const compareAmountToThreshold = (amount, threshold, comparator) =>
+  comparator === "gt"
+    ? amount > threshold
+    : comparator === "gte"
+      ? amount >= threshold
+      : comparator === "lt"
+        ? amount < threshold
+        : comparator === "lte"
+          ? amount <= threshold
+          : amount === threshold;
+function normalizeMaterialityRequest(workbook, config, scopeOptions = {}) {
+  const materialityConfig = normalizeMaterialityConfig(workbook, config);
   return {
     ...buildMaterialitySourceEvidence(
       workbook,
@@ -446,30 +487,36 @@ function normalizeMaterialityRequest(workbook, r, t = {}) {
           materialityConfig.dateColumn,
         ],
       },
-      t,
+      scopeOptions,
     ),
     request: materialityConfig,
   };
 }
-function buildMaterialitySourceEvidence(workbook, r, t = {}) {
-  (!r ||
-    typeof r.sheetId != "string" ||
-    typeof r.range != "string" ||
-    typeof r.headers != "boolean" ||
-    !Array.isArray(r.columns) ||
-    r.columns.length > 500) &&
+function buildMaterialitySourceEvidence(
+  workbook,
+  sourceSelection,
+  scopeOptions = {},
+) {
+  (!sourceSelection ||
+    typeof sourceSelection.sheetId != "string" ||
+    typeof sourceSelection.range != "string" ||
+    typeof sourceSelection.headers != "boolean" ||
+    !Array.isArray(sourceSelection.columns) ||
+    sourceSelection.columns.length > 500) &&
     failWithMessage(
       "Provide a bounded source range and scalar field selection.",
     );
-  const rangeAddress = parseRangeAddress(r.range),
-    sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+  const rangeAddress = parseRangeAddress(sourceSelection.range),
+    sheet = workbook.sheets.find(
+      (sheet) => sheet.id === sourceSelection.sheetId,
+    );
   (!sheet ||
     rangeAddress.lastRow >= sheet.rowCount ||
     rangeAddress.lastCol >= sheet.colCount ||
     (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
       (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
       materialityScreenLimits.sourceCells ||
-    r.columns.some(
+    sourceSelection.columns.some(
       (column) =>
         !Number.isInteger(column) ||
         column < rangeAddress.firstCol ||
@@ -478,81 +525,105 @@ function buildMaterialitySourceEvidence(workbook, r, t = {}) {
     failWithMessage(
       "Choose scalar fields inside one source rectangle of at most 500 cells and within worksheet dimensions.",
     );
-  const a = {
-      ...r,
+  const normalizedSelection = {
+      ...sourceSelection,
       range: `${formatCellAddress(rangeAddress.firstRow, rangeAddress.firstCol)}:${formatCellAddress(rangeAddress.lastRow, rangeAddress.lastCol)}`,
     },
-    screenHostScope = normalizeScreenHostScope(workbook, t),
+    screenHostScope = normalizeScreenHostScope(workbook, scopeOptions),
     materialitySourceRange = resolveMaterialitySourceRange(
       workbook,
-      a,
+      normalizedSelection,
       screenHostScope,
     ),
-    u = parseRangeAddress(a.range);
+    u = parseRangeAddress(normalizedSelection.range);
   for (let firstRow = u.firstRow; firstRow <= u.lastRow; firstRow++)
     for (let firstCol = u.firstCol; firstCol <= u.lastCol; firstCol++) {
-      const g =
+      const rawValue =
         materialitySourceRange.cells[formatCellAddress(firstRow, firstCol)]
           ?.raw;
-      typeof g == "number" &&
-        !Number.isFinite(g) &&
+      typeof rawValue == "number" &&
+        !Number.isFinite(rawValue) &&
         failWithMessage(
           "Selected raw evidence contains a nonfinite number and cannot be preserved in JSON. Correct it before screening.",
         );
     }
-  const l = [];
-  for (let m = u.firstRow + Number(a.headers); m <= u.lastRow; m++)
-    for (const v of new Set(a.columns)) l.push(formatCellAddress(m, v));
-  const c = inspectScreenFormulaCells(
+  const inspectedAddresses = [];
+  for (
+    let rowIndex = u.firstRow + Number(normalizedSelection.headers);
+    rowIndex <= u.lastRow;
+    rowIndex++
+  )
+    for (const columnIndex of new Set(normalizedSelection.columns))
+      inspectedAddresses.push(formatCellAddress(rowIndex, columnIndex));
+  const formulaValues = inspectScreenFormulaCells(
       workbook,
       materialitySourceRange,
-      l,
+      inspectedAddresses,
       screenHostScope,
     ),
     rows = [];
-  for (let m = u.firstRow + Number(a.headers); m <= u.lastRow; m++)
+  for (
+    let dataRowIndex = u.firstRow + Number(normalizedSelection.headers);
+    dataRowIndex <= u.lastRow;
+    dataRowIndex++
+  )
     rows.push({
-      sourceRow: m + 1,
-      sourceRange: `${formatCellAddress(m, u.firstCol)}:${formatCellAddress(m, u.lastCol)}`,
-      cells: Array.from({ length: u.lastCol - u.firstCol + 1 }, (v, g) =>
-        structuredClone(
-          materialitySourceRange.cells[
-            formatCellAddress(m, u.firstCol + g)
-          ] ?? { raw: null },
-        ),
+      sourceRow: dataRowIndex + 1,
+      sourceRange: `${formatCellAddress(dataRowIndex, u.firstCol)}:${formatCellAddress(dataRowIndex, u.lastCol)}`,
+      cells: Array.from(
+        { length: u.lastCol - u.firstCol + 1 },
+        (v, columnOffset) =>
+          structuredClone(
+            materialitySourceRange.cells[
+              formatCellAddress(dataRowIndex, u.firstCol + columnOffset)
+            ] ?? { raw: null },
+          ),
       ),
-      values: Array.from({ length: u.lastCol - u.firstCol + 1 }, (v, g) => {
-        const cellAddress = formatCellAddress(m, u.firstCol + g);
-        return c.has(cellAddress)
-          ? c.get(cellAddress)
-          : (materialitySourceRange.cells[cellAddress]?.raw ?? null);
-      }),
+      values: Array.from(
+        { length: u.lastCol - u.firstCol + 1 },
+        (v, valueOffset) => {
+          const cellAddress = formatCellAddress(
+            dataRowIndex,
+            u.firstCol + valueOffset,
+          );
+          return formulaValues.has(cellAddress)
+            ? formulaValues.get(cellAddress)
+            : (materialitySourceRange.cells[cellAddress]?.raw ?? null);
+        },
+      ),
     });
-  const f = {
+  const evidence = {
     context: screenHostScope,
     sheetId: materialitySourceRange.id,
     sheetName: materialitySourceRange.name,
     rows: rows,
-    headers: Array.from({ length: u.lastCol - u.firstCol + 1 }, (m, v) =>
-      a.headers
-        ? String(
-            materialitySourceRange.cells[
-              formatCellAddress(u.firstRow, u.firstCol + v)
-            ]?.raw ?? `Column ${columnIndexToLetters(u.firstCol + v)}`,
-          )
-        : `Column ${columnIndexToLetters(u.firstCol + v)}`,
+    headers: Array.from(
+      { length: u.lastCol - u.firstCol + 1 },
+      (m, headerOffset) =>
+        normalizedSelection.headers
+          ? String(
+              materialitySourceRange.cells[
+                formatCellAddress(u.firstRow, u.firstCol + headerOffset)
+              ]?.raw ??
+                `Column ${columnIndexToLetters(u.firstCol + headerOffset)}`,
+            )
+          : `Column ${columnIndexToLetters(u.firstCol + headerOffset)}`,
     ),
   };
   return (
-    new TextEncoder().encode(JSON.stringify(f, null, 2)).length > 2e6 &&
+    new TextEncoder().encode(JSON.stringify(evidence, null, 2)).length > 2e6 &&
       failWithMessage(
         "The complete source evidence exceeds 2,000,000 bytes. Select a smaller population.",
       ),
-    f
+    evidence
   );
 }
-function runMaterialityScreen(workbook, r, t = {}) {
-  const materialityRequest = normalizeMaterialityRequest(workbook, r, t),
+function runMaterialityScreen(workbook, screenConfig, scopeOptions = {}) {
+  const materialityRequest = normalizeMaterialityRequest(
+      workbook,
+      screenConfig,
+      scopeOptions,
+    ),
     { request, context } = materialityRequest,
     rangeAddress = parseRangeAddress(request.range),
     rows = [],
@@ -573,16 +644,20 @@ function runMaterialityScreen(workbook, r, t = {}) {
     eligibleAmount = 0,
     unknownOrOtherCurrencyRows = 0;
   for (const row of materialityRequest.rows) {
-    const v = (I) => row.values[I - rangeAddress.firstCol],
-      g = v(request.amountColumn),
-      b = v(request.currencyColumn),
-      y = v(request.dateColumn),
-      amount = typeof g == "number" && Number.isFinite(g) ? g : null,
-      currency =
-        typeof b == "string" && /^[A-Za-z]{3}$/.test(b)
-          ? b.toUpperCase()
+    const valueAt = (columnIndex) =>
+        row.values[columnIndex - rangeAddress.firstCol],
+      rawAmount = valueAt(request.amountColumn),
+      rawCurrency = valueAt(request.currencyColumn),
+      rawDate = valueAt(request.dateColumn),
+      amount =
+        typeof rawAmount == "number" && Number.isFinite(rawAmount)
+          ? rawAmount
           : null,
-      dateToIso = normalizeDateToIso(y),
+      currency =
+        typeof rawCurrency == "string" && /^[A-Za-z]{3}$/.test(rawCurrency)
+          ? rawCurrency.toUpperCase()
+          : null,
+      dateToIso = normalizeDateToIso(rawDate),
       reasons = [];
     (amount === null &&
       (reasons.push(
@@ -654,17 +729,22 @@ function runMaterialityScreen(workbook, r, t = {}) {
     ? null
     : rows
         .filter((row) => row.disposition === "flagged")
-        .reduce((m, v) => m + v.amount, 0);
+        .reduce(
+          (flaggedTotal, flaggedRow) => flaggedTotal + flaggedRow.amount,
+          0,
+        );
   [
     knownSourceAmount,
     eligibleAmount,
     knownSourceAmount - eligibleAmount,
     flaggedAmount,
-  ].some((m) => m !== null && !Number.isFinite(m)) &&
+  ].some(
+    (controlTotal) => controlTotal !== null && !Number.isFinite(controlTotal),
+  ) &&
     failWithMessage(
       "The control total exceeds finite numeric capacity. Reduce the population or magnitude.",
     );
-  const p = {
+  const screenReport = {
     schemaVersion: 1,
     kind: "materiality-screen",
     algorithm: "ledgerglass-materiality-1",
@@ -701,38 +781,44 @@ function runMaterialityScreen(workbook, r, t = {}) {
     ],
   };
   return (
-    new TextEncoder().encode(JSON.stringify(p, null, 2)).length > 2e6 &&
+    new TextEncoder().encode(JSON.stringify(screenReport, null, 2)).length >
+      2e6 &&
       failWithMessage(
         "The complete evidence report exceeds 2,000,000 bytes. Select a smaller source population.",
       ),
-    Tz.set(p, {
+    Tz.set(screenReport, {
       snapshot: JSON.stringify(workbook),
       request: JSON.stringify(request),
       context: JSON.stringify(context),
-      content: JSON.stringify(p),
+      content: JSON.stringify(screenReport),
     }),
-    p
+    screenReport
   );
 }
-function checkMaterialityReportFreshness(workbook, r, t, n = {}) {
-  const o = Tz.get(r);
-  if (!o)
+function checkMaterialityReportFreshness(
+  workbook,
+  report,
+  configInput,
+  scopeOptions = {},
+) {
+  const snapshotRecord = Tz.get(report);
+  if (!snapshotRecord)
     return {
       current: false,
       disclose: false,
       reason: "This report is untrusted or changed. Run the screen again.",
     };
   try {
-    if (o.content !== JSON.stringify(r))
+    if (snapshotRecord.content !== JSON.stringify(report))
       return {
         current: false,
         disclose: false,
         reason: "This report is untrusted or changed. Run the screen again.",
       };
-    const screenHostScope = normalizeScreenHostScope(workbook, n);
+    const screenHostScope = normalizeScreenHostScope(workbook, scopeOptions);
     if (
-      (resolveMaterialitySourceRange(workbook, r.request, screenHostScope),
-      JSON.stringify(screenHostScope) !== o.context)
+      (resolveMaterialitySourceRange(workbook, report.request, screenHostScope),
+      JSON.stringify(screenHostScope) !== snapshotRecord.context)
     )
       return {
         current: false,
@@ -740,14 +826,14 @@ function checkMaterialityReportFreshness(workbook, r, t, n = {}) {
         reason:
           "The authorized or hidden-content scope changed. Run the screen again.",
       };
-    if (JSON.stringify(workbook) !== o.snapshot)
+    if (JSON.stringify(workbook) !== snapshotRecord.snapshot)
       return {
         current: false,
         disclose: false,
         reason: "The source workbook changed. Run the screen again.",
       };
-    const materialityConfig = normalizeMaterialityConfig(workbook, t);
-    return JSON.stringify(materialityConfig) !== o.request
+    const materialityConfig = normalizeMaterialityConfig(workbook, configInput);
+    return JSON.stringify(materialityConfig) !== snapshotRecord.request
       ? {
           current: false,
           disclose: true,
@@ -768,39 +854,61 @@ function checkMaterialityReportFreshness(workbook, r, t, n = {}) {
     };
   }
 }
-function exportMaterialityReportJson(workbook, r, t, n = {}) {
-  const o = checkMaterialityReportFreshness(workbook, r, t, n);
-  return (o.current || failWithMessage(o.reason), JSON.stringify(r, null, 2));
+function exportMaterialityReportJson(
+  workbook,
+  report,
+  configInput,
+  scopeOptions = {},
+) {
+  const freshness = checkMaterialityReportFreshness(
+    workbook,
+    report,
+    configInput,
+    scopeOptions,
+  );
+  return (
+    freshness.current || failWithMessage(freshness.reason),
+    JSON.stringify(report, null, 2)
+  );
 }
-function parseMaterialityReportText(workbook, r, t = {}) {
-  (typeof r != "string" ||
-    r.length > 2e6 ||
-    new TextEncoder().encode(r).length > 2e6) &&
+function parseMaterialityReportText(workbook, reportText, scopeOptions = {}) {
+  (typeof reportText != "string" ||
+    reportText.length > 2e6 ||
+    new TextEncoder().encode(reportText).length > 2e6) &&
     failWithMessage(
       "The screen configuration/report must be at most 2,000,000 bytes.",
     );
-  let n;
+  let parsedReport;
   try {
-    n = JSON.parse(r);
+    parsedReport = JSON.parse(reportText);
   } catch {
     failWithMessage("The screen configuration/report is not valid JSON.");
   }
-  return loadMaterialityConfiguration(workbook, n, t);
+  return loadMaterialityConfiguration(workbook, parsedReport, scopeOptions);
 }
-function loadMaterialityConfiguration(workbook, r, t = {}) {
-  (!r || typeof r != "object" || Array.isArray(r)) &&
+function loadMaterialityConfiguration(
+  workbook,
+  savedReport,
+  scopeOptions = {},
+) {
+  (!savedReport ||
+    typeof savedReport != "object" ||
+    Array.isArray(savedReport)) &&
     failWithMessage("Choose a supported screen configuration or report.");
-  const n = r;
-  (n.schemaVersion !== 1 || n.kind !== "materiality-screen") &&
+  const report = savedReport;
+  (report.schemaVersion !== 1 || report.kind !== "materiality-screen") &&
     failWithMessage(
       "The materiality screen configuration version is unsupported.",
     );
-  const materialityConfig = normalizeMaterialityConfig(workbook, n.request);
+  const materialityConfig = normalizeMaterialityConfig(
+    workbook,
+    report.request,
+  );
   return (
     resolveMaterialitySourceRange(
       workbook,
       materialityConfig,
-      normalizeScreenHostScope(workbook, t),
+      normalizeScreenHostScope(workbook, scopeOptions),
     ),
     materialityConfig
   );
@@ -813,31 +921,36 @@ const agingScheduleLimits = {
   },
   _z = new WeakMap(),
   dayInMilliseconds = 864e5;
-function parseAgingIsoDate(e) {
+function parseAgingIsoDate(dateText) {
   if (
-    typeof e != "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(e) ||
-    e.startsWith("0000-")
+    typeof dateText != "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateText) ||
+    dateText.startsWith("0000-")
   )
     return null;
-  const r = Date.parse(`${e}T00:00:00.000Z`);
-  return Number.isFinite(r) && new Date(r).toISOString().slice(0, 10) === e
-    ? r / dayInMilliseconds
+  const timestamp = Date.parse(`${dateText}T00:00:00.000Z`);
+  return Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString().slice(0, 10) === dateText
+    ? timestamp / dayInMilliseconds
     : null;
 }
-function normalizeAgingDateInput(e, dateSystem) {
-  if (typeof e == "string") return parseAgingIsoDate(e) === null ? null : e;
+function normalizeAgingDateInput(dateValue, dateSystem) {
+  if (typeof dateValue == "string")
+    return parseAgingIsoDate(dateValue) === null ? null : dateValue;
   if (
-    typeof e != "number" ||
-    !Number.isInteger(e) ||
-    (dateSystem === "1900" && (e < 1 || e > 2958465 || e === 60)) ||
-    (dateSystem === "1904" && (e < 0 || e > 2957003))
+    typeof dateValue != "number" ||
+    !Number.isInteger(dateValue) ||
+    (dateSystem === "1900" &&
+      (dateValue < 1 || dateValue > 2958465 || dateValue === 60)) ||
+    (dateSystem === "1904" && (dateValue < 0 || dateValue > 2957003))
   )
     return null;
-  const t =
+  const epochStart =
     dateSystem === "1900" ? Date.UTC(1899, 11, 31) : Date.UTC(1904, 0, 1);
   return new Date(
-    t + (dateSystem === "1900" && e > 60 ? e - 1 : e) * dayInMilliseconds,
+    epochStart +
+      (dateSystem === "1900" && dateValue > 60 ? dateValue - 1 : dateValue) *
+        dayInMilliseconds,
   )
     .toISOString()
     .slice(0, 10);
@@ -858,8 +971,12 @@ function defaultMaterialityConfig(agingConfiguration) {
     effectiveTo: "9999-12-31",
   };
 }
-function normalizeAgingConfiguration(workbook, agingConfiguration, t) {
-  const n = [
+function normalizeAgingConfiguration(
+  workbook,
+  agingConfiguration,
+  scopeOptions,
+) {
+  const requiredKeys = [
     "sheetId",
     "range",
     "headers",
@@ -875,8 +992,10 @@ function normalizeAgingConfiguration(workbook, agingConfiguration, t) {
   ((!agingConfiguration ||
     typeof agingConfiguration != "object" ||
     Array.isArray(agingConfiguration) ||
-    Object.keys(agingConfiguration).length !== n.length ||
-    n.some((d) => !Object.hasOwn(agingConfiguration, d))) &&
+    Object.keys(agingConfiguration).length !== requiredKeys.length ||
+    requiredKeys.some(
+      (requiredKey) => !Object.hasOwn(agingConfiguration, requiredKey),
+    )) &&
     throwErrorMessage("Provide a complete, supported aging configuration."),
     (!["due", "document"].includes(agingConfiguration.dateBasis) ||
       !["1900", "1904"].includes(agingConfiguration.dateSystem)) &&
@@ -891,32 +1010,36 @@ function normalizeAgingConfiguration(workbook, agingConfiguration, t) {
       agingConfiguration.buckets.length < 1 ||
       agingConfiguration.buckets.length > agingScheduleLimits.buckets) &&
       throwErrorMessage("Configure between 1 and 24 aging buckets."));
-  let o = 0;
-  const a = new Set();
-  for (const [d, u] of agingConfiguration.buckets.entries())
-    ((!u ||
-      typeof u != "object" ||
-      Array.isArray(u) ||
-      Object.keys(u).length !== 3 ||
-      !["label", "from", "to"].every((l) => Object.hasOwn(u, l)) ||
-      typeof u.label != "string" ||
-      !u.label.trim() ||
-      u.label.trim().length > 80 ||
-      /[\u0000-\u001f\u007f]/.test(u.label) ||
-      a.has(u.label.trim().toLowerCase())) &&
+  let expectedBucketStart = 0;
+  const bucketLabels = new Set();
+  for (const [bucketIndex, bucket] of agingConfiguration.buckets.entries())
+    ((!bucket ||
+      typeof bucket != "object" ||
+      Array.isArray(bucket) ||
+      Object.keys(bucket).length !== 3 ||
+      !["label", "from", "to"].every((bucketKey) =>
+        Object.hasOwn(bucket, bucketKey),
+      ) ||
+      typeof bucket.label != "string" ||
+      !bucket.label.trim() ||
+      bucket.label.trim().length > 80 ||
+      /[\u0000-\u001f\u007f]/.test(bucket.label) ||
+      bucketLabels.has(bucket.label.trim().toLowerCase())) &&
       throwErrorMessage(
         "Each bucket needs a unique label of 1–80 characters and inclusive from/to bounds.",
       ),
-      a.add(u.label.trim().toLowerCase()),
-      (!Number.isSafeInteger(u.from) ||
-        u.from !== o ||
-        (d === agingConfiguration.buckets.length - 1
-          ? u.to !== null
-          : !Number.isSafeInteger(u.to) || u.to < u.from || u.to > 3652424)) &&
+      bucketLabels.add(bucket.label.trim().toLowerCase()),
+      (!Number.isSafeInteger(bucket.from) ||
+        bucket.from !== expectedBucketStart ||
+        (bucketIndex === agingConfiguration.buckets.length - 1
+          ? bucket.to !== null
+          : !Number.isSafeInteger(bucket.to) ||
+            bucket.to < bucket.from ||
+            bucket.to > 3652424)) &&
         throwErrorMessage(
           "Buckets must cover every nonnegative day exactly once: start at 0, use contiguous inclusive integer bounds, and leave only the final upper bound open.",
         ),
-      (o = u.to === null ? 0 : u.to + 1));
+      (expectedBucketStart = bucket.to === null ? 0 : bucket.to + 1));
   const materialityReportText = parseMaterialityReportText(
     workbook,
     JSON.stringify({
@@ -924,7 +1047,7 @@ function normalizeAgingConfiguration(workbook, agingConfiguration, t) {
       kind: "materiality-screen",
       request: defaultMaterialityConfig(agingConfiguration),
     }),
-    t,
+    scopeOptions,
   );
   return {
     sheetId: materialityReportText.sheetId,
@@ -943,48 +1066,75 @@ function normalizeAgingConfiguration(workbook, agingConfiguration, t) {
     })),
   };
 }
-function addDecimalAmounts(e) {
-  const r = e.map((s) => {
-      const [d, u = "0"] = String(s).toLowerCase().split("e"),
-        [l, c = ""] = d.split(".");
-      return { n: BigInt(l + c), scale: c.length - Number(u) };
+function addDecimalAmounts(amounts) {
+  const decimalParts = amounts.map((value) => {
+      const [mantissa, exponentText = "0"] = String(value)
+          .toLowerCase()
+          .split("e"),
+        [integerDigits, fractionDigits = ""] = mantissa.split(".");
+      return {
+        n: BigInt(integerDigits + fractionDigits),
+        scale: fractionDigits.length - Number(exponentText),
+      };
     }),
-    t = Math.max(0, ...r.map((s) => s.scale));
-  let n = r.reduce((s, d) => s + d.n * 10n ** BigInt(t - d.scale), 0n);
-  if (n === 0n) return "0";
-  const o = n < 0n ? "-" : "";
-  n < 0n && (n = -n);
-  const a = n.toString().padStart(t + 1, "0");
-  return o + (t ? `${a.slice(0, -t)}.${a.slice(-t)}`.replace(/\.?0+$/, "") : a);
+    maxScale = Math.max(
+      0,
+      ...decimalParts.map((decimalPart) => decimalPart.scale),
+    );
+  let scaledTotal = decimalParts.reduce(
+    (sum, decimalEntry) =>
+      sum + decimalEntry.n * 10n ** BigInt(maxScale - decimalEntry.scale),
+    0n,
+  );
+  if (scaledTotal === 0n) return "0";
+  const sign = scaledTotal < 0n ? "-" : "";
+  scaledTotal < 0n && (scaledTotal = -scaledTotal);
+  const digits = scaledTotal.toString().padStart(maxScale + 1, "0");
+  return (
+    sign +
+    (maxScale
+      ? `${digits.slice(0, -maxScale)}.${digits.slice(-maxScale)}`.replace(
+          /\.?0+$/,
+          "",
+        )
+      : digits)
+  );
 }
-function assertAgingControlTotal(e) {
-  const r = Number(e);
-  return Number.isFinite(r)
-    ? r
+function assertAgingControlTotal(exactAmount) {
+  const numericAmount = Number(exactAmount);
+  return Number.isFinite(numericAmount)
+    ? numericAmount
     : throwErrorMessage(
         "The aging control total exceeds finite numeric capacity. Reduce the selected population or magnitude.",
       );
 }
-function buildAgingSchedule(workbook, r, t = {}) {
-  const agingConfiguration = normalizeAgingConfiguration(workbook, r, t),
+function buildAgingSchedule(workbook, agingRequest, options = {}) {
+  const agingConfiguration = normalizeAgingConfiguration(
+      workbook,
+      agingRequest,
+      options,
+    ),
     materialityRequest = normalizeMaterialityRequest(
       workbook,
       defaultMaterialityConfig(agingConfiguration),
-      t,
+      options,
     ),
     firstCol = parseRangeAddress(agingConfiguration.range).firstCol,
     agingIsoDate = parseAgingIsoDate(agingConfiguration.asOf),
     rows = materialityRequest.rows.map((row) => {
-      const w = row.values[agingConfiguration.amountColumn - firstCol],
-        E = row.values[agingConfiguration.currencyColumn - firstCol],
-        amount = typeof w == "number" && Number.isFinite(w) ? w : null,
-        currency =
-          typeof E == "string" && /^[A-Za-z]{3}$/.test(E)
-            ? E.toUpperCase()
+      const rawAmount = row.values[agingConfiguration.amountColumn - firstCol],
+        rawCurrency = row.values[agingConfiguration.currencyColumn - firstCol],
+        amount =
+          typeof rawAmount == "number" && Number.isFinite(rawAmount)
+            ? rawAmount
             : null,
-        F = row.values[agingConfiguration.dateColumn - firstCol],
+        currency =
+          typeof rawCurrency == "string" && /^[A-Za-z]{3}$/.test(rawCurrency)
+            ? rawCurrency.toUpperCase()
+            : null,
+        rawDate = row.values[agingConfiguration.dateColumn - firstCol],
         agingDateInput = normalizeAgingDateInput(
-          F,
+          rawDate,
           agingConfiguration.dateSystem,
         ),
         ageDays =
@@ -993,7 +1143,7 @@ function buildAgingSchedule(workbook, r, t = {}) {
             : agingIsoDate - parseAgingIsoDate(agingDateInput),
         exceptions = [],
         reasons = [];
-      (F === null || F === ""
+      (rawDate === null || rawDate === ""
         ? (exceptions.push("missing-date"),
           reasons.push("Date is missing; no date is inferred."))
         : agingDateInput === null
@@ -1044,28 +1194,34 @@ function buildAgingSchedule(workbook, r, t = {}) {
         }
       );
     }),
-    u = rows.filter(
+    knownCurrencyRows = rows.filter(
       (row) =>
         row.amount !== null && row.currency === agingConfiguration.currency,
     ),
-    l = rows.filter((row) => row.disposition === "aged"),
-    c = u.filter((y) => y.disposition === "excluded"),
-    h = (y) => addDecimalAmounts(y.map((w) => w.amount)),
-    exactKnownSourceAmount = h(u),
-    exactAgedAmount = h(l),
-    exactExcludedKnownAmount = h(c),
-    buckets = agingConfiguration.buckets.map((bucket, w) => {
-      const E = l.filter((k) => k.bucket === w),
-        exactAmount = h(E);
+    agedRows = rows.filter((row) => row.disposition === "aged"),
+    excludedKnownRows = knownCurrencyRows.filter(
+      (knownRow) => knownRow.disposition === "excluded",
+    ),
+    sumExactAmounts = (selectedRows) =>
+      addDecimalAmounts(selectedRows.map((entry) => entry.amount)),
+    exactKnownSourceAmount = sumExactAmounts(knownCurrencyRows),
+    exactAgedAmount = sumExactAmounts(agedRows),
+    exactExcludedKnownAmount = sumExactAmounts(excludedKnownRows),
+    buckets = agingConfiguration.buckets.map((bucket, bucketIndex) => {
+      const bucketRows = agedRows.filter(
+          (agedRow) => agedRow.bucket === bucketIndex,
+        ),
+        exactAmount = sumExactAmounts(bucketRows);
       return {
         ...bucket,
-        count: E.length,
+        count: bucketRows.length,
         amount: assertAgingControlTotal(exactAmount),
         exactAmount: exactAmount,
       };
     }),
-    g = (y) => rows.filter((row) => row.exceptions.includes(y)).length,
-    b = {
+    countExceptions = (exceptionType) =>
+      rows.filter((row) => row.exceptions.includes(exceptionType)).length,
+    schedule = {
       schemaVersion: 1,
       kind: "aging-schedule",
       algorithm: "ledgerglass-aging-1",
@@ -1077,30 +1233,33 @@ function buildAgingSchedule(workbook, r, t = {}) {
       request: structuredClone(agingConfiguration),
       context: structuredClone(materialityRequest.context),
       status:
-        l.length === rows.length ? "complete" : "complete-with-exclusions",
+        agedRows.length === rows.length
+          ? "complete"
+          : "complete-with-exclusions",
       headers: structuredClone(materialityRequest.headers),
       rows: rows,
       buckets: buckets,
       counts: {
         population: rows.length,
-        aged: l.length,
-        excluded: rows.length - l.length,
-        missingDates: g("missing-date"),
-        invalidDates: g("invalid-date"),
-        futureDates: g("future-date"),
-        unsupportedCurrencies: g("unsupported-currency"),
+        aged: agedRows.length,
+        excluded: rows.length - agedRows.length,
+        missingDates: countExceptions("missing-date"),
+        invalidDates: countExceptions("invalid-date"),
+        futureDates: countExceptions("future-date"),
+        unsupportedCurrencies: countExceptions("unsupported-currency"),
         missingCurrencies: rows.filter((row) => {
-          const w = row.values[agingConfiguration.currencyColumn - firstCol];
-          return w === null || w === "";
+          const currencyValue =
+            row.values[agingConfiguration.currencyColumn - firstCol];
+          return currencyValue === null || currencyValue === "";
         }).length,
-        invalidAmounts: g("invalid-amount"),
+        invalidAmounts: countExceptions("invalid-amount"),
       },
       totals: {
         currency: agingConfiguration.currency,
         knownSourceAmount: assertAgingControlTotal(exactKnownSourceAmount),
         agedAmount: assertAgingControlTotal(exactAgedAmount),
         excludedKnownAmount: assertAgingControlTotal(exactExcludedKnownAmount),
-        unknownOrOtherCurrencyRows: rows.length - u.length,
+        unknownOrOtherCurrencyRows: rows.length - knownCurrencyRows.length,
         exactKnownSourceAmount: exactKnownSourceAmount,
         exactAgedAmount: exactAgedAmount,
         exactExcludedKnownAmount: exactExcludedKnownAmount,
@@ -1117,23 +1276,28 @@ function buildAgingSchedule(workbook, r, t = {}) {
       ],
     };
   return (
-    new TextEncoder().encode(JSON.stringify(b, null, 2)).length >
+    new TextEncoder().encode(JSON.stringify(schedule, null, 2)).length >
       agingScheduleLimits.reportBytes &&
       throwErrorMessage(
         "The aging report exceeds 2,000,000 bytes. Select a smaller population.",
       ),
-    _z.set(b, {
+    _z.set(schedule, {
       snapshot: JSON.stringify(workbook),
       context: JSON.stringify(materialityRequest.context),
       request: JSON.stringify(agingConfiguration),
-      content: JSON.stringify(b),
+      content: JSON.stringify(schedule),
     }),
-    b
+    schedule
   );
 }
-function checkAgingReportFreshness(workbook, r, t, n = {}) {
-  const o = _z.get(r);
-  if (!o || o.content !== JSON.stringify(r))
+function checkAgingReportFreshness(
+  workbook,
+  report,
+  agingRequest,
+  options = {},
+) {
+  const snapshotRecord = _z.get(report);
+  if (!snapshotRecord || snapshotRecord.content !== JSON.stringify(report))
     return {
       current: false,
       disclose: false,
@@ -1141,24 +1305,28 @@ function checkAgingReportFreshness(workbook, r, t, n = {}) {
         "This aging report is untrusted or changed. Run the schedule again.",
     };
   try {
-    const agingConfiguration = normalizeAgingConfiguration(workbook, t, n),
-      s = {
-        includeHidden: !!n.includeHidden,
+    const agingConfiguration = normalizeAgingConfiguration(
+        workbook,
+        agingRequest,
+        options,
+      ),
+      authorizedScope = {
+        includeHidden: !!options.includeHidden,
         allowedSheetIds: [
           ...new Set(
-            n.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id),
+            options.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id),
           ),
         ].sort(),
       };
-    return o.snapshot !== JSON.stringify(workbook) ||
-      o.context !== JSON.stringify(s)
+    return snapshotRecord.snapshot !== JSON.stringify(workbook) ||
+      snapshotRecord.context !== JSON.stringify(authorizedScope)
       ? {
           current: false,
           disclose: false,
           reason:
             "The source or authorized scope changed. Run the aging schedule again.",
         }
-      : JSON.stringify(agingConfiguration) !== o.request
+      : JSON.stringify(agingConfiguration) !== snapshotRecord.request
         ? {
             current: false,
             disclose: true,
@@ -1179,28 +1347,36 @@ function checkAgingReportFreshness(workbook, r, t, n = {}) {
     };
   }
 }
-function exportAgingReportJson(workbook, r, t, n = {}) {
-  const o = checkAgingReportFreshness(workbook, r, t, n);
-  return (o.current || throwErrorMessage(o.reason), JSON.stringify(r, null, 2));
-}
-function loadAgingConfiguration(workbook, r, t = {}) {
+function exportAgingReportJson(workbook, report, agingRequest, options = {}) {
+  const freshness = checkAgingReportFreshness(
+    workbook,
+    report,
+    agingRequest,
+    options,
+  );
   return (
-    (!r ||
-      typeof r != "object" ||
-      Array.isArray(r) ||
-      r.schemaVersion !== 1 ||
-      r.kind !== "aging-schedule") &&
-      throwErrorMessage("Choose a supported aging configuration or report."),
-    normalizeAgingConfiguration(workbook, r.request, t)
+    freshness.current || throwErrorMessage(freshness.reason),
+    JSON.stringify(report, null, 2)
   );
 }
-const listRangeColumnIndexes = (e) => {
+function loadAgingConfiguration(workbook, report, options = {}) {
+  return (
+    (!report ||
+      typeof report != "object" ||
+      Array.isArray(report) ||
+      report.schemaVersion !== 1 ||
+      report.kind !== "aging-schedule") &&
+      throwErrorMessage("Choose a supported aging configuration or report."),
+    normalizeAgingConfiguration(workbook, report.request, options)
+  );
+}
+const listRangeColumnIndexes = (rangeText) => {
     try {
-      const rangeAddress = parseRangeAddress(e);
+      const rangeAddress = parseRangeAddress(rangeText);
       return rangeAddress.lastCol - rangeAddress.firstCol < 500
         ? Array.from(
             { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
-            (t, n) => rangeAddress.firstCol + n,
+            (t, columnOffset) => rangeAddress.firstCol + columnOffset,
           )
         : [];
     } catch {
@@ -1213,37 +1389,41 @@ const listRangeColumnIndexes = (e) => {
     { label: "61–90 days", from: 61, to: 90 },
     { label: "91+ days", from: 91, to: null },
   ];
-function AgingScheduleScreen(e) {
+function AgingScheduleScreen(props) {
   const { text, language } = useWorkbookMessages(),
     cancellableOperation = useCancellableOperation(),
-    o = ne.useId(),
-    a = ne.useRef(null),
-    s = ne.useRef(true),
-    d = ne.useRef(0),
-    u = ne.useRef(""),
-    rangeColumnIndexes = listRangeColumnIndexes(e.range),
-    [range, h] = ne.useState(e.range),
-    [f, p] = ne.useState(true),
-    [amountColumn, v] = ne.useState(rangeColumnIndexes[0] ?? 0),
-    [currencyColumn, b] = ne.useState(rangeColumnIndexes[1] ?? 1),
-    [dateColumn, w] = ne.useState(rangeColumnIndexes[2] ?? 2),
-    [currency, A] = ne.useState("USD"),
-    [dateBasis, F] = ne.useState("due"),
-    [dateSystem, O] = ne.useState(e.workbook.datePolicy?.dateSystem ?? "1900"),
-    [asOf, z] = ne.useState(new Date().toISOString().slice(0, 10)),
-    [buckets, D] = ne.useState(structuredClone(defaultAgingBuckets)),
-    [checked, _] = ne.useState(false),
-    [C, T] = ne.useState(null),
-    [N, R] = ne.useState(""),
-    [L, $] = ne.useState(""),
-    [U, G] = ne.useState(""),
-    [H, Q] = ne.useState(""),
-    [X$1, J] = ne.useState(0),
-    [q, W] = ne.useState("all"),
-    K = {
-      sheetId: e.sheetId,
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    isMountedRef = ne.useRef(true),
+    requestCounterRef = ne.useRef(0),
+    requestKeyRef = ne.useRef(""),
+    rangeColumnIndexes = listRangeColumnIndexes(props.range),
+    [range, setRange] = ne.useState(props.range),
+    [hasHeaders, setHasHeaders] = ne.useState(true),
+    [amountColumn, setAmountColumn] = ne.useState(rangeColumnIndexes[0] ?? 0),
+    [currencyColumn, setCurrencyColumn] = ne.useState(
+      rangeColumnIndexes[1] ?? 1,
+    ),
+    [dateColumn, setDateColumn] = ne.useState(rangeColumnIndexes[2] ?? 2),
+    [currency, setCurrency] = ne.useState("USD"),
+    [dateBasis, setDateBasis] = ne.useState("due"),
+    [dateSystem, setDateSystem] = ne.useState(
+      props.workbook.datePolicy?.dateSystem ?? "1900",
+    ),
+    [asOf, setAsOf] = ne.useState(new Date().toISOString().slice(0, 10)),
+    [buckets, setBuckets] = ne.useState(structuredClone(defaultAgingBuckets)),
+    [checked, setChecked] = ne.useState(false),
+    [agingSchedule, setAgingSchedule] = ne.useState(null),
+    [runSourceKey, setRunSourceKey] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [errorScopeKey, setErrorScopeKey] = ne.useState(""),
+    [statusMessage, setStatusMessage] = ne.useState(""),
+    [X$1, setPageIndex] = ne.useState(0),
+    [reviewFilter, setReviewFilter] = ne.useState("all"),
+    agingRequest = {
+      sheetId: props.sheetId,
       range: range,
-      headers: f,
+      headers: hasHeaders,
       amountColumn: amountColumn,
       currencyColumn: currencyColumn,
       dateColumn: dateColumn,
@@ -1253,168 +1433,213 @@ function AgingScheduleScreen(e) {
       asOf: asOf,
       buckets: buckets,
     },
-    te = {
-      readOnly: e.readOnly,
-      includeHidden: !!e.allowHidden && checked,
-      allowedSheetIds: e.allowedSheetIds,
+    agingOptions = {
+      readOnly: props.readOnly,
+      includeHidden: !!props.allowHidden && checked,
+      allowedSheetIds: props.allowedSheetIds,
     },
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    oe = [
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
+    sortedSheetIds = [
       ...new Set(
-        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+        props.allowedSheetIds ?? props.workbook.sheets.map((sheet) => sheet.id),
       ),
     ].sort(),
-    de =
+    isSourceInContext =
       !!sheet &&
-      oe.includes(sheet.id) &&
-      (te.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
-    he = JSON.stringify([e.sheetId, e.range]),
-    Se = JSON.stringify([e.workbook, oe, te.includeHidden, he]),
-    le = JSON.stringify([Se, K]);
-  u.current = le;
-  const ce = C
-      ? N !== he
+      sortedSheetIds.includes(sheet.id) &&
+      (agingOptions.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
+    sourceKey = JSON.stringify([props.sheetId, props.range]),
+    workbookKey = JSON.stringify([
+      props.workbook,
+      sortedSheetIds,
+      agingOptions.includeHidden,
+      sourceKey,
+    ]),
+    requestKey = JSON.stringify([workbookKey, agingRequest]);
+  requestKeyRef.current = requestKey;
+  const freshness = agingSchedule
+      ? runSourceKey !== sourceKey
         ? {
             current: false,
             disclose: false,
             reason:
               "The source selection changed. Run the aging schedule again.",
           }
-        : checkAgingReportFreshness(e.workbook, C, K, te)
+        : checkAgingReportFreshness(
+            props.workbook,
+            agingSchedule,
+            agingRequest,
+            agingOptions,
+          )
       : null,
-    ge = ce?.disclose ? C : null,
-    se =
-      ge?.rows.filter(
+    visibleSchedule = freshness?.disclose ? agingSchedule : null,
+    filteredRows =
+      visibleSchedule?.rows.filter(
         (row) =>
-          q === "all" || q === row.disposition || row.exceptions.includes(q),
+          reviewFilter === "all" ||
+          reviewFilter === row.disposition ||
+          row.exceptions.includes(reviewFilter),
       ) ?? [],
-    we = Math.max(1, Math.ceil(se.length / agingScheduleLimits.pageSize)),
-    Ee = Math.min(X$1, we - 1),
-    Ae = listRangeColumnIndexes(range),
-    ye = (Me) => {
-      ($(
-        Me instanceof Error
-          ? Me.message
+    pageCount = Math.max(
+      1,
+      Math.ceil(filteredRows.length / agingScheduleLimits.pageSize),
+    ),
+    currentPage = Math.min(X$1, pageCount - 1),
+    selectableColumnIndexes = listRangeColumnIndexes(range),
+    showError = (caughtError) => {
+      (setErrorMessage(
+        caughtError instanceof Error
+          ? caughtError.message
           : "The aging schedule could not complete. Review the settings and source.",
       ),
-        G(Se),
-        Q(""));
+        setErrorScopeKey(workbookKey),
+        setStatusMessage(""));
     };
   ne.useEffect(() => {
-    s.current = true;
+    isMountedRef.current = true;
     const activeElement = document.activeElement;
     return (
-      a.current?.querySelector('[data-ui-label="Aging source range"]')?.focus(),
+      dialogRef.current
+        ?.querySelector('[data-ui-label="Aging source range"]')
+        ?.focus(),
       () => {
-        ((s.current = false),
-          d.current++,
+        ((isMountedRef.current = false),
+          requestCounterRef.current++,
           activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []);
   const onClick = () => {
-      d.current++;
+      requestCounterRef.current++;
       try {
-        (T(buildAgingSchedule(e.workbook, K, te)),
-          R(he),
-          $(""),
-          Q(""),
-          W("all"),
-          J(0));
+        (setAgingSchedule(
+          buildAgingSchedule(props.workbook, agingRequest, agingOptions),
+        ),
+          setRunSourceKey(sourceKey),
+          setErrorMessage(""),
+          setStatusMessage(""),
+          setReviewFilter("all"),
+          setPageIndex(0));
       } catch (error) {
-        (T(null), ye(error));
+        (setAgingSchedule(null), showError(error));
       }
     },
-    Pe = () => {
+    downloadReport = () => {
       try {
-        if (!C || !ce?.current)
+        if (!agingSchedule || !freshness?.current)
           throw Error("Run a current aging schedule before downloading.");
-        const Me = exportAgingReportJson(e.workbook, C, K, te),
-          ke = URL.createObjectURL(
-            new Blob([Me], { type: "application/json" }),
+        const reportJson = exportAgingReportJson(
+            props.workbook,
+            agingSchedule,
+            agingRequest,
+            agingOptions,
           ),
-          je = document.createElement("a");
-        ((je.href = ke),
-          (je.download = "aging-schedule.json"),
-          je.click(),
-          URL.revokeObjectURL(ke),
-          Q(
+          downloadUrl = URL.createObjectURL(
+            new Blob([reportJson], { type: "application/json" }),
+          ),
+          downloadLink = document.createElement("a");
+        ((downloadLink.href = downloadUrl),
+          (downloadLink.download = "aging-schedule.json"),
+          downloadLink.click(),
+          URL.revokeObjectURL(downloadUrl),
+          setStatusMessage(
             "Aging report downloaded with settings, all source rows, exceptions and exact control totals.",
           ),
-          $(""));
+          setErrorMessage(""));
       } catch (error) {
-        ye(error);
+        showError(error);
       }
     },
-    qe = async (Me) => {
-      if (!Me) return;
-      const ke = le,
-        je = ++d.current,
-        $e = () => s.current && je === d.current && u.current === ke;
+    loadConfigurationFile = async (configFile) => {
+      if (!configFile) return;
+      const startRequestKey = requestKey,
+        requestId = ++requestCounterRef.current,
+        isCurrentRequest = () =>
+          isMountedRef.current &&
+          requestId === requestCounterRef.current &&
+          requestKeyRef.current === startRequestKey;
       try {
-        if (Me.size > agingScheduleLimits.reportBytes)
+        if (configFile.size > agingScheduleLimits.reportBytes)
           throw Error(
             "Choose an aging configuration/report no larger than 2,000,000 bytes.",
           );
-        const Je = await importNativeJsonFile(Me, cancellableOperation.begin());
-        if (!$e()) return;
-        const agingConfiguration = loadAgingConfiguration(e.workbook, Je, te);
-        if (agingConfiguration.sheetId !== e.sheetId)
+        const importedConfig = await importNativeJsonFile(
+          configFile,
+          cancellableOperation.begin(),
+        );
+        if (!isCurrentRequest()) return;
+        const agingConfiguration = loadAgingConfiguration(
+          props.workbook,
+          importedConfig,
+          agingOptions,
+        );
+        if (agingConfiguration.sheetId !== props.sheetId)
           throw Error(
             "Open the saved configuration's source worksheet before loading it.",
           );
-        (h(agingConfiguration.range),
-          p(agingConfiguration.headers),
-          v(agingConfiguration.amountColumn),
-          b(agingConfiguration.currencyColumn),
-          w(agingConfiguration.dateColumn),
-          A(agingConfiguration.currency),
-          F(agingConfiguration.dateBasis),
-          O(agingConfiguration.dateSystem),
-          z(agingConfiguration.asOf),
-          D(agingConfiguration.buckets),
-          T(null),
-          $(""),
-          Q(
+        (setRange(agingConfiguration.range),
+          setHasHeaders(agingConfiguration.headers),
+          setAmountColumn(agingConfiguration.amountColumn),
+          setCurrencyColumn(agingConfiguration.currencyColumn),
+          setDateColumn(agingConfiguration.dateColumn),
+          setCurrency(agingConfiguration.currency),
+          setDateBasis(agingConfiguration.dateBasis),
+          setDateSystem(agingConfiguration.dateSystem),
+          setAsOf(agingConfiguration.asOf),
+          setBuckets(agingConfiguration.buckets),
+          setAgingSchedule(null),
+          setErrorMessage(""),
+          setStatusMessage(
             "Aging configuration loaded. Run it against the current source; saved conclusions are not reused.",
           ));
       } catch (error) {
-        $e() && ye(toFileProcessingError(error));
+        isCurrentRequest() && showError(toFileProcessingError(error));
       }
     },
-    ht = (Me, ke) =>
-      D((je) => je.map(($e, Je) => (Je === Me ? { ...$e, ...ke } : $e)));
+    updateBucket = (indexToUpdate, changes) =>
+      setBuckets((bucketsToUpdate) =>
+        bucketsToUpdate.map((bucketEntry, entryIndex) =>
+          entryIndex === indexToUpdate
+            ? { ...bucketEntry, ...changes }
+            : bucketEntry,
+        ),
+      );
   return i.jsx("div", {
     className: "aging-backdrop",
     onMouseDown: (event) => {
-      event.target === event.currentTarget && e.onClose();
+      event.target === event.currentTarget && props.onClose();
     },
     children: i.jsxs("section", {
       className: "aging-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": `${o}-title`,
-      ref: a,
+      "aria-labelledby": `${titleId}-title`,
+      ref: dialogRef,
       onKeyDown: (event) => {
-        var je, $e;
+        var lastFocusable, firstFocusable;
         if (
           (event.stopPropagation(),
-          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Escape" && (event.preventDefault(), props.onClose()),
           event.key === "Tab")
         ) {
-          const Je = Array.from(
-            a.current?.querySelectorAll(
+          const focusableElements = Array.from(
+            dialogRef.current?.querySelectorAll(
               'button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]',
             ) ?? [],
           ).filter(
-            (ze) =>
-              !ze.closest("details:not([open])") || ze.tagName === "SUMMARY",
+            (element) =>
+              !element.closest("details:not([open])") ||
+              element.tagName === "SUMMARY",
           );
-          event.shiftKey && document.activeElement === Je[0]
-            ? (event.preventDefault(), (je = Je.at(-1)) == null || je.focus())
+          event.shiftKey && document.activeElement === focusableElements[0]
+            ? (event.preventDefault(),
+              (lastFocusable = focusableElements.at(-1)) == null ||
+                lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === Je.at(-1) &&
-              (event.preventDefault(), ($e = Je[0]) == null || $e.focus());
+              document.activeElement === focusableElements.at(-1) &&
+              (event.preventDefault(),
+              (firstFocusable = focusableElements[0]) == null ||
+                firstFocusable.focus());
         }
       },
       children: [
@@ -1423,7 +1648,7 @@ function AgingScheduleScreen(e) {
             i.jsxs("div", {
               children: [
                 i.jsx("h2", {
-                  id: `${o}-title`,
+                  id: `${titleId}-title`,
                   children: i.jsx(LocalizedText, {
                     children: "Aging schedule",
                   }),
@@ -1438,7 +1663,7 @@ function AgingScheduleScreen(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close aging schedule"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close aging schedule"),
               "data-ui-label": "Close aging schedule",
               children: i.jsx(X, { size: 18 }),
@@ -1458,7 +1683,9 @@ function AgingScheduleScreen(e) {
               children: [
                 i.jsx(LocalizedText, { children: "Source worksheet" }),
                 i.jsx("strong", {
-                  children: de ? sheet.name : "Outside current context",
+                  children: isSourceInContext
+                    ? sheet.name
+                    : "Outside current context",
                 }),
               ],
             }),
@@ -1467,8 +1694,8 @@ function AgingScheduleScreen(e) {
                 i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Aging source range"),
-                  value: de ? range : "",
-                  onChange: (event) => h(event.target.value),
+                  value: isSourceInContext ? range : "",
+                  onChange: (event) => setRange(event.target.value),
                   lang: language("Aging source range"),
                   "data-ui-label": "Aging source range",
                 }),
@@ -1479,8 +1706,8 @@ function AgingScheduleScreen(e) {
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: f,
-                  onChange: (event) => p(event.target.checked),
+                  checked: hasHeaders,
+                  onChange: (event) => setHasHeaders(event.target.checked),
                 }),
                 i.jsx(LocalizedText, {
                   children: "First row contains headers",
@@ -1488,30 +1715,34 @@ function AgingScheduleScreen(e) {
               ],
             }),
             [
-              ["Amount column", amountColumn, v],
-              ["Currency column", currencyColumn, b],
-              ["Date column", dateColumn, w],
-            ].map(([Me, ke, je]) =>
+              ["Amount column", amountColumn, setAmountColumn],
+              ["Currency column", currencyColumn, setCurrencyColumn],
+              ["Date column", dateColumn, setDateColumn],
+            ].map(([fieldLabel, selectedColumn, setSelectedColumn]) =>
               i.jsxs(
                 "label",
                 {
                   children: [
-                    Me,
+                    fieldLabel,
                     i.jsx("select", {
-                      "aria-label": Me,
-                      value: ke,
-                      onChange: (event) => je(Number(event.target.value)),
-                      children: Ae.map(($e) =>
+                      "aria-label": fieldLabel,
+                      value: selectedColumn,
+                      onChange: (event) =>
+                        setSelectedColumn(Number(event.target.value)),
+                      children: selectableColumnIndexes.map((columnIndex) =>
                         i.jsx(
                           "option",
-                          { value: $e, children: columnIndexToLetters($e) },
-                          $e,
+                          {
+                            value: columnIndex,
+                            children: columnIndexToLetters(columnIndex),
+                          },
+                          columnIndex,
                         ),
                       ),
                     }),
                   ],
                 },
-                Me,
+                fieldLabel,
               ),
             ),
             i.jsxs("label", {
@@ -1521,7 +1752,7 @@ function AgingScheduleScreen(e) {
                   "aria-label": text("Declared currency"),
                   maxLength: 3,
                   value: currency,
-                  onChange: (event) => A(event.target.value),
+                  onChange: (event) => setCurrency(event.target.value),
                   lang: language("Declared currency"),
                   "data-ui-label": "Declared currency",
                 }),
@@ -1533,7 +1764,7 @@ function AgingScheduleScreen(e) {
                 i.jsxs("select", {
                   "aria-label": text("Date basis"),
                   value: dateBasis,
-                  onChange: (event) => F(event.target.value),
+                  onChange: (event) => setDateBasis(event.target.value),
                   lang: language("Date basis"),
                   "data-ui-label": "Date basis",
                   children: [
@@ -1553,7 +1784,7 @@ function AgingScheduleScreen(e) {
                   "aria-label": text("Fixed as-of date"),
                   type: "date",
                   value: asOf,
-                  onChange: (event) => z(event.target.value),
+                  onChange: (event) => setAsOf(event.target.value),
                   lang: language("Fixed as-of date"),
                   "data-ui-label": "Fixed as-of date",
                 }),
@@ -1567,7 +1798,7 @@ function AgingScheduleScreen(e) {
                 i.jsxs("select", {
                   "aria-label": text("Numeric serial date system"),
                   value: dateSystem,
-                  onChange: (event) => O(event.target.value),
+                  onChange: (event) => setDateSystem(event.target.value),
                   lang: language("Numeric serial date system"),
                   "data-ui-label": "Numeric serial date system",
                   children: [
@@ -1627,38 +1858,43 @@ function AgingScheduleScreen(e) {
                     }),
                   }),
                   i.jsx("tbody", {
-                    children: buckets.map((bucket, ke) =>
+                    children: buckets.map((bucket, bucketIndex) =>
                       i.jsxs(
                         "tr",
                         {
                           children: [
                             i.jsx("td", {
                               children: i.jsx("input", {
-                                "aria-label": `Bucket ${ke + 1} label`,
+                                "aria-label": `Bucket ${bucketIndex + 1} label`,
                                 value: bucket.label,
                                 maxLength: 80,
                                 onChange: (event) =>
-                                  ht(ke, { label: event.target.value }),
+                                  updateBucket(bucketIndex, {
+                                    label: event.target.value,
+                                  }),
                               }),
                             }),
                             i.jsx("td", {
                               children: i.jsx(LocalizedNumberField, {
-                                "aria-label": `Bucket ${ke + 1} from`,
+                                "aria-label": `Bucket ${bucketIndex + 1} from`,
                                 min: "0",
                                 step: "1",
                                 value: Number.isFinite(bucket.from)
                                   ? bucket.from
                                   : "",
-                                onValueChange: (je) =>
-                                  ht(ke, {
-                                    from: je === "" ? NaN : Number(je),
+                                onValueChange: (fromInput) =>
+                                  updateBucket(bucketIndex, {
+                                    from:
+                                      fromInput === ""
+                                        ? NaN
+                                        : Number(fromInput),
                                   }),
                               }),
                             }),
                             i.jsx("td", {
                               children: i.jsx(LocalizedNumberField, {
                                 allowEmpty: true,
-                                "aria-label": `Bucket ${ke + 1} to`,
+                                "aria-label": `Bucket ${bucketIndex + 1} to`,
                                 min: "0",
                                 step: "1",
                                 placeholder: text("Open-ended"),
@@ -1668,17 +1904,24 @@ function AgingScheduleScreen(e) {
                                     : Number.isFinite(bucket.to)
                                       ? bucket.to
                                       : "",
-                                onValueChange: (je) =>
-                                  ht(ke, { to: je === "" ? null : Number(je) }),
+                                onValueChange: (toInput) =>
+                                  updateBucket(bucketIndex, {
+                                    to: toInput === "" ? null : Number(toInput),
+                                  }),
                                 lang: language("Open-ended"),
                               }),
                             }),
                             i.jsx("td", {
                               children: i.jsx("button", {
-                                "aria-label": `Remove bucket ${ke + 1}`,
+                                "aria-label": `Remove bucket ${bucketIndex + 1}`,
                                 disabled: buckets.length === 1,
                                 onClick: () =>
-                                  D((je) => je.filter(($e, Je) => Je !== ke)),
+                                  setBuckets((currentBuckets) =>
+                                    currentBuckets.filter(
+                                      ($e, filterIndex) =>
+                                        filterIndex !== bucketIndex,
+                                    ),
+                                  ),
                                 children: i.jsx(LocalizedText, {
                                   children: "Remove",
                                 }),
@@ -1686,7 +1929,7 @@ function AgingScheduleScreen(e) {
                             }),
                           ],
                         },
-                        ke,
+                        bucketIndex,
                       ),
                     ),
                   }),
@@ -1696,24 +1939,28 @@ function AgingScheduleScreen(e) {
             i.jsx("button", {
               disabled: buckets.length >= agingScheduleLimits.buckets,
               onClick: () =>
-                D((Me) => {
-                  const ke = Me.at(-1),
-                    je = ke.to ?? ke.from + 29;
+                setBuckets((previousBuckets) => {
+                  const lastBucket = previousBuckets.at(-1),
+                    lastBucketEnd = lastBucket.to ?? lastBucket.from + 29;
                   return [
-                    ...Me.slice(0, -1),
-                    { ...ke, to: je },
-                    { label: `${je + 1}+ days`, from: je + 1, to: null },
+                    ...previousBuckets.slice(0, -1),
+                    { ...lastBucket, to: lastBucketEnd },
+                    {
+                      label: `${lastBucketEnd + 1}+ days`,
+                      from: lastBucketEnd + 1,
+                      to: null,
+                    },
                   ];
                 }),
               children: i.jsx(LocalizedText, { children: "Add bucket" }),
             }),
             i.jsx("button", {
-              onClick: () => D(structuredClone(defaultAgingBuckets)),
+              onClick: () => setBuckets(structuredClone(defaultAgingBuckets)),
               children: i.jsx(LocalizedText, { children: "Reset buckets" }),
             }),
           ],
         }),
-        e.allowHidden &&
+        props.allowHidden &&
           i.jsxs("label", {
             className: "aging-check",
             children: [
@@ -1721,7 +1968,7 @@ function AgingScheduleScreen(e) {
                 "aria-label": text("Include hidden content"),
                 type: "checkbox",
                 checked: checked,
-                onChange: (event) => _(event.target.checked),
+                onChange: (event) => setChecked(event.target.checked),
                 lang: language("Include hidden content"),
                 "data-ui-label": "Include hidden content",
               }),
@@ -1742,7 +1989,7 @@ function AgingScheduleScreen(e) {
           children: [
             i.jsx("button", {
               className: "aging-primary",
-              disabled: !de,
+              disabled: !isSourceInContext,
               onClick: onClick,
               children: i.jsx(LocalizedText, {
                 children: "Run aging schedule",
@@ -1758,8 +2005,9 @@ function AgingScheduleScreen(e) {
                   type: "file",
                   accept: "application/json,.json",
                   onChange: (event) => {
-                    const ke = event.target.files?.[0];
-                    ((event.target.value = ""), qe(ke));
+                    const selectedFile = event.target.files?.[0];
+                    ((event.target.value = ""),
+                      loadConfigurationFile(selectedFile));
                   },
                   lang: language("Load aging configuration"),
                   "data-ui-label": "Load aging configuration",
@@ -1767,26 +2015,33 @@ function AgingScheduleScreen(e) {
               ],
             }),
             i.jsx("button", {
-              disabled: !ce?.current,
-              onClick: Pe,
+              disabled: !freshness?.current,
+              onClick: downloadReport,
               children: i.jsx(LocalizedText, {
                 children: "Download current aging report",
               }),
             }),
           ],
         }),
-        L &&
-          U === Se &&
-          i.jsx("p", { role: "alert", className: "aging-error", children: L }),
-        H && i.jsx("p", { role: "status", children: H }),
-        C &&
-          ce &&
+        errorMessage &&
+          errorScopeKey === workbookKey &&
+          i.jsx("p", {
+            role: "alert",
+            className: "aging-error",
+            children: errorMessage,
+          }),
+        statusMessage &&
+          i.jsx("p", { role: "status", children: statusMessage }),
+        agingSchedule &&
+          freshness &&
           i.jsx("p", {
             role: "status",
-            className: ce.current ? "" : "aging-stale",
-            children: ce.current ? ce.reason : `Stale result. ${ce.reason}`,
+            className: freshness.current ? "" : "aging-stale",
+            children: freshness.current
+              ? freshness.reason
+              : `Stale result. ${freshness.reason}`,
           }),
-        ge &&
+        visibleSchedule &&
           i.jsxs("section", {
             className: "aging-result",
             "aria-label": text("Aging schedule results"),
@@ -1795,61 +2050,63 @@ function AgingScheduleScreen(e) {
             children: [
               i.jsx("h3", {
                 children:
-                  ge.status === "complete"
+                  visibleSchedule.status === "complete"
                     ? "Schedule complete"
                     : "Complete with exclusions — review every excluded row",
               }),
               i.jsxs("p", {
                 children: [
-                  ge.request.dateBasis === "due" ? "Due date" : "Document date",
+                  visibleSchedule.request.dateBasis === "due"
+                    ? "Due date"
+                    : "Document date",
                   " ",
                   i.jsx(LocalizedText, { children: "basis · as of " }),
-                  ge.request.asOf,
+                  visibleSchedule.request.asOf,
                   " · ",
-                  ge.request.dateSystem,
+                  visibleSchedule.request.dateSystem,
                   " ",
                   i.jsx(LocalizedText, { children: "serial system ·" }),
                   " ",
-                  ge.request.currency,
+                  visibleSchedule.request.currency,
                 ],
               }),
               i.jsxs("p", {
                 children: [
-                  ge.counts.population,
+                  visibleSchedule.counts.population,
                   " ",
                   i.jsx(LocalizedText, { children: "source rows ·" }),
                   " ",
-                  ge.counts.aged,
+                  visibleSchedule.counts.aged,
                   " ",
                   i.jsx(LocalizedText, { children: "aged · " }),
-                  ge.counts.excluded,
+                  visibleSchedule.counts.excluded,
                   " ",
                   i.jsx(LocalizedText, { children: "excluded" }),
                 ],
               }),
               i.jsxs("p", {
                 children: [
-                  ge.counts.missingDates,
+                  visibleSchedule.counts.missingDates,
                   " ",
                   i.jsx(LocalizedText, { children: "missing dates ·" }),
                   " ",
-                  ge.counts.invalidDates,
+                  visibleSchedule.counts.invalidDates,
                   " ",
                   i.jsx(LocalizedText, { children: "invalid dates ·" }),
                   " ",
-                  ge.counts.futureDates,
+                  visibleSchedule.counts.futureDates,
                   " ",
                   i.jsx(LocalizedText, { children: "future dates ·" }),
                   " ",
-                  ge.counts.unsupportedCurrencies,
+                  visibleSchedule.counts.unsupportedCurrencies,
                   " ",
                   i.jsx(LocalizedText, {
                     children: "unsupported currencies (including ",
                   }),
-                  ge.counts.missingCurrencies,
+                  visibleSchedule.counts.missingCurrencies,
                   " ",
                   i.jsx(LocalizedText, { children: "missing currencies) · " }),
-                  ge.counts.invalidAmounts,
+                  visibleSchedule.counts.invalidAmounts,
                   " ",
                   i.jsx(LocalizedText, {
                     children:
@@ -1881,7 +2138,7 @@ function AgingScheduleScreen(e) {
                         i.jsxs("th", {
                           children: [
                             i.jsx(LocalizedText, { children: "Signed " }),
-                            ge.totals.currency,
+                            visibleSchedule.totals.currency,
                             " ",
                             i.jsx(LocalizedText, { children: "total" }),
                           ],
@@ -1890,28 +2147,29 @@ function AgingScheduleScreen(e) {
                     }),
                   }),
                   i.jsx("tbody", {
-                    children: ge.buckets.map((bucket, ke) =>
-                      i.jsxs(
-                        "tr",
-                        {
-                          children: [
-                            i.jsx("th", {
-                              scope: "row",
-                              children: bucket.label,
-                            }),
-                            i.jsxs("td", {
-                              children: [
-                                bucket.from,
-                                "–",
-                                bucket.to ?? "unbounded",
-                              ],
-                            }),
-                            i.jsx("td", { children: bucket.count }),
-                            i.jsx("td", { children: bucket.exactAmount }),
-                          ],
-                        },
-                        ke,
-                      ),
+                    children: visibleSchedule.buckets.map(
+                      (bucket, resultBucketIndex) =>
+                        i.jsxs(
+                          "tr",
+                          {
+                            children: [
+                              i.jsx("th", {
+                                scope: "row",
+                                children: bucket.label,
+                              }),
+                              i.jsxs("td", {
+                                children: [
+                                  bucket.from,
+                                  "–",
+                                  bucket.to ?? "unbounded",
+                                ],
+                              }),
+                              i.jsx("td", { children: bucket.count }),
+                              i.jsx("td", { children: bucket.exactAmount }),
+                            ],
+                          },
+                          resultBucketIndex,
+                        ),
                     ),
                   }),
                 ],
@@ -1919,23 +2177,23 @@ function AgingScheduleScreen(e) {
               i.jsxs("p", {
                 children: [
                   i.jsx(LocalizedText, { children: "Exact signed " }),
-                  ge.totals.currency,
+                  visibleSchedule.totals.currency,
                   " ",
                   i.jsx(LocalizedText, {
                     children: "control totals: known source ",
                   }),
-                  ge.totals.exactKnownSourceAmount,
+                  visibleSchedule.totals.exactKnownSourceAmount,
                   " ",
                   i.jsx(LocalizedText, { children: "= aged" }),
                   " ",
-                  ge.totals.exactAgedAmount,
+                  visibleSchedule.totals.exactAgedAmount,
                   " ",
                   i.jsx(LocalizedText, { children: "+ excluded known amount" }),
                   " ",
-                  ge.totals.exactExcludedKnownAmount,
+                  visibleSchedule.totals.exactExcludedKnownAmount,
                   ".",
                   " ",
-                  ge.totals.unknownOrOtherCurrencyRows,
+                  visibleSchedule.totals.unknownOrOtherCurrencyRows,
                   " ",
                   i.jsx(LocalizedText, {
                     children:
@@ -1946,18 +2204,18 @@ function AgingScheduleScreen(e) {
               i.jsxs("p", {
                 children: [
                   i.jsx(LocalizedText, { children: "Source: " }),
-                  ge.sheetName,
+                  visibleSchedule.sheetName,
                   "!",
-                  ge.request.range,
+                  visibleSchedule.request.range,
                   " ",
                   i.jsx(LocalizedText, { children: "· workbook " }),
-                  ge.workbookId,
+                  visibleSchedule.workbookId,
                   " ",
                   i.jsx(LocalizedText, { children: "· revision" }),
                   " ",
-                  ge.revision,
+                  visibleSchedule.revision,
                   " · ",
-                  ge.algorithm,
+                  visibleSchedule.algorithm,
                 ],
               }),
               i.jsxs("label", {
@@ -1965,9 +2223,9 @@ function AgingScheduleScreen(e) {
                   i.jsx(LocalizedText, { children: "Rows to review" }),
                   i.jsxs("select", {
                     "aria-label": text("Aging rows to review"),
-                    value: q,
+                    value: reviewFilter,
                     onChange: (event) => {
-                      (W(event.target.value), J(0));
+                      (setReviewFilter(event.target.value), setPageIndex(0));
                     },
                     lang: language("Aging rows to review"),
                     "data-ui-label": "Aging rows to review",
@@ -2040,7 +2298,7 @@ function AgingScheduleScreen(e) {
                               children: "Exceptions",
                             }),
                           }),
-                          ge.headers.map((header, ke) =>
+                          visibleSchedule.headers.map((header, headerIndex) =>
                             i.jsxs(
                               "th",
                               {
@@ -2048,89 +2306,99 @@ function AgingScheduleScreen(e) {
                                   header,
                                   " (",
                                   columnIndexToLetters(
-                                    parseRangeAddress(ge.request.range)
-                                      .firstCol + ke,
+                                    parseRangeAddress(
+                                      visibleSchedule.request.range,
+                                    ).firstCol + headerIndex,
                                   ),
                                   ")",
                                 ],
                               },
-                              ke,
+                              headerIndex,
                             ),
                           ),
                         ],
                       }),
                     }),
                     i.jsx("tbody", {
-                      children: se.slice(Ee * 20, Ee * 20 + 20).map((Me) =>
-                        i.jsxs(
-                          "tr",
-                          {
-                            children: [
-                              i.jsxs("th", {
-                                scope: "row",
-                                children: [Me.sourceRow, " · ", Me.sourceRange],
-                              }),
-                              i.jsxs("td", {
-                                children: [
-                                  Me.date ?? "Invalid or missing",
-                                  " /",
-                                  " ",
-                                  Me.ageDays ?? "Unavailable",
-                                ],
-                              }),
-                              i.jsxs("td", {
-                                children: [
-                                  Me.amount ?? "Invalid",
-                                  " /",
-                                  " ",
-                                  Me.currency ?? "Invalid",
-                                ],
-                              }),
-                              i.jsx("td", {
-                                children:
-                                  Me.bucket === null
-                                    ? "Excluded"
-                                    : ge.buckets[Me.bucket].label,
-                              }),
-                              i.jsx("td", {
-                                children:
-                                  Me.reasons.join(" ") ||
-                                  "Aged once in the configured bucket.",
-                              }),
-                              Me.cells.map((cell, je) =>
-                                i.jsx(
-                                  "td",
-                                  {
-                                    children: i.jsxs("details", {
-                                      children: [
-                                        i.jsx("summary", {
-                                          children:
-                                            JSON.stringify(Me.values[je]) ??
-                                            "null",
-                                        }),
-                                        i.jsx("p", {
-                                          children: i.jsx(LocalizedText, {
-                                            children: "Stored cell evidence",
+                      children: filteredRows
+                        .slice(currentPage * 20, currentPage * 20 + 20)
+                        .map((filteredRow) =>
+                          i.jsxs(
+                            "tr",
+                            {
+                              children: [
+                                i.jsxs("th", {
+                                  scope: "row",
+                                  children: [
+                                    filteredRow.sourceRow,
+                                    " · ",
+                                    filteredRow.sourceRange,
+                                  ],
+                                }),
+                                i.jsxs("td", {
+                                  children: [
+                                    filteredRow.date ?? "Invalid or missing",
+                                    " /",
+                                    " ",
+                                    filteredRow.ageDays ?? "Unavailable",
+                                  ],
+                                }),
+                                i.jsxs("td", {
+                                  children: [
+                                    filteredRow.amount ?? "Invalid",
+                                    " /",
+                                    " ",
+                                    filteredRow.currency ?? "Invalid",
+                                  ],
+                                }),
+                                i.jsx("td", {
+                                  children:
+                                    filteredRow.bucket === null
+                                      ? "Excluded"
+                                      : visibleSchedule.buckets[
+                                          filteredRow.bucket
+                                        ].label,
+                                }),
+                                i.jsx("td", {
+                                  children:
+                                    filteredRow.reasons.join(" ") ||
+                                    "Aged once in the configured bucket.",
+                                }),
+                                filteredRow.cells.map((cell, cellIndex) =>
+                                  i.jsx(
+                                    "td",
+                                    {
+                                      children: i.jsxs("details", {
+                                        children: [
+                                          i.jsx("summary", {
+                                            children:
+                                              JSON.stringify(
+                                                filteredRow.values[cellIndex],
+                                              ) ?? "null",
                                           }),
-                                        }),
-                                        i.jsx("pre", {
-                                          children: JSON.stringify(
-                                            cell,
-                                            null,
-                                            2,
-                                          ),
-                                        }),
-                                      ],
-                                    }),
-                                  },
-                                  je,
+                                          i.jsx("p", {
+                                            children: i.jsx(LocalizedText, {
+                                              children: "Stored cell evidence",
+                                            }),
+                                          }),
+                                          i.jsx("pre", {
+                                            children: JSON.stringify(
+                                              cell,
+                                              null,
+                                              2,
+                                            ),
+                                          }),
+                                        ],
+                                      }),
+                                    },
+                                    cellIndex,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          },
-                          Me.sourceRow,
+                              ],
+                            },
+                            filteredRow.sourceRow,
+                          ),
                         ),
-                      ),
                     }),
                   ],
                 }),
@@ -2141,8 +2409,8 @@ function AgingScheduleScreen(e) {
                 "data-ui-label": "Aging result pages",
                 children: [
                   i.jsx("button", {
-                    disabled: Ee === 0,
-                    onClick: () => J(Ee - 1),
+                    disabled: currentPage === 0,
+                    onClick: () => setPageIndex(currentPage - 1),
                     children: i.jsx(LocalizedText, {
                       children: "Previous rows",
                     }),
@@ -2150,19 +2418,19 @@ function AgingScheduleScreen(e) {
                   i.jsxs("span", {
                     children: [
                       i.jsx(LocalizedText, { children: "Page " }),
-                      Ee + 1,
+                      currentPage + 1,
                       " ",
                       i.jsx(LocalizedText, { children: "of " }),
-                      we,
+                      pageCount,
                       " · ",
-                      se.length,
+                      filteredRows.length,
                       " ",
                       i.jsx(LocalizedText, { children: "rows in this view" }),
                     ],
                   }),
                   i.jsx("button", {
-                    disabled: Ee + 1 >= we,
-                    onClick: () => J(Ee + 1),
+                    disabled: currentPage + 1 >= pageCount,
+                    onClick: () => setPageIndex(currentPage + 1),
                     children: i.jsx(LocalizedText, { children: "Next rows" }),
                   }),
                 ],
@@ -2174,14 +2442,16 @@ function AgingScheduleScreen(e) {
                       children: "Aging rules and limitations",
                     }),
                   }),
-                  ge.notes.map((note) => i.jsx("p", { children: note }, note)),
+                  visibleSchedule.notes.map((note) =>
+                    i.jsx("p", { children: note }, note),
+                  ),
                 ],
               }),
             ],
           }),
         i.jsx("footer", {
           children: i.jsx("button", {
-            onClick: e.onClose,
+            onClick: props.onClose,
             children: i.jsx(LocalizedText, {
               children: "Close aging schedule",
             }),

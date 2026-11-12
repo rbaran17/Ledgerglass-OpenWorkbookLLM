@@ -45,159 +45,199 @@ import {
   validateReportSourceScope,
 } from "./38-data-analysis-dialog.js";
 
-function ReportOutputsDialog(e) {
+function ReportOutputsDialog(props) {
   const { text } = useWorkbookMessages(),
-    t = ne.useId(),
-    n = ne.useRef(null),
+    dialogTitleId = ne.useId(),
+    dialogRef = ne.useRef(null),
     cancellableOperation = useCancellableOperation(),
-    a = ne.useRef(e);
-  a.current = e;
-  const [s, d] = ne.useState("Publish"),
-    [u, l] = ne.useState({
+    latestPropsRef = ne.useRef(props);
+  latestPropsRef.current = props;
+  const [activeTab, setActiveTab] = ne.useState("Publish"),
+    [requestDraft, setRequestDraft] = ne.useState({
       name: "Report output",
       kind: "range",
-      sheetId: e.sheetId,
-      range: e.range,
+      sheetId: props.sheetId,
+      range: props.range,
       mode: "snapshot",
       population: "full",
     }),
-    [checked, h] = ne.useState(false),
-    [f, p] = ne.useState(false),
-    [m, v] = ne.useState(null),
-    [g, b] = ne.useState(),
-    [y, w] = ne.useState(null),
-    [E, A] = ne.useState(""),
-    [k, F] = ne.useState(""),
-    [I, O] = ne.useState(""),
-    [j, z] = ne.useState(""),
-    [inspection, D] = ne.useState(null),
-    [disabled, _] = ne.useState(false),
-    C = {
-      readOnly: e.readOnly,
-      allowedSheetIds: e.allowedSheetIds,
-      includeHidden: !!e.allowHidden && checked,
+    [checked, setHiddenAuthorized] = ne.useState(false),
+    [isFilterEnabled, setIsFilterEnabled] = ne.useState(false),
+    [preview, setPreview] = ne.useState(null),
+    [refreshTargetId, setRefreshTargetId] = ne.useState(),
+    [previewWorkbook, setPreviewWorkbook] = ne.useState(null),
+    [previewScopeKey, setPreviewScopeKey] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [statusMessage, setStatusMessage] = ne.useState(""),
+    [selectedOutputId, setSelectedOutputId] = ne.useState(""),
+    [inspection, setInspection] = ne.useState(null),
+    [disabled, setDisabled] = ne.useState(false),
+    reportScope = {
+      readOnly: props.readOnly,
+      allowedSheetIds: props.allowedSheetIds,
+      includeHidden: !!props.allowHidden && checked,
     },
-    T = JSON.stringify([C, e.filter]),
-    N = !!m && y === e.workbook && E === T,
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === u.sheetId),
-    L = e.workbook.reportOutputs?.find((reportOutput) => reportOutput.id === j),
-    $ = L ? describeReportOutputStatus(e.workbook, L.id, C) : null,
-    U =
-      s === "Saved outputs"
-        ? $?.status !== "unavailable"
-          ? L?.snapshot
+    currentScopeKey = JSON.stringify([reportScope, props.filter]),
+    isPreviewCurrent =
+      !!preview &&
+      previewWorkbook === props.workbook &&
+      previewScopeKey === currentScopeKey,
+    sheet = props.workbook.sheets.find(
+      (sheet) => sheet.id === requestDraft.sheetId,
+    ),
+    selectedOutput = props.workbook.reportOutputs?.find(
+      (reportOutput) => reportOutput.id === selectedOutputId,
+    ),
+    selectedOutputStatus = selectedOutput
+      ? describeReportOutputStatus(
+          props.workbook,
+          selectedOutput.id,
+          reportScope,
+        )
+      : null,
+    exportableSnapshot =
+      activeTab === "Saved outputs"
+        ? selectedOutputStatus?.status !== "unavailable"
+          ? selectedOutput?.snapshot
           : undefined
-        : N
-          ? m?.snapshot
+        : isPreviewCurrent
+          ? preview?.snapshot
           : undefined;
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      n.current?.querySelector("button")?.focus(),
+      dialogRef.current?.querySelector("button")?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
-  const G = (ae) => {
+  const runAction = (action) => {
       try {
-        (F(""), O(""), ae());
+        (setErrorMessage(""), setStatusMessage(""), action());
       } catch (error) {
-        F(error instanceof Error ? error.message : String(error));
+        setErrorMessage(error instanceof Error ? error.message : String(error));
       }
     },
-    H = (ae) => {
-      (l((oe) => ({ ...oe, ...ae })), b(undefined), v(null), F(""));
+    updateRequestDraft = (draftPatch) => {
+      (setRequestDraft((previousDraft) => ({
+        ...previousDraft,
+        ...draftPatch,
+      })),
+        setRefreshTargetId(undefined),
+        setPreview(null),
+        setErrorMessage(""));
     },
-    Q = (request, refreshId) =>
-      G(() => {
-        var Se;
-        const de = refreshReportOutput(e.workbook, request, C, refreshId);
-        (v(de),
-          b(refreshId),
-          l(de.request),
-          w(e.workbook),
-          A(T),
-          d("Publish"),
-          ((Se = n.current?.querySelector(".lg-reports-scroll")) == null
+    previewReportOutput = (request, refreshId) =>
+      runAction(() => {
+        var scrollContainer;
+        const refreshedPreview = refreshReportOutput(
+          props.workbook,
+          request,
+          reportScope,
+          refreshId,
+        );
+        (setPreview(refreshedPreview),
+          setRefreshTargetId(refreshId),
+          setRequestDraft(refreshedPreview.request),
+          setPreviewWorkbook(props.workbook),
+          setPreviewScopeKey(currentScopeKey),
+          setActiveTab("Publish"),
+          ((scrollContainer =
+            dialogRef.current?.querySelector(".lg-reports-scroll")) == null
             ? undefined
-            : Se.scrollTo
-          )?.call(Se, 0, 0));
+            : scrollContainer.scrollTo
+          )?.call(scrollContainer, 0, 0));
       }),
-    X$1 = async (ae, oe) => {
-      (_(true), F(""));
+    X$1 = async (format, snapshot) => {
+      (setDisabled(true), setErrorMessage(""));
       try {
-        const de = a.current,
-          he = () =>
-            validateReportSourceScope(a.current.workbook, oe, {
-              readOnly: a.current.readOnly,
-              allowedSheetIds: a.current.allowedSheetIds,
-              includeHidden: !!a.current.allowHidden && checked,
-            });
-        he();
-        const Se =
-          ae === "png"
-            ? await renderReportPngBlob(oe)
+        const startProps = latestPropsRef.current,
+          revalidateSourceScope = () =>
+            validateReportSourceScope(
+              latestPropsRef.current.workbook,
+              snapshot,
+              {
+                readOnly: latestPropsRef.current.readOnly,
+                allowedSheetIds: latestPropsRef.current.allowedSheetIds,
+                includeHidden: !!latestPropsRef.current.allowHidden && checked,
+              },
+            );
+        revalidateSourceScope();
+        const exportFile =
+          format === "png"
+            ? await renderReportPngBlob(snapshot)
             : (() => {
-                const le =
-                  ae === "svg"
-                    ? renderReportSvg(oe)
-                    : ae === "html"
-                      ? buildReportHtmlFile(oe)
-                      : buildReportSvgFile(oe);
+                const renderedFile =
+                  format === "svg"
+                    ? renderReportSvg(snapshot)
+                    : format === "html"
+                      ? buildReportHtmlFile(snapshot)
+                      : buildReportSvgFile(snapshot);
                 return {
-                  filename: le.filename,
-                  blob: new Blob([le.content], { type: le.mime }),
+                  filename: renderedFile.filename,
+                  blob: new Blob([renderedFile.content], {
+                    type: renderedFile.mime,
+                  }),
                 };
               })();
-        if ((he(), de.onDownload !== a.current.onDownload))
+        if (
+          (revalidateSourceScope(),
+          startProps.onDownload !== latestPropsRef.current.onDownload)
+        )
           throw Error("The report destination changed. Export again.");
-        (await (a.current.onDownload ?? downloadBlobAsFile)(Se),
-          O(`${ae.toUpperCase()} snapshot exported.`));
+        (await (latestPropsRef.current.onDownload ?? downloadBlobAsFile)(
+          exportFile,
+        ),
+          setStatusMessage(`${format.toUpperCase()} snapshot exported.`));
       } catch (error) {
-        F(error.message);
+        setErrorMessage(error.message);
       } finally {
-        _(false);
+        setDisabled(false);
       }
     },
-    J = async (ae) => {
-      (_(true), D(null), F(""));
+    inspectObjectFile = async (file) => {
+      (setDisabled(true), setInspection(null), setErrorMessage(""));
       try {
         const inspection = await importAutomationFile(
-          ae,
+          file,
           cancellableOperation.begin(),
         );
-        (inspectEmbeddedObjects(inspection), D(inspection));
+        (inspectEmbeddedObjects(inspection), setInspection(inspection));
       } catch (error) {
-        F(error.message);
+        setErrorMessage(error.message);
       } finally {
-        _(false);
+        setDisabled(false);
       }
     };
   return i.jsx("div", {
     className: "lg-reports-overlay",
     children: i.jsxs("section", {
-      ref: n,
+      ref: dialogRef,
       className: "lg-reports-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": t,
+      "aria-labelledby": dialogTitleId,
       onKeyDown: (event) => {
-        var oe, de;
+        var lastFocusable, firstFocusable;
         if (
-          (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+          (event.key === "Escape" && (event.stopPropagation(), props.onClose()),
           event.key === "Tab")
         ) {
-          const he = [
-            ...n.current.querySelectorAll(
+          const focusables = [
+            ...dialogRef.current.querySelectorAll(
               'button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]',
             ),
           ];
-          event.shiftKey && document.activeElement === he[0]
-            ? (event.preventDefault(), (oe = he.at(-1)) == null || oe.focus())
+          event.shiftKey && document.activeElement === focusables[0]
+            ? (event.preventDefault(),
+              (lastFocusable = focusables.at(-1)) == null ||
+                lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === he.at(-1) &&
-              (event.preventDefault(), (de = he[0]) == null || de.focus());
+              document.activeElement === focusables.at(-1) &&
+              (event.preventDefault(),
+              (firstFocusable = focusables[0]) == null ||
+                firstFocusable.focus());
         }
       },
       children: [
@@ -207,7 +247,7 @@ function ReportOutputsDialog(e) {
               children: [
                 i.jsx("p", { children: "REPORTING" }),
                 i.jsx("h2", {
-                  id: t,
+                  id: dialogTitleId,
                   children: i.jsx(LocalizedText, {
                     children: "Report outputs & embedded objects",
                   }),
@@ -216,31 +256,32 @@ function ReportOutputsDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close report outputs"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
         i.jsx("nav", {
           "aria-label": text("Report workflow"),
-          children: ["Publish", "Saved outputs", "Object inventory"].map((ae) =>
-            i.jsx(
-              "button",
-              {
-                "aria-pressed": s === ae,
-                onClick: () => {
-                  (d(ae), F(""));
+          children: ["Publish", "Saved outputs", "Object inventory"].map(
+            (tabName) =>
+              i.jsx(
+                "button",
+                {
+                  "aria-pressed": activeTab === tabName,
+                  onClick: () => {
+                    (setActiveTab(tabName), setErrorMessage(""));
+                  },
+                  children: text(tabName),
                 },
-                children: text(ae),
-              },
-              ae,
-            ),
+                tabName,
+              ),
           ),
         }),
         i.jsxs("div", {
           className: "lg-reports-scroll",
           children: [
-            s === "Publish" &&
+            activeTab === "Publish" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("p", {
@@ -255,9 +296,9 @@ function ReportOutputsDialog(e) {
                         children: [
                           "Report name",
                           i.jsx("input", {
-                            value: u.name,
+                            value: requestDraft.name,
                             onChange: (event) =>
-                              H({ name: event.target.value }),
+                              updateRequestDraft({ name: event.target.value }),
                           }),
                         ],
                       }),
@@ -265,28 +306,31 @@ function ReportOutputsDialog(e) {
                         children: [
                           "Source worksheet",
                           i.jsx("select", {
-                            value: u.sheetId,
+                            value: requestDraft.sheetId,
                             onChange: (event) => {
-                              (H({
+                              (updateRequestDraft({
                                 sheetId: event.target.value,
                                 kind: "range",
                                 objectId: undefined,
                               }),
-                                p(false));
+                                setIsFilterEnabled(false));
                             },
-                            children: e.workbook.sheets
+                            children: props.workbook.sheets
                               .filter(
                                 (sheet) =>
-                                  (!e.allowedSheetIds ||
-                                    e.allowedSheetIds.includes(sheet.id)) &&
-                                  (C.includeHidden ||
+                                  (!props.allowedSheetIds ||
+                                    props.allowedSheetIds.includes(sheet.id)) &&
+                                  (reportScope.includeHidden ||
                                     (!sheet.hidden && !sheet.veryHidden)),
                               )
-                              .map((ae) =>
+                              .map((worksheet) =>
                                 i.jsx(
                                   "option",
-                                  { value: ae.id, children: ae.name },
-                                  ae.id,
+                                  {
+                                    value: worksheet.id,
+                                    children: worksheet.name,
+                                  },
+                                  worksheet.id,
                                 ),
                               ),
                           }),
@@ -296,20 +340,23 @@ function ReportOutputsDialog(e) {
                         children: [
                           "Output content",
                           i.jsxs("select", {
-                            value: u.kind === "range" ? "range" : u.objectId,
+                            value:
+                              requestDraft.kind === "range"
+                                ? "range"
+                                : requestDraft.objectId,
                             onChange: (event) => {
-                              const oe = sheet?.objects?.find(
+                              const selectedObject = sheet?.objects?.find(
                                 (object) => object.id === event.target.value,
                               );
-                              H(
-                                oe
+                              updateRequestDraft(
+                                selectedObject
                                   ? {
                                       kind: "object",
-                                      objectId: oe.id,
+                                      objectId: selectedObject.id,
                                       range:
-                                        oe.kind === "chart"
-                                          ? oe.range
-                                          : oe.anchor,
+                                        selectedObject.kind === "chart"
+                                          ? selectedObject.range
+                                          : selectedObject.anchor,
                                     }
                                   : { kind: "range", objectId: undefined },
                               );
@@ -337,10 +384,10 @@ function ReportOutputsDialog(e) {
                         children: [
                           "Report range",
                           i.jsx("input", {
-                            value: u.range,
-                            disabled: u.kind === "object",
+                            value: requestDraft.range,
+                            disabled: requestDraft.kind === "object",
                             onChange: (event) =>
-                              H({ range: event.target.value }),
+                              updateRequestDraft({ range: event.target.value }),
                           }),
                         ],
                       }),
@@ -348,9 +395,9 @@ function ReportOutputsDialog(e) {
                         children: [
                           "Reuse mode",
                           i.jsxs("select", {
-                            value: u.mode,
+                            value: requestDraft.mode,
                             onChange: (event) =>
-                              H({ mode: event.target.value }),
+                              updateRequestDraft({ mode: event.target.value }),
                             children: [
                               i.jsx("option", {
                                 value: "snapshot",
@@ -368,9 +415,11 @@ function ReportOutputsDialog(e) {
                         children: [
                           "Report population",
                           i.jsxs("select", {
-                            value: u.population,
+                            value: requestDraft.population,
                             onChange: (event) =>
-                              H({ population: event.target.value }),
+                              updateRequestDraft({
+                                population: event.target.value,
+                              }),
                             children: [
                               i.jsx("option", {
                                 value: "full",
@@ -389,21 +438,21 @@ function ReportOutputsDialog(e) {
                   i.jsxs("div", {
                     className: "lg-reports-options",
                     children: [
-                      e.filter &&
-                        u.sheetId === e.sheetId &&
+                      props.filter &&
+                        requestDraft.sheetId === props.sheetId &&
                         i.jsxs("label", {
                           children: [
                             i.jsx("input", {
                               type: "checkbox",
-                              checked: f,
+                              checked: isFilterEnabled,
                               onChange: (event) => {
-                                (p(event.target.checked),
-                                  H({
+                                (setIsFilterEnabled(event.target.checked),
+                                  updateRequestDraft({
                                     filter: event.target.checked
-                                      ? e.filter
+                                      ? props.filter
                                       : undefined,
                                     ...(event.target.checked
-                                      ? { range: e.filter.range }
+                                      ? { range: props.filter.range }
                                       : {}),
                                   }));
                               },
@@ -411,14 +460,15 @@ function ReportOutputsDialog(e) {
                             "Use active population filter",
                           ],
                         }),
-                      e.allowHidden &&
+                      props.allowHidden &&
                         i.jsxs("label", {
                           children: [
                             i.jsx("input", {
                               type: "checkbox",
                               checked: checked,
                               onChange: (event) => {
-                                (h(event.target.checked), v(null));
+                                (setHiddenAuthorized(event.target.checked),
+                                  setPreview(null));
                               },
                             }),
                             "Authorize hidden source cells",
@@ -435,27 +485,27 @@ function ReportOutputsDialog(e) {
                     className: "lg-reports-primary",
                     disabled: disabled,
                     onClick: () =>
-                      Q(
+                      previewReportOutput(
                         {
-                          ...u,
-                          filter: g
-                            ? u.filter
-                            : f
-                              ? (e.filter ?? u.filter)
+                          ...requestDraft,
+                          filter: refreshTargetId
+                            ? requestDraft.filter
+                            : isFilterEnabled
+                              ? (props.filter ?? requestDraft.filter)
                               : undefined,
                         },
-                        g,
+                        refreshTargetId,
                       ),
                     children: "Preview report output",
                   }),
-                  m &&
-                    !N &&
+                  preview &&
+                    !isPreviewCurrent &&
                     i.jsx("p", {
                       role: "alert",
                       children:
                         "The workbook or permissions changed. Preview again.",
                     }),
-                  N &&
+                  isPreviewCurrent &&
                     i.jsxs("section", {
                       className: "lg-reports-preview",
                       children: [
@@ -463,20 +513,20 @@ function ReportOutputsDialog(e) {
                           className: "lg-reports-preview-title",
                           children: [
                             i.jsx("strong", {
-                              children: m.refreshId
+                              children: preview.refreshId
                                 ? "Reviewed refresh"
                                 : "Snapshot preview",
                             }),
                             i.jsxs("span", {
                               children: [
                                 "Revision ",
-                                m.snapshot.revision,
+                                preview.snapshot.revision,
                                 " ·",
                                 " ",
-                                m.snapshot.rows.length,
+                                preview.snapshot.rows.length,
                                 " rows ·",
                                 " ",
-                                m.snapshot.request.mode,
+                                preview.snapshot.request.mode,
                               ],
                             }),
                           ],
@@ -484,14 +534,14 @@ function ReportOutputsDialog(e) {
                         i.jsx("div", {
                           className: "lg-reports-visual",
                           children: i.jsx(ReportOutputView, {
-                            snapshot: m.snapshot,
+                            snapshot: preview.snapshot,
                           }),
                         }),
                       ],
                     }),
                 ],
               }),
-            s === "Saved outputs" &&
+            activeTab === "Saved outputs" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("p", {
@@ -504,14 +554,15 @@ function ReportOutputsDialog(e) {
                     children: [
                       "Saved report",
                       i.jsxs("select", {
-                        value: j,
-                        onChange: (event) => z(event.target.value),
+                        value: selectedOutputId,
+                        onChange: (event) =>
+                          setSelectedOutputId(event.target.value),
                         children: [
                           i.jsx("option", {
                             value: "",
                             children: "Choose a saved output",
                           }),
-                          e.workbook.reportOutputs?.map((reportOutput) =>
+                          props.workbook.reportOutputs?.map((reportOutput) =>
                             i.jsxs(
                               "option",
                               {
@@ -529,46 +580,53 @@ function ReportOutputsDialog(e) {
                       }),
                     ],
                   }),
-                  L &&
+                  selectedOutput &&
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsxs("p", {
                           role: "status",
-                          className: `lg-reports-status ${$?.status}`,
+                          className: `lg-reports-status ${selectedOutputStatus?.status}`,
                           children: [
-                            $?.status.toUpperCase(),
+                            selectedOutputStatus?.status.toUpperCase(),
                             " · ",
-                            $?.message,
+                            selectedOutputStatus?.message,
                           ],
                         }),
-                        $?.status !== "unavailable" &&
+                        selectedOutputStatus?.status !== "unavailable" &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsxs("div", {
                                 className: "lg-reports-actions",
                                 children: [
-                                  L.snapshot.request.mode === "linked" &&
+                                  selectedOutput.snapshot.request.mode ===
+                                    "linked" &&
                                     i.jsx("button", {
                                       disabled: disabled,
                                       onClick: () => {
-                                        (p(!!L.snapshot.request.filter),
-                                          Q(L.snapshot.request, L.id));
+                                        (setIsFilterEnabled(
+                                          !!selectedOutput.snapshot.request
+                                            .filter,
+                                        ),
+                                          previewReportOutput(
+                                            selectedOutput.snapshot.request,
+                                            selectedOutput.id,
+                                          ));
                                       },
                                       children: "Preview linked refresh",
                                     }),
                                   i.jsx("button", {
-                                    disabled: e.readOnly || disabled,
+                                    disabled: props.readOnly || disabled,
                                     onClick: () =>
-                                      G(() => {
-                                        (e.onWorkbookChange(
+                                      runAction(() => {
+                                        (props.onWorkbookChange(
                                           removeReportOutput(
-                                            e.workbook,
-                                            L.id,
-                                            C,
+                                            props.workbook,
+                                            selectedOutput.id,
+                                            reportScope,
                                           ),
                                           "Remove report output",
                                         ),
-                                          z(""));
+                                          setSelectedOutputId(""));
                                       }),
                                     children: "Remove saved output",
                                   }),
@@ -577,7 +635,7 @@ function ReportOutputsDialog(e) {
                               i.jsx("div", {
                                 className: "lg-reports-visual",
                                 children: i.jsx(ReportOutputView, {
-                                  snapshot: L.snapshot,
+                                  snapshot: selectedOutput.snapshot,
                                 }),
                               }),
                             ],
@@ -586,7 +644,7 @@ function ReportOutputsDialog(e) {
                     }),
                 ],
               }),
-            s === "Object inventory" &&
+            activeTab === "Object inventory" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("p", {
@@ -603,8 +661,9 @@ function ReportOutputsDialog(e) {
                         disabled: disabled,
                         accept: ".xlsx,.xlsm,.xlam,.xltm,.xltx,.xls,.bin",
                         onChange: (event) => {
-                          const oe = event.target.files?.[0];
-                          (oe && J(oe), (event.target.value = ""));
+                          const selectedFile = event.target.files?.[0];
+                          (selectedFile && inspectObjectFile(selectedFile),
+                            (event.target.value = ""));
                         },
                       }),
                     ],
@@ -618,29 +677,29 @@ function ReportOutputsDialog(e) {
                           items: inspectEmbeddedObjects(inspection).items,
                         }),
                         i.jsx("button", {
-                          disabled: e.readOnly || disabled,
+                          disabled: props.readOnly || disabled,
                           onClick: () =>
-                            G(() => {
-                              (e.onWorkbookChange(
+                            runAction(() => {
+                              (props.onWorkbookChange(
                                 retainEmbeddedObjectInventory(
-                                  e.workbook,
+                                  props.workbook,
                                   inspection,
                                   {
-                                    readOnly: e.readOnly,
+                                    readOnly: props.readOnly,
                                   },
                                 ),
                                 "Retain embedded-object inventory",
                               ),
-                                O(
+                                setStatusMessage(
                                   "Inert object inventory retained. Keep the original file separately.",
                                 ),
-                                D(null));
+                                setInspection(null));
                             }),
                           children: "Retain inventory",
                         }),
                       ],
                     }),
-                  e.workbook.embeddedObjectInventories?.map(
+                  props.workbook.embeddedObjectInventories?.map(
                     (embeddedObjectInventory) =>
                       i.jsxs(
                         "section",
@@ -662,7 +721,7 @@ function ReportOutputsDialog(e) {
                             i.jsx("button", {
                               disabled: disabled,
                               onClick: () =>
-                                void (e.onDownload ?? downloadBlobAsFile)({
+                                void (props.onDownload ?? downloadBlobAsFile)({
                                   filename: "Embedded-object-inventory.json",
                                   blob: new Blob(
                                     [
@@ -686,13 +745,14 @@ function ReportOutputsDialog(e) {
                   ),
                 ],
               }),
-            k &&
+            errorMessage &&
               i.jsx("p", {
                 role: "alert",
                 className: "lg-reports-error",
-                children: k,
+                children: errorMessage,
               }),
-            I && i.jsx("p", { role: "status", children: I }),
+            statusMessage &&
+              i.jsx("p", { role: "status", children: statusMessage }),
           ],
         }),
         i.jsxs("footer", {
@@ -700,48 +760,55 @@ function ReportOutputsDialog(e) {
             i.jsx("div", {
               className: "lg-reports-actions",
               children:
-                U &&
-                ["svg", "png", "html", "json"].map((ae) =>
+                exportableSnapshot &&
+                ["svg", "png", "html", "json"].map((exportFormat) =>
                   i.jsxs(
                     "button",
                     {
                       disabled: disabled,
-                      onClick: () => void X$1(ae, U),
-                      children: ["Export ", ae.toUpperCase()],
+                      onClick: () => void X$1(exportFormat, exportableSnapshot),
+                      children: ["Export ", exportFormat.toUpperCase()],
                     },
-                    ae,
+                    exportFormat,
                   ),
                 ),
             }),
             i.jsxs("div", {
               className: "lg-reports-actions",
               children: [
-                e.readOnly && i.jsx("span", { children: "Read-only host" }),
-                s === "Publish" &&
+                props.readOnly && i.jsx("span", { children: "Read-only host" }),
+                activeTab === "Publish" &&
                   i.jsx("button", {
                     className: "lg-reports-primary",
-                    disabled: !N || e.readOnly || disabled,
+                    disabled: !isPreviewCurrent || props.readOnly || disabled,
                     onClick: () =>
-                      G(() => {
-                        const ae = !!m?.refreshId,
-                          oe = publishReportOutput(e.workbook, m, C);
-                        (e.onWorkbookChange(
-                          oe,
-                          ae
+                      runAction(() => {
+                        const isRefresh = !!preview?.refreshId,
+                          publishedWorkbook = publishReportOutput(
+                            props.workbook,
+                            preview,
+                            reportScope,
+                          );
+                        (props.onWorkbookChange(
+                          publishedWorkbook,
+                          isRefresh
                             ? "Refresh linked report output"
                             : "Publish report output",
                         ),
-                          z(m?.refreshId ?? oe.reportOutputs.at(-1).id),
-                          b(undefined),
-                          v(null),
-                          O(
-                            ae
+                          setSelectedOutputId(
+                            preview?.refreshId ??
+                              publishedWorkbook.reportOutputs.at(-1).id,
+                          ),
+                          setRefreshTargetId(undefined),
+                          setPreview(null),
+                          setStatusMessage(
+                            isRefresh
                               ? "Linked output refreshed. Previously exported snapshots are unchanged."
                               : "Report output published.",
                           ),
-                          d("Saved outputs"));
+                          setActiveTab("Saved outputs"));
                       }),
-                    children: m?.refreshId
+                    children: preview?.refreshId
                       ? "Publish reviewed refresh"
                       : "Publish report output",
                   }),
@@ -770,7 +837,7 @@ function ObjectInventoryTable({ items }) {
           }),
         }),
         i.jsx("tbody", {
-          children: items.map((item, t) =>
+          children: items.map((item, itemIndex) =>
             i.jsxs(
               "tr",
               {
@@ -782,7 +849,7 @@ function ObjectInventoryTable({ items }) {
                   i.jsx("td", { children: item.note }),
                 ],
               },
-              t,
+              itemIndex,
             ),
           ),
         }),
@@ -791,13 +858,16 @@ function ObjectInventoryTable({ items }) {
   });
 }
 
-function resolveWhatIfHostScope(workbook, r) {
-  if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
+function resolveWhatIfHostScope(workbook, scopeRequest) {
+  if (
+    scopeRequest.includeHidden !== undefined &&
+    typeof scopeRequest.includeHidden != "boolean"
+  )
     throw Error("Include hidden must be boolean.");
   if (
-    r.allowedSheetIds !== undefined &&
-    (!Array.isArray(r.allowedSheetIds) ||
-      r.allowedSheetIds.some(
+    scopeRequest.allowedSheetIds !== undefined &&
+    (!Array.isArray(scopeRequest.allowedSheetIds) ||
+      scopeRequest.allowedSheetIds.some(
         (allowedSheetId) =>
           typeof allowedSheetId != "string" ||
           !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
@@ -805,23 +875,33 @@ function resolveWhatIfHostScope(workbook, r) {
   )
     throw Error("What-if host scope contains an unknown worksheet.");
   return {
-    includeHidden: !!r.includeHidden,
+    includeHidden: !!scopeRequest.includeHidden,
     allowedSheetIds: [
-      ...new Set(r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id)),
+      ...new Set(
+        scopeRequest.allowedSheetIds ??
+          workbook.sheets.map((sheet) => sheet.id),
+      ),
     ].sort(),
   };
 }
-function isVisibleAuthorizedCell(workbook, r, whatIfHostScope) {
-  const sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+function isVisibleAuthorizedCell(workbook, cellRef, whatIfHostScope) {
+  const sheet = workbook.sheets.find((sheet) => sheet.id === cellRef.sheetId);
   if (!sheet || !whatIfHostScope.allowedSheetIds.includes(sheet.id))
     return false;
-  const o = _t(r.address);
+  const cellPosition = _t(cellRef.address);
   return (
     whatIfHostScope.includeHidden ||
     (!sheet.hidden &&
       !sheet.veryHidden &&
-      !cn(sheet, "row").some((a) => a.start <= o.row && o.row <= a.end) &&
-      !cn(sheet, "column").some((a) => a.start <= o.col && o.col <= a.end))
+      !cn(sheet, "row").some(
+        (rowSpan) =>
+          rowSpan.start <= cellPosition.row && cellPosition.row <= rowSpan.end,
+      ) &&
+      !cn(sheet, "column").some(
+        (columnSpan) =>
+          columnSpan.start <= cellPosition.col &&
+          cellPosition.col <= columnSpan.end,
+      ))
   );
 }
 const whatIfAllowedFunctions = new Set([
@@ -846,19 +926,19 @@ const whatIfAllowedFunctions = new Set([
   "EVALUATE",
   "GET.CELL",
 ]);
-function computeWhatIfResult(workbook, request, t = {}) {
-  const n = validateWhatIfDefinition(request),
-    whatIfHostScope = resolveWhatIfHostScope(workbook, t),
-    a = expandWhatIfScenarios(n);
-  for (const f of [...n.inputs, ...n.outputs])
-    if (!isVisibleAuthorizedCell(workbook, f, whatIfHostScope))
+function computeWhatIfResult(workbook, request, hostScopeOptions = {}) {
+  const definition = validateWhatIfDefinition(request),
+    whatIfHostScope = resolveWhatIfHostScope(workbook, hostScopeOptions),
+    scenarios = expandWhatIfScenarios(definition);
+  for (const sourceCell of [...definition.inputs, ...definition.outputs])
+    if (!isVisibleAuthorizedCell(workbook, sourceCell, whatIfHostScope))
       throw Error(
         "A what-if source is missing or outside the visible, authorized host context.",
       );
-  const s = n.inputs.map((input, p) => {
+  const baselineInputs = definition.inputs.map((input, inputIndex) => {
       const sheet = workbook.sheets.find((sheet) => sheet.id === input.sheetId),
         cell = sheet.cells[input.address],
-        g = _t(input.address);
+        inputPosition = _t(input.address);
       if (!cell || !isFiniteNumber(cell.raw))
         throw Error(
           "Changing cells must contain finite numeric inputs, not formulas, text, blanks or spill outputs.",
@@ -870,25 +950,28 @@ function computeWhatIfResult(workbook, request, t = {}) {
       if (sheet.merges?.some((merge) => isCellInRange(merge, input.address)))
         throw Error("Merged cells cannot be what-if inputs.");
       if (
-        [...(sheet.pivots ?? []), ...(sheet.queries ?? [])].some((E) =>
-          isCellInRange(E.outputRange, input.address),
+        [...(sheet.pivots ?? []), ...(sheet.queries ?? [])].some(
+          (generatedResult) =>
+            isCellInRange(generatedResult.outputRange, input.address),
         )
       )
         throw Error("Generated pivot/query results cannot be what-if inputs.");
-      for (const E of sheet.tables ?? []) {
-        if (!isCellInRange(E.range, input.address)) continue;
-        const rangeAddress = parseRangeAddress(E.range),
-          k = E.columns[g.col - rangeAddress.firstCol];
+      for (const table of sheet.tables ?? []) {
+        if (!isCellInRange(table.range, input.address)) continue;
+        const rangeAddress = parseRangeAddress(table.range),
+          tableColumn =
+            table.columns[inputPosition.col - rangeAddress.firstCol];
         if (
-          g.row === rangeAddress.firstRow ||
-          (E.showTotals && g.row === rangeAddress.lastRow) ||
-          k?.calculatedFormula ||
-          Object.entries(sheet.cells).some(([F, cell]) => {
-            const O = _t(F);
+          inputPosition.row === rangeAddress.firstRow ||
+          (table.showTotals && inputPosition.row === rangeAddress.lastRow) ||
+          tableColumn?.calculatedFormula ||
+          Object.entries(sheet.cells).some(([cellAddress, cell]) => {
+            const candidatePosition = _t(cellAddress);
             return (
-              O.col === g.col &&
-              O.row > rangeAddress.firstRow &&
-              O.row <= rangeAddress.lastRow - (E.showTotals ? 1 : 0) &&
+              candidatePosition.col === inputPosition.col &&
+              candidatePosition.row > rangeAddress.firstRow &&
+              candidatePosition.row <=
+                rangeAddress.lastRow - (table.showTotals ? 1 : 0) &&
               !cell.literal &&
               typeof cell.raw == "string" &&
               cell.raw.startsWith("=")
@@ -899,12 +982,18 @@ function computeWhatIfResult(workbook, request, t = {}) {
             "Table headers, totals and calculated columns cannot be what-if inputs.",
           );
       }
-      const b = (sheet.validations ?? []).filter((E) =>
-        isCellInRange(E.range, input.address),
+      const inputValidations = (sheet.validations ?? []).filter((validation) =>
+        isCellInRange(validation.range, input.address),
       );
       if (
-        [cell.raw, ...a.map((E) => E.inputs[p])].some((E) =>
-          b.some((A) => !validateDataValidationRule(A, E)),
+        [
+          cell.raw,
+          ...scenarios.map((scenario) => scenario.inputs[inputIndex]),
+        ].some((candidateValue) =>
+          inputValidations.some(
+            (validationRule) =>
+              !validateDataValidationRule(validationRule, candidateValue),
+          ),
         )
       )
         throw Error(
@@ -912,8 +1001,8 @@ function computeWhatIfResult(workbook, request, t = {}) {
         );
       return cell.raw;
     }),
-    d = new Map();
-  for (const output of n.outputs) {
+    dependencyMap = new Map();
+  for (const output of definition.outputs) {
     const cell = workbook.sheets.find((sheet) => sheet.id === output.sheetId)
       .cells[output.address];
     if (
@@ -925,7 +1014,7 @@ function computeWhatIfResult(workbook, request, t = {}) {
       throw Error(
         "Every result cell must contain an actual calculation formula.",
       );
-    const m = inspectFormulaDependencies(
+    const dependencyInspection = inspectFormulaDependencies(
         {
           ...workbook,
           sheets: workbook.sheets.map((sheet) =>
@@ -944,34 +1033,50 @@ function computeWhatIfResult(workbook, request, t = {}) {
           },
         },
       ),
-      v = [m.target, ...m.nodes],
-      g = new Set(v.map((event) => event.key));
-    if (m.coverage.truncated || m.coverage.depthLimited)
+      dependencyNodes = [
+        dependencyInspection.target,
+        ...dependencyInspection.nodes,
+      ],
+      dependencyKeys = new Set(dependencyNodes.map((event) => event.key));
+    if (
+      dependencyInspection.coverage.truncated ||
+      dependencyInspection.coverage.depthLimited
+    )
       throw Error(
         "What-if analysis requires a complete dependency closure within 500 cells, 5,000 scanned formulas and depth 8.",
       );
-    const issue = m.issues.find((issue) => g.has(issue.from));
-    if (issue || m.cycles.length)
+    const issue = dependencyInspection.issues.find((issue) =>
+      dependencyKeys.has(issue.from),
+    );
+    if (issue || dependencyInspection.cycles.length)
       throw Error(
         `What-if analysis requires supported static dependencies: ${issue?.message ?? "a cycle was found."}`,
       );
-    for (const y of v) d.set(y.key, { sheetId: y.sheetId, address: y.address });
+    for (const dependencyNode of dependencyNodes)
+      dependencyMap.set(dependencyNode.key, {
+        sheetId: dependencyNode.sheetId,
+        address: dependencyNode.address,
+      });
   }
-  if (d.size > whatIfLimits.dependencyCells)
+  if (dependencyMap.size > whatIfLimits.dependencyCells)
     throw Error(
       "What-if analysis supports at most 500 dependency cells across all results.",
     );
-  if (n.inputs.some((input) => !d.has(cellAddressKey(input))))
+  if (
+    definition.inputs.some((input) => !dependencyMap.has(cellAddressKey(input)))
+  )
     throw Error(
       "Each changing input must be a precedent of at least one selected formula result.",
     );
-  const assumptions = [...d.values()].map((f) => {
-      if (!isVisibleAuthorizedCell(workbook, f, whatIfHostScope))
+  const assumptions = [...dependencyMap.values()].map((dependency) => {
+      if (!isVisibleAuthorizedCell(workbook, dependency, whatIfHostScope))
         throw Error(
           "A formula dependency is outside the visible, authorized host context.",
         );
-      const sheet = workbook.sheets.find((sheet) => sheet.id === f.sheetId),
-        cell = sheet.cells[f.address];
+      const sheet = workbook.sheets.find(
+          (sheet) => sheet.id === dependency.sheetId,
+        ),
+        cell = sheet.cells[dependency.address];
       if (!cell || cell.raw === null)
         throw Error(
           "What-if analysis requires populated static dependencies; blank or possible spill-child cells are unsupported.",
@@ -981,71 +1086,80 @@ function computeWhatIfResult(workbook, request, t = {}) {
         typeof cell.raw == "string" &&
         cell.raw.startsWith("=")
       ) {
-        const v = resolveDefinedNameValue(cell.raw, workbook, sheet.id).replace(
-          /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
-          "",
-        );
+        const formulaText = resolveDefinedNameValue(
+          cell.raw,
+          workbook,
+          sheet.id,
+        ).replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, "");
         if (
-          [...v.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)]
-            .map((b) =>
-              b[1]
+          [...formulaText.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)]
+            .map((match) =>
+              match[1]
                 .toUpperCase()
                 .replace(/^_XLFN\./, "")
                 .replace(/^_XLWS\./, ""),
             )
-            .some((b) => whatIfAllowedFunctions.has(b)) ||
-          /[{}#]/.test(v)
+            .some((functionName) => whatIfAllowedFunctions.has(functionName)) ||
+          /[{}#]/.test(formulaText)
         )
           throw Error(
             "What-if analysis excludes volatile, dynamic-reference, array/spill and unsupported reusable-function dependencies.",
           );
       }
       return {
-        ...f,
+        ...dependency,
         sheetName: sheet.name,
         raw: cell.raw,
         ...(cell.literal === undefined ? {} : { literal: cell.literal }),
       };
     }),
-    workUnits = d.size * (a.length + 1);
+    workUnits = dependencyMap.size * (scenarios.length + 1);
   if (workUnits > whatIfLimits.workUnits)
     throw Error(
       "What-if evaluation would exceed 50,000 dependency-cell work units. Reduce the values, scenarios or dependencies.",
     );
-  const c = {
+  const scopedWorkbook = {
     ...workbook,
     sheets: workbook.sheets
       .filter((sheet) => whatIfHostScope.allowedSheetIds.includes(sheet.id))
-      .map((f) => ({
-        ...f,
+      .map((sheet) => ({
+        ...sheet,
         cells: Object.fromEntries(
-          Object.entries(f.cells).filter(([address]) =>
-            d.has(cellAddressKey({ sheetId: f.id, address: address })),
+          Object.entries(sheet.cells).filter(([address]) =>
+            dependencyMap.has(
+              cellAddressKey({ sheetId: sheet.id, address: address }),
+            ),
           ),
         ),
       })),
   };
-  function h(f, p) {
+  function runTrial(trialName, trialInputs) {
     try {
-      const m = new Map(
-          n.inputs.map((input, w) => [cellAddressKey(input), p[w]]),
+      const inputOverrides = new Map(
+          definition.inputs.map((input, inputIndex) => [
+            cellAddressKey(input),
+            trialInputs[inputIndex],
+          ]),
         ),
         workbook = {
-          ...c,
-          sheets: c.sheets.map((sheet) => ({
+          ...scopedWorkbook,
+          sheets: scopedWorkbook.sheets.map((sheet) => ({
             ...sheet,
             cells: Object.fromEntries(
-              Object.entries(sheet.cells).map(([address, E]) => {
-                const raw = m.get(
+              Object.entries(sheet.cells).map(([address, cell]) => {
+                const raw = inputOverrides.get(
                   cellAddressKey({ sheetId: sheet.id, address: address }),
                 );
-                return [address, raw === undefined ? E : { ...E, raw: raw }];
+                return [
+                  address,
+                  raw === undefined ? cell : { ...cell, raw: raw },
+                ];
               }),
             ),
           })),
         },
         workbookWithSettings = calculateWorkbookWithSettings(workbook),
-        outputs = n.outputs.map((output) =>
+        outputs = definition.outputs.map((output) =>
           workbookWithSettings(output.sheetId, output.address),
         );
       if (workbookWithSettings.getOperationalErrors().length)
@@ -1056,8 +1170,13 @@ function computeWhatIfResult(workbook, request, t = {}) {
         throw Error(
           `Each formula must return a finite number; received ${outputs.map(String).join(", ")}.`,
         );
-      for (const y of d.values())
-        if (workbookWithSettings.getSpillRange(y.sheetId, y.address))
+      for (const dependencyCell of dependencyMap.values())
+        if (
+          workbookWithSettings.getSpillRange(
+            dependencyCell.sheetId,
+            dependencyCell.address,
+          )
+        )
           throw Error(
             "A trial produced an array/spill; scalar results are required.",
           );
@@ -1065,11 +1184,16 @@ function computeWhatIfResult(workbook, request, t = {}) {
         throw Error(
           "Dependency inspection encountered an operational calculation error.",
         );
-      return { name: f, inputs: [...p], outputs: outputs, error: null };
+      return {
+        name: trialName,
+        inputs: [...trialInputs],
+        outputs: outputs,
+        error: null,
+      };
     } catch (error) {
       return {
-        name: f,
-        inputs: [...p],
+        name: trialName,
+        inputs: [...trialInputs],
         outputs: null,
         error: (error instanceof Error
           ? error.message
@@ -1080,56 +1204,69 @@ function computeWhatIfResult(workbook, request, t = {}) {
   }
   return {
     snapshot: JSON.stringify(workbook),
-    requestSnapshot: JSON.stringify(n),
-    request: n,
+    requestSnapshot: JSON.stringify(definition),
+    request: definition,
     context: whatIfHostScope,
-    baseline: h("Baseline", s),
-    trials: a.map((f) => h(f.name, f.inputs)),
+    baseline: runTrial("Baseline", baselineInputs),
+    trials: scenarios.map((scenario) =>
+      runTrial(scenario.name, scenario.inputs),
+    ),
     assumptions: assumptions,
     sourceRevision: workbook.revision,
-    dependencyCells: d.size,
+    dependencyCells: dependencyMap.size,
     workUnits: workUnits,
   };
 }
-function createWhatIfPreviewSnapshot(workbook, r, t) {
-  if (JSON.stringify(workbook) !== r.snapshot)
+function createWhatIfPreviewSnapshot(workbook, preview, hostScopeOptions) {
+  if (JSON.stringify(workbook) !== preview.snapshot)
     throw Error(
       "The workbook changed after preview. Preview and review the analysis again.",
     );
-  const whatIfResult = computeWhatIfResult(workbook, r.request, t);
-  if (JSON.stringify(whatIfResult) !== JSON.stringify(r))
+  const whatIfResult = computeWhatIfResult(
+    workbook,
+    preview.request,
+    hostScopeOptions,
+  );
+  if (JSON.stringify(whatIfResult) !== JSON.stringify(preview))
     throw Error(
       "The what-if preview or host context changed. Preview and review again.",
     );
   return whatIfResult;
 }
-function buildWhatIfPreview(workbook, r, t = {}) {
-  const { snapshot, requestSnapshot, context, ...s } =
-    createWhatIfPreviewSnapshot(workbook, r, t);
-  return s;
+function buildWhatIfPreview(workbook, preview, hostScopeOptions = {}) {
+  const { snapshot, requestSnapshot, context, ...previewDetails } =
+    createWhatIfPreviewSnapshot(workbook, preview, hostScopeOptions);
+  return previewDetails;
 }
-function applyWhatIfScenario(workbook, r, t, n = {}) {
-  if (n.readOnly) throw Error("This workbook is read-only.");
-  const whatIfPreviewSnapshot = createWhatIfPreviewSnapshot(workbook, r, n);
+function applyWhatIfScenario(workbook, preview, scenarioChoice, options = {}) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
+  const whatIfPreviewSnapshot = createWhatIfPreviewSnapshot(
+    workbook,
+    preview,
+    options,
+  );
   if (whatIfPreviewSnapshot.request.kind !== "scenarios")
     throw Error(
       "Sensitivity tables are reports. Only named scenarios can be applied.",
     );
   if (
-    t !== "baseline" &&
-    (!Number.isInteger(t) || t < 0 || t >= whatIfPreviewSnapshot.trials.length)
+    scenarioChoice !== "baseline" &&
+    (!Number.isInteger(scenarioChoice) ||
+      scenarioChoice < 0 ||
+      scenarioChoice >= whatIfPreviewSnapshot.trials.length)
   )
     throw Error("Choose one reviewed scenario.");
-  const a =
-    t === "baseline"
+  const selectedScenario =
+    scenarioChoice === "baseline"
       ? whatIfPreviewSnapshot.baseline
-      : whatIfPreviewSnapshot.trials[t];
-  if (a.error || !a.outputs)
+      : whatIfPreviewSnapshot.trials[scenarioChoice];
+  if (selectedScenario.error || !selectedScenario.outputs)
     throw Error(
       "A failed calculation cannot be applied. The baseline is unchanged.",
     );
-  return a.inputs.every(
-    (input, d) => input === whatIfPreviewSnapshot.baseline.inputs[d],
+  return selectedScenario.inputs.every(
+    (input, inputIndex) =>
+      input === whatIfPreviewSnapshot.baseline.inputs[inputIndex],
   )
     ? workbook
     : {
@@ -1137,28 +1274,30 @@ function applyWhatIfScenario(workbook, r, t, n = {}) {
         sheets: workbook.sheets.map((sheet) => {
           const cells = { ...sheet.cells };
           return (
-            whatIfPreviewSnapshot.request.inputs.forEach((input, l) => {
-              input.sheetId === sheet.id &&
-                (cells[input.address] = {
-                  ...cells[input.address],
-                  raw: a.inputs[l],
-                });
-            }),
+            whatIfPreviewSnapshot.request.inputs.forEach(
+              (input, requestInputIndex) => {
+                input.sheetId === sheet.id &&
+                  (cells[input.address] = {
+                    ...cells[input.address],
+                    raw: selectedScenario.inputs[requestInputIndex],
+                  });
+              },
+            ),
             { ...sheet, cells: cells }
           );
         }),
       };
 }
-const formatAssumptionReference = (e, r) =>
-  `${e.assumptions.find((assumption) => cellAddressKey(assumption) === cellAddressKey(r))?.sheetName ?? r.sheetId}!${r.address}`;
+const formatAssumptionReference = (whatIfPreview, cellReference) =>
+  `${whatIfPreview.assumptions.find((assumption) => cellAddressKey(assumption) === cellAddressKey(cellReference))?.sheetName ?? cellReference.sheetId}!${cellReference.address}`;
 function buildWhatIfReportRows(whatIfPreview) {
-  const r = whatIfPreview.request.inputs.map((input) =>
+  const inputLabels = whatIfPreview.request.inputs.map((input) =>
       formatAssumptionReference(whatIfPreview, input),
     ),
-    t = whatIfPreview.request.outputs.map((output) =>
+    outputLabels = whatIfPreview.request.outputs.map((output) =>
       formatAssumptionReference(whatIfPreview, output),
     ),
-    n = [
+    reportRows = [
       [whatIfPreview.request.name],
       ["Historical what-if report", whatIfPreview.request.kind],
       ["Source revision", whatIfPreview.sourceRevision],
@@ -1166,48 +1305,61 @@ function buildWhatIfReportRows(whatIfPreview) {
         "Refresh explicitly from What-if Analysis; existing reports retain their original assumptions.",
       ],
     ],
-    o = (a) =>
-      a.outputs ?? whatIfPreview.request.outputs.map(() => `Error: ${a.error}`);
+    formatOutputs = (scenarioResult) =>
+      scenarioResult.outputs ??
+      whatIfPreview.request.outputs.map(() => `Error: ${scenarioResult.error}`);
   if (
-    (n.push(
-      ["Baseline", ...r, ...t],
+    (reportRows.push(
+      ["Baseline", ...inputLabels, ...outputLabels],
       [
         whatIfPreview.baseline.name,
         ...whatIfPreview.baseline.inputs,
-        ...o(whatIfPreview.baseline),
+        ...formatOutputs(whatIfPreview.baseline),
       ],
       [],
     ),
     whatIfPreview.request.kind === "scenarios")
   ) {
-    n.push(["Scenario", ...r, ...t]);
+    reportRows.push(["Scenario", ...inputLabels, ...outputLabels]);
     for (const trial of whatIfPreview.trials)
-      n.push([trial.name, ...trial.inputs, ...o(trial)]);
+      reportRows.push([trial.name, ...trial.inputs, ...formatOutputs(trial)]);
   } else if (whatIfPreview.request.kind === "one-variable")
     if (whatIfPreview.request.orientation === "column") {
-      n.push([r[0], ...t]);
+      reportRows.push([inputLabels[0], ...outputLabels]);
       for (const trial of whatIfPreview.trials)
-        n.push([trial.inputs[0], ...o(trial)]);
+        reportRows.push([trial.inputs[0], ...formatOutputs(trial)]);
     } else
-      (n.push([r[0], ...whatIfPreview.request.values]),
-        t.forEach((a, s) =>
-          n.push([a, ...whatIfPreview.trials.map((trial) => o(trial)[s])]),
+      (reportRows.push([inputLabels[0], ...whatIfPreview.request.values]),
+        outputLabels.forEach((outputLabel, outputIndex) =>
+          reportRows.push([
+            outputLabel,
+            ...whatIfPreview.trials.map(
+              (trial) => formatOutputs(trial)[outputIndex],
+            ),
+          ]),
         ));
   else {
     const { rowValues, columnValues } = whatIfPreview.request;
-    (n.push([`Down: ${r[1]} / Across: ${r[0]}`, ...rowValues]),
-      columnValues.forEach((columnValue, u) =>
-        n.push([
+    (reportRows.push([
+      `Down: ${inputLabels[1]} / Across: ${inputLabels[0]}`,
+      ...rowValues,
+    ]),
+      columnValues.forEach((columnValue, columnValueIndex) =>
+        reportRows.push([
           columnValue,
           ...rowValues.map(
-            (rowValue, c) =>
-              o(whatIfPreview.trials[u * rowValues.length + c])[0],
+            (rowValue, rowValueIndex) =>
+              formatOutputs(
+                whatIfPreview.trials[
+                  columnValueIndex * rowValues.length + rowValueIndex
+                ],
+              )[0],
           ),
         ]),
       ));
   }
   return (
-    n.push(
+    reportRows.push(
       [],
       [
         "Source assumptions at preview",
@@ -1223,112 +1375,134 @@ function buildWhatIfReportRows(whatIfPreview) {
       ["Dependency cells", whatIfPreview.dependencyCells],
       ["Dependency-cell work units", whatIfPreview.workUnits],
     ),
-    n
+    reportRows
   );
 }
-function saveWhatIfAnalysis(workbook, r, t = {}, n) {
-  if (t.readOnly) throw Error("This workbook is read-only.");
+function saveWhatIfAnalysis(workbook, preview, options = {}, savedAnalysisId) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
   if (workbook.structureProtection?.enabled)
     throw Error(
       "Workbook structure is protected. Unprotect it before saving a new report.",
     );
-  const whatIfPreview = buildWhatIfPreview(workbook, r, t),
-    a = workbook.whatIfAnalyses ?? [];
-  if (n && !a.some((p) => p.id === n))
+  const whatIfPreview = buildWhatIfPreview(workbook, preview, options),
+    savedAnalyses = workbook.whatIfAnalyses ?? [];
+  if (
+    savedAnalysisId &&
+    !savedAnalyses.some((analysis) => analysis.id === savedAnalysisId)
+  )
     throw Error("The saved analysis no longer exists.");
   if (
-    n &&
+    savedAnalysisId &&
     !isWhatIfAnalysisInScope(
       workbook,
-      a.find((p) => p.id === n),
-      t,
+      savedAnalyses.find(
+        (savedAnalysis) => savedAnalysis.id === savedAnalysisId,
+      ),
+      options,
     )
   )
     throw Error("The saved analysis is outside the authorized context.");
-  if (!n && a.length >= whatIfLimits.savedAnalyses)
+  if (!savedAnalysisId && savedAnalyses.length >= whatIfLimits.savedAnalyses)
     throw Error(
       "At most 40 saved analyses are supported. Remove an unused definition first.",
     );
   if (
-    a.some(
-      (p) =>
-        p.id !== n &&
-        p.request.name.toLowerCase() ===
+    savedAnalyses.some(
+      (otherAnalysis) =>
+        otherAnalysis.id !== savedAnalysisId &&
+        otherAnalysis.request.name.toLowerCase() ===
           whatIfPreview.request.name.toLowerCase(),
     )
   )
     throw Error(
       "A saved analysis already has this name. Choose another name or update that analysis.",
     );
-  const s =
+  const baseSheetName =
       whatIfPreview.request.name
         .replace(/[\\/\[\]*?:]/g, " ")
         .slice(0, 25)
         .trim() || "What-if",
-    d = new Set(workbook.sheets.map((sheet) => sheet.name.toLowerCase()));
-  let u = s,
-    l = 2;
-  for (; d.has(u.toLowerCase());) {
-    const p = ` ${l++}`;
-    u = `${s.slice(0, 31 - p.length)}${p}`;
+    existingSheetNames = new Set(
+      workbook.sheets.map((sheet) => sheet.name.toLowerCase()),
+    );
+  let sheetName = baseSheetName,
+    suffixNumber = 2;
+  for (; existingSheetNames.has(sheetName.toLowerCase());) {
+    const suffix = ` ${suffixNumber++}`;
+    sheetName = `${baseSheetName.slice(0, 31 - suffix.length)}${suffix}`;
   }
-  const worksheetRecord = createWorksheetRecord(u);
-  for (const [p, m] of buildWhatIfReportRows(whatIfPreview).entries())
-    for (const [v, raw] of m.entries())
-      worksheetRecord.cells[`${columnIndexToLetters(v)}${p + 1}`] = {
+  const worksheetRecord = createWorksheetRecord(sheetName);
+  for (const [rowIndex, rowCells] of buildWhatIfReportRows(
+    whatIfPreview,
+  ).entries())
+    for (const [columnIndex, raw] of rowCells.entries())
+      worksheetRecord.cells[
+        `${columnIndexToLetters(columnIndex)}${rowIndex + 1}`
+      ] = {
         raw: raw,
         ...(typeof raw == "string" ? { literal: true } : {}),
-        ...(p === 0 || p === 4 || p === 7
+        ...(rowIndex === 0 || rowIndex === 4 || rowIndex === 7
           ? { style: { bold: true, fill: "#e2f0d9" } }
           : {}),
       };
   ((worksheetRecord.columnWidths = { 0: 300, 1: 240, 2: 180, 3: 160 }),
     (worksheetRecord.frozenRows = 4));
-  const h = {
-    id: n ?? crypto.randomUUID(),
+  const analysisRecord = {
+    id: savedAnalysisId ?? crypto.randomUUID(),
     reportSheetId: worksheetRecord.id,
     ...whatIfPreview,
   };
   return normalizeWorkbookInput({
     ...workbook,
     sheets: [...workbook.sheets, worksheetRecord],
-    whatIfAnalyses: n ? a.map((p) => (p.id === n ? h : p)) : [...a, h],
+    whatIfAnalyses: savedAnalysisId
+      ? savedAnalyses.map((existingAnalysis) =>
+          existingAnalysis.id === savedAnalysisId
+            ? analysisRecord
+            : existingAnalysis,
+        )
+      : [...savedAnalyses, analysisRecord],
   });
 }
-function isWhatIfAnalysisInScope(workbook, r, t = {}) {
-  const whatIfHostScope = resolveWhatIfHostScope(workbook, t);
-  return r.assumptions.every((assumption) =>
+function isWhatIfAnalysisInScope(workbook, analysis, options = {}) {
+  const whatIfHostScope = resolveWhatIfHostScope(workbook, options);
+  return analysis.assumptions.every((assumption) =>
     workbook.sheets.some((sheet) => sheet.id === assumption.sheetId)
       ? isVisibleAuthorizedCell(workbook, assumption, whatIfHostScope)
-      : t.allowedSheetIds === undefined,
+      : options.allowedSheetIds === undefined,
   );
 }
-function findSavedWhatIfAnalysis(workbook, r, t = {}) {
-  if (t.readOnly) throw Error("This workbook is read-only.");
+function findSavedWhatIfAnalysis(workbook, analysisId, options = {}) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
   if (workbook.structureProtection?.enabled)
     throw Error("Workbook structure is protected.");
-  const n = workbook.whatIfAnalyses?.find(
-    (whatIfAnalys) => whatIfAnalys.id === r,
+  const savedAnalysis = workbook.whatIfAnalyses?.find(
+    (whatIfAnalys) => whatIfAnalys.id === analysisId,
   );
-  if (!n || !isWhatIfAnalysisInScope(workbook, n, t))
+  if (
+    !savedAnalysis ||
+    !isWhatIfAnalysisInScope(workbook, savedAnalysis, options)
+  )
     throw Error(
       "The saved analysis is missing or outside the authorized context.",
     );
   return {
     ...workbook,
     whatIfAnalyses: workbook.whatIfAnalyses.filter(
-      (whatIfAnalys) => whatIfAnalys.id !== r,
+      (whatIfAnalys) => whatIfAnalys.id !== analysisId,
     ),
   };
 }
-function parseAssumptionNumbers(e, locale) {
-  const t = locale === "de-DE" || locale === "fr-FR",
-    n = e.split(t ? /[;\n]/ : /[,;\n]/);
+function parseAssumptionNumbers(assumptionText, locale) {
+  const usesDecimalComma = locale === "de-DE" || locale === "fr-FR",
+    entries = assumptionText.split(usesDecimalComma ? /[;\n]/ : /[,;\n]/);
   try {
-    return n.map((o) => validateLocalizedNumberEntry(o, "Assumption", locale));
+    return entries.map((entry) =>
+      validateLocalizedNumberEntry(entry, "Assumption", locale),
+    );
   } catch {
     throw Error(
-      t
+      usesDecimalComma
         ? "Enter finite numbers separated by semicolons or new lines; use a comma for decimals. Empty assumptions are not zero."
         : "Enter comma-separated finite numbers; empty assumptions are not zero.",
     );

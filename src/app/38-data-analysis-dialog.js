@@ -44,40 +44,40 @@ import {
   parseNumericText,
 } from "./37-statistics-and-linear-solver.js";
 
-function DataAnalysisDialog(e) {
+function DataAnalysisDialog(props) {
   const { text } = useWorkbookMessages(),
-    t = ne.useId(),
-    n = ne.useRef(null),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
     analysisReport = sheet.analysisReport,
-    [s, d] = ne.useState(
-      analysisReport?.request.kind ?? e.initialKind ?? "statistics",
+    [analysisKind, setAnalysisKind] = ne.useState(
+      analysisReport?.request.kind ?? props.initialKind ?? "statistics",
     ),
-    [u, l] = ne.useState("Setup"),
-    [c, h] = ne.useState(""),
-    [f, p] = ne.useState(null),
-    [checked, v] = ne.useState(analysisReport?.includeHidden ?? false),
-    [g, b] = ne.useState(0),
-    y = () => {
-      let te = 1;
+    [activeSection, setActiveSection] = ne.useState("Setup"),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [preview, setPreview] = ne.useState(null),
+    [checked, setChecked] = ne.useState(analysisReport?.includeHidden ?? false),
+    [resultPage, setResultPage] = ne.useState(0),
+    defaultOutputName = () => {
+      let analysisNumber = 1;
       for (
         ;
-        e.workbook.sheets.some(
-          (sheet) => sheet.name.toLowerCase() === `analysis ${te}`,
+        props.workbook.sheets.some(
+          (sheet) => sheet.name.toLowerCase() === `analysis ${analysisNumber}`,
         );
       )
-        te++;
-      return `Analysis ${te}`;
+        analysisNumber++;
+      return `Analysis ${analysisNumber}`;
     },
-    [outputName, E] = ne.useState(y),
-    [A, k] = ne.useState(() =>
+    [outputName, setOutputName] = ne.useState(defaultOutputName),
+    [solverRequest, setSolverRequest] = ne.useState(() =>
       analysisReport?.request.kind === "solver"
         ? analysisReport.request
         : {
             kind: "solver",
             outputName: outputName,
             objective: {
-              sheetId: e.sheetId,
+              sheetId: props.sheetId,
               address:
                 Object.entries(sheet.cells).find(
                   ([, cell]) =>
@@ -91,7 +91,7 @@ function DataAnalysisDialog(e) {
               .filter(([, cell]) => typeof cell.raw == "number")
               .slice(0, 2)
               .map(([address]) => ({
-                cell: { sheetId: e.sheetId, address: address },
+                cell: { sheetId: props.sheetId, address: address },
                 lower: 0,
                 upper: 100,
                 domain: "continuous",
@@ -101,114 +101,155 @@ function DataAnalysisDialog(e) {
             maxCandidates: 5e4,
           },
     ),
-    [F, I] = ne.useState(() =>
+    [statisticsRequest, setStatisticsRequest] = ne.useState(() =>
       analysisReport?.request.kind === "statistics"
         ? analysisReport.request
         : {
             kind: "statistics",
             outputName: outputName,
-            sheetId: e.sheetId,
-            range: e.range.includes(":")
-              ? e.range
+            sheetId: props.sheetId,
+            range: props.range.includes(":")
+              ? props.range
               : formatOccupiedRangeAddress(sheet),
             method: "descriptive",
             missing: "reject",
           },
     ),
-    [O, j] = ne.useState(F.bins?.join(", ") ?? "10, 20, 30"),
-    [z, V] = ne.useState(0),
-    [D, B] = ne.useState(-1),
-    [_, C] = ne.useState(null),
-    [T, N] = ne.useState(""),
-    R = JSON.stringify([
-      e.readOnly,
-      e.allowedSheetIds,
-      !!e.allowHidden && checked,
+    [binsText, setBinsText] = ne.useState(
+      statisticsRequest.bins?.join(", ") ?? "10, 20, 30",
+    ),
+    [inputRevision, setInputRevision] = ne.useState(0),
+    [previewRevision, setPreviewRevision] = ne.useState(-1),
+    [previewWorkbook, setPreviewWorkbook] = ne.useState(null),
+    [previewPermissionKey, setPreviewPermissionKey] = ne.useState(""),
+    permissionKey = JSON.stringify([
+      props.readOnly,
+      props.allowedSheetIds,
+      !!props.allowHidden && checked,
     ]),
-    L = !!f && D === z && _ === e.workbook && T === R,
-    $ = {
-      readOnly: e.readOnly,
-      allowedSheetIds: e.allowedSheetIds,
-      includeHidden: !!e.allowHidden && checked,
+    isPreviewCurrent =
+      !!preview &&
+      previewRevision === inputRevision &&
+      previewWorkbook === props.workbook &&
+      previewPermissionKey === permissionKey,
+    analysisOptions = {
+      readOnly: props.readOnly,
+      allowedSheetIds: props.allowedSheetIds,
+      includeHidden: !!props.allowHidden && checked,
     },
-    U = () => {
-      (V((te) => te + 1), p(null), h(""), b(0));
+    invalidatePreview = () => {
+      (setInputRevision((previousRevision) => previousRevision + 1),
+        setPreview(null),
+        setErrorMessage(""),
+        setResultPage(0));
     },
-    G = (te) => {
-      (k((ae) => ({ ...ae, ...te })), U());
+    updateSolverRequest = (solverPatch) => {
+      (setSolverRequest((previousSolverRequest) => ({
+        ...previousSolverRequest,
+        ...solverPatch,
+      })),
+        invalidatePreview());
     },
-    H = (te) => {
-      (I((ae) => ({ ...ae, ...te })), U());
+    updateStatisticsRequest = (statisticsPatch) => {
+      (setStatisticsRequest((previousStatisticsRequest) => ({
+        ...previousStatisticsRequest,
+        ...statisticsPatch,
+      })),
+        invalidatePreview());
     },
-    Q = e.workbook.sheets.filter(
+    selectableSheets = props.workbook.sheets.filter(
       (sheet) =>
         !sheet.analysisReport &&
         !sheet.dataModelReport &&
-        (!e.allowedSheetIds || e.allowedSheetIds.includes(sheet.id)) &&
-        ($.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
+        (!props.allowedSheetIds || props.allowedSheetIds.includes(sheet.id)) &&
+        (analysisOptions.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     ),
-    X$1 = (te, ae, oe) =>
+    X$1 = (selectedSheetId, onSheetChange, selectLabel) =>
       i.jsx("select", {
-        "aria-label": text(oe),
-        value: te,
-        onChange: (event) => ae(event.target.value),
-        children: Q.map((de) =>
-          i.jsx("option", { value: de.id, children: de.name }, de.id),
+        "aria-label": text(selectLabel),
+        value: selectedSheetId,
+        onChange: (event) => onSheetChange(event.target.value),
+        children: selectableSheets.map((worksheet) =>
+          i.jsx(
+            "option",
+            { value: worksheet.id, children: worksheet.name },
+            worksheet.id,
+          ),
         ),
       }),
-    J = (te, ae, oe) =>
+    renderNumberField = (fieldLabel, fieldValue, onFieldChange) =>
       i.jsx(LocalizedNumberField, {
-        "aria-label": text(te),
-        value: ae === undefined || !Number.isFinite(ae) ? "" : ae,
-        onValueChange: (de) => oe(parseNumericText(de)),
+        "aria-label": text(fieldLabel),
+        value:
+          fieldValue === undefined || !Number.isFinite(fieldValue)
+            ? ""
+            : fieldValue,
+        onValueChange: (numericText) =>
+          onFieldChange(parseNumericText(numericText)),
       });
   (ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      n.current?.querySelector("button")?.focus(),
+      dialogRef.current?.querySelector("button")?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []),
     ne.useEffect(() => {
-      const te = n.current?.querySelector(".lg-model-body");
-      te && (te.scrollTop = 0);
-    }, [u, f]));
+      const modelBody = dialogRef.current?.querySelector(".lg-model-body");
+      modelBody && (modelBody.scrollTop = 0);
+    }, [activeSection, preview]));
   const onClick = () => {
-      (p(null), h(""));
+      (setPreview(null), setErrorMessage(""));
       try {
         const request =
-            s === "solver"
-              ? { ...A, outputName: outputName }
+            analysisKind === "solver"
+              ? { ...solverRequest, outputName: outputName }
               : {
-                  ...F,
+                  ...statisticsRequest,
                   outputName: outputName,
-                  ...(F.method === "histogram"
-                    ? { bins: O.split(",").map(parseNumericText) }
+                  ...(statisticsRequest.method === "histogram"
+                    ? { bins: binsText.split(",").map(parseNumericText) }
                     : {}),
                 },
-          ae = runAnalysisRequest(e.workbook, request, $);
-        (p(ae), B(z), C(e.workbook), N(R), l("Results"), b(0));
+          nextPreview = runAnalysisRequest(
+            props.workbook,
+            request,
+            analysisOptions,
+          );
+        (setPreview(nextPreview),
+          setPreviewRevision(inputRevision),
+          setPreviewWorkbook(props.workbook),
+          setPreviewPermissionKey(permissionKey),
+          setActiveSection("Results"),
+          setResultPage(0));
       } catch (error) {
-        h(error instanceof Error ? error.message : "Analysis failed.");
+        setErrorMessage(
+          error instanceof Error ? error.message : "Analysis failed.",
+        );
       }
     },
-    W = (te) => {
+    saveAnalysis = (commitMode) => {
       try {
-        if (!L || !f)
+        if (!isPreviewCurrent || !preview)
           throw Error("Preview the current inputs and permissions first.");
-        const ae = commitAnalysisResult(e.workbook, f, te, $);
-        (e.onWorkbookChange(
-          ae,
-          te === "report"
+        const nextWorkbook = commitAnalysisResult(
+          props.workbook,
+          preview,
+          commitMode,
+          analysisOptions,
+        );
+        (props.onWorkbookChange(
+          nextWorkbook,
+          commitMode === "report"
             ? "Save analysis report"
             : "Apply Solver solution and report",
         ),
-          p(null),
-          e.onClose());
+          setPreview(null),
+          props.onClose());
       } catch (error) {
-        h(
+        setErrorMessage(
           error instanceof Error
             ? error.message
             : "The analysis was not saved.",
@@ -218,33 +259,35 @@ function DataAnalysisDialog(e) {
   return i.jsx("div", {
     className: "lg-modal-backdrop",
     children: i.jsxs("section", {
-      ref: n,
+      ref: dialogRef,
       className: "lg-data-model lg-analysis",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": t,
+      "aria-labelledby": titleId,
       onKeyDown: (event) => {
         if (
-          (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+          (event.key === "Escape" && (event.stopPropagation(), props.onClose()),
           event.key === "Tab")
         ) {
-          const ae = [
-              ...n.current.querySelectorAll(
+          const focusableElements = [
+              ...dialogRef.current.querySelectorAll(
                 'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]',
               ),
             ].filter(
-              (he) =>
-                !he.hidden &&
-                (he.getClientRects().length ||
+              (element) =>
+                !element.hidden &&
+                (element.getClientRects().length ||
                   navigator.userAgent.includes("jsdom")),
             ),
-            oe = ae[0],
-            de = ae.at(-1);
-          event.shiftKey && document.activeElement === oe
-            ? (event.preventDefault(), de == null || de.focus())
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === de &&
-              (event.preventDefault(), oe == null || oe.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -259,15 +302,16 @@ function DataAnalysisDialog(e) {
                   }),
                 }),
                 i.jsx("h2", {
-                  id: t,
+                  id: titleId,
                   children: i.jsx(LocalizedText, {
-                    children: s === "solver" ? "Solver" : "Data Analysis",
+                    children:
+                      analysisKind === "solver" ? "Solver" : "Data Analysis",
                   }),
                 }),
                 i.jsx("p", {
                   children: i.jsx(LocalizedText, {
                     children:
-                      s === "solver"
+                      analysisKind === "solver"
                         ? "Define a bounded linear model, review the result, then choose whether to apply it."
                         : "Choose a statistical method and review the sample before saving a report.",
                   }),
@@ -276,7 +320,7 @@ function DataAnalysisDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close analysis"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(X, { size: 20 }),
             }),
           ],
@@ -284,15 +328,15 @@ function DataAnalysisDialog(e) {
         i.jsxs("nav", {
           "aria-label": text("Analysis sections"),
           children: [
-            ["Setup", "Results"].map((te) =>
+            ["Setup", "Results"].map((section) =>
               i.jsx(
                 "button",
                 {
-                  "aria-pressed": u === te,
-                  onClick: () => l(te),
-                  children: i.jsx(LocalizedText, { children: te }),
+                  "aria-pressed": activeSection === section,
+                  onClick: () => setActiveSection(section),
+                  children: i.jsx(LocalizedText, { children: section }),
                 },
-                te,
+                section,
               ),
             ),
             i.jsx("span", {
@@ -300,9 +344,11 @@ function DataAnalysisDialog(e) {
               children: LabeledField(
                 "Tool",
                 i.jsxs("select", {
-                  value: s,
+                  value: analysisKind,
                   onChange: (event) => {
-                    (d(event.target.value), U(), l("Setup"));
+                    (setAnalysisKind(event.target.value),
+                      invalidatePreview(),
+                      setActiveSection("Setup"));
                   },
                   children: [
                     i.jsx("option", { value: "solver", children: "Solver" }),
@@ -327,13 +373,13 @@ function DataAnalysisDialog(e) {
                     "Loaded the saved definition. A new preview and a new report name are required to refresh it.",
                 }),
               }),
-            c &&
+            errorMessage &&
               i.jsx("p", {
                 role: "alert",
                 className: "lg-analysis-error",
-                children: c,
+                children: errorMessage,
               }),
-            u === "Setup"
+            activeSection === "Setup"
               ? i.jsxs(i.Fragment, {
                   children: [
                     i.jsxs("div", {
@@ -344,24 +390,26 @@ function DataAnalysisDialog(e) {
                           i.jsx("input", {
                             value: outputName,
                             onChange: (event) => {
-                              (E(event.target.value), U());
+                              (setOutputName(event.target.value),
+                                invalidatePreview());
                             },
                           }),
                         ),
-                        e.allowHidden &&
+                        props.allowHidden &&
                           LabeledField(
                             "Include hidden source cells",
                             i.jsx("input", {
                               type: "checkbox",
                               checked: checked,
                               onChange: (event) => {
-                                (v(event.target.checked), U());
+                                (setChecked(event.target.checked),
+                                  invalidatePreview());
                               },
                             }),
                           ),
                       ],
                     }),
-                    s === "solver"
+                    analysisKind === "solver"
                       ? i.jsxs(i.Fragment, {
                           children: [
                             i.jsxs("fieldset", {
@@ -377,11 +425,11 @@ function DataAnalysisDialog(e) {
                                     LabeledField(
                                       "Objective worksheet",
                                       X$1(
-                                        A.objective.sheetId,
+                                        solverRequest.objective.sheetId,
                                         (sheetId) =>
-                                          G({
+                                          updateSolverRequest({
                                             objective: {
-                                              ...A.objective,
+                                              ...solverRequest.objective,
                                               sheetId: sheetId,
                                             },
                                           }),
@@ -391,11 +439,11 @@ function DataAnalysisDialog(e) {
                                     LabeledField(
                                       "Objective formula cell",
                                       i.jsx("input", {
-                                        value: A.objective.address,
+                                        value: solverRequest.objective.address,
                                         onChange: (event) =>
-                                          G({
+                                          updateSolverRequest({
                                             objective: {
-                                              ...A.objective,
+                                              ...solverRequest.objective,
                                               address: event.target.value
                                                 .replace(/\$/g, "")
                                                 .toUpperCase(),
@@ -406,9 +454,11 @@ function DataAnalysisDialog(e) {
                                     LabeledField(
                                       "Direction",
                                       i.jsxs("select", {
-                                        value: A.direction,
+                                        value: solverRequest.direction,
                                         onChange: (event) =>
-                                          G({ direction: event.target.value }),
+                                          updateSolverRequest({
+                                            direction: event.target.value,
+                                          }),
                                         children: [
                                           i.jsx("option", {
                                             value: "maximize",
@@ -425,11 +475,16 @@ function DataAnalysisDialog(e) {
                                         ],
                                       }),
                                     ),
-                                    A.direction === "target" &&
+                                    solverRequest.direction === "target" &&
                                       LabeledField(
                                         "Target value",
-                                        J("Target value", A.target, (target) =>
-                                          G({ target: target }),
+                                        renderNumberField(
+                                          "Target value",
+                                          solverRequest.target,
+                                          (target) =>
+                                            updateSolverRequest({
+                                              target: target,
+                                            }),
                                         ),
                                       ),
                                   ],
@@ -450,149 +505,182 @@ function DataAnalysisDialog(e) {
                                       "Up to six numeric inputs. Give every input finite lower and upper bounds. Use continuous inputs together, or integer and binary inputs together.",
                                   }),
                                 }),
-                                A.variables.map((variable, ae) =>
-                                  i.jsxs(
-                                    "div",
-                                    {
-                                      className:
-                                        "lg-model-controls lg-analysis-row",
-                                      children: [
-                                        LabeledField(
-                                          `Variable ${ae + 1} worksheet`,
-                                          X$1(
-                                            variable.cell.sheetId,
-                                            (sheetId) =>
-                                              G({
-                                                variables: A.variables.map(
-                                                  (variable, he) =>
-                                                    he === ae
-                                                      ? {
-                                                          ...variable,
-                                                          cell: {
-                                                            ...variable.cell,
-                                                            sheetId: sheetId,
-                                                          },
-                                                        }
-                                                      : variable,
-                                                ),
-                                              }),
-                                            `Variable ${ae + 1} worksheet`,
-                                          ),
-                                        ),
-                                        LabeledField(
-                                          `Variable ${ae + 1} cell`,
-                                          i.jsx("input", {
-                                            value: variable.cell.address,
-                                            onChange: (event) =>
-                                              G({
-                                                variables: A.variables.map(
-                                                  (variable, he) =>
-                                                    he === ae
-                                                      ? {
-                                                          ...variable,
-                                                          cell: {
-                                                            ...variable.cell,
-                                                            address:
-                                                              event.target.value
-                                                                .replace(
-                                                                  /\$/g,
-                                                                  "",
-                                                                )
-                                                                .toUpperCase(),
-                                                          },
-                                                        }
-                                                      : variable,
-                                                ),
-                                              }),
-                                          }),
-                                        ),
-                                        ["lower", "upper"].map((oe) =>
+                                solverRequest.variables.map(
+                                  (variable, variableIndex) =>
+                                    i.jsxs(
+                                      "div",
+                                      {
+                                        className:
+                                          "lg-model-controls lg-analysis-row",
+                                        children: [
                                           LabeledField(
-                                            `Variable ${ae + 1} ${oe}`,
-                                            J(
-                                              `Variable ${ae + 1} ${oe}`,
-                                              variable[oe],
-                                              (de) =>
-                                                G({
-                                                  variables: A.variables.map(
-                                                    (variable, Se) =>
-                                                      Se === ae
-                                                        ? {
-                                                            ...variable,
-                                                            [oe]: de,
-                                                          }
-                                                        : variable,
-                                                  ),
+                                            `Variable ${variableIndex + 1} worksheet`,
+                                            X$1(
+                                              variable.cell.sheetId,
+                                              (sheetId) =>
+                                                updateSolverRequest({
+                                                  variables:
+                                                    solverRequest.variables.map(
+                                                      (
+                                                        variable,
+                                                        variableSheetIndex,
+                                                      ) =>
+                                                        variableSheetIndex ===
+                                                        variableIndex
+                                                          ? {
+                                                              ...variable,
+                                                              cell: {
+                                                                ...variable.cell,
+                                                                sheetId:
+                                                                  sheetId,
+                                                              },
+                                                            }
+                                                          : variable,
+                                                    ),
                                                 }),
+                                              `Variable ${variableIndex + 1} worksheet`,
                                             ),
                                           ),
-                                        ),
-                                        LabeledField(
-                                          `Variable ${ae + 1} domain`,
-                                          i.jsxs("select", {
-                                            value: variable.domain,
-                                            onChange: (event) =>
-                                              G({
-                                                variables: A.variables.map(
-                                                  (variable, he) =>
-                                                    he === ae
-                                                      ? {
-                                                          ...variable,
-                                                          domain:
-                                                            event.target.value,
-                                                          ...(event.target
-                                                            .value === "binary"
-                                                            ? {
-                                                                lower: 0,
-                                                                upper: 1,
-                                                              }
-                                                            : {}),
-                                                        }
-                                                      : variable,
-                                                ),
-                                              }),
-                                            children: [
-                                              i.jsx("option", {
-                                                value: "continuous",
-                                                children: "Continuous",
-                                              }),
-                                              i.jsx("option", {
-                                                value: "integer",
-                                                children: "Integer",
-                                              }),
-                                              i.jsx("option", {
-                                                value: "binary",
-                                                children: "Binary",
-                                              }),
-                                            ],
-                                          }),
-                                        ),
-                                        i.jsx("button", {
-                                          "aria-label": text(
-                                            `Remove variable ${ae + 1}`,
-                                          ),
-                                          onClick: () =>
-                                            G({
-                                              variables: A.variables.filter(
-                                                (variable, de) => de !== ae,
-                                              ),
+                                          LabeledField(
+                                            `Variable ${variableIndex + 1} cell`,
+                                            i.jsx("input", {
+                                              value: variable.cell.address,
+                                              onChange: (event) =>
+                                                updateSolverRequest({
+                                                  variables:
+                                                    solverRequest.variables.map(
+                                                      (
+                                                        variable,
+                                                        variableCellIndex,
+                                                      ) =>
+                                                        variableCellIndex ===
+                                                        variableIndex
+                                                          ? {
+                                                              ...variable,
+                                                              cell: {
+                                                                ...variable.cell,
+                                                                address:
+                                                                  event.target.value
+                                                                    .replace(
+                                                                      /\$/g,
+                                                                      "",
+                                                                    )
+                                                                    .toUpperCase(),
+                                                              },
+                                                            }
+                                                          : variable,
+                                                    ),
+                                                }),
                                             }),
-                                          children: "×",
-                                        }),
-                                      ],
-                                    },
-                                    ae,
-                                  ),
+                                          ),
+                                          ["lower", "upper"].map((boundKey) =>
+                                            LabeledField(
+                                              `Variable ${variableIndex + 1} ${boundKey}`,
+                                              renderNumberField(
+                                                `Variable ${variableIndex + 1} ${boundKey}`,
+                                                variable[boundKey],
+                                                (boundValue) =>
+                                                  updateSolverRequest({
+                                                    variables:
+                                                      solverRequest.variables.map(
+                                                        (
+                                                          variable,
+                                                          variableBoundIndex,
+                                                        ) =>
+                                                          variableBoundIndex ===
+                                                          variableIndex
+                                                            ? {
+                                                                ...variable,
+                                                                [boundKey]:
+                                                                  boundValue,
+                                                              }
+                                                            : variable,
+                                                      ),
+                                                  }),
+                                              ),
+                                            ),
+                                          ),
+                                          LabeledField(
+                                            `Variable ${variableIndex + 1} domain`,
+                                            i.jsxs("select", {
+                                              value: variable.domain,
+                                              onChange: (event) =>
+                                                updateSolverRequest({
+                                                  variables:
+                                                    solverRequest.variables.map(
+                                                      (
+                                                        variable,
+                                                        variableDomainIndex,
+                                                      ) =>
+                                                        variableDomainIndex ===
+                                                        variableIndex
+                                                          ? {
+                                                              ...variable,
+                                                              domain:
+                                                                event.target
+                                                                  .value,
+                                                              ...(event.target
+                                                                .value ===
+                                                              "binary"
+                                                                ? {
+                                                                    lower: 0,
+                                                                    upper: 1,
+                                                                  }
+                                                                : {}),
+                                                            }
+                                                          : variable,
+                                                    ),
+                                                }),
+                                              children: [
+                                                i.jsx("option", {
+                                                  value: "continuous",
+                                                  children: "Continuous",
+                                                }),
+                                                i.jsx("option", {
+                                                  value: "integer",
+                                                  children: "Integer",
+                                                }),
+                                                i.jsx("option", {
+                                                  value: "binary",
+                                                  children: "Binary",
+                                                }),
+                                              ],
+                                            }),
+                                          ),
+                                          i.jsx("button", {
+                                            "aria-label": text(
+                                              `Remove variable ${variableIndex + 1}`,
+                                            ),
+                                            onClick: () =>
+                                              updateSolverRequest({
+                                                variables:
+                                                  solverRequest.variables.filter(
+                                                    (
+                                                      variable,
+                                                      removeVariableIndex,
+                                                    ) =>
+                                                      removeVariableIndex !==
+                                                      variableIndex,
+                                                  ),
+                                              }),
+                                            children: "×",
+                                          }),
+                                        ],
+                                      },
+                                      variableIndex,
+                                    ),
                                 ),
                                 i.jsx("button", {
-                                  disabled: A.variables.length >= 6,
+                                  disabled: solverRequest.variables.length >= 6,
                                   onClick: () =>
-                                    G({
+                                    updateSolverRequest({
                                       variables: [
-                                        ...A.variables,
+                                        ...solverRequest.variables,
                                         {
                                           cell: {
-                                            sheetId: Q[0]?.id ?? e.sheetId,
+                                            sheetId:
+                                              selectableSheets[0]?.id ??
+                                              props.sheetId,
                                             address: "A2",
                                           },
                                           lower: 0,
@@ -614,237 +702,283 @@ function DataAnalysisDialog(e) {
                                     children: "Constraints",
                                   }),
                                 }),
-                                A.constraints.map((constraint, ae) =>
-                                  i.jsxs(
-                                    "div",
-                                    {
-                                      className:
-                                        "lg-model-controls lg-analysis-row",
-                                      children: [
-                                        LabeledField(
-                                          `Constraint ${ae + 1} worksheet`,
-                                          X$1(
-                                            constraint.left.sheetId,
-                                            (sheetId) =>
-                                              G({
-                                                constraints: A.constraints.map(
-                                                  (constraint, he) =>
-                                                    he === ae
-                                                      ? {
-                                                          ...constraint,
-                                                          left: {
-                                                            ...constraint.left,
-                                                            sheetId: sheetId,
-                                                          },
-                                                        }
-                                                      : constraint,
-                                                ),
-                                              }),
-                                            `Constraint ${ae + 1} worksheet`,
-                                          ),
-                                        ),
-                                        LabeledField(
-                                          `Constraint ${ae + 1} cell`,
-                                          i.jsx("input", {
-                                            value: constraint.left.address,
-                                            onChange: (event) =>
-                                              G({
-                                                constraints: A.constraints.map(
-                                                  (constraint, he) =>
-                                                    he === ae
-                                                      ? {
-                                                          ...constraint,
-                                                          left: {
-                                                            ...constraint.left,
-                                                            address:
-                                                              event.target.value
-                                                                .replace(
-                                                                  /\$/g,
-                                                                  "",
-                                                                )
-                                                                .toUpperCase(),
-                                                          },
-                                                        }
-                                                      : constraint,
-                                                ),
-                                              }),
-                                          }),
-                                        ),
-                                        LabeledField(
-                                          `Constraint ${ae + 1} relation`,
-                                          i.jsx("select", {
-                                            value: constraint.operator,
-                                            onChange: (event) =>
-                                              G({
-                                                constraints: A.constraints.map(
-                                                  (constraint, he) =>
-                                                    he === ae
-                                                      ? {
-                                                          ...constraint,
-                                                          operator:
-                                                            event.target.value,
-                                                        }
-                                                      : constraint,
-                                                ),
-                                              }),
-                                            children: ["<=", ">=", "="].map(
-                                              (oe) =>
-                                                i.jsx(
-                                                  "option",
-                                                  { children: oe },
-                                                  oe,
-                                                ),
+                                solverRequest.constraints.map(
+                                  (constraint, constraintIndex) =>
+                                    i.jsxs(
+                                      "div",
+                                      {
+                                        className:
+                                          "lg-model-controls lg-analysis-row",
+                                        children: [
+                                          LabeledField(
+                                            `Constraint ${constraintIndex + 1} worksheet`,
+                                            X$1(
+                                              constraint.left.sheetId,
+                                              (sheetId) =>
+                                                updateSolverRequest({
+                                                  constraints:
+                                                    solverRequest.constraints.map(
+                                                      (
+                                                        constraint,
+                                                        constraintSheetIndex,
+                                                      ) =>
+                                                        constraintSheetIndex ===
+                                                        constraintIndex
+                                                          ? {
+                                                              ...constraint,
+                                                              left: {
+                                                                ...constraint.left,
+                                                                sheetId:
+                                                                  sheetId,
+                                                              },
+                                                            }
+                                                          : constraint,
+                                                    ),
+                                                }),
+                                              `Constraint ${constraintIndex + 1} worksheet`,
                                             ),
-                                          }),
-                                        ),
-                                        LabeledField(
-                                          `Constraint ${ae + 1} right type`,
-                                          i.jsxs("select", {
-                                            value:
-                                              typeof constraint.right ==
-                                              "number"
-                                                ? "number"
-                                                : "cell",
-                                            onChange: (event) =>
-                                              G({
-                                                constraints: A.constraints.map(
-                                                  (de, he) =>
-                                                    he === ae
-                                                      ? {
-                                                          ...de,
-                                                          right:
-                                                            event.target
-                                                              .value ===
-                                                            "number"
-                                                              ? 0
-                                                              : {
-                                                                  sheetId:
-                                                                    constraint
-                                                                      .left
-                                                                      .sheetId,
-                                                                  address: "A2",
-                                                                },
-                                                        }
-                                                      : de,
-                                                ),
-                                              }),
-                                            children: [
-                                              i.jsx("option", {
-                                                value: "number",
-                                                children: "Number",
-                                              }),
-                                              i.jsx("option", {
-                                                value: "cell",
-                                                children: "Cell",
-                                              }),
-                                            ],
-                                          }),
-                                        ),
-                                        typeof constraint.right == "number"
-                                          ? LabeledField(
-                                              `Constraint ${ae + 1} value`,
-                                              J(
-                                                `Constraint ${ae + 1} value`,
-                                                constraint.right,
-                                                (right) =>
-                                                  G({
-                                                    constraints:
-                                                      A.constraints.map(
-                                                        (constraint, he) =>
-                                                          he === ae
-                                                            ? {
-                                                                ...constraint,
-                                                                right: right,
-                                                              }
-                                                            : constraint,
-                                                      ),
-                                                  }),
-                                              ),
-                                            )
-                                          : i.jsxs(i.Fragment, {
-                                              children: [
-                                                LabeledField(
-                                                  `Constraint ${ae + 1} right worksheet`,
-                                                  X$1(
-                                                    constraint.right.sheetId,
-                                                    (sheetId) =>
-                                                      G({
-                                                        constraints:
-                                                          A.constraints.map(
-                                                            (de, he) =>
-                                                              he === ae
-                                                                ? {
-                                                                    ...de,
-                                                                    right: {
-                                                                      ...constraint.right,
-                                                                      sheetId:
-                                                                        sheetId,
-                                                                    },
-                                                                  }
-                                                                : de,
-                                                          ),
-                                                      }),
-                                                    `Constraint ${ae + 1} right worksheet`,
+                                          ),
+                                          LabeledField(
+                                            `Constraint ${constraintIndex + 1} cell`,
+                                            i.jsx("input", {
+                                              value: constraint.left.address,
+                                              onChange: (event) =>
+                                                updateSolverRequest({
+                                                  constraints:
+                                                    solverRequest.constraints.map(
+                                                      (
+                                                        constraint,
+                                                        constraintCellIndex,
+                                                      ) =>
+                                                        constraintCellIndex ===
+                                                        constraintIndex
+                                                          ? {
+                                                              ...constraint,
+                                                              left: {
+                                                                ...constraint.left,
+                                                                address:
+                                                                  event.target.value
+                                                                    .replace(
+                                                                      /\$/g,
+                                                                      "",
+                                                                    )
+                                                                    .toUpperCase(),
+                                                              },
+                                                            }
+                                                          : constraint,
+                                                    ),
+                                                }),
+                                            }),
+                                          ),
+                                          LabeledField(
+                                            `Constraint ${constraintIndex + 1} relation`,
+                                            i.jsx("select", {
+                                              value: constraint.operator,
+                                              onChange: (event) =>
+                                                updateSolverRequest({
+                                                  constraints:
+                                                    solverRequest.constraints.map(
+                                                      (
+                                                        constraint,
+                                                        constraintRelationIndex,
+                                                      ) =>
+                                                        constraintRelationIndex ===
+                                                        constraintIndex
+                                                          ? {
+                                                              ...constraint,
+                                                              operator:
+                                                                event.target
+                                                                  .value,
+                                                            }
+                                                          : constraint,
+                                                    ),
+                                                }),
+                                              children: ["<=", ">=", "="].map(
+                                                (relation) =>
+                                                  i.jsx(
+                                                    "option",
+                                                    { children: relation },
+                                                    relation,
                                                   ),
-                                                ),
-                                                LabeledField(
-                                                  `Constraint ${ae + 1} right cell`,
-                                                  i.jsx("input", {
-                                                    value:
-                                                      constraint.right.address,
-                                                    onChange: (event) =>
-                                                      G({
-                                                        constraints:
-                                                          A.constraints.map(
-                                                            (de, he) =>
-                                                              he === ae
-                                                                ? {
-                                                                    ...de,
-                                                                    right: {
-                                                                      ...constraint.right,
+                                              ),
+                                            }),
+                                          ),
+                                          LabeledField(
+                                            `Constraint ${constraintIndex + 1} right type`,
+                                            i.jsxs("select", {
+                                              value:
+                                                typeof constraint.right ==
+                                                "number"
+                                                  ? "number"
+                                                  : "cell",
+                                              onChange: (event) =>
+                                                updateSolverRequest({
+                                                  constraints:
+                                                    solverRequest.constraints.map(
+                                                      (
+                                                        rightTypeConstraint,
+                                                        rightTypeIndex,
+                                                      ) =>
+                                                        rightTypeIndex ===
+                                                        constraintIndex
+                                                          ? {
+                                                              ...rightTypeConstraint,
+                                                              right:
+                                                                event.target
+                                                                  .value ===
+                                                                "number"
+                                                                  ? 0
+                                                                  : {
+                                                                      sheetId:
+                                                                        constraint
+                                                                          .left
+                                                                          .sheetId,
                                                                       address:
-                                                                        event.target.value
-                                                                          .replace(
-                                                                            /\$/g,
-                                                                            "",
-                                                                          )
-                                                                          .toUpperCase(),
+                                                                        "A2",
                                                                     },
-                                                                  }
-                                                                : de,
-                                                          ),
-                                                      }),
-                                                  }),
-                                                ),
+                                                            }
+                                                          : rightTypeConstraint,
+                                                    ),
+                                                }),
+                                              children: [
+                                                i.jsx("option", {
+                                                  value: "number",
+                                                  children: "Number",
+                                                }),
+                                                i.jsx("option", {
+                                                  value: "cell",
+                                                  children: "Cell",
+                                                }),
                                               ],
                                             }),
-                                        i.jsx("button", {
-                                          "aria-label": text(
-                                            `Remove constraint ${ae + 1}`,
                                           ),
-                                          onClick: () =>
-                                            G({
-                                              constraints: A.constraints.filter(
-                                                (constraint, de) => de !== ae,
-                                              ),
-                                            }),
-                                          children: "×",
-                                        }),
-                                      ],
-                                    },
-                                    ae,
-                                  ),
+                                          typeof constraint.right == "number"
+                                            ? LabeledField(
+                                                `Constraint ${constraintIndex + 1} value`,
+                                                renderNumberField(
+                                                  `Constraint ${constraintIndex + 1} value`,
+                                                  constraint.right,
+                                                  (right) =>
+                                                    updateSolverRequest({
+                                                      constraints:
+                                                        solverRequest.constraints.map(
+                                                          (
+                                                            constraint,
+                                                            rightValueIndex,
+                                                          ) =>
+                                                            rightValueIndex ===
+                                                            constraintIndex
+                                                              ? {
+                                                                  ...constraint,
+                                                                  right: right,
+                                                                }
+                                                              : constraint,
+                                                        ),
+                                                    }),
+                                                ),
+                                              )
+                                            : i.jsxs(i.Fragment, {
+                                                children: [
+                                                  LabeledField(
+                                                    `Constraint ${constraintIndex + 1} right worksheet`,
+                                                    X$1(
+                                                      constraint.right.sheetId,
+                                                      (sheetId) =>
+                                                        updateSolverRequest({
+                                                          constraints:
+                                                            solverRequest.constraints.map(
+                                                              (
+                                                                rightSheetConstraint,
+                                                                rightSheetIndex,
+                                                              ) =>
+                                                                rightSheetIndex ===
+                                                                constraintIndex
+                                                                  ? {
+                                                                      ...rightSheetConstraint,
+                                                                      right: {
+                                                                        ...constraint.right,
+                                                                        sheetId:
+                                                                          sheetId,
+                                                                      },
+                                                                    }
+                                                                  : rightSheetConstraint,
+                                                            ),
+                                                        }),
+                                                      `Constraint ${constraintIndex + 1} right worksheet`,
+                                                    ),
+                                                  ),
+                                                  LabeledField(
+                                                    `Constraint ${constraintIndex + 1} right cell`,
+                                                    i.jsx("input", {
+                                                      value:
+                                                        constraint.right
+                                                          .address,
+                                                      onChange: (event) =>
+                                                        updateSolverRequest({
+                                                          constraints:
+                                                            solverRequest.constraints.map(
+                                                              (
+                                                                rightCellConstraint,
+                                                                rightCellIndex,
+                                                              ) =>
+                                                                rightCellIndex ===
+                                                                constraintIndex
+                                                                  ? {
+                                                                      ...rightCellConstraint,
+                                                                      right: {
+                                                                        ...constraint.right,
+                                                                        address:
+                                                                          event.target.value
+                                                                            .replace(
+                                                                              /\$/g,
+                                                                              "",
+                                                                            )
+                                                                            .toUpperCase(),
+                                                                      },
+                                                                    }
+                                                                  : rightCellConstraint,
+                                                            ),
+                                                        }),
+                                                    }),
+                                                  ),
+                                                ],
+                                              }),
+                                          i.jsx("button", {
+                                            "aria-label": text(
+                                              `Remove constraint ${constraintIndex + 1}`,
+                                            ),
+                                            onClick: () =>
+                                              updateSolverRequest({
+                                                constraints:
+                                                  solverRequest.constraints.filter(
+                                                    (
+                                                      constraint,
+                                                      removeConstraintIndex,
+                                                    ) =>
+                                                      removeConstraintIndex !==
+                                                      constraintIndex,
+                                                  ),
+                                              }),
+                                            children: "×",
+                                          }),
+                                        ],
+                                      },
+                                      constraintIndex,
+                                    ),
                                 ),
                                 i.jsx("button", {
-                                  disabled: A.constraints.length >= 16,
+                                  disabled:
+                                    solverRequest.constraints.length >= 16,
                                   onClick: () =>
-                                    G({
+                                    updateSolverRequest({
                                       constraints: [
-                                        ...A.constraints,
+                                        ...solverRequest.constraints,
                                         {
                                           left: {
-                                            sheetId: A.objective.sheetId,
-                                            address: A.objective.address,
+                                            sheetId:
+                                              solverRequest.objective.sheetId,
+                                            address:
+                                              solverRequest.objective.address,
                                           },
                                           operator: "<=",
                                           right: 100,
@@ -862,19 +996,24 @@ function DataAnalysisDialog(e) {
                               children: [
                                 LabeledField(
                                   "Feasibility tolerance",
-                                  J(
+                                  renderNumberField(
                                     "Feasibility tolerance",
-                                    A.tolerance,
-                                    (tolerance) => G({ tolerance: tolerance }),
+                                    solverRequest.tolerance,
+                                    (tolerance) =>
+                                      updateSolverRequest({
+                                        tolerance: tolerance,
+                                      }),
                                   ),
                                 ),
                                 LabeledField(
                                   "Maximum candidates",
-                                  J(
+                                  renderNumberField(
                                     "Maximum candidates",
-                                    A.maxCandidates,
+                                    solverRequest.maxCandidates,
                                     (maxCandidates) =>
-                                      G({ maxCandidates: maxCandidates }),
+                                      updateSolverRequest({
+                                        maxCandidates: maxCandidates,
+                                      }),
                                   ),
                                 ),
                               ],
@@ -903,17 +1042,20 @@ function DataAnalysisDialog(e) {
                                     LabeledField(
                                       "Source worksheet",
                                       X$1(
-                                        F.sheetId,
-                                        (sheetId) => H({ sheetId: sheetId }),
+                                        statisticsRequest.sheetId,
+                                        (sheetId) =>
+                                          updateStatisticsRequest({
+                                            sheetId: sheetId,
+                                          }),
                                         "Source worksheet",
                                       ),
                                     ),
                                     LabeledField(
                                       "Headed source range",
                                       i.jsx("input", {
-                                        value: F.range,
+                                        value: statisticsRequest.range,
                                         onChange: (event) =>
-                                          H({
+                                          updateStatisticsRequest({
                                             range: event.target.value
                                               .replace(/\$/g, "")
                                               .toUpperCase(),
@@ -923,9 +1065,11 @@ function DataAnalysisDialog(e) {
                                     LabeledField(
                                       "Analysis method",
                                       i.jsx("select", {
-                                        value: F.method,
+                                        value: statisticsRequest.method,
                                         onChange: (event) =>
-                                          H({ method: event.target.value }),
+                                          updateStatisticsRequest({
+                                            method: event.target.value,
+                                          }),
                                         children: [
                                           [
                                             "descriptive",
@@ -940,11 +1084,14 @@ function DataAnalysisDialog(e) {
                                             "Probability distributions",
                                           ],
                                           ["forecast", "Forecasting"],
-                                        ].map(([te, ae]) =>
+                                        ].map(([methodValue, methodLabel]) =>
                                           i.jsx(
                                             "option",
-                                            { value: te, children: ae },
-                                            te,
+                                            {
+                                              value: methodValue,
+                                              children: methodLabel,
+                                            },
+                                            methodValue,
                                           ),
                                         ),
                                       }),
@@ -952,9 +1099,11 @@ function DataAnalysisDialog(e) {
                                     LabeledField(
                                       "Incomplete rows",
                                       i.jsxs("select", {
-                                        value: F.missing,
+                                        value: statisticsRequest.missing,
                                         onChange: (event) =>
-                                          H({ missing: event.target.value }),
+                                          updateStatisticsRequest({
+                                            missing: event.target.value,
+                                          }),
                                         children: [
                                           i.jsx("option", {
                                             value: "reject",
@@ -979,24 +1128,25 @@ function DataAnalysisDialog(e) {
                                 }),
                               ],
                             }),
-                            F.method === "regression" &&
+                            statisticsRequest.method === "regression" &&
                               i.jsx("p", {
                                 children: i.jsx(LocalizedText, {
                                   children:
                                     "Put the response Y in the first column and predictors X in the remaining columns. The model includes an intercept, coefficient confidence intervals and residuals.",
                                 }),
                               }),
-                            F.method === "histogram" &&
+                            statisticsRequest.method === "histogram" &&
                               LabeledField(
                                 "Bin upper bounds",
                                 i.jsx("input", {
-                                  value: O,
+                                  value: binsText,
                                   onChange: (event) => {
-                                    (j(event.target.value), U());
+                                    (setBinsText(event.target.value),
+                                      invalidatePreview());
                                   },
                                 }),
                               ),
-                            F.method === "distribution" &&
+                            statisticsRequest.method === "distribution" &&
                               i.jsxs("fieldset", {
                                 children: [
                                   i.jsx("legend", {
@@ -1010,9 +1160,11 @@ function DataAnalysisDialog(e) {
                                       LabeledField(
                                         "Distribution",
                                         i.jsxs("select", {
-                                          value: F.distribution ?? "normal",
+                                          value:
+                                            statisticsRequest.distribution ??
+                                            "normal",
                                           onChange: (event) =>
-                                            H({
+                                            updateStatisticsRequest({
                                               distribution: event.target.value,
                                             }),
                                           children: [
@@ -1031,23 +1183,29 @@ function DataAnalysisDialog(e) {
                                           ],
                                         }),
                                       ),
-                                      !F.distribution ||
-                                      F.distribution === "normal"
+                                      !statisticsRequest.distribution ||
+                                      statisticsRequest.distribution ===
+                                        "normal"
                                         ? i.jsxs(i.Fragment, {
                                             children: [
                                               LabeledField(
                                                 "Mean",
-                                                J("Mean", F.mean, (mean) =>
-                                                  H({ mean: mean }),
+                                                renderNumberField(
+                                                  "Mean",
+                                                  statisticsRequest.mean,
+                                                  (mean) =>
+                                                    updateStatisticsRequest({
+                                                      mean: mean,
+                                                    }),
                                                 ),
                                               ),
                                               LabeledField(
                                                 "Standard deviation",
-                                                J(
+                                                renderNumberField(
                                                   "Standard deviation",
-                                                  F.standardDeviation,
+                                                  statisticsRequest.standardDeviation,
                                                   (standardDeviation) =>
-                                                    H({
+                                                    updateStatisticsRequest({
                                                       standardDeviation:
                                                         standardDeviation,
                                                     }),
@@ -1055,25 +1213,28 @@ function DataAnalysisDialog(e) {
                                               ),
                                             ],
                                           })
-                                        : F.distribution === "binomial"
+                                        : statisticsRequest.distribution ===
+                                            "binomial"
                                           ? i.jsxs(i.Fragment, {
                                               children: [
                                                 LabeledField(
                                                   "Trials",
-                                                  J(
+                                                  renderNumberField(
                                                     "Trials",
-                                                    F.trials,
+                                                    statisticsRequest.trials,
                                                     (trials) =>
-                                                      H({ trials: trials }),
+                                                      updateStatisticsRequest({
+                                                        trials: trials,
+                                                      }),
                                                   ),
                                                 ),
                                                 LabeledField(
                                                   "Success probability",
-                                                  J(
+                                                  renderNumberField(
                                                     "Success probability",
-                                                    F.probability,
+                                                    statisticsRequest.probability,
                                                     (probability) =>
-                                                      H({
+                                                      updateStatisticsRequest({
                                                         probability:
                                                           probability,
                                                       }),
@@ -1083,11 +1244,13 @@ function DataAnalysisDialog(e) {
                                             })
                                           : LabeledField(
                                               "Rate (lambda)",
-                                              J(
+                                              renderNumberField(
                                                 "Rate (lambda)",
-                                                F.lambda,
+                                                statisticsRequest.lambda,
                                                 (lambda) =>
-                                                  H({ lambda: lambda }),
+                                                  updateStatisticsRequest({
+                                                    lambda: lambda,
+                                                  }),
                                               ),
                                             ),
                                     ],
@@ -1100,7 +1263,7 @@ function DataAnalysisDialog(e) {
                                   }),
                                 ],
                               }),
-                            F.method === "forecast" &&
+                            statisticsRequest.method === "forecast" &&
                               i.jsxs("fieldset", {
                                 children: [
                                   i.jsx("legend", {
@@ -1114,9 +1277,13 @@ function DataAnalysisDialog(e) {
                                       LabeledField(
                                         "Forecast method",
                                         i.jsxs("select", {
-                                          value: F.forecast ?? "linear",
+                                          value:
+                                            statisticsRequest.forecast ??
+                                            "linear",
                                           onChange: (event) =>
-                                            H({ forecast: event.target.value }),
+                                            updateStatisticsRequest({
+                                              forecast: event.target.value,
+                                            }),
                                           children: [
                                             i.jsx("option", {
                                               value: "linear",
@@ -1135,28 +1302,39 @@ function DataAnalysisDialog(e) {
                                       ),
                                       LabeledField(
                                         "Forecast periods",
-                                        J(
+                                        renderNumberField(
                                           "Forecast periods",
-                                          F.horizon ?? 6,
-                                          (horizon) => H({ horizon: horizon }),
+                                          statisticsRequest.horizon ?? 6,
+                                          (horizon) =>
+                                            updateStatisticsRequest({
+                                              horizon: horizon,
+                                            }),
                                         ),
                                       ),
-                                      F.forecast === "moving-average" &&
+                                      statisticsRequest.forecast ===
+                                        "moving-average" &&
                                         LabeledField(
                                           "Moving average window",
-                                          J(
+                                          renderNumberField(
                                             "Moving average window",
-                                            F.window ?? 3,
-                                            (te) => H({ window: te }),
+                                            statisticsRequest.window ?? 3,
+                                            (windowSize) =>
+                                              updateStatisticsRequest({
+                                                window: windowSize,
+                                              }),
                                           ),
                                         ),
-                                      F.forecast === "exponential" &&
+                                      statisticsRequest.forecast ===
+                                        "exponential" &&
                                         LabeledField(
                                           "Smoothing alpha",
-                                          J(
+                                          renderNumberField(
                                             "Smoothing alpha",
-                                            F.alpha ?? 0.3,
-                                            (alpha) => H({ alpha: alpha }),
+                                            statisticsRequest.alpha ?? 0.3,
+                                            (alpha) =>
+                                              updateStatisticsRequest({
+                                                alpha: alpha,
+                                              }),
                                           ),
                                         ),
                                     ],
@@ -1174,38 +1352,42 @@ function DataAnalysisDialog(e) {
                   ],
                 })
               : i.jsx(i.Fragment, {
-                  children: f
+                  children: preview
                     ? i.jsxs(i.Fragment, {
                         children: [
                           i.jsxs("div", {
-                            className: `lg-analysis-summary ${f.result.success ? "" : "failed"}`,
+                            className: `lg-analysis-summary ${preview.result.success ? "" : "failed"}`,
                             role: "status",
                             children: [
                               i.jsx("strong", {
-                                children: f.result.status.toUpperCase(),
+                                children: preview.result.status.toUpperCase(),
                               }),
-                              i.jsx("span", { children: f.result.message }),
-                              i.jsx("span", { children: f.result.algorithm }),
+                              i.jsx("span", {
+                                children: preview.result.message,
+                              }),
+                              i.jsx("span", {
+                                children: preview.result.algorithm,
+                              }),
                               i.jsxs("span", {
                                 children: [
                                   "Included ",
-                                  f.result.included,
+                                  preview.result.included,
                                   " / ",
-                                  f.result.inspected,
+                                  preview.result.inspected,
                                   " ",
                                   "· Excluded ",
-                                  f.result.exclusions.length,
+                                  preview.result.exclusions.length,
                                   " · Candidates",
                                   " ",
-                                  f.result.iterations,
+                                  preview.result.iterations,
                                 ],
                               }),
-                              f.result.objective !== undefined &&
+                              preview.result.objective !== undefined &&
                                 i.jsxs("b", {
                                   children: [
                                     "Objective:",
                                     " ",
-                                    f.result.objective.toLocaleString(
+                                    preview.result.objective.toLocaleString(
                                       undefined,
                                       {
                                         maximumFractionDigits: 10,
@@ -1215,7 +1397,7 @@ function DataAnalysisDialog(e) {
                                 }),
                             ],
                           }),
-                          !L &&
+                          !isPreviewCurrent &&
                             i.jsx("p", {
                               role: "alert",
                               children: i.jsx(LocalizedText, {
@@ -1223,7 +1405,7 @@ function DataAnalysisDialog(e) {
                                   "The workbook or permissions changed. Preview again.",
                               }),
                             }),
-                          f.result.rows.length > 0 &&
+                          preview.result.rows.length > 0 &&
                             i.jsxs(i.Fragment, {
                               children: [
                                 i.jsx("div", {
@@ -1232,41 +1414,48 @@ function DataAnalysisDialog(e) {
                                   "aria-label": text("Analysis results"),
                                   children: i.jsx("table", {
                                     children: i.jsx("tbody", {
-                                      children: f.result.rows
-                                        .slice(g * 20, g * 20 + 20)
-                                        .map((te, ae) =>
+                                      children: preview.result.rows
+                                        .slice(
+                                          resultPage * 20,
+                                          resultPage * 20 + 20,
+                                        )
+                                        .map((resultRow, rowIndex) =>
                                           i.jsx(
                                             "tr",
                                             {
-                                              children: te.map((oe, de) =>
-                                                i.jsx(
-                                                  "td",
-                                                  {
-                                                    children:
-                                                      oe === null
-                                                        ? "Undefined"
-                                                        : typeof oe == "number"
-                                                          ? oe !== 0 &&
-                                                            (Math.abs(oe) <
-                                                              1e-6 ||
-                                                              Math.abs(oe) >=
-                                                                1e12)
-                                                            ? oe.toExponential(
-                                                                6,
-                                                              )
-                                                            : oe.toLocaleString(
-                                                                undefined,
-                                                                {
-                                                                  maximumSignificantDigits: 12,
-                                                                },
-                                                              )
-                                                          : String(oe),
-                                                  },
-                                                  de,
-                                                ),
+                                              children: resultRow.map(
+                                                (cellValue, columnIndex) =>
+                                                  i.jsx(
+                                                    "td",
+                                                    {
+                                                      children:
+                                                        cellValue === null
+                                                          ? "Undefined"
+                                                          : typeof cellValue ==
+                                                              "number"
+                                                            ? cellValue !== 0 &&
+                                                              (Math.abs(
+                                                                cellValue,
+                                                              ) < 1e-6 ||
+                                                                Math.abs(
+                                                                  cellValue,
+                                                                ) >= 1e12)
+                                                              ? cellValue.toExponential(
+                                                                  6,
+                                                                )
+                                                              : cellValue.toLocaleString(
+                                                                  undefined,
+                                                                  {
+                                                                    maximumSignificantDigits: 12,
+                                                                  },
+                                                                )
+                                                            : String(cellValue),
+                                                    },
+                                                    columnIndex,
+                                                  ),
                                               ),
                                             },
-                                            ae,
+                                            rowIndex,
                                           ),
                                         ),
                                     }),
@@ -1276,8 +1465,11 @@ function DataAnalysisDialog(e) {
                                   className: "lg-model-controls",
                                   children: [
                                     i.jsx("button", {
-                                      disabled: g === 0,
-                                      onClick: () => b((te) => te - 1),
+                                      disabled: resultPage === 0,
+                                      onClick: () =>
+                                        setResultPage(
+                                          (currentPage) => currentPage - 1,
+                                        ),
                                       children: i.jsx(LocalizedText, {
                                         children: "Previous results",
                                       }),
@@ -1285,19 +1477,25 @@ function DataAnalysisDialog(e) {
                                     i.jsxs("span", {
                                       children: [
                                         "Page ",
-                                        g + 1,
+                                        resultPage + 1,
                                         " /",
                                         " ",
                                         Math.max(
                                           1,
-                                          Math.ceil(f.result.rows.length / 20),
+                                          Math.ceil(
+                                            preview.result.rows.length / 20,
+                                          ),
                                         ),
                                       ],
                                     }),
                                     i.jsx("button", {
                                       disabled:
-                                        (g + 1) * 20 >= f.result.rows.length,
-                                      onClick: () => b((te) => te + 1),
+                                        (resultPage + 1) * 20 >=
+                                        preview.result.rows.length,
+                                      onClick: () =>
+                                        setResultPage(
+                                          (pageCursor) => pageCursor + 1,
+                                        ),
                                       children: i.jsx(LocalizedText, {
                                         children: "Next results",
                                       }),
@@ -1316,9 +1514,13 @@ function DataAnalysisDialog(e) {
                                 }),
                               }),
                               i.jsx("ul", {
-                                children: f.result.assumptions.map(
-                                  (assumption, ae) =>
-                                    i.jsx("li", { children: assumption }, ae),
+                                children: preview.result.assumptions.map(
+                                  (assumption, assumptionIndex) =>
+                                    i.jsx(
+                                      "li",
+                                      { children: assumption },
+                                      assumptionIndex,
+                                    ),
                                 ),
                               }),
                             ],
@@ -1328,11 +1530,11 @@ function DataAnalysisDialog(e) {
                               i.jsxs("summary", {
                                 children: [
                                   "Sample exclusions (",
-                                  f.result.exclusions.length,
+                                  preview.result.exclusions.length,
                                   ")",
                                 ],
                               }),
-                              f.result.exclusions.map((exclusion) =>
+                              preview.result.exclusions.map((exclusion) =>
                                 i.jsxs(
                                   "p",
                                   {
@@ -1372,15 +1574,19 @@ function DataAnalysisDialog(e) {
               children: i.jsx(LocalizedText, { children: "Preview analysis" }),
             }),
             i.jsx("button", {
-              disabled: e.readOnly || !L || !f?.result.success,
-              onClick: () => W("report"),
+              disabled:
+                props.readOnly || !isPreviewCurrent || !preview?.result.success,
+              onClick: () => saveAnalysis("report"),
               children: i.jsx(LocalizedText, { children: "Save report" }),
             }),
-            s === "solver" &&
+            analysisKind === "solver" &&
               i.jsx("button", {
                 className: "primary",
-                disabled: e.readOnly || !L || !f?.result.success,
-                onClick: () => W("apply-solution"),
+                disabled:
+                  props.readOnly ||
+                  !isPreviewCurrent ||
+                  !preview?.result.success,
+                onClick: () => saveAnalysis("apply-solution"),
                 children: i.jsx(LocalizedText, {
                   children: "Apply solution and report",
                 }),
@@ -1392,12 +1598,12 @@ function DataAnalysisDialog(e) {
   });
 }
 function AnalysisSnapshotNotice({ workbook, sheetId, onReview }) {
-  const n = workbook.sheets.find(
+  const analysisReport = workbook.sheets.find(
     (sheet) => sheet.id === sheetId,
   )?.analysisReport;
-  if (!n) return null;
+  if (!analysisReport) return null;
   const savedAnalysisReport = readSavedAnalysisReport(workbook, sheetId, {
-    includeHidden: n.includeHidden,
+    includeHidden: analysisReport.includeHidden,
   });
   return i.jsxs("div", {
     className: "lg-notice",
@@ -1425,12 +1631,19 @@ function captureAnalysisWorkbookState(workbookInput) {
     styleCatalog: workbookInput.styleCatalog ?? null,
   });
 }
-const isCellHiddenInSheet = (e, r, t) =>
+const isCellHiddenInSheet = (sheet, rowIndex, columnIndex) =>
   !!(
-    e.hidden ||
-    e.veryHidden ||
-    cn(e, "row").some((n) => n.start <= r && n.end >= r) ||
-    cn(e, "column").some((n) => n.start <= t && n.end >= t)
+    sheet.hidden ||
+    sheet.veryHidden ||
+    cn(sheet, "row").some(
+      (hiddenRowRange) =>
+        hiddenRowRange.start <= rowIndex && hiddenRowRange.end >= rowIndex,
+    ) ||
+    cn(sheet, "column").some(
+      (hiddenColumnRange) =>
+        hiddenColumnRange.start <= columnIndex &&
+        hiddenColumnRange.end >= columnIndex,
+    )
   );
 function buildReportSourceSheet(reportSnapshot) {
   return {
@@ -1448,9 +1661,9 @@ function buildReportSourceSheet(reportSnapshot) {
     ),
   };
 }
-function buildReportSnapshot(workbook, r, t = {}) {
-  const request = validateObjectReportRequest(r),
-    analysisPermissions = normalizeAnalysisPermissions(workbook, t),
+function buildReportSnapshot(workbook, requestInput, hostContext = {}) {
+  const request = validateObjectReportRequest(requestInput),
+    analysisPermissions = normalizeAnalysisPermissions(workbook, hostContext),
     workbookInput = normalizeWorkbookInput(workbook),
     sheet = workbookInput.sheets.find((sheet) => sheet.id === request.sheetId);
   if (!sheet || !analysisPermissions.allowedSheetIds.includes(sheet.id))
@@ -1483,10 +1696,10 @@ function buildReportSnapshot(workbook, r, t = {}) {
   const rangeAddress = parseRangeAddress(request.range),
     columns = Array.from(
       { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
-      (j, z) => rangeAddress.firstCol + z,
+      (j, columnOffset) => rangeAddress.firstCol + columnOffset,
     );
-  let c,
-    h = [];
+  let gridValues,
+    dependencyCells = [];
   if (object && object.kind !== "chart") {
     if (
       !analysisPermissions.includeHidden &&
@@ -1495,66 +1708,85 @@ function buildReportSnapshot(workbook, r, t = {}) {
       throw Error(
         "The drawing anchor is hidden. Explicit authorization is required.",
       );
-    ((c = [[null]]), (h = [{ sheetId: sheet.id, address: object.anchor }]));
+    ((gridValues = [[null]]),
+      (dependencyCells = [{ sheetId: sheet.id, address: object.anchor }]));
   } else {
     const sourceRectangles = readSourceRectangles(
       workbookInput,
       [{ sheetId: sheet.id, range: request.range }],
-      t,
+      hostContext,
     );
-    ((c = sourceRectangles.grids[0].values),
-      (h = sourceRectangles.dependencyCells));
+    ((gridValues = sourceRectangles.grids[0].values),
+      (dependencyCells = sourceRectangles.dependencyCells));
   }
-  const f = new Map();
-  c.forEach((j, z) =>
-    j.forEach((V, D) =>
-      f.set(
-        `${columnIndexToLetters(rangeAddress.firstCol + D)}${rangeAddress.firstRow + z + 1}`,
-        V,
+  const valuesByAddress = new Map();
+  gridValues.forEach((rowValues, rowOffset) =>
+    rowValues.forEach((cellValue, columnOffset) =>
+      valuesByAddress.set(
+        `${columnIndexToLetters(rangeAddress.firstCol + columnOffset)}${rangeAddress.firstRow + rowOffset + 1}`,
+        cellValue,
       ),
     ),
   );
-  const p = (j, z) => {
-      if (j !== sheet.id || !f.has(z))
+  const getCapturedValue = (sheetId, address) => {
+      if (sheetId !== sheet.id || !valuesByAddress.has(address))
         throw Error("Report calculation is outside the captured range.");
-      return f.get(z);
+      return valuesByAddress.get(address);
     },
-    m = request.filter
-      ? applyFilterConditions(workbookInput, sheet.id, request.filter, p)
+    filterResult = request.filter
+      ? applyFilterConditions(
+          workbookInput,
+          sheet.id,
+          request.filter,
+          getCapturedValue,
+        )
       : undefined;
-  m && (request.filter = m.context.definition);
-  const v = c.map((j, z) => rangeAddress.firstRow + z + 1),
-    g =
+  filterResult && (request.filter = filterResult.context.definition);
+  const rowNumbers = gridValues.map(
+      (j, rowIndex) => rangeAddress.firstRow + rowIndex + 1,
+    ),
+    populationRows =
       request.population === "visible"
-        ? v.filter(
-            (j) =>
+        ? rowNumbers.filter(
+            (rowNumber) =>
               !cn(sheet, "row").some(
-                (z) => z.start <= j - 1 && z.end >= j - 1,
+                (rowRange) =>
+                  rowRange.start <= rowNumber - 1 &&
+                  rowRange.end >= rowNumber - 1,
               ) &&
-              (!m ||
-                j === rangeAddress.firstRow + 1 ||
-                m.context.matchingSourceRows.includes(j)),
+              (!filterResult ||
+                rowNumber === rangeAddress.firstRow + 1 ||
+                filterResult.context.matchingSourceRows.includes(rowNumber)),
           )
-        : v;
-  let b = g;
+        : rowNumbers;
+  let retainedRows = populationRows;
   if (object?.kind === "chart") {
-    const j = object.chartOptions?.includedRows,
-      z = g.filter(
-        (D) =>
-          (object.headers !== false && D === rangeAddress.firstRow + 1) ||
-          !j ||
-          j.includes(D),
+    const includedRows = object.chartOptions?.includedRows,
+      selectedRows = populationRows.filter(
+        (rowNumber) =>
+          (object.headers !== false &&
+            rowNumber === rangeAddress.firstRow + 1) ||
+          !includedRows ||
+          includedRows.includes(rowNumber),
       );
     object.chartOptions = {
       ...object.chartOptions,
-      includedRows: z.filter(
-        (D) => !(object.headers !== false && D === rangeAddress.firstRow + 1),
+      includedRows: selectedRows.filter(
+        (rowNumber) =>
+          !(
+            object.headers !== false && rowNumber === rangeAddress.firstRow + 1
+          ),
       ),
     };
-    const V = inspectChartSource(sheet, object, p);
-    (formatDiagnosticsMessage(V), (b = z));
+    const chartDiagnostics = inspectChartSource(
+      sheet,
+      object,
+      getCapturedValue,
+    );
+    (formatDiagnosticsMessage(chartDiagnostics), (retainedRows = selectedRows));
   }
-  if (!b.length) throw Error("No rows remain in the report population.");
+  if (!retainedRows.length)
+    throw Error("No rows remain in the report population.");
   const warnings = [
     "Fixed values and formatting captured locally; links refresh only after host authorization and explicit review. No network access or remote refresh is performed.",
     "Table images use readable, wrapped cell text with portable fonts. Merges are refused; conditional formatting, layout fidelity and native Office OLE links are not represented.",
@@ -1576,7 +1808,7 @@ function buildReportSnapshot(workbook, r, t = {}) {
       warnings.push(
         "Chart row selections are preserved. Explicitly excluded chart rows are omitted from retained cells.",
       ));
-  const w = {
+  const snapshot = {
     engine: reportOutputFormatVersion,
     id: crypto.randomUUID(),
     request: request,
@@ -1588,20 +1820,26 @@ function buildReportSnapshot(workbook, r, t = {}) {
     sourceHash: captureAnalysisWorkbookState(workbookInput),
     includeHidden: analysisPermissions.includeHidden,
     authorizedSheetIds: [
-      ...new Set([sheet.id, ...h.map((j) => j.sheetId)]),
+      ...new Set([
+        sheet.id,
+        ...dependencyCells.map((dependencyCell) => dependencyCell.sheetId),
+      ]),
     ].sort(),
-    sourceCells: h.map((j) => ({ sheetId: j.sheetId, address: j.address })),
-    rows: b.map((row) => ({
+    sourceCells: dependencyCells.map((dependencyCell) => ({
+      sheetId: dependencyCell.sheetId,
+      address: dependencyCell.address,
+    })),
+    rows: retainedRows.map((row) => ({
       row: row,
-      cells: columns.map((column, V) => {
+      cells: columns.map((column, columnIndex) => {
         const address = `${columnIndexToLetters(column)}${row}`,
-          B = c[row - rangeAddress.firstRow - 1][V],
+          cellValue = gridValues[row - rangeAddress.firstRow - 1][columnIndex],
           cell = sheet.cells[address];
         return {
           address: address,
-          value: B,
+          value: cellValue,
           text: formatNumberWithPattern(
-            B,
+            cellValue,
             cell,
             workbookInput.datePolicy?.dateSystem,
           ),
@@ -1613,112 +1851,119 @@ function buildReportSnapshot(workbook, r, t = {}) {
     })),
     columns: columns,
     widths: columns.map((column) => sheet.columnWidths?.[String(column)] ?? 84),
-    excludedRows: v.filter((j) => !b.includes(j)),
+    excludedRows: rowNumbers.filter(
+      (rowNumber) => !retainedRows.includes(rowNumber),
+    ),
     ...(object ? { object: object } : {}),
     warnings: warnings,
     hash: "",
   };
   return (
-    (w.hash = hashRecordExcludingHash(w)),
-    deepFreezeValue(parseReportSnapshot(w))
+    (snapshot.hash = hashRecordExcludingHash(snapshot)),
+    deepFreezeValue(parseReportSnapshot(snapshot))
   );
 }
 const qT = new WeakMap();
-function refreshReportOutput(workbook, request, t = {}, refreshId) {
+function refreshReportOutput(workbook, request, hostContext = {}, refreshId) {
   if (refreshId) {
-    const d = workbook.reportOutputs?.find(
+    const existingOutput = workbook.reportOutputs?.find(
       (reportOutput) => reportOutput.id === refreshId,
     );
-    if (!d || d.snapshot.request.mode !== "linked")
+    if (!existingOutput || existingOutput.snapshot.request.mode !== "linked")
       throw Error("Only an existing linked output can be refreshed.");
     if (
       fingerprintCanonicalValue(validateObjectReportRequest(request)) !==
-      fingerprintCanonicalValue(d.snapshot.request)
+      fingerprintCanonicalValue(existingOutput.snapshot.request)
     )
       throw Error(
         "Refresh uses the saved definition. Publish a new output to change it.",
       );
-    if (d.snapshot.workbookId !== workbook.id)
+    if (existingOutput.snapshot.workbookId !== workbook.id)
       throw Error(
         "This link belongs to a different workbook. Publish a new output after reviewing the source.",
       );
   }
-  const reportSnapshot = buildReportSnapshot(workbook, request, t),
-    a = {
+  const reportSnapshot = buildReportSnapshot(workbook, request, hostContext),
+    preview = {
       request: reportSnapshot.request,
       snapshot: reportSnapshot,
       workbookHash: fingerprintCanonicalValue(workbook),
       contextHash: fingerprintCanonicalValue(
-        normalizeAnalysisPermissions(workbook, t),
+        normalizeAnalysisPermissions(workbook, hostContext),
       ),
       ...(refreshId ? { refreshId: refreshId } : {}),
     };
-  return (qT.set(a, fingerprintCanonicalValue(a)), a);
+  return (qT.set(preview, fingerprintCanonicalValue(preview)), preview);
 }
-function publishReportOutput(workbook, r, t = {}) {
-  if (t.readOnly) throw Error("This workbook is read-only.");
+function publishReportOutput(workbook, preview, hostContext = {}) {
+  if (hostContext.readOnly) throw Error("This workbook is read-only.");
   if (
     (assertWorkbookStructureEditable(workbook),
-    qT.get(r) !== fingerprintCanonicalValue(r) ||
-      r.workbookHash !== fingerprintCanonicalValue(workbook) ||
-      r.contextHash !==
-        fingerprintCanonicalValue(normalizeAnalysisPermissions(workbook, t)))
+    qT.get(preview) !== fingerprintCanonicalValue(preview) ||
+      preview.workbookHash !== fingerprintCanonicalValue(workbook) ||
+      preview.contextHash !==
+        fingerprintCanonicalValue(
+          normalizeAnalysisPermissions(workbook, hostContext),
+        ))
   )
     throw Error(
       "The preview, workbook or permissions changed. Preview the report again.",
     );
   const workbookInput = normalizeWorkbookInput(workbook),
     reportOutputs = [...(workbookInput.reportOutputs ?? [])];
-  if (r.refreshId) {
-    const s = reportOutputs.findIndex(
-      (reportOutput) => reportOutput.id === r.refreshId,
+  if (preview.refreshId) {
+    const outputIndex = reportOutputs.findIndex(
+      (reportOutput) => reportOutput.id === preview.refreshId,
     );
-    if (s < 0) throw Error("The linked output was removed.");
-    reportOutputs[s] = {
-      ...reportOutputs[s],
-      version: reportOutputs[s].version + 1,
-      snapshot: structuredClone(r.snapshot),
+    if (outputIndex < 0) throw Error("The linked output was removed.");
+    reportOutputs[outputIndex] = {
+      ...reportOutputs[outputIndex],
+      version: reportOutputs[outputIndex].version + 1,
+      snapshot: structuredClone(preview.snapshot),
     };
   } else {
     if (
       reportOutputs.some(
         (reportOutput) =>
           reportOutput.snapshot.request.name.toLowerCase() ===
-          r.request.name.toLowerCase(),
+          preview.request.name.toLowerCase(),
       )
     )
       throw Error("A report with this name already exists.");
     reportOutputs.push({
       id: crypto.randomUUID(),
       version: 1,
-      snapshot: structuredClone(r.snapshot),
+      snapshot: structuredClone(preview.snapshot),
     });
   }
-  const a = normalizeWorkbookInput({
+  const nextWorkbook = normalizeWorkbookInput({
     ...workbookInput,
     reportOutputs: reportOutputs,
   });
-  return (qT.delete(r), a);
+  return (qT.delete(preview), nextWorkbook);
 }
-function removeReportOutput(workbook, r, t = {}) {
-  if (t.readOnly) throw Error("This workbook is read-only.");
+function removeReportOutput(workbook, outputId, hostContext = {}) {
+  if (hostContext.readOnly) throw Error("This workbook is read-only.");
   assertWorkbookStructureEditable(workbook);
-  const n = workbook.reportOutputs?.find(
-    (reportOutput) => reportOutput.id === r,
+  const existingOutput = workbook.reportOutputs?.find(
+    (reportOutput) => reportOutput.id === outputId,
   );
-  if (!n) throw Error("Report output not found.");
+  if (!existingOutput) throw Error("Report output not found.");
   return (
-    validateReportSourceScope(workbook, n.snapshot, t),
+    validateReportSourceScope(workbook, existingOutput.snapshot, hostContext),
     normalizeWorkbookInput({
       ...workbook,
       reportOutputs: workbook.reportOutputs.filter(
-        (reportOutput) => reportOutput.id !== r,
+        (reportOutput) => reportOutput.id !== outputId,
       ),
     })
   );
 }
-function validateReportSourceScope(workbook, snapshot, t = {}) {
-  const analysisPermissions = normalizeAnalysisPermissions(workbook, t);
+function validateReportSourceScope(workbook, snapshot, hostContext = {}) {
+  const analysisPermissions = normalizeAnalysisPermissions(
+    workbook,
+    hostContext,
+  );
   if (
     snapshot.workbookId !== workbook.id ||
     snapshot.authorizedSheetIds.some(
@@ -1732,12 +1977,12 @@ function validateReportSourceScope(workbook, snapshot, t = {}) {
     const sheet = workbook.sheets.find(
         (sheet) => sheet.id === sourceCell.sheetId,
       ),
-      s = _t(sourceCell.address);
+      cellPosition = _t(sourceCell.address);
     if (
       !sheet ||
       !analysisPermissions.allowedSheetIds.includes(sourceCell.sheetId) ||
       (!analysisPermissions.includeHidden &&
-        isCellHiddenInSheet(sheet, s.row, s.col))
+        isCellHiddenInSheet(sheet, cellPosition.row, cellPosition.col))
     )
       throw Error(
         "A report source cell is missing, hidden or outside the authorized context.",
@@ -1754,14 +1999,14 @@ function validateReportSourceScope(workbook, snapshot, t = {}) {
       throw Error("The report source is missing or hidden.");
   }
 }
-function describeReportOutputStatus(workbook, r, t = {}) {
+function describeReportOutputStatus(workbook, outputId, hostContext = {}) {
   try {
-    const o = workbook.reportOutputs?.find(
-      (reportOutput) => reportOutput.id === r,
+    const existingOutput = workbook.reportOutputs?.find(
+      (reportOutput) => reportOutput.id === outputId,
     );
-    if (!o) throw Error("Report output not found.");
-    validateReportSourceScope(workbook, o.snapshot, t);
-    const reportSnapshot = parseReportSnapshot(o.snapshot);
+    if (!existingOutput) throw Error("Report output not found.");
+    validateReportSourceScope(workbook, existingOutput.snapshot, hostContext);
+    const reportSnapshot = parseReportSnapshot(existingOutput.snapshot);
     return reportSnapshot.request.mode === "snapshot"
       ? {
           status: "snapshot",
@@ -1785,24 +2030,24 @@ function describeReportOutputStatus(workbook, r, t = {}) {
     };
   }
 }
-const escapeHtmlText = (e) =>
-    String(e).replace(
+const escapeHtmlText = (text) =>
+    String(text).replace(
       /[&<>"']/g,
-      (r) =>
+      (character) =>
         ({
           "&": "&amp;",
           "<": "&lt;",
           ">": "&gt;",
           '"': "&quot;",
           "'": "&apos;",
-        })[r],
+        })[character],
     ),
-  toSafeFileName = (e) =>
-    e.replace(/[\x00-\x1f\\/:*?"<>|]/g, "_").slice(0, 100) || "Report",
-  formatReportCaption = (e) =>
-    `${e.workbookName} · revision ${e.revision} · ${e.sheetName}!${e.request.range} · calculated ${e.calculatedAt}`;
-function wrapTextByCharacters(e, r) {
-  return e
+  toSafeFileName = (rawName) =>
+    rawName.replace(/[\x00-\x1f\\/:*?"<>|]/g, "_").slice(0, 100) || "Report",
+  formatReportCaption = (snapshot) =>
+    `${snapshot.workbookName} · revision ${snapshot.revision} · ${snapshot.sheetName}!${snapshot.request.range} · calculated ${snapshot.calculatedAt}`;
+function wrapTextByCharacters(text, charsPerLine) {
+  return text
     .replace(
       /\r\n?/g,
       `
@@ -1812,15 +2057,22 @@ function wrapTextByCharacters(e, r) {
       `
 `,
     )
-    .flatMap((t) => {
-      const n = Array.from(t),
-        o = [];
-      for (let a = 0; a < n.length; a += r) o.push(n.slice(a, a + r).join(""));
-      return o.length ? o : [""];
+    .flatMap((line) => {
+      const characters = Array.from(line),
+        wrappedLines = [];
+      for (
+        let startIndex = 0;
+        startIndex < characters.length;
+        startIndex += charsPerLine
+      )
+        wrappedLines.push(
+          characters.slice(startIndex, startIndex + charsPerLine).join(""),
+        );
+      return wrappedLines.length ? wrappedLines : [""];
     });
 }
-function renderReportSvg(e) {
-  const reportSnapshot = parseReportSnapshot(e),
+function renderReportSvg(rawSnapshot) {
+  const reportSnapshot = parseReportSnapshot(rawSnapshot),
     object = reportSnapshot.object;
   if (
     [
@@ -1831,11 +2083,11 @@ function renderReportSvg(e) {
       ...reportSnapshot.rows.flatMap((row) =>
         row.cells.map((cell) => cell.text),
       ),
-    ].some((h) =>
+    ].some((candidateText) =>
       new RegExp(
         "[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\uFFFE\\uFFFF]|\\p{Surrogate}",
         "u",
-      ).test(h),
+      ).test(candidateText),
     )
   )
     throw Error(
@@ -1843,57 +2095,57 @@ function renderReportSvg(e) {
     );
   let width = 640,
     height = 0,
-    a = "";
+    svgBody = "";
   if (object?.kind === "chart") {
     const reportSourceSheet = buildReportSourceSheet(reportSnapshot),
       report = inspectChartSource(
         reportSourceSheet,
         object,
-        (m, v) => reportSourceSheet.cells[v]?.raw ?? null,
+        (m, address) => reportSourceSheet.cells[address]?.raw ?? null,
       );
     formatDiagnosticsMessage(report);
-    const p = c_.renderToStaticMarkup(
+    const chartMarkup = c_.renderToStaticMarkup(
       i.jsx(ChartReportSvg, { report: report }),
     );
     ((width = 640),
       (height = object.chart === "sparkline" ? 128 : 380),
-      (a = `<svg x="18" y="112" width="${width}" height="${height}" viewBox="${object.chart === "sparkline" ? "0 0 200 40" : "0 0 640 380"}">${p}</svg>`));
+      (svgBody = `<svg x="18" y="112" width="${width}" height="${height}" viewBox="${object.chart === "sparkline" ? "0 0 200 40" : "0 0 640 380"}">${chartMarkup}</svg>`));
   } else if (object?.kind === "picture")
     (inspectPictureDataUrl(object.dataURL),
       (width = Math.max(640, object.width)),
       (height = object.height),
-      (a = `<image x="18" y="112" width="${object.width}" height="${height}" href="${escapeHtmlText(object.dataURL)}"/>`));
+      (svgBody = `<image x="18" y="112" width="${object.width}" height="${height}" href="${escapeHtmlText(object.dataURL)}"/>`));
   else if (object?.kind === "shape") {
     ((width = Math.max(640, object.width)),
       (height = Math.max(80, object.height)));
-    const h = `fill="${object.fill}" stroke="${object.stroke}" stroke-width="2"`,
-      f =
+    const shapeAttributes = `fill="${object.fill}" stroke="${object.stroke}" stroke-width="2"`,
+      shapeMarkup =
         object.shape === "ellipse"
-          ? `<ellipse cx="${object.width / 2}" cy="${height / 2}" rx="${object.width / 2 - 2}" ry="${height / 2 - 2}" ${h}/>`
+          ? `<ellipse cx="${object.width / 2}" cy="${height / 2}" rx="${object.width / 2 - 2}" ry="${height / 2 - 2}" ${shapeAttributes}/>`
           : object.shape === "arrow"
-            ? `<path d="M2 20 H${object.width - 30} V2 L${object.width - 2} ${height / 2} L${object.width - 30} ${height - 2} V${height - 20} H2 Z" ${h}/>`
+            ? `<path d="M2 20 H${object.width - 30} V2 L${object.width - 2} ${height / 2} L${object.width - 30} ${height - 2} V${height - 20} H2 Z" ${shapeAttributes}/>`
             : object.shape === "text"
               ? ""
-              : `<rect x="1" y="1" width="${object.width - 2}" height="${height - 2}" ${h}/>`,
-      p = wrapTextByCharacters(
+              : `<rect x="1" y="1" width="${object.width - 2}" height="${height - 2}" ${shapeAttributes}/>`,
+      labelLines = wrapTextByCharacters(
         object.label,
         Math.max(4, Math.floor((object.width - 16) / 8)),
       );
-    if (p.length * 18 + 16 > height)
+    if (labelLines.length * 18 + 16 > height)
       throw Error(
         "The shape label does not fit the report image. Enlarge the source shape before publishing.",
       );
-    a = `<g transform="translate(18 112)">${f}${p.map((m, v) => `<text x="8" y="${24 + v * 18}" font-size="13" fill="#202334">${escapeHtmlText(m)}</text>`).join("")}</g>`;
+    svgBody = `<g transform="translate(18 112)">${shapeMarkup}${labelLines.map((line, lineIndex) => `<text x="8" y="${24 + lineIndex * 18}" font-size="13" fill="#202334">${escapeHtmlText(line)}</text>`).join("")}</g>`;
   } else {
-    const h = reportSnapshot.columns.map((column, m) =>
+    const columnWidths = reportSnapshot.columns.map((column, columnIndex) =>
       Math.min(
         600,
         Math.max(
           84,
-          reportSnapshot.widths[m],
+          reportSnapshot.widths[columnIndex],
           ...reportSnapshot.rows.map((row) =>
-            typeof row.cells[m].value == "number"
-              ? Array.from(row.cells[m].text).length * 8 + 20
+            typeof row.cells[columnIndex].value == "number"
+              ? Array.from(row.cells[columnIndex].text).length * 8 + 20
               : 84,
           ),
         ),
@@ -1901,27 +2153,30 @@ function renderReportSvg(e) {
     );
     width = Math.max(
       640,
-      h.reduce((p, m) => p + m, 0),
+      columnWidths.reduce((total, columnWidth) => total + columnWidth, 0),
     );
-    let f = 112;
+    let rowTop = 112;
     for (const row of reportSnapshot.rows) {
-      const m = row.cells.map((cell, y) =>
+      const cellLines = row.cells.map((cell, cellIndex) =>
           wrapTextByCharacters(
             cell.text,
-            Math.max(1, Math.floor((h[y] - 16) / 8)),
+            Math.max(1, Math.floor((columnWidths[cellIndex] - 16) / 8)),
           ),
         ),
-        v = Math.max(28, ...m.map((b) => b.length * 18 + 12));
-      let g = 18;
-      (row.cells.forEach((cell, y) => {
-        const w = cell.style ?? {},
-          E = h[y];
-        ((a += `<rect x="${g}" y="${f}" width="${E}" height="${v}" fill="${escapeHtmlText(w.fill ?? "#ffffff")}" stroke="#ccd6fa"/><text font-family="Courier New,monospace" font-size="13" fill="${escapeHtmlText(w.color ?? "#202334")}"${w.bold ? ' font-weight="bold"' : ""}${w.italic ? ' font-style="italic"' : ""}${w.underline ? ' text-decoration="underline"' : ""}>${m[y].map((A, k) => `<tspan x="${g + 8}" y="${f + 20 + k * 18}">${escapeHtmlText(A)}</tspan>`).join("")}</text>`),
-          (g += E));
+        rowHeight = Math.max(
+          28,
+          ...cellLines.map((lines) => lines.length * 18 + 12),
+        );
+      let cellLeft = 18;
+      (row.cells.forEach((cell, cellIndex) => {
+        const cellStyle = cell.style ?? {},
+          cellWidth = columnWidths[cellIndex];
+        ((svgBody += `<rect x="${cellLeft}" y="${rowTop}" width="${cellWidth}" height="${rowHeight}" fill="${escapeHtmlText(cellStyle.fill ?? "#ffffff")}" stroke="#ccd6fa"/><text font-family="Courier New,monospace" font-size="13" fill="${escapeHtmlText(cellStyle.color ?? "#202334")}"${cellStyle.bold ? ' font-weight="bold"' : ""}${cellStyle.italic ? ' font-style="italic"' : ""}${cellStyle.underline ? ' text-decoration="underline"' : ""}>${cellLines[cellIndex].map((line, lineIndex) => `<tspan x="${cellLeft + 8}" y="${rowTop + 20 + lineIndex * 18}">${escapeHtmlText(line)}</tspan>`).join("")}</text>`),
+          (cellLeft += cellWidth));
       }),
-        (f += v));
+        (rowTop += rowHeight));
     }
-    height = f - 112;
+    height = rowTop - 112;
   }
   if (
     ((width += 36),
@@ -1933,30 +2188,33 @@ function renderReportSvg(e) {
     throw Error(
       "Report image exceeds 4,096 × 16,384 / 16 megapixels. Narrow the range or export JSON/HTML instead.",
     );
-  const s = `${reportSnapshot.request.population} population · ${reportSnapshot.rows.length} retained / ${reportSnapshot.rows.length + reportSnapshot.excludedRows.length} range rows · ${reportSnapshot.request.filter ? "filter criteria recorded" : "no population filter"}`,
-    d = wrapTextByCharacters(
+  const populationSummary = `${reportSnapshot.request.population} population · ${reportSnapshot.rows.length} retained / ${reportSnapshot.rows.length + reportSnapshot.excludedRows.length} range rows · ${reportSnapshot.request.filter ? "filter criteria recorded" : "no population filter"}`,
+    captionLines = wrapTextByCharacters(
       formatReportCaption(reportSnapshot),
       Math.floor((width - 36) / 7.4),
     ),
-    u = [
+    headerLines = [
       ...wrapTextByCharacters(
         reportSnapshot.request.name,
         Math.floor((width - 36) / 9),
       ),
-      ...d,
-      ...wrapTextByCharacters(s, Math.floor((width - 36) / 7.4)),
+      ...captionLines,
+      ...wrapTextByCharacters(
+        populationSummary,
+        Math.floor((width - 36) / 7.4),
+      ),
     ],
-    l = Math.max(0, u.length * 18 + 24 - 112);
+    headerOffset = Math.max(0, headerLines.length * 18 + 24 - 112);
   if (
-    ((height += l),
-    (a = `<g transform="translate(0 ${l})">${a}</g>`),
+    ((height += headerOffset),
+    (svgBody = `<g transform="translate(0 ${headerOffset})">${svgBody}</g>`),
     height > reportOutputLimits.imageHeight ||
       width * height > reportOutputLimits.imagePixels)
   )
     throw Error(
       "Report image exceeds its pixel budget. Narrow the range or export JSON/HTML.",
     );
-  const content = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img"><title>${escapeHtmlText(reportSnapshot.request.name)}</title><desc>${escapeHtmlText(formatReportCaption(reportSnapshot))}. ${escapeHtmlText(s)}. Fixed snapshot; no automatic refresh.</desc><metadata>${escapeHtmlText(JSON.stringify({ engine: reportSnapshot.engine, hash: reportSnapshot.hash, request: reportSnapshot.request, workbookId: reportSnapshot.workbookId, revision: reportSnapshot.revision, calculatedAt: reportSnapshot.calculatedAt }))}</metadata><rect width="100%" height="100%" fill="white"/><g font-family="Arial,sans-serif">${u.map((h, f) => `<text x="18" y="${25 + f * 18}" font-size="${f === 0 ? 16 : 12}" fill="#362c63">${escapeHtmlText(h)}</text>`).join("")}${a}<text x="18" y="${height - 17}" font-size="11" fill="#545969">Fixed snapshot · ${escapeHtmlText(reportSnapshot.id)} · full values and context in the JSON export</text></g></svg>`;
+  const content = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img"><title>${escapeHtmlText(reportSnapshot.request.name)}</title><desc>${escapeHtmlText(formatReportCaption(reportSnapshot))}. ${escapeHtmlText(populationSummary)}. Fixed snapshot; no automatic refresh.</desc><metadata>${escapeHtmlText(JSON.stringify({ engine: reportSnapshot.engine, hash: reportSnapshot.hash, request: reportSnapshot.request, workbookId: reportSnapshot.workbookId, revision: reportSnapshot.revision, calculatedAt: reportSnapshot.calculatedAt }))}</metadata><rect width="100%" height="100%" fill="white"/><g font-family="Arial,sans-serif">${headerLines.map((headerLine, headerIndex) => `<text x="18" y="${25 + headerIndex * 18}" font-size="${headerIndex === 0 ? 16 : 12}" fill="#362c63">${escapeHtmlText(headerLine)}</text>`).join("")}${svgBody}<text x="18" y="${height - 17}" font-size="11" fill="#545969">Fixed snapshot · ${escapeHtmlText(reportSnapshot.id)} · full values and context in the JSON export</text></g></svg>`;
   return {
     filename: toSafeFileName(reportSnapshot.request.name) + ".svg",
     mime: "image/svg+xml",
@@ -1965,8 +2223,8 @@ function renderReportSvg(e) {
     height: height,
   };
 }
-function buildReportSvgFile(e) {
-  const reportSnapshot = parseReportSnapshot(e);
+function buildReportSvgFile(rawSnapshot) {
+  const reportSnapshot = parseReportSnapshot(rawSnapshot);
   return {
     filename: toSafeFileName(reportSnapshot.request.name) + ".json",
     mime: "application/json",
@@ -1975,12 +2233,12 @@ function buildReportSvgFile(e) {
 }
 function ReportOutputView({ snapshot, showData = true }) {
   const reportSnapshot = parseReportSnapshot(snapshot);
-  let n,
-    o = "";
+  let renderedSvg,
+    renderError = "";
   try {
-    n = renderReportSvg(reportSnapshot);
+    renderedSvg = renderReportSvg(reportSnapshot);
   } catch (error) {
-    o = error.message;
+    renderError = error.message;
   }
   return i.jsxs("figure", {
     className: "lg-report-output-view",
@@ -2008,7 +2266,7 @@ function ReportOutputView({ snapshot, showData = true }) {
           }),
         ],
       }),
-      n
+      renderedSvg
         ? i.jsx("img", {
             alt:
               reportSnapshot.request.name +
@@ -2016,15 +2274,15 @@ function ReportOutputView({ snapshot, showData = true }) {
               formatReportCaption(reportSnapshot),
             src:
               "data:image/svg+xml;charset=utf-8," +
-              encodeURIComponent(n.content),
-            width: n.width,
-            height: n.height,
+              encodeURIComponent(renderedSvg.content),
+            width: renderedSvg.width,
+            height: renderedSvg.height,
             style: { maxWidth: "100%", height: "auto", display: "block" },
           })
-        : i.jsx("p", { role: "status", children: o }),
+        : i.jsx("p", { role: "status", children: renderError }),
       showData &&
         i.jsxs("details", {
-          open: !n,
+          open: !renderedSvg,
           children: [
             i.jsx("summary", {
               children: "Accessible values and report context",
@@ -2104,63 +2362,75 @@ function ReportOutputView({ snapshot, showData = true }) {
                   2,
                 ),
               }),
-            reportSnapshot.warnings.map((warning, s) =>
-              i.jsx("p", { children: warning }, s),
+            reportSnapshot.warnings.map((warning, warningIndex) =>
+              i.jsx("p", { children: warning }, warningIndex),
             ),
           ],
         }),
     ],
   });
 }
-function buildReportHtmlFile(e) {
-  const reportSnapshot = parseReportSnapshot(e),
-    t = c_.renderToStaticMarkup(
+function buildReportHtmlFile(rawSnapshot) {
+  const reportSnapshot = parseReportSnapshot(rawSnapshot),
+    bodyMarkup = c_.renderToStaticMarkup(
       i.jsx(ReportOutputView, { snapshot: reportSnapshot }),
     );
   return {
     filename: toSafeFileName(reportSnapshot.request.name) + ".html",
     mime: "text/html",
-    content: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtmlText(reportSnapshot.request.name)}</title></head><body style="padding:18px;overflow:auto">${t}</body></html>`,
+    content: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtmlText(reportSnapshot.request.name)}</title></head><body style="padding:18px;overflow:auto">${bodyMarkup}</body></html>`,
   };
 }
-async function renderReportPngBlob(e) {
-  const r = renderReportSvg(e),
-    t = URL.createObjectURL(new Blob([r.content], { type: "image/svg+xml" }));
+async function renderReportPngBlob(rawSnapshot) {
+  const svgResult = renderReportSvg(rawSnapshot),
+    svgUrl = URL.createObjectURL(
+      new Blob([svgResult.content], { type: "image/svg+xml" }),
+    );
   try {
-    const n = new Image();
-    await new Promise((d, u) => {
-      const l = setTimeout(() => {
-        ((n.src = ""), u(Error("Report image rendering timed out.")));
+    const svgImage = new Image();
+    await new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        ((svgImage.src = ""),
+          reject(Error("Report image rendering timed out.")));
       }, 15e3);
-      ((n.onload = () => {
-        (clearTimeout(l), d());
+      ((svgImage.onload = () => {
+        (clearTimeout(timeoutId), resolve());
       }),
-        (n.onerror = () => {
-          (clearTimeout(l),
-            u(
+        (svgImage.onerror = () => {
+          (clearTimeout(timeoutId),
+            reject(
               Error(
                 "The browser could not render this report image. Export SVG or HTML.",
               ),
             ));
         }),
-        (n.src = t));
+        (svgImage.src = svgUrl));
     });
-    const o = document.createElement("canvas");
-    ((o.width = r.width), (o.height = r.height));
-    const a = o.getContext("2d");
-    if (!a) throw Error("PNG rendering is unavailable in this browser.");
-    a.drawImage(n, 0, 0);
-    const blob = await new Promise((d, u) => {
-      const l = setTimeout(() => u(Error("PNG encoding timed out.")), 15e3);
-      o.toBlob((c) => {
-        (clearTimeout(l), c ? d(c) : u(Error("PNG encoding failed.")));
+    const canvas = document.createElement("canvas");
+    ((canvas.width = svgResult.width), (canvas.height = svgResult.height));
+    const context = canvas.getContext("2d");
+    if (!context) throw Error("PNG rendering is unavailable in this browser.");
+    context.drawImage(svgImage, 0, 0);
+    const blob = await new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(
+        () => reject(Error("PNG encoding timed out.")),
+        15e3,
+      );
+      canvas.toBlob((encodedBlob) => {
+        (clearTimeout(timeoutId),
+          encodedBlob
+            ? resolve(encodedBlob)
+            : reject(Error("PNG encoding failed.")));
       }, "image/png");
     });
     if (blob.size > 16 * 1024 * 1024)
       throw Error("PNG exceeds 16 MB. Export SVG or narrow the report.");
-    return { filename: toSafeFileName(e.request.name) + ".png", blob: blob };
+    return {
+      filename: toSafeFileName(rawSnapshot.request.name) + ".png",
+      blob: blob,
+    };
   } finally {
-    URL.revokeObjectURL(t);
+    URL.revokeObjectURL(svgUrl);
   }
 }
 
