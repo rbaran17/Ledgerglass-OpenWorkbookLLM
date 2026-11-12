@@ -9,6 +9,8 @@ import {
 } from "../04-cell-input-paste-and-fill.js";
 
 function createCellEditActions({
+  viewAndSelectionActions,
+  persistenceActions,
   persistenceState,
   formulaEntryState,
   selectionState,
@@ -21,17 +23,12 @@ function createCellEditActions({
   getEditableCellText,
   setActiveSheetId,
   activeSheet,
-  selectSingleRange,
   workbookCalculator,
   latestEditStateRef,
-  getSelectedCellAddresses,
-  commitWorkbookChange,
-  runGuardedAction,
-  focusGridSurface,
 }) {
   function clearSelectedCellContents() {
     applyCellPatches(
-      getSelectedCellAddresses().map((fe) => ({
+      viewAndSelectionActions.getSelectedCellAddresses().map((fe) => ({
         sheetId: activeSheet.id,
         address: fe,
         cell: { ...activeSheet.cells[fe], raw: null, literal: false },
@@ -43,7 +40,7 @@ function createCellEditActions({
     try {
       if (Ue && fe.some((Xe) => Xe.sheetId !== Ue))
         throw Error("The formula destination changed.");
-      commitWorkbookChange(
+      persistenceActions.commitWorkbookChange(
         applyCellPatchTransaction(
           latestEditStateRef.current.book,
           fe,
@@ -125,7 +122,7 @@ function createCellEditActions({
       (setActiveSheetId(fe.sheetId),
       selectionState.setActiveCellAddress(fe.address),
       selectionState.setSelectionAnchorAddress(fe.address),
-      selectSingleRange(fe.address),
+      viewAndSelectionActions.selectSingleRange(fe.address),
       filterSortState.setActiveColumnSort(null),
       filterSortState.setFilterValueSearch(""),
       navigationState.setPendingScrollAddress(fe.address));
@@ -176,7 +173,7 @@ function createCellEditActions({
             activeSheet.cells[selectionState.activeCellAddress],
           ),
       ),
-      focusGridSurface());
+      viewAndSelectionActions.focusGridSurface());
   }
   function commitCellEdit(fe) {
     const Oe = formulaEntryState.activeCellEditRef.current;
@@ -226,8 +223,8 @@ function createCellEditActions({
     }
   }
   function applyCellFormatPatch(fe) {
-    runGuardedAction(() => {
-      const Oe = getSelectedCellAddresses();
+    viewAndSelectionActions.runGuardedAction(() => {
+      const Oe = viewAndSelectionActions.getSelectedCellAddresses();
       if (
         fe.style &&
         (Object.hasOwn(fe.style, "border") ||

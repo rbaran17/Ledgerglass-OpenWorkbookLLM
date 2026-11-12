@@ -13,6 +13,7 @@ import {
 } from "../03-workbook-model.js";
 
 function createPersistenceActions({
+  viewAndSelectionActions,
   persistenceState,
   formulaEntryState,
   operationStatusState,
@@ -34,9 +35,6 @@ function createPersistenceActions({
   setRedoStack,
   calculationRun,
   latestEditStateRef,
-  buildWorkbookViewState,
-  applyWorkbookView,
-  notifyHostCallback,
 }) {
   function runCalculationNow() {
     (calculationRun.run(),
@@ -48,7 +46,7 @@ function createPersistenceActions({
   }
   function reportSaveStatus(fe, Oe, Be) {
     try {
-      notifyHostCallback("save-state", () =>
+      viewAndSelectionActions.notifyHostCallback("save-state", () =>
         setSaveAbortControllerRef.current?.({
           status: fe,
           workbookId: Oe.id,
@@ -222,7 +220,7 @@ function createPersistenceActions({
     ))
       try {
         const fe = latestEditStateRef.current.book,
-          Oe = buildWorkbookViewState(fe),
+          Oe = viewAndSelectionActions.buildWorkbookViewState(fe),
           Be = findRecoverableCheckpoint(workbookPersistence, fe);
         if (Be) {
           ((persistenceState.isWorkbookLoadedRef.current = true),
@@ -251,7 +249,10 @@ function createPersistenceActions({
         reportSaveError(fe);
       }
   }
-  function persistWorkbookSnapshot(fe, Oe = buildWorkbookViewState(fe)) {
+  function persistWorkbookSnapshot(
+    fe,
+    Oe = viewAndSelectionActions.buildWorkbookViewState(fe),
+  ) {
     if (!persistenceState.isWorkbookLoadedRef.current) {
       const gt = new WorkbookRevisionConflictError(
         "corrupt",
@@ -318,7 +319,7 @@ function createPersistenceActions({
       assistantState.setAssistantProposal(null),
       assistantState.setAnswerCitations(null),
       auditState.setAuditAnalysisResult(null),
-      applyWorkbookView(Oe.view),
+      viewAndSelectionActions.applyWorkbookView(Oe.view),
       persistenceState.setIsSaveConflictDialogOpen(false),
       persistenceState.setPersistenceError(null),
       operationStatusState.setErrorNotice(""),
@@ -326,7 +327,9 @@ function createPersistenceActions({
         "Loaded the saved workbook. The discarded local undo history has been cleared.",
       ));
     try {
-      notifyHostCallback("change", () => onChange?.(Oe.workbook));
+      viewAndSelectionActions.notifyHostCallback("change", () =>
+        onChange?.(Oe.workbook),
+      );
     } catch {
       operationStatusState.setErrorNotice(
         "The host could not acknowledge the reloaded workbook.",
@@ -386,7 +389,9 @@ function createPersistenceActions({
           reportSaveError(wt);
         }
       try {
-        notifyHostCallback("change", () => onChange?.(fe));
+        viewAndSelectionActions.notifyHostCallback("change", () =>
+          onChange?.(fe),
+        );
       } catch {
         operationStatusState.setErrorNotice(
           "The host could not acknowledge the change. Export JSON to retain this revision.",

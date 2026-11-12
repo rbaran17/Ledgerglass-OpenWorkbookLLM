@@ -2,6 +2,9 @@ import i from "react/jsx-runtime";
 import { Layers, Plus } from "lucide-react";
 
 function EditorSheetTabs({
+  gridInteractionActions,
+  cellEditActions,
+  navigationActions,
   dialogState,
   selectionState,
   navigationState,
@@ -11,9 +14,6 @@ function EditorSheetTabs({
   language,
   activeWorkbook,
   activeSheet,
-  runEditorCommand,
-  commitCellEdit,
-  switchActiveWorksheet,
 }) {
   return i.jsxs("div", {
     className: "lg-sheet-tabs",
@@ -69,7 +69,7 @@ function EditorSheetTabs({
                                     : Be.length - 1)) %
                                   Be.length
                               ];
-                    (switchActiveWorksheet(Xe.id),
+                    (navigationActions.switchActiveWorksheet(Xe.id),
                       requestAnimationFrame(() =>
                         Array.from(
                           selectionState.appRootRef.current?.querySelectorAll(
@@ -80,20 +80,20 @@ function EditorSheetTabs({
                           ?.focus(),
                       ));
                   },
-                  onClick: () => switchActiveWorksheet(fe.id),
+                  onClick: () => navigationActions.switchActiveWorksheet(fe.id),
                   style: fe.tabColor
                     ? {
                         boxShadow: `inset 0 -3px ${fe.tabColor}`,
                       }
                     : undefined,
                   onDoubleClick: () => {
-                    commitCellEdit() &&
+                    cellEditActions.commitCellEdit() &&
                       (navigationState.setTabBarSheetId(fe.id),
                       dialogState.setActiveDialogMode("sheets"));
                   },
                   onContextMenu: (Oe) => {
                     (Oe.preventDefault(),
-                      commitCellEdit() &&
+                      cellEditActions.commitCellEdit() &&
                         (navigationState.setTabBarSheetId(fe.id),
                         dialogState.setActiveDialogMode("sheets")));
                   },
@@ -118,7 +118,7 @@ function EditorSheetTabs({
           i.jsx("button", {
             "aria-label": text("Manage worksheets"),
             title: text("Manage worksheets"),
-            onClick: () => runEditorCommand("sheets"),
+            onClick: () => gridInteractionActions.runEditorCommand("sheets"),
             lang: language("Manage worksheets"),
             "data-ui-label": "Manage worksheets",
             children: i.jsx(Layers, { size: 16 }),

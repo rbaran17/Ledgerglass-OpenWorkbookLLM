@@ -16,6 +16,10 @@ import {
 import { Tp } from "../53-find-replace-go-to.js";
 
 function createGridInteractionActions({
+  viewAndSelectionActions,
+  persistenceActions,
+  navigationActions,
+  cellEditActions,
   dialogState,
   selectionState,
   navigationState,
@@ -29,40 +33,19 @@ function createGridInteractionActions({
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  selectSingleRange,
   selectionAreas,
-  requireSingleSelectionRange,
   splitPaneSizes,
-  clearCutSession,
   rowVisibilityIndex,
   columnVisibilityIndex,
   defaultRowHeight,
   zoomScale,
-  runCalculationNow,
   mergeRanges,
   activeCell,
   rowViewport,
-  getSelectedCellAddresses,
-  commitWorkbookEdit,
-  replaceWorkbookSnapshot,
-  runGuardedAction,
-  applyCellPatches,
-  beginCellEdit,
-  commitCellEdit,
-  requestCellScroll,
-  selectCellAddress,
-  switchActiveWorksheet,
-  applyCellFormatPatch,
-  undoOrRedo,
-  stepVisibleRowIndex,
-  stepVisibleColumnIndex,
-  jumpToDataEdge,
-  selectAllCells,
-  selectRowOrColumn,
 }) {
   function runEditorCommand(fe) {
     if (fe === "xlsxSource") {
-      runGuardedAction(() =>
+      viewAndSelectionActions.runGuardedAction(() =>
         importExportState.setXlsxConversionReview({
           snapshot: activeWorkbook,
           report: buildSourceImportRecord(activeWorkbook),
@@ -72,7 +55,7 @@ function createGridInteractionActions({
       );
       return;
     }
-    if (commitCellEdit()) {
+    if (cellEditActions.commitCellEdit()) {
       if (
         (fe === "populationFilter" &&
           filterSortState.setActiveFilterColumn(undefined),
@@ -109,7 +92,7 @@ function createGridInteractionActions({
         return;
       }
       if (fe === "calculateNow") {
-        runCalculationNow();
+        persistenceActions.runCalculationNow();
         return;
       }
       if (fe === "pasteSpecial" && clipboardState.clipboardSnapshotState) {
@@ -199,7 +182,7 @@ function createGridInteractionActions({
     }
     if (fe.key === "Escape" && clipboardState.clipboardSnapshotState) {
       (fe.preventDefault(),
-        clearCutSession(),
+        viewAndSelectionActions.clearCutSession(),
         operationStatusState.setStatusNotice(
           "Cut canceled; source cells remain unchanged.",
         ));
@@ -207,7 +190,9 @@ function createGridInteractionActions({
     }
     if (fe.key === "Escape" && selectionState.completedSelectionAreas.length) {
       (fe.preventDefault(),
-        selectSingleRange(selectionState.activeCellAddress),
+        viewAndSelectionActions.selectSingleRange(
+          selectionState.activeCellAddress,
+        ),
         selectionState.setSelectionAnchorAddress(
           selectionState.activeCellAddress,
         ),
@@ -242,7 +227,7 @@ function createGridInteractionActions({
       ["Tab", "Enter"].includes(fe.key)
     ) {
       (fe.preventDefault(),
-        runGuardedAction(() => {
+        viewAndSelectionActions.runGuardedAction(() => {
           const jt = enumerateSelectionCells(selectionAreas).filter((xr) => {
             const Sr = _t(xr);
             return (
@@ -254,11 +239,11 @@ function createGridInteractionActions({
           const rr = jt.indexOf(selectionState.activeCellAddress),
             Mr = fe.shiftKey ? -1 : 1,
             Br = jt[(rr + Mr + jt.length) % jt.length];
-          commitCellEdit() &&
+          cellEditActions.commitCellEdit() &&
             (selectionState.setActiveCellAddress(Br),
             selectionState.setSelectionAnchorAddress(Br),
             (selectionState.activeCellAddressRef.current = Br),
-            requestCellScroll(Br));
+            viewAndSelectionActions.requestCellScroll(Br));
         }));
       return;
     }
@@ -270,7 +255,7 @@ function createGridInteractionActions({
     let Xe = Ue.row,
       gt = Ue.col;
     if ((fe.ctrlKey || fe.metaKey) && fe.key.toLowerCase() === "z") {
-      (fe.preventDefault(), undoOrRedo(fe.shiftKey));
+      (fe.preventDefault(), navigationActions.undoOrRedo(fe.shiftKey));
       return;
     }
     if (fe.ctrlKey || fe.metaKey) {
@@ -284,7 +269,8 @@ function createGridInteractionActions({
         return;
       }
       if (jt === " ") {
-        (fe.preventDefault(), selectRowOrColumn("column", Ue.col, fe.shiftKey));
+        (fe.preventDefault(),
+          navigationActions.selectRowOrColumn("column", Ue.col, fe.shiftKey));
         return;
       }
       if (jt === "pageup" || jt === "pagedown") {
@@ -292,31 +278,33 @@ function createGridInteractionActions({
         const rr = activeWorkbook.sheets.filter((xr) => !xr.hidden),
           Mr = rr.findIndex((xr) => xr.id === activeSheet.id),
           Br = rr[Mr + (jt === "pageup" ? -1 : 1)];
-        Br && commitCellEdit() && switchActiveWorksheet(Br.id);
+        Br &&
+          cellEditActions.commitCellEdit() &&
+          navigationActions.switchActiveWorksheet(Br.id);
         return;
       }
       if (jt.startsWith("arrow")) {
         fe.preventDefault();
-        const rr = jumpToDataEdge(
+        const rr = viewAndSelectionActions.jumpToDataEdge(
           Ue.row,
           Ue.col,
           jt === "arrowup" || jt === "arrowdown",
           jt === "arrowup" || jt === "arrowleft" ? -1 : 1,
         );
-        selectCellAddress(
+        navigationActions.selectCellAddress(
           `${columnIndexToLetters(rr.col)}${rr.row + 1}`,
           fe.shiftKey,
         );
         return;
       }
       if (jt === "a") {
-        (fe.preventDefault(), selectAllCells());
+        (fe.preventDefault(), navigationActions.selectAllCells());
         return;
       }
       if (["b", "i", "u"].includes(jt)) {
         if ((fe.preventDefault(), !isEditingLocked)) {
           const rr = jt === "b" ? "bold" : jt === "i" ? "italic" : "underline";
-          applyCellFormatPatch({
+          cellEditActions.applyCellFormatPatch({
             style: { [rr]: !resolveEffectiveCellStyle(activeCell?.style)[rr] },
           });
         }
@@ -325,9 +313,9 @@ function createGridInteractionActions({
       if (jt === "d") {
         (fe.preventDefault(),
           isEditingLocked ||
-            runGuardedAction(() => {
-              (requireSingleSelectionRange(),
-                commitWorkbookEdit(
+            viewAndSelectionActions.runGuardedAction(() => {
+              (viewAndSelectionActions.requireSingleSelectionRange(),
+                navigationActions.commitWorkbookEdit(
                   applyCellPreview(
                     activeWorkbook,
                     buildFillPreview(
@@ -345,9 +333,9 @@ function createGridInteractionActions({
       if (jt === "r") {
         (fe.preventDefault(),
           isEditingLocked ||
-            runGuardedAction(() => {
-              (requireSingleSelectionRange(),
-                commitWorkbookEdit(
+            viewAndSelectionActions.runGuardedAction(() => {
+              (viewAndSelectionActions.requireSingleSelectionRange(),
+                navigationActions.commitWorkbookEdit(
                   applyCellPreview(
                     activeWorkbook,
                     buildFillPreview(
@@ -363,7 +351,7 @@ function createGridInteractionActions({
         return;
       }
       if (jt === "y") {
-        (fe.preventDefault(), undoOrRedo(true));
+        (fe.preventDefault(), navigationActions.undoOrRedo(true));
         return;
       }
       if (jt === "f" || jt === "h") {
@@ -376,7 +364,7 @@ function createGridInteractionActions({
       }
       if (jt === "home") {
         (fe.preventDefault(),
-          selectCellAddress(
+          navigationActions.selectCellAddress(
             `${columnIndexToLetters(columnVisibilityIndex.logicalIndex(0))}${rowVisibilityIndex.logicalIndex(0) + 1}`,
             fe.shiftKey,
           ));
@@ -385,7 +373,7 @@ function createGridInteractionActions({
       if (jt === "end") {
         fe.preventDefault();
         const rr = findOccupiedRangeBounds(activeSheet);
-        selectCellAddress(
+        navigationActions.selectCellAddress(
           `${columnIndexToLetters(columnVisibilityIndex.next(rr?.lastCol ?? 0, -1, true) ?? columnVisibilityIndex.logicalIndex(0))}${(rowVisibilityIndex.next(rr?.lastRow ?? 0, -1, true) ?? rowVisibilityIndex.logicalIndex(0)) + 1}`,
           fe.shiftKey,
         );
@@ -394,21 +382,25 @@ function createGridInteractionActions({
       return;
     }
     if (fe.shiftKey && fe.key === " ") {
-      (fe.preventDefault(), selectRowOrColumn("row", Ue.row, false));
+      (fe.preventDefault(),
+        navigationActions.selectRowOrColumn("row", Ue.row, false));
       return;
     }
     if (["Home", "PageUp", "PageDown"].includes(fe.key)) {
       (fe.preventDefault(),
         fe.key === "Home"
           ? (gt = columnVisibilityIndex.logicalIndex(0))
-          : (Xe = stepVisibleRowIndex(
+          : (Xe = viewAndSelectionActions.stepVisibleRowIndex(
               Xe,
               Math.max(
                 1,
                 Math.floor(rowViewport / zoomScale / defaultRowHeight) - 1,
               ) * (fe.key === "PageUp" ? -1 : 1),
             )),
-        selectCellAddress(`${columnIndexToLetters(gt)}${Xe + 1}`, fe.shiftKey));
+        navigationActions.selectCellAddress(
+          `${columnIndexToLetters(gt)}${Xe + 1}`,
+          fe.shiftKey,
+        ));
       return;
     }
     if (
@@ -423,13 +415,19 @@ function createGridInteractionActions({
     ) {
       if (
         (fe.preventDefault(),
-        fe.key === "ArrowDown" && (Xe = stepVisibleRowIndex(Xe, 1)),
+        fe.key === "ArrowDown" &&
+          (Xe = viewAndSelectionActions.stepVisibleRowIndex(Xe, 1)),
         fe.key === "Enter" &&
-          (Xe = stepVisibleRowIndex(Xe, fe.shiftKey ? -1 : 1)),
-        fe.key === "ArrowUp" && (Xe = stepVisibleRowIndex(Xe, -1)),
-        fe.key === "ArrowLeft" && (gt = stepVisibleColumnIndex(gt, -1)),
+          (Xe = viewAndSelectionActions.stepVisibleRowIndex(
+            Xe,
+            fe.shiftKey ? -1 : 1,
+          )),
+        fe.key === "ArrowUp" &&
+          (Xe = viewAndSelectionActions.stepVisibleRowIndex(Xe, -1)),
+        fe.key === "ArrowLeft" &&
+          (gt = viewAndSelectionActions.stepVisibleColumnIndex(gt, -1)),
         (fe.key === "ArrowRight" || fe.key === "Tab") &&
-          (gt = stepVisibleColumnIndex(
+          (gt = viewAndSelectionActions.stepVisibleColumnIndex(
             gt,
             fe.shiftKey && fe.key === "Tab" ? -1 : 1,
           )),
@@ -449,15 +447,18 @@ function createGridInteractionActions({
             (Xe = rowVisibilityIndex.next(rr.firstRow, -1) ?? Ue.row));
       }
       const jt = `${columnIndexToLetters(Math.max(0, Math.min(activeSheet.colCount - 1, gt)))}${Math.max(1, Math.min(activeSheet.rowCount, Xe + 1))}`;
-      selectCellAddress(jt, fe.shiftKey && !["Tab", "Enter"].includes(fe.key));
+      navigationActions.selectCellAddress(
+        jt,
+        fe.shiftKey && !["Tab", "Enter"].includes(fe.key),
+      );
       return;
     }
     (!isEditingLocked &&
       (fe.key === "Delete" || fe.key === "Backspace") &&
       (fe.preventDefault(),
-      runGuardedAction(() =>
-        applyCellPatches(
-          getSelectedCellAddresses().map((jt) => ({
+      viewAndSelectionActions.runGuardedAction(() =>
+        cellEditActions.applyCellPatches(
+          viewAndSelectionActions.getSelectedCellAddresses().map((jt) => ({
             sheetId: activeSheet.id,
             address: jt,
             cell: { ...activeSheet.cells[jt], raw: null },
@@ -474,18 +475,20 @@ function createGridInteractionActions({
         formulaEntryState.setIsFormulaPointMode(
           formulaEntryState.formulaPointerStateRef.current.mode,
         ),
-        beginCellEdit(
+        cellEditActions.beginCellEdit(
           fe.key === "F2" ? getEditableCellText(activeCell) : fe.key,
           true,
         )));
   }
   function commitDialogInput() {
     dialogState.promptDialogState &&
-      runGuardedAction(() => {
+      viewAndSelectionActions.runGuardedAction(() => {
         if (dialogState.promptDialogState.kind === "note")
-          applyCellFormatPatch({ note: dialogState.promptDialogState.value });
+          cellEditActions.applyCellFormatPatch({
+            note: dialogState.promptDialogState.value,
+          });
         else if (dialogState.promptDialogState.kind === "rename")
-          replaceWorkbookSnapshot(
+          navigationActions.replaceWorkbookSnapshot(
             renameWorkbook(activeWorkbook, dialogState.promptDialogState.value),
             "Rename workbook",
           );
@@ -495,8 +498,11 @@ function createGridInteractionActions({
               dialogState.promptDialogState.value,
             ),
             Oe = fe.sheets.at(-1);
-          (replaceWorkbookSnapshot(fe, `Add sheet: ${Oe.name}`),
-            switchActiveWorksheet(Oe.id));
+          (navigationActions.replaceWorkbookSnapshot(
+            fe,
+            `Add sheet: ${Oe.name}`,
+          ),
+            navigationActions.switchActiveWorksheet(Oe.id));
         }
         dialogState.setPromptDialogState(null);
       });
@@ -505,7 +511,7 @@ function createGridInteractionActions({
     return splitPaneSizes.active.current === fe
       ? true
       : !formulaEntryState.activeCellEditRef.current?.value.startsWith("=") &&
-          !commitCellEdit()
+          !cellEditActions.commitCellEdit()
         ? false
         : (splitPaneSizes.activate(fe),
           (selectionState.gridContainerRef.current =

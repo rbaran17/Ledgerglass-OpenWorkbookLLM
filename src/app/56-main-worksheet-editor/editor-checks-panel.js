@@ -18,6 +18,9 @@ import { columnIndexToLetters } from "../03-workbook-model.js";
 import { saveBlobToFile } from "../13-consolidation-dialog.js";
 
 function EditorChecksPanel({
+  gridInteractionActions,
+  navigationActions,
+  fileAndAnalysisActions,
   dialogState,
   filterSortState,
   auditState,
@@ -27,10 +30,6 @@ function EditorChecksPanel({
   activeWorkbook,
   activeSheet,
   filterResult,
-  runEditorCommand,
-  selectCellAddress,
-  switchActiveWorksheet,
-  runCurrentAuditAnalysis,
 }) {
   return (
     dialogState.sidePanelKind === "checks" &&
@@ -100,7 +99,8 @@ function EditorChecksPanel({
           className: "lg-test-choices",
           children: [
             i.jsxs("button", {
-              onClick: () => runEditorCommand("patterns"),
+              onClick: () =>
+                gridInteractionActions.runEditorCommand("patterns"),
               children: [
                 i.jsx(ListFilter, { size: 17 }),
                 i.jsxs("span", {
@@ -157,7 +157,7 @@ function EditorChecksPanel({
                 {
                   onClick: () => {
                     if (fe.kind === "materiality" || fe.kind === "aging") {
-                      runEditorCommand(fe.kind);
+                      gridInteractionActions.runEditorCommand(fe.kind);
                       return;
                     }
                     (auditState.setSelectedAuditKind(fe.kind),
@@ -295,7 +295,7 @@ function EditorChecksPanel({
           }),
         i.jsxs("button", {
           className: "lg-button dark full",
-          onClick: runCurrentAuditAnalysis,
+          onClick: fileAndAnalysisActions.runCurrentAuditAnalysis,
           children: [
             i.jsx(ClipboardCheck, { size: 15 }),
             i.jsx(LocalizedText, {
@@ -382,8 +382,12 @@ function EditorChecksPanel({
                                       );
                                     },
                                   ),
-                                    switchActiveWorksheet(Oe.sheetId),
-                                    selectCellAddress(Oe.address),
+                                    navigationActions.switchActiveWorksheet(
+                                      Oe.sheetId,
+                                    ),
+                                    navigationActions.selectCellAddress(
+                                      Oe.address,
+                                    ),
                                     auditState.setAuditAnalysisResult(
                                       auditState.auditAnalysisResult,
                                     ),

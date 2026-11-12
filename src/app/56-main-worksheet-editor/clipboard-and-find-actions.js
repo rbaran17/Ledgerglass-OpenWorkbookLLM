@@ -10,6 +10,9 @@ import { workbookLimits } from "../02-text-and-financial-functions.js";
 import { wy } from "../55-external-source-refresh.js";
 
 function createClipboardAndFindActions({
+  viewAndSelectionActions,
+  cellEditActions,
+  navigationActions,
   selectionState,
   operationStatusState,
   findReplaceState,
@@ -17,21 +20,16 @@ function createClipboardAndFindActions({
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  selectSingleRange,
   selectionAreasKey,
-  requireSingleSelectionRange,
   workbookCalculator,
   rowVisibilityIndex,
   columnVisibilityIndex,
   latestEditStateRef,
   selectionRangeBounds,
-  getSelectedCellAddresses,
-  runGuardedAction,
-  applyCellPatches,
-  selectCellAddress,
 }) {
   function selectionToTsv(fe = false) {
-    (requireSingleSelectionRange(), getSelectedCellAddresses());
+    (viewAndSelectionActions.requireSingleSelectionRange(),
+      viewAndSelectionActions.getSelectedCellAddresses());
     const Oe = {
         row: selectionRangeBounds.firstRow,
         col: selectionRangeBounds.firstCol,
@@ -110,9 +108,10 @@ function createClipboardAndFindActions({
     }
   }
   function pasteClipboardText(fe) {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (
-        (requireSingleSelectionRange(), fe.length > workbookLimits.maxFileBytes)
+        (viewAndSelectionActions.requireSingleSelectionRange(),
+        fe.length > workbookLimits.maxFileBytes)
       )
         throw new Error("Clipboard text is too large.");
       const Oe =
@@ -137,8 +136,8 @@ function createClipboardAndFindActions({
             readOnly: latestEditStateRef.current.readOnly,
           },
         );
-        (applyCellPatches(wt.patches, "Paste cells"),
-          selectSingleRange(wt.targetRange));
+        (cellEditActions.applyCellPatches(wt.patches, "Paste cells"),
+          viewAndSelectionActions.selectSingleRange(wt.targetRange));
         return;
       }
       const Be = x7.parse(fe.replace(/\r?\n$/, ""), {
@@ -174,8 +173,8 @@ function createClipboardAndFindActions({
           gt.push({ sheetId: activeSheet.id, address: Br, cell: xr });
         }),
       ),
-        applyCellPatches(gt, "Paste cells"),
-        selectSingleRange(
+        cellEditActions.applyCellPatches(gt, "Paste cells"),
+        viewAndSelectionActions.selectSingleRange(
           wy(
             selectionState.activeCellAddress,
             `${columnIndexToLetters(Xe.col + Ue[0].length - 1)}${Xe.row + Ue.length}`,
@@ -202,7 +201,7 @@ function createClipboardAndFindActions({
     }
   }
   function findNextTextMatch() {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (!findReplaceState.findQuery) return;
       const fe = Object.keys(activeSheet.cells)
         .filter((Ue) => {
@@ -232,20 +231,21 @@ function createClipboardAndFindActions({
             const Xe = _t(Ue);
             return Xe.row > Oe.row || (Xe.row === Oe.row && Xe.col > Oe.col);
           }) ?? fe[0];
-      (selectCellAddress(Be),
+      (navigationActions.selectCellAddress(Be),
         operationStatusState.setStatusNotice(
           `${fe.length} matching cell${fe.length === 1 ? "" : "s"}.`,
         ));
     });
   }
   function replaceTextInSelection() {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (!findReplaceState.findQuery) throw new Error("Enter text to find.");
       const fe = new RegExp(
           findReplaceState.findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
           "gi",
         ),
-        Oe = getSelectedCellAddresses()
+        Oe = viewAndSelectionActions
+          .getSelectedCellAddresses()
           .filter(
             (Be) =>
               typeof activeSheet.cells[Be]?.raw == "string" &&
@@ -264,7 +264,8 @@ function createClipboardAndFindActions({
               ),
             },
           }));
-      (Oe.length && applyCellPatches(Oe, "Replace text in selection"),
+      (Oe.length &&
+        cellEditActions.applyCellPatches(Oe, "Replace text in selection"),
         operationStatusState.setStatusNotice(
           `Replaced text in ${Oe.length} cells.`,
         ));

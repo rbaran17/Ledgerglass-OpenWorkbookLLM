@@ -13,6 +13,11 @@ import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { WorkbookCapacityLimits } from "../20-calculation-options-and-assistant.js";
 
 function EditorSidePanel({
+  gridInteractionActions,
+  viewAndSelectionActions,
+  cellEditActions,
+  navigationActions,
+  fileAndAnalysisActions,
   selectionState,
   formulaEntryState,
   dialogState,
@@ -35,14 +40,6 @@ function EditorSidePanel({
   selectedCellCount,
   assistantSelection,
   selectionReferenceLabel,
-  runEditorCommand,
-  runGuardedAction,
-  applyCellPatches,
-  focusGridSurface,
-  selectCellAddress,
-  switchActiveWorksheet,
-  runCurrentAuditAnalysis,
-  askAssistantQuestion,
 }) {
   return (
     dialogState.sidePanelKind &&
@@ -90,6 +87,9 @@ function EditorSidePanel({
           className: "lg-panel-body",
           children: [
             i.jsx(EditorChecksPanel, {
+              gridInteractionActions,
+              navigationActions,
+              fileAndAnalysisActions,
               dialogState,
               filterSortState,
               auditState,
@@ -99,12 +99,11 @@ function EditorSidePanel({
               activeWorkbook,
               activeSheet,
               filterResult,
-              runEditorCommand,
-              selectCellAddress,
-              switchActiveWorksheet,
-              runCurrentAuditAnalysis,
             }),
             i.jsx(EditorAssistantPanel, {
+              viewAndSelectionActions,
+              cellEditActions,
+              fileAndAnalysisActions,
               selectionState,
               formulaEntryState,
               dialogState,
@@ -123,10 +122,6 @@ function EditorSidePanel({
               selectedCellCount,
               assistantSelection,
               selectionReferenceLabel,
-              runGuardedAction,
-              applyCellPatches,
-              focusGridSurface,
-              askAssistantQuestion,
             }),
             dialogState.sidePanelKind === "history" &&
               i.jsxs(i.Fragment, {

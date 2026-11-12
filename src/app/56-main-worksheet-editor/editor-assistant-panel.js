@@ -15,6 +15,9 @@ import { Check } from "lucide-react";
 import { validateProposedCalculation } from "../20-calculation-options-and-assistant.js";
 
 function EditorAssistantPanel({
+  viewAndSelectionActions,
+  cellEditActions,
+  fileAndAnalysisActions,
   selectionState,
   formulaEntryState,
   dialogState,
@@ -33,10 +36,6 @@ function EditorAssistantPanel({
   selectedCellCount,
   assistantSelection,
   selectionReferenceLabel,
-  runGuardedAction,
-  applyCellPatches,
-  focusGridSurface,
-  askAssistantQuestion,
 }) {
   return (
     dialogState.sidePanelKind === "assistant" &&
@@ -62,7 +61,7 @@ function EditorAssistantPanel({
         selectedCount: selectedCellCount,
         busy: assistantState.isAssistantBusy,
         proposalId: assistantState.assistantProposal?.id,
-        onSend: askAssistantQuestion,
+        onSend: fileAndAnalysisActions.askAssistantQuestion,
         onCancel: () => {
           (assistantState.assistantRequestIdRef.current++,
             assistantState.assistantAbortControllerRef.current?.abort(),
@@ -156,7 +155,7 @@ function EditorAssistantPanel({
                                 )),
                                 selectionState.setActiveCellAddress(Oe),
                                 navigationState.setPendingScrollAddress(Oe),
-                                focusGridSurface());
+                                viewAndSelectionActions.focusGridSurface());
                             },
                           },
                           assistantState.assistantProposal.id,
@@ -259,39 +258,41 @@ function EditorAssistantPanel({
                                 className: "lg-button dark full",
                                 disabled: isEditingLocked,
                                 onClick: () =>
-                                  runGuardedAction(() => {
-                                    const fe = latestEditStateRef.current,
-                                      Oe = {
-                                        sheetId: fe.sheetId,
-                                        range: fe.range,
-                                      };
-                                    if (
-                                      fe.readOnly ||
-                                      formulaEntryState.activeCellEditRef
-                                        .current ||
-                                      !evaluateAnswerEvidence(
+                                  viewAndSelectionActions.runGuardedAction(
+                                    () => {
+                                      const fe = latestEditStateRef.current,
+                                        Oe = {
+                                          sheetId: fe.sheetId,
+                                          range: fe.range,
+                                        };
+                                      if (
+                                        fe.readOnly ||
+                                        formulaEntryState.activeCellEditRef
+                                          .current ||
+                                        !evaluateAnswerEvidence(
+                                          fe.book,
+                                          Oe,
+                                          assistantState.answerCitations,
+                                        ).current
+                                      )
+                                        throw Error(
+                                          "The current approved source changed or editing is unavailable. Request a fresh answer before applying changes.",
+                                        );
+                                      const Be = validateProposedCalculation(
                                         fe.book,
                                         Oe,
-                                        assistantState.answerCitations,
-                                      ).current
-                                    )
-                                      throw Error(
-                                        "The current approved source changed or editing is unavailable. Request a fresh answer before applying changes.",
+                                        assistantState.assistantProposal,
                                       );
-                                    const Be = validateProposedCalculation(
-                                      fe.book,
-                                      Oe,
-                                      assistantState.assistantProposal,
-                                    );
-                                    (applyCellPatches(
-                                      Be.patches,
-                                      `Accepted assistant proposal ${Be.id}`,
-                                      fe.selectionKey,
-                                    ),
-                                      operationStatusState.setStatusNotice(
-                                        "Reviewed proposal applied and recorded in activity.",
-                                      ));
-                                  }),
+                                      (cellEditActions.applyCellPatches(
+                                        Be.patches,
+                                        `Accepted assistant proposal ${Be.id}`,
+                                        fe.selectionKey,
+                                      ),
+                                        operationStatusState.setStatusNotice(
+                                          "Reviewed proposal applied and recorded in activity.",
+                                        ));
+                                    },
+                                  ),
                                 children: [
                                   i.jsx(Check, {
                                     size: 15,

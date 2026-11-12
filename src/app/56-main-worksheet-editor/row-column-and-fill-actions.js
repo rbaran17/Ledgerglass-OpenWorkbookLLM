@@ -14,13 +14,15 @@ import {
 import { wy } from "../55-external-source-refresh.js";
 
 function createRowColumnAndFillActions({
+  viewAndSelectionActions,
+  persistenceActions,
+  cellEditActions,
   selectionState,
   viewDisplayState,
   dragFillState,
   actor,
   activeSheet,
   isEditingLocked,
-  requireSingleSelectionRange,
   fillDragStateRef,
   columnVisibilityIndex,
   defaultRowHeight,
@@ -34,15 +36,9 @@ function createRowColumnAndFillActions({
   frozenColumnIndexes,
   shownRows,
   shownColumns,
-  getSelectedCellAddresses,
-  commitWorkbookChange,
-  runGuardedAction,
-  focusGridSurface,
-  commitCellEdit,
-  requestCellScroll,
 }) {
   function resolveSelectedAxisIndexes(fe, Oe) {
-    requireSingleSelectionRange();
+    viewAndSelectionActions.requireSingleSelectionRange();
     const { firstRow, lastRow, firstCol, lastCol } = selectionRangeBounds,
       Nt =
         fe === "column"
@@ -84,7 +80,7 @@ function createRowColumnAndFillActions({
         (shownColumns.includes(wt.col) ||
           frozenColumnIndexes.includes(wt.col)) &&
         (shownRows.includes(wt.row) || frozenRowIndexes.includes(wt.row));
-    (commitWorkbookChange({
+    (persistenceActions.commitWorkbookChange({
       ...Ue,
       revision: Ue.revision + 1,
       sheets: Ue.sheets.map((rr) =>
@@ -101,14 +97,17 @@ function createRowColumnAndFillActions({
         },
       ],
     }),
-      jt && requestCellScroll(selectionState.activeCellAddress));
+      jt &&
+        viewAndSelectionActions.requestCellScroll(
+          selectionState.activeCellAddress,
+        ));
   }
   function autoFitSelectedAxis(fe, Oe) {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (
         isEditingLocked ||
         latestEditStateRef.current.readOnly ||
-        !commitCellEdit()
+        !cellEditActions.commitCellEdit()
       )
         return;
       const Be = resolveSelectedAxisIndexes(fe, Oe),
@@ -140,14 +139,14 @@ function createRowColumnAndFillActions({
         `AutoFit ${fe === "column" ? "column widths" : "row heights"}`,
       ),
         viewDisplayState.setAxisResizeState(null),
-        focusGridSurface());
+        viewAndSelectionActions.focusGridSurface());
     });
   }
   function beginAxisResize(fe, Oe, Be) {
     if (
       (Be.preventDefault(),
       Be.stopPropagation(),
-      Be.button !== 0 || isEditingLocked || !commitCellEdit())
+      Be.button !== 0 || isEditingLocked || !cellEditActions.commitCellEdit())
     )
       return;
     const Ue =
@@ -165,9 +164,13 @@ function createRowColumnAndFillActions({
   function beginFillDrag(fe) {
     (fe.preventDefault(),
       fe.stopPropagation(),
-      !(fe.button !== 0 || isEditingLocked || !commitCellEdit()) &&
-        runGuardedAction(() => {
-          getSelectedCellAddresses();
+      !(
+        fe.button !== 0 ||
+        isEditingLocked ||
+        !cellEditActions.commitCellEdit()
+      ) &&
+        viewAndSelectionActions.runGuardedAction(() => {
+          viewAndSelectionActions.getSelectedCellAddresses();
           const Oe = {
             book: latestEditStateRef.current.book,
             sheetId: activeSheet.id,

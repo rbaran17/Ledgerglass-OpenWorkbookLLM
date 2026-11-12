@@ -21,6 +21,9 @@ import { requestAssistantAnswer } from "../21-aging-and-materiality-screens.js";
 import { buildAnswerCitations } from "../51-pattern-checks-and-citations.js";
 
 function createFileAndAnalysisActions({
+  persistenceActions,
+  viewAndSelectionActions,
+  navigationActions,
   dialogState,
   auditState,
   operationStatusState,
@@ -38,9 +41,6 @@ function createFileAndAnalysisActions({
   filterResult,
   latestEditStateRef,
   assistantSelection,
-  commitWorkbookChange,
-  runGuardedAction,
-  switchActiveWorksheet,
 }) {
   async function importWorkbookFromFile(fe) {
     if (!fe) return;
@@ -119,8 +119,10 @@ function createFileAndAnalysisActions({
         });
         return;
       }
-      (commitWorkbookChange(Nt.workbook),
-        switchActiveWorksheet(Nt.workbook.sheets.find((wt) => !wt.hidden).id),
+      (persistenceActions.commitWorkbookChange(Nt.workbook),
+        navigationActions.switchActiveWorksheet(
+          Nt.workbook.sheets.find((wt) => !wt.hidden).id,
+        ),
         operationStatusState.setStatusNotice(
           Nt.warnings.length ? Nt.warnings.join(" ") : "Workbook imported.",
         ));
@@ -203,7 +205,7 @@ function createFileAndAnalysisActions({
     }
   }
   function runCurrentAuditAnalysis() {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (auditState.auditPopulationScope === "visible" && !filterResult)
         throw Error(
           "Review and apply a current population filter before visible-only analysis.",

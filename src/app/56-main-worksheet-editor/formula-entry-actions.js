@@ -11,28 +11,22 @@ import {
 } from "../03-workbook-model.js";
 
 function createFormulaEntryActions({
+  cellEditActions,
+  viewAndSelectionActions,
+  navigationActions,
   formulaEntryState,
   selectionState,
   operationStatusState,
   dragFillState,
   activeWorkbook,
   activeSheet,
-  syncFormulaEditorSelection,
-  restoreFormulaEditorFocus,
-  isFormulaEditingLocked,
-  beginCellEdit,
-  requestCellScroll,
-  switchActiveWorksheet,
-  stepVisibleRowIndex,
-  stepVisibleColumnIndex,
-  jumpToDataEdge,
 }) {
   function insertFormulaReference(fe, Oe = false, Be) {
     const Ue = formulaEntryState.activeCellEditRef.current,
       Xe = formulaEntryState.formulaPointerStateRef.current;
     if (
       !Ue?.value.startsWith("=") ||
-      isFormulaEditingLocked() ||
+      cellEditActions.isFormulaEditingLocked() ||
       operationStatusState.isOperationBusy
     )
       return false;
@@ -48,7 +42,10 @@ function createFormulaEntryActions({
         Ue.sheetId === activeSheet.id ? undefined : activeSheet.name,
       );
     return (
-      beginCellEdit(jt.value, !!Xe.input?.classList.contains("lg-cell-editor")),
+      cellEditActions.beginCellEdit(
+        jt.value,
+        !!Xe.input?.classList.contains("lg-cell-editor"),
+      ),
       (Xe.span = jt.span),
       (Xe.start = Xe.end = jt.span.end),
       (Xe.anchor = Nt),
@@ -60,7 +57,7 @@ function createFormulaEntryActions({
         range: wt,
         bounds: Be?.bounds ?? parseRangeAddress(wt),
       }),
-      restoreFormulaEditorFocus(),
+      cellEditActions.restoreFormulaEditorFocus(),
       true
     );
   }
@@ -112,18 +109,19 @@ function createFormulaEntryActions({
     if (
       fe.nativeEvent.isComposing ||
       fe.altKey ||
-      isFormulaEditingLocked() ||
+      cellEditActions.isFormulaEditingLocked() ||
       operationStatusState.isOperationBusy
     )
       return false;
     const Oe = fe.currentTarget;
     if (!Oe.value.startsWith("=")) return false;
-    syncFormulaEditorSelection(Oe);
+    cellEditActions.syncFormulaEditorSelection(Oe);
     const Be = formulaEntryState.formulaPointerStateRef.current;
     if (fe.key === "F2" && !fe.ctrlKey && !fe.metaKey)
       return (
         fe.preventDefault(),
-        formulaEntryState.activeCellEditRef.current || beginCellEdit(Oe.value),
+        formulaEntryState.activeCellEditRef.current ||
+          cellEditActions.beginCellEdit(Oe.value),
         (Be.mode = !Be.mode),
         formulaEntryState.setIsFormulaPointMode(Be.mode),
         true
@@ -132,11 +130,14 @@ function createFormulaEntryActions({
       const jt = $ae(Oe.value, Be.start, Be.end);
       return jt
         ? (fe.preventDefault(),
-          beginCellEdit(jt.value, Oe.classList.contains("lg-cell-editor")),
+          cellEditActions.beginCellEdit(
+            jt.value,
+            Oe.classList.contains("lg-cell-editor"),
+          ),
           (Be.span = jt.span),
           (Be.start = Be.end = jt.span.end),
           formulaEntryState.setFormulaCaretPosition(jt.span.end),
-          restoreFormulaEditorFocus(),
+          cellEditActions.restoreFormulaEditorFocus(),
           true)
         : false;
     }
@@ -145,7 +146,7 @@ function createFormulaEntryActions({
       const jt = activeWorkbook.sheets.filter((Br) => !Br.hidden),
         rr = jt.findIndex((Br) => Br.id === activeSheet.id),
         Mr = jt[rr + (fe.key === "PageUp" ? -1 : 1)];
-      return (Mr && switchActiveWorksheet(Mr.id), true);
+      return (Mr && navigationActions.switchActiveWorksheet(Mr.id), true);
     }
     if (
       !Be.mode ||
@@ -164,15 +165,19 @@ function createFormulaEntryActions({
       gt = ["ArrowUp", "ArrowLeft"].includes(fe.key) ? -1 : 1,
       Nt =
         fe.ctrlKey || fe.metaKey
-          ? jumpToDataEdge(Ue.row, Ue.col, Xe, gt)
+          ? viewAndSelectionActions.jumpToDataEdge(Ue.row, Ue.col, Xe, gt)
           : {
-              row: Xe ? stepVisibleRowIndex(Ue.row, gt) : Ue.row,
-              col: Xe ? Ue.col : stepVisibleColumnIndex(Ue.col, gt),
+              row: Xe
+                ? viewAndSelectionActions.stepVisibleRowIndex(Ue.row, gt)
+                : Ue.row,
+              col: Xe
+                ? Ue.col
+                : viewAndSelectionActions.stepVisibleColumnIndex(Ue.col, gt),
             },
       wt = `${columnIndexToLetters(Nt.col)}${Nt.row + 1}`;
     return (
       insertFormulaReference(wt, fe.shiftKey),
-      requestCellScroll(wt),
+      viewAndSelectionActions.requestCellScroll(wt),
       true
     );
   }

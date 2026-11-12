@@ -19,6 +19,9 @@ import { parseGoToReference } from "../22-themes-and-cell-styles.js";
 import { isDeepFrozenValue } from "../01-schemas-date-functions-and-validation.js";
 
 function createNavigationActions({
+  viewAndSelectionActions,
+  persistenceActions,
+  cellEditActions,
   dialogState,
   selectionState,
   navigationState,
@@ -35,13 +38,9 @@ function createNavigationActions({
   setActiveSheetId,
   activeSheet,
   isEditingLocked,
-  selectSingleRange,
-  applySelectionAreas,
   selectionAreas,
   sheetSplitPanes,
   splitPaneSizes,
-  scrollActivePaneVertically,
-  scrollActivePaneHorizontally,
   undoStack,
   setUndoStack,
   redoStack,
@@ -55,23 +54,12 @@ function createNavigationActions({
   scrollableColumnLayout,
   frozenRowsHeight,
   frozenColumnsWidth,
-  computeGridViewport,
-  buildWorkbookViewState,
-  applyWorkbookView,
-  commitWorkbookChange,
-  runGuardedAction,
-  restoreFormulaEditorFocus,
-  focusGridSurface,
-  commitCellEdit,
-  requestCellScroll,
-  stepVisibleRowIndex,
-  stepVisibleColumnIndex,
 }) {
   function commitWorkbookEdit(fe, Oe) {
     const Be = latestEditStateRef.current.book,
       Ue = applyWorkbookChange(Be, fe, actor, Oe),
       Xe = fe.sheets.find((wt) => !Be.sheets.some((jt) => jt.id === wt.id));
-    (commitWorkbookChange(
+    (persistenceActions.commitWorkbookChange(
       Ue,
       true,
       Oe === "Unprotect sheet" &&
@@ -88,10 +76,16 @@ function createNavigationActions({
     const Ue =
       JSON.stringify(Be.structureProtection) !==
       JSON.stringify(fe.structureProtection);
-    (commitWorkbookChange(applyWorkbookChange(Be, fe, actor, Oe), true, true),
+    (persistenceActions.commitWorkbookChange(
+      applyWorkbookChange(Be, fe, actor, Oe),
+      true,
+      true,
+    ),
       Ue && (setUndoStack([]), setRedoStack([])),
       fe.sheets.some((Xe) => Xe.id === activeSheet.id && !Xe.hidden) ||
-        applyWorkbookView(buildWorkbookViewState(fe)),
+        viewAndSelectionActions.applyWorkbookView(
+          viewAndSelectionActions.buildWorkbookViewState(fe),
+        ),
       operationStatusState.setStatusNotice(Oe));
   }
   function commitWorkbookWithNewSheet(fe, Oe) {
@@ -109,7 +103,7 @@ function createNavigationActions({
       Be = {};
     for (const Ue of Pv(sheetSplitPanes)) {
       const Xe = splitPaneSizes.current.current[Ue],
-        gt = computeGridViewport(Xe),
+        gt = viewAndSelectionActions.computeGridViewport(Xe),
         Nt = Math.max(
           1,
           Xe.height -
@@ -140,7 +134,7 @@ function createNavigationActions({
       ));
   }
   function selectCellAddress(fe, Oe = false, Be = false) {
-    if (!commitCellEdit()) return;
+    if (!cellEditActions.commitCellEdit()) return;
     if (
       !Oe &&
       !filterSortState.filterValueSearch &&
@@ -157,12 +151,12 @@ function createNavigationActions({
       operationStatusState.setErrorNotice(gt.message);
       return;
     }
-    (requestCellScroll(fe),
+    (viewAndSelectionActions.requestCellScroll(fe),
       (selectionState.activeCellAddressRef.current = fe),
       selectionState.setActiveCellAddress(
         Oe ? selectionState.selectionAnchorAddress : fe,
       ),
-      applySelectionAreas(Xe),
+      viewAndSelectionActions.applySelectionAreas(Xe),
       Oe || selectionState.setSelectionAnchorAddress(fe),
       formulaEntryState.setCellEditState(null));
   }
@@ -174,31 +168,31 @@ function createNavigationActions({
       (setActiveSheetId(fe),
         filterSortState.setActiveColumnSort(null),
         filterSortState.setFilterValueSearch(""),
-        scrollActivePaneVertically(0),
-        scrollActivePaneHorizontally(0),
+        viewAndSelectionActions.scrollActivePaneVertically(0),
+        viewAndSelectionActions.scrollActivePaneHorizontally(0),
         formulaEntryState.setCellEditState(null),
         (formulaEntryState.formulaPointerStateRef.current.anchor = undefined),
         (formulaEntryState.formulaPointerStateRef.current.head = undefined),
         formulaEntryState.setActiveFormulaReference(null),
-        restoreFormulaEditorFocus());
+        cellEditActions.restoreFormulaEditorFocus());
       return;
     }
-    commitCellEdit() &&
+    cellEditActions.commitCellEdit() &&
       ((selectionState.activeCellAddressRef.current = "A1"),
       setActiveSheetId(fe),
       selectionState.setActiveCellAddress("A1"),
       selectionState.setSelectionAnchorAddress("A1"),
-      selectSingleRange("A1"),
+      viewAndSelectionActions.selectSingleRange("A1"),
       filterSortState.setActiveColumnSort(null),
       filterSortState.setFilterValueSearch(""),
-      scrollActivePaneVertically(0),
-      scrollActivePaneHorizontally(0),
+      viewAndSelectionActions.scrollActivePaneVertically(0),
+      viewAndSelectionActions.scrollActivePaneHorizontally(0),
       auditState.setAuditAnalysisResult(null),
       auditState.setAuditSourceRange(""),
       selectionState.gridContainerRef.current &&
         ((selectionState.gridContainerRef.current.scrollTop = 0),
         (selectionState.gridContainerRef.current.scrollLeft = 0)),
-      focusGridSurface());
+      viewAndSelectionActions.focusGridSurface());
   }
   function navigateToSheetCell(fe, Oe) {
     const Be = latestEditStateRef.current.book.sheets.find(
@@ -216,7 +210,7 @@ function createNavigationActions({
       throw Error(
         "The target cell is hidden. Unhide its row/column or expand its outline before navigating.",
       );
-    commitCellEdit() &&
+    cellEditActions.commitCellEdit() &&
       (filterSortState.setFilterStateByScope((Xe) => {
         const gt = { ...Xe };
         return (delete gt[JSON.stringify([activeWorkbook.id, fe])], gt);
@@ -225,7 +219,7 @@ function createNavigationActions({
       selectionState.setActiveCellAddress(Oe),
       selectionState.setSelectionAnchorAddress(Oe),
       (selectionState.activeCellAddressRef.current = Oe),
-      selectSingleRange(Oe),
+      viewAndSelectionActions.selectSingleRange(Oe),
       filterSortState.setFilterValueSearch(""),
       filterSortState.setActiveColumnSort(null),
       navigationState.setPendingScrollAddress(Oe));
@@ -233,13 +227,13 @@ function createNavigationActions({
   function selectSheetRanges(fe, Oe) {
     const Be = parseSelectionAreas(Oe);
     (navigateToSheetCell(fe, Be.at(-1).split(":")[0]),
-      applySelectionAreas(Be),
+      viewAndSelectionActions.applySelectionAreas(Be),
       dialogState.setActiveDialogMode(null),
-      focusGridSurface());
+      viewAndSelectionActions.focusGridSurface());
   }
   function commitNameBoxReference() {
-    runGuardedAction(() => {
-      if (!commitCellEdit()) return;
+    viewAndSelectionActions.runGuardedAction(() => {
+      if (!cellEditActions.commitCellEdit()) return;
       const fe = parseGoToReference(
           activeWorkbook,
           activeSheet.id,
@@ -261,12 +255,13 @@ function createNavigationActions({
         selectionState.setActiveCellAddress(Ue),
         selectionState.setSelectionAnchorAddress(Ue),
         (selectionState.activeCellAddressRef.current = Xe),
-        applySelectionAreas(Oe),
-        fe.sheetId === activeSheet.id && requestCellScroll(Ue));
+        viewAndSelectionActions.applySelectionAreas(Oe),
+        fe.sheetId === activeSheet.id &&
+          viewAndSelectionActions.requestCellScroll(Ue));
     });
   }
   function undoOrRedo(fe = false) {
-    runGuardedAction(() => {
+    viewAndSelectionActions.runGuardedAction(() => {
       if (isEditingLocked || latestEditStateRef.current.readOnly)
         throw new Error("This workbook is read-only.");
       const Oe = fe
@@ -303,7 +298,7 @@ function createNavigationActions({
               fe ? "Redo workbook change" : "Undo workbook change",
               { restoringHistory: true },
             );
-      (commitWorkbookChange(Be, false),
+      (persistenceActions.commitWorkbookChange(Be, false),
         fe
           ? (setRedoStack(redoStack.slice(0, -1)),
             setUndoStack([...undoStack, activeWorkbook]))
@@ -314,8 +309,8 @@ function createNavigationActions({
     });
   }
   function replaceActiveWorkbook(fe) {
-    runGuardedAction(() => {
-      (commitWorkbookChange(fe),
+    viewAndSelectionActions.runGuardedAction(() => {
+      (persistenceActions.commitWorkbookChange(fe),
         setUndoStack([]),
         setRedoStack([]),
         switchActiveWorksheet(fe.sheets.find((Oe) => !Oe.hidden).id),
@@ -325,7 +320,7 @@ function createNavigationActions({
     });
   }
   function toggleFreezeTopRow() {
-    runGuardedAction(() =>
+    viewAndSelectionActions.runGuardedAction(() =>
       commitWorkbookEdit(
         setFreezePanes(
           activeWorkbook,
@@ -353,30 +348,36 @@ function createNavigationActions({
       (setActiveSheetId(Be.sheetId),
         selectionState.setActiveCellAddress(Br),
         selectionState.setSelectionAnchorAddress(Br),
-        selectSingleRange(Br),
+        viewAndSelectionActions.selectSingleRange(Br),
         navigationState.setPendingScrollAddress(Br),
-        focusGridSurface());
+        viewAndSelectionActions.focusGridSurface());
       return;
     }
     const Ue = _t(selectionState.activeCellAddress),
-      Xe = fe === "Enter" ? stepVisibleRowIndex(Ue.row, Oe ? -1 : 1) : Ue.row,
-      gt = fe === "Tab" ? stepVisibleColumnIndex(Ue.col, Oe ? -1 : 1) : Ue.col;
+      Xe =
+        fe === "Enter"
+          ? viewAndSelectionActions.stepVisibleRowIndex(Ue.row, Oe ? -1 : 1)
+          : Ue.row,
+      gt =
+        fe === "Tab"
+          ? viewAndSelectionActions.stepVisibleColumnIndex(Ue.col, Oe ? -1 : 1)
+          : Ue.col;
     (selectCellAddress(`${columnIndexToLetters(gt)}${Xe + 1}`),
-      focusGridSurface());
+      viewAndSelectionActions.focusGridSurface());
   }
   function selectAllCells() {
-    if (!commitCellEdit()) return;
-    selectSingleRange(
+    if (!cellEditActions.commitCellEdit()) return;
+    viewAndSelectionActions.selectSingleRange(
       `A1:${columnIndexToLetters(activeSheet.colCount - 1)}${activeSheet.rowCount}`,
     );
     const fe = `${columnIndexToLetters(columnVisibilityIndex.logicalIndex(0))}${rowVisibilityIndex.logicalIndex(0) + 1}`;
     (selectionState.setActiveCellAddress(fe),
       selectionState.setSelectionAnchorAddress(fe),
       (selectionState.activeCellAddressRef.current = fe),
-      focusGridSurface());
+      viewAndSelectionActions.focusGridSurface());
   }
   function selectRowOrColumn(fe, Oe, Be) {
-    if (!commitCellEdit()) return;
+    if (!cellEditActions.commitCellEdit()) return;
     const Ue = _t(selectionState.selectionAnchorAddress)[
         fe === "column" ? "col" : "row"
       ],
@@ -386,7 +387,7 @@ function createNavigationActions({
         fe === "column"
           ? `${columnIndexToLetters(Oe)}${rowVisibilityIndex.logicalIndex(0) + 1}`
           : `${columnIndexToLetters(columnVisibilityIndex.logicalIndex(0))}${Oe + 1}`;
-    (selectSingleRange(
+    (viewAndSelectionActions.selectSingleRange(
       fe === "column"
         ? `${columnIndexToLetters(Xe)}1:${columnIndexToLetters(gt)}${activeSheet.rowCount}`
         : `A${Xe + 1}:${columnIndexToLetters(activeSheet.colCount - 1)}${gt + 1}`,
@@ -396,7 +397,7 @@ function createNavigationActions({
         Be ? selectionState.selectionAnchorAddress : Nt,
       ),
       Be || selectionState.setSelectionAnchorAddress(Nt),
-      focusGridSurface());
+      viewAndSelectionActions.focusGridSurface());
   }
   return {
     commitWorkbookEdit,

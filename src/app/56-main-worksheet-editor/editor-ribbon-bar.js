@@ -8,6 +8,13 @@ import {
 } from "../04-cell-input-paste-and-fill.js";
 
 function EditorRibbonBar({
+  viewAndSelectionActions,
+  cellEditActions,
+  gridInteractionActions,
+  navigationActions,
+  fileAndAnalysisActions,
+  clipboardAndFindActions,
+  rowColumnAndFillActions,
   selectionState,
   dialogState,
   filterSortState,
@@ -19,29 +26,13 @@ function EditorRibbonBar({
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  requireSingleSelectionRange,
-  scrollActivePaneVertically,
   undoStack,
   redoStack,
   hasFrozenRows,
   activeCell,
-  clearSelectedCellContents,
-  runEditorCommand,
-  commitWorkbookEdit,
-  runGuardedAction,
-  applyCellPatches,
-  applyZoomPercent,
-  applyCellFormatPatch,
-  undoOrRedo,
-  exportWorkbookAs,
-  replaceActiveWorkbook,
-  toggleFreezeTopRow,
-  copyOrCutSelection,
-  pasteFromClipboard,
-  autoFitSelectedAxis,
 }) {
   return i.jsx(WorkbookRibbon, {
-    onTool: runEditorCommand,
+    onTool: gridInteractionActions.runEditorCommand,
     sheetProtected: !!activeSheet.protection?.enabled,
     allowProtectionChange: !readOnly,
     workbookStructureProtected: !!activeWorkbook.structureProtection?.enabled,
@@ -55,13 +46,14 @@ function EditorRibbonBar({
     headings: viewDisplayState.isHeadingsVisible,
     freezeRows: hasFrozenRows,
     zoom: viewDisplayState.zoomPercent,
-    onFormat: applyCellFormatPatch,
-    onUndo: () => undoOrRedo(),
-    onRedo: () => undoOrRedo(true),
+    onFormat: cellEditActions.applyCellFormatPatch,
+    onUndo: () => navigationActions.undoOrRedo(),
+    onRedo: () => navigationActions.undoOrRedo(true),
     onImport: () => importExportState.importFileInputRef.current?.click(),
-    onExport: (fe) => void exportWorkbookAs(fe),
-    onNew: () => replaceActiveWorkbook(createBlankWorkbook()),
-    onDemo: () => replaceActiveWorkbook(buildSampleLedgerWorkbook()),
+    onExport: (fe) => void fileAndAnalysisActions.exportWorkbookAs(fe),
+    onNew: () => navigationActions.replaceActiveWorkbook(createBlankWorkbook()),
+    onDemo: () =>
+      navigationActions.replaceActiveWorkbook(buildSampleLedgerWorkbook()),
     onRename: () =>
       dialogState.setPromptDialogState({
         kind: "rename",
@@ -72,13 +64,14 @@ function EditorRibbonBar({
         kind: "sheet",
         value: `Sheet${activeWorkbook.sheets.length + 1}`,
       }),
-    onAddRow: () => runEditorCommand("insertRow"),
-    onAddColumn: () => runEditorCommand("insertColumn"),
-    onAutoFitColumns: () => autoFitSelectedAxis("column"),
-    onAutoFitRows: () => autoFitSelectedAxis("row"),
+    onAddRow: () => gridInteractionActions.runEditorCommand("insertRow"),
+    onAddColumn: () => gridInteractionActions.runEditorCommand("insertColumn"),
+    onAutoFitColumns: () =>
+      rowColumnAndFillActions.autoFitSelectedAxis("column"),
+    onAutoFitRows: () => rowColumnAndFillActions.autoFitSelectedAxis("row"),
     onAutosum: () =>
-      runGuardedAction(() =>
-        applyCellPatches(
+      viewAndSelectionActions.runGuardedAction(() =>
+        cellEditActions.applyCellPatches(
           [
             applyAutoSum(
               activeWorkbook,
@@ -90,9 +83,9 @@ function EditorRibbonBar({
         ),
       ),
     onFillDown: () =>
-      runGuardedAction(() => {
-        (requireSingleSelectionRange(),
-          commitWorkbookEdit(
+      viewAndSelectionActions.runGuardedAction(() => {
+        (viewAndSelectionActions.requireSingleSelectionRange(),
+          navigationActions.commitWorkbookEdit(
             applyCellPreview(
               activeWorkbook,
               buildFillPreview(
@@ -105,10 +98,13 @@ function EditorRibbonBar({
             "Fill down",
           ));
       }),
-    onClear: () => runGuardedAction(clearSelectedCellContents),
-    onCopy: () => void copyOrCutSelection(false),
-    onCut: () => void copyOrCutSelection(true),
-    onPaste: () => void pasteFromClipboard(),
+    onClear: () =>
+      viewAndSelectionActions.runGuardedAction(
+        cellEditActions.clearSelectedCellContents,
+      ),
+    onCopy: () => void clipboardAndFindActions.copyOrCutSelection(false),
+    onCut: () => void clipboardAndFindActions.copyOrCutSelection(true),
+    onPaste: () => void clipboardAndFindActions.pasteFromClipboard(),
     onFind: () => findReplaceState.setIsFindBarVisible((fe) => !fe),
     onSort: (fe) => {
       (filterSortState.setActiveColumnSort(
@@ -119,7 +115,7 @@ function EditorRibbonBar({
             }
           : null,
       ),
-        scrollActivePaneVertically(0),
+        viewAndSelectionActions.scrollActivePaneVertically(0),
         selectionState.gridContainerRef.current &&
           (selectionState.gridContainerRef.current.scrollTop = 0));
     },
@@ -130,8 +126,8 @@ function EditorRibbonBar({
     onShowFormulas: () => viewDisplayState.setIsShowingFormulas((fe) => !fe),
     onGridlines: () => viewDisplayState.setIsGridlinesVisible((fe) => !fe),
     onHeadings: () => viewDisplayState.setIsHeadingsVisible((fe) => !fe),
-    onFreeze: toggleFreezeTopRow,
-    onZoom: applyZoomPercent,
+    onFreeze: navigationActions.toggleFreezeTopRow,
+    onZoom: navigationActions.applyZoomPercent,
     onPanel: dialogState.setSidePanelKind,
     onNote: () =>
       dialogState.setPromptDialogState({
@@ -139,7 +135,7 @@ function EditorRibbonBar({
         value: activeCell?.note ?? "",
       }),
     onReviewed: () =>
-      applyCellFormatPatch({
+      cellEditActions.applyCellFormatPatch({
         tickmark: activeCell?.tickmark ? "" : "✓",
       }),
   });
