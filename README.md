@@ -204,9 +204,7 @@ Read the [LLM protocol](docs/LLM-PROTOCOL.md), [chat integration guide](docs/CHA
 
 ### MCP server
 
-The server provides scoped context/range reads, formula inspection/evaluation/contracts/compatibility, audit checks, capability discovery and proposal queuing. It cannot apply changes or widen the host-approved selection.
-
-After `npm run build:lib`:
+The server gives a model nine tools over one host-approved selection: capability discovery, the selection's context, range reads, formula inspection and evaluation, the supported function list, a formula compatibility check, audit checks and proposal queuing. It cannot apply changes or widen the approved selection.
 
 ```sh
 npm run mcp -- \
@@ -216,9 +214,11 @@ npm run mcp -- \
   --outbox /absolute/path/proposals.json
 ```
 
-The sheet argument is the stable JSON sheet ID, not its display name. Export a native workbook through File → Save workbook data. The input file and proposal outbox must be separate.
+The sheet argument is the stable JSON sheet ID, not its display name. Export a native workbook through File → Save workbook data. The input file and proposal outbox must be separate. No build step is needed: the server runs from `src/`.
 
-This reference uses stdio and a file bridge. It does not synchronize an open browser window automatically or expose a public HTTP MCP endpoint. The embedding host connects its authorized workbook, proposal queue and review UI through the server factory. See [MCP tools, configuration and integration](docs/MCP.md).
+This reference uses stdio and a file bridge. It does not synchronize an open browser window automatically or expose a public HTTP MCP endpoint. An embedding host connects its authorized workbook, proposal queue and review UI through `createWorkbookMcpServer` in `src/mcp/server.js`. See [MCP tools, configuration and integration](docs/MCP.md).
+
+The server was rewritten after the original source was lost. It keeps the original entry point and the two tool names that survived (`workbook_get_context`, `workbook_get_capabilities`); the other seven tools were named and specified afresh.
 
 ## Data, persistence and file exchange
 

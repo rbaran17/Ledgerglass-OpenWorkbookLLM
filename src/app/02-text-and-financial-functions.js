@@ -779,8 +779,18 @@ const supportedTextFunctionNames = [
     "TEXTAFTER",
   ],
   notTextFunctionSentinel = Symbol("not-text-function"),
+  // Numbers become text with 15 significant digits, as they do in Excel, so
+  // =0.1+0.2&"" gives "0.3" and not "0.30000000000000004".
   coerceValueToText = (e) =>
-    e == null ? "" : typeof e == "boolean" ? (e ? "TRUE" : "FALSE") : String(e);
+    e == null
+      ? ""
+      : typeof e == "boolean"
+        ? e
+          ? "TRUE"
+          : "FALSE"
+        : typeof e == "number" && Number.isFinite(e)
+          ? String(Number(e.toPrecision(15)))
+          : String(e);
 function parseDateTimeText(e) {
   const r =
     /^(?:(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})\/(\d{1,2})\/(\d{4}))(?:[ T](.+))?$/.exec(

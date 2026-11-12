@@ -1916,19 +1916,45 @@ function shiftFormulaReferences(e, r, t) {
       continue;
     }
     const u = o === 0 || !unquotedNameCharPattern.test(e[o - 1]),
+      // A1:B2 is handled as one reference, so that a corner pushed off the
+      // grid invalidates the whole range instead of half of it.
+      x = u
+        ? /^(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*):(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*)/.exec(
+            a,
+          )
+        : null,
       l = u ? /^(\$?)([A-Za-z]{1,3}):(\$?)([A-Za-z]{1,3})/.exec(a) : null,
       c = u ? /^(\$?)([1-9]\d*):(\$?)([1-9]\d*)/.exec(a) : null,
       h = u ? /^(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*)/.exec(a) : null,
-      f = l ?? c ?? h;
+      f = x ?? l ?? c ?? h;
     if (
       f &&
       !unquotedNameCharPattern.test(a[f[0].length] ?? "") &&
       !/^\s*[(!]/.test(a.slice(f[0].length))
     ) {
-      if (l)
-        n += `${shiftColumnReference(l[1], l[2], t)}:${shiftColumnReference(l[3], l[4], t)}`;
+      const joinRange = (...parts) =>
+        parts.includes("#REF!")
+          ? "#REF!"
+          : parts.length === 4
+            ? `${parts[0]}${parts[1]}:${parts[2]}${parts[3]}`
+            : `${parts[0]}:${parts[1]}`;
+      if (x)
+        n += joinRange(
+          shiftColumnReference(x[1], x[2], t),
+          offsetRowReference(x[3], x[4], r),
+          shiftColumnReference(x[5], x[6], t),
+          offsetRowReference(x[7], x[8], r),
+        );
+      else if (l)
+        n += joinRange(
+          shiftColumnReference(l[1], l[2], t),
+          shiftColumnReference(l[3], l[4], t),
+        );
       else if (c)
-        n += `${offsetRowReference(c[1], c[2], r)}:${offsetRowReference(c[3], c[4], r)}`;
+        n += joinRange(
+          offsetRowReference(c[1], c[2], r),
+          offsetRowReference(c[3], c[4], r),
+        );
       else if (h) {
         const p = shiftColumnReference(h[1], h[2], t),
           m = offsetRowReference(h[3], h[4], r);
