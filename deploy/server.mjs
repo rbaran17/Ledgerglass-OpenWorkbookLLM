@@ -181,10 +181,11 @@ export async function startWebServer(options = {}) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const runtime = await startWebServer();
-    process.stdout.write(JSON.stringify({ event: 'listening', port: runtime.address.port }) + '\n');
     const stop = () => { void runtime.close().catch(() => { process.exitCode = 1; }); };
     process.once('SIGTERM', stop);
     process.once('SIGINT', stop);
+    // Announce readiness only once a signal can be handled; a supervisor may send one straight away.
+    process.stdout.write(JSON.stringify({ event: 'listening', port: runtime.address.port }) + '\n');
   } catch {
     process.stderr.write('Ledgerglass web runtime could not start. Check build output and configuration.\n');
     process.exitCode = 1;
