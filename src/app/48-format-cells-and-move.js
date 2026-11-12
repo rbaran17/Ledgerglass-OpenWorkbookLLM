@@ -373,9 +373,9 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
   };
   if (
     (!y &&
-      e.sheets.some((B) => {
-        return B.conditionalFormats?.some((C) => C.kind === "formula");
-      }) &&
+      e.sheets.some((B) =>
+        B.conditionalFormats?.some((C) => C.kind === "formula"),
+      ) &&
       throwWorkbookError(
         "Range moves cannot repair formula-based conditional rules yet. Remove those rules before moving cells.",
       ),
@@ -588,12 +588,11 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
       throwWorkbookError("Workbook revision limit reached."),
     checkDataValidationBatch(
       w,
-      I.filter((B) => {
-        return (
+      I.filter(
+        (B) =>
           B.before?.raw !== B.after?.raw ||
-          B.before?.literal !== B.after?.literal
-        );
-      }),
+          B.before?.literal !== B.after?.literal,
+      ),
     ));
   const z = j ? normalizeWorkbookInput(w) : e,
     V = I.map((B) => ({
@@ -754,13 +753,11 @@ function MoveCellsDialog(e) {
     m = Math.max(1, Math.ceil(p.length / 15)),
     v = Math.min(l, m - 1);
   ne.useEffect(() => {
-    var I;
     const k = document.activeElement;
     return (
-      (I = o.current?.querySelector("button:not(:disabled)")) == null ||
-        I.focus(),
+      o.current?.querySelector("button:not(:disabled)")?.focus(),
       () => {
-        k != null && k.isConnected && k.focus();
+        k?.isConnected && k.focus();
       }
     );
   }, []);
@@ -1035,7 +1032,7 @@ function resolveSelectionNumberFormat(e) {
         ? e.active
         : t,
     o = e.workbook.sheets.find((d) => d.id === e.sheetId)?.cells[n];
-  if (o != null && o.numberFormat)
+  if (o?.numberFormat)
     try {
       return validateNumberFormatSettings(o.numberFormat);
     } catch {}
@@ -1046,14 +1043,12 @@ function resolveSelectionNumberFormat(e) {
     ...(["number", "currency", "percent"].includes(a)
       ? {
           decimals: Math.min(12, summarizeNumberFormat(o?.numFmt) ?? 2),
-          useGrouping:
-            o != null && o.numFmt ? o.numFmt.includes(",") : a !== "percent",
+          useGrouping: o?.numFmt ? o.numFmt.includes(",") : a !== "percent",
         }
       : {}),
   });
 }
 function M4e(e) {
-  var q;
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -1094,12 +1089,7 @@ function M4e(e) {
       s.current.sheet !== e.sheetId ||
       s.current.selection !== JSON.stringify(e.ranges ?? [e.range]) ||
       s.current.active !== e.active,
-    N =
-      e.readOnly ||
-      T ||
-      !!((q = j?.protection) != null && q.enabled) ||
-      !j ||
-      _ > 500,
+    N = e.readOnly || T || !!j?.protection?.enabled || !j || _ > 500,
     R = ne.useMemo(
       () => calculateWorkbookWithSettings(e.workbook),
       [e.workbook],
@@ -1159,14 +1149,13 @@ function M4e(e) {
     };
   return (
     ne.useEffect(() => {
-      var oe;
       const te = document.activeElement;
       return (
-        (oe = o.current?.querySelector(
-          '[role="option"][aria-selected="true"]',
-        )) == null || oe.focus(),
+        o.current
+          ?.querySelector('[role="option"][aria-selected="true"]')
+          ?.focus(),
         () => {
-          te != null && te.isConnected && te.focus();
+          te?.isConnected && te.focus();
         }
       );
     }, []),
@@ -1245,7 +1234,6 @@ function M4e(e) {
                       tabIndex: u === te ? 0 : -1,
                       onClick: () => J(te),
                       onKeyDown: (oe) => {
-                        var he;
                         if (
                           ["ArrowUp", "ArrowDown", "Home", "End"].includes(
                             oe.key,
@@ -1263,9 +1251,9 @@ function M4e(e) {
                                       : Uv.length - 1)) %
                                   Uv.length;
                           (J(Uv[Se]),
-                            (he =
-                              oe.currentTarget.parentElement?.children[Se]) ==
-                              null || he.focus());
+                            oe.currentTarget.parentElement?.children[
+                              Se
+                            ]?.focus());
                         }
                       },
                       children: numberFormatCategoryLabels[te],
@@ -1399,22 +1387,19 @@ function M4e(e) {
                                           : String(te.value),
                                     }),
                                     i.jsx("td", {
-                                      children:
-                                        ae != null && ae.accounting
-                                          ? i.jsxs("span", {
-                                              className: `nf-accounting nf-symbol-${ae.accounting.symbolPosition}`,
-                                              children: [
-                                                i.jsx("span", {
-                                                  children:
-                                                    ae.accounting.symbol,
-                                                }),
-                                                i.jsx("span", {
-                                                  children:
-                                                    ae.accounting.amount,
-                                                }),
-                                              ],
-                                            })
-                                          : (ae?.text ?? "Unsupported pattern"),
+                                      children: ae?.accounting
+                                        ? i.jsxs("span", {
+                                            className: `nf-accounting nf-symbol-${ae.accounting.symbolPosition}`,
+                                            children: [
+                                              i.jsx("span", {
+                                                children: ae.accounting.symbol,
+                                              }),
+                                              i.jsx("span", {
+                                                children: ae.accounting.amount,
+                                              }),
+                                            ],
+                                          })
+                                        : (ae?.text ?? "Unsupported pattern"),
                                     }),
                                   ],
                                 },

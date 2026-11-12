@@ -23,7 +23,6 @@ import {
 } from "./18-transformation-recipes-dialog.js";
 
 function FilterViewsDialog(e) {
-  var L, U, G, Q;
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -47,20 +46,14 @@ function FilterViewsDialog(e) {
     F =
       !!e.onWorkbookChange &&
       !e.readOnly &&
-      !((L = e.workbook.structureProtection) != null && L.enabled) &&
-      !(
-        (U = e.workbook.sheets.find((oe) => oe.id === e.sheetId)?.protection) !=
-          null && U.enabled
-      ),
+      !e.workbook.structureProtection?.enabled &&
+      !e.workbook.sheets.find((oe) => oe.id === e.sheetId)?.protection?.enabled,
     I =
       !!e.onWorkbookChange &&
       !e.readOnly &&
-      !((G = e.workbook.structureProtection) != null && G.enabled) &&
+      !e.workbook.structureProtection?.enabled &&
       !!k &&
-      !(
-        (Q = e.workbook.sheets.find((oe) => oe.id === k.sheetId)?.protection) !=
-          null && Q.enabled
-      ),
+      !e.workbook.sheets.find((oe) => oe.id === k.sheetId)?.protection?.enabled,
     O = ne.useMemo(() => {
       try {
         const oe = parseRangeAddress(s.range);
@@ -135,11 +128,11 @@ function FilterViewsDialog(e) {
     }
   }
   ne.useEffect(() => {
-    var oe, de;
+    var oe;
     f &&
-      ((de = (oe = a.current) == null ? undefined : oe.scrollIntoView) ==
-        null ||
-        de.call(oe, { block: "nearest" }));
+      ((oe = a.current) == null ? undefined : oe.scrollIntoView)?.call(oe, {
+        block: "nearest",
+      });
   }, [f]);
   function _(oe) {
     (d((de) => ({
@@ -167,14 +160,12 @@ function FilterViewsDialog(e) {
     });
   }
   function T(oe, de, he) {
-    d((Se) => {
-      return {
-        ...Se,
-        advanced: Se.advanced?.map((ce, ge) =>
-          ge === oe ? ce.map((se, we) => (we === de ? he : se)) : ce,
-        ),
-      };
-    });
+    d((Se) => ({
+      ...Se,
+      advanced: Se.advanced?.map((ce, ge) =>
+        ge === oe ? ce.map((se, we) => (we === de ? he : se)) : ce,
+      ),
+    }));
   }
   function N(oe, de, he, Se = false) {
     return i.jsxs("div", {
@@ -280,12 +271,11 @@ function FilterViewsDialog(e) {
   }
   return (
     ne.useEffect(() => {
-      var de;
       const oe = document.activeElement;
       return (
-        (de = o.current) == null || de.focus(),
+        o.current?.focus(),
         () => {
-          oe != null && oe.isConnected && oe.focus();
+          oe?.isConnected && oe.focus();
         }
       );
     }, []),
@@ -399,8 +389,8 @@ function FilterViewsDialog(e) {
                                 value: "",
                                 children: "Choose a saved view",
                               }),
-                              e.workbook.savedFilterViews?.map((oe) => {
-                                return i.jsxs(
+                              e.workbook.savedFilterViews?.map((oe) =>
+                                i.jsxs(
                                   "option",
                                   {
                                     value: oe.id,
@@ -415,8 +405,8 @@ function FilterViewsDialog(e) {
                                     ],
                                   },
                                   oe.id,
-                                );
-                              }),
+                                ),
+                              ),
                             ],
                           }),
                         ],
@@ -702,7 +692,6 @@ function FilterViewsDialog(e) {
                         lang: language("Value slicer"),
                         "data-ui-label": "Value slicer",
                         children: j.result?.values.map((oe) => {
-                          var he;
                           const de =
                             z.values === undefined ||
                             z.values.some(
@@ -715,8 +704,7 @@ function FilterViewsDialog(e) {
                             {
                               "aria-pressed": de,
                               disabled:
-                                z.values === undefined &&
-                                !!((he = j.result) != null && he.truncated),
+                                z.values === undefined && !!j.result?.truncated,
                               onClick: () => C(oe.value),
                               children: [
                                 i.jsxs("span", {
@@ -772,25 +760,23 @@ function FilterViewsDialog(e) {
                             children: [
                               N(
                                 oe,
-                                (he) => {
-                                  return _({
+                                (he) =>
+                                  _({
                                     ...z,
                                     conditions: z.conditions?.map((le, ce) =>
                                       ce === de ? he : le,
                                     ),
-                                  });
-                                },
+                                  }),
                                 `Column condition ${de + 1}`,
                               ),
                               i.jsxs("button", {
-                                onClick: () => {
-                                  return _({
+                                onClick: () =>
+                                  _({
                                     ...z,
                                     conditions: z.conditions?.filter(
                                       (Se, le) => le !== de,
                                     ),
-                                  });
-                                },
+                                  }),
                                 children: [
                                   i.jsx(LocalizedText, {
                                     children: "Remove condition ",
@@ -891,20 +877,16 @@ function FilterViewsDialog(e) {
                                   ),
                                   i.jsxs("button", {
                                     onClick: () =>
-                                      d((le) => {
-                                        return {
-                                          ...le,
-                                          advanced: le.advanced
-                                            ?.map((ge, se) =>
-                                              se === de
-                                                ? ge.filter(
-                                                    (we, Ee) => Ee !== Se,
-                                                  )
-                                                : ge,
-                                            )
-                                            .filter((ge) => ge.length),
-                                        };
-                                      }),
+                                      d((le) => ({
+                                        ...le,
+                                        advanced: le.advanced
+                                          ?.map((ge, se) =>
+                                            se === de
+                                              ? ge.filter((we, Ee) => Ee !== Se)
+                                              : ge,
+                                          )
+                                          .filter((ge) => ge.length),
+                                      })),
                                     children: [
                                       i.jsx(LocalizedText, {
                                         children: "Remove group ",
@@ -924,16 +906,14 @@ function FilterViewsDialog(e) {
                           ),
                           i.jsxs("button", {
                             onClick: () =>
-                              d((he) => {
-                                return {
-                                  ...he,
-                                  advanced: he.advanced?.map((le, ce) =>
-                                    ce === de
-                                      ? [...le, createDefaultFilterCriterion(u)]
-                                      : le,
-                                  ),
-                                };
-                              }),
+                              d((he) => ({
+                                ...he,
+                                advanced: he.advanced?.map((le, ce) =>
+                                  ce === de
+                                    ? [...le, createDefaultFilterCriterion(u)]
+                                    : le,
+                                ),
+                              })),
                             children: [
                               i.jsx(LocalizedText, {
                                 children: "Add AND condition to group ",
@@ -943,14 +923,12 @@ function FilterViewsDialog(e) {
                           }),
                           i.jsxs("button", {
                             onClick: () =>
-                              d((he) => {
-                                return {
-                                  ...he,
-                                  advanced: he.advanced?.filter(
-                                    (le, ce) => ce !== de,
-                                  ),
-                                };
-                              }),
+                              d((he) => ({
+                                ...he,
+                                advanced: he.advanced?.filter(
+                                  (le, ce) => ce !== de,
+                                ),
+                              })),
                             children: [
                               i.jsx(LocalizedText, {
                                 children: "Remove group ",
@@ -1138,8 +1116,7 @@ function ValidationReviewDialog({
     s = error.issues.some((d) => d.style === "stop" || d.evaluationError);
   return (
     ne.useEffect(() => {
-      var u;
-      (u = a.current?.querySelector("button")) == null || u.focus();
+      a.current?.querySelector("button")?.focus();
     }, []),
     i.jsx("div", {
       className: "wt-backdrop",

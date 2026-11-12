@@ -56,7 +56,6 @@ function applyCellPatchTransaction(
   const a = new Set();
   let s;
   const d = r.map((p) => {
-      var A;
       if (!isNonArrayObject(p)) return throwWithMessage("Invalid cell patch.");
       const m = findSheetOrThrow(e, p.sheetId);
       assertSheetUnprotected(m);
@@ -70,9 +69,9 @@ function applyCellPatchTransaction(
       const y = m.cells[b];
       if (
         (y?.raw ?? null) !== p.cell?.raw ||
-        !!(y != null && y.literal) != !!((A = p.cell) != null && A.literal)
+        !!y?.literal != !!p.cell?.literal
       ) {
-        s ?? (s = calculateWorkbookWithSettings(e));
+        s ??= calculateWorkbookWithSettings(e);
         const k = s.getSpillAnchor(m.id, b);
         if (k && k !== b) {
           const F = r.find((I) => I.sheetId === m.id && I.address === k);
@@ -153,11 +152,10 @@ function applyCellPatchTransaction(
     }
   const h = checkDataValidationBatch(
     c,
-    d.filter((p) => {
-      return (
-        p.before?.raw !== p.after.raw || p.before?.literal !== p.after.literal
-      );
-    }),
+    d.filter(
+      (p) =>
+        p.before?.raw !== p.after.raw || p.before?.literal !== p.after.literal,
+    ),
     o.validationApproval,
   );
   if (
@@ -195,12 +193,7 @@ function applyCellPatchTransaction(
     isDeepFrozenValue(e) &&
       NC.has(e) &&
       c.sheets === l &&
-      d.every((p) => {
-        var m;
-        return (
-          !p.after.hyperlink && !((m = p.after.style) != null && m.binding)
-        );
-      }) &&
+      d.every((p) => !p.after.hyperlink && !p.after.style?.binding) &&
       t$(f),
     carryCalculatorRecordForward(e, f),
     f

@@ -19,8 +19,7 @@ function ColorPickerButton({
     ne.useEffect(() => {
       if (!s) return;
       const c = (h) => {
-        var f;
-        ((f = u.current) != null && f.contains(h.target)) || d(false);
+        u.current?.contains(h.target) || d(false);
       };
       return (
         document.addEventListener("pointerdown", c),
@@ -63,12 +62,11 @@ function ColorPickerButton({
             role: "dialog",
             "aria-label": l,
             onKeyDown: (c) => {
-              var f;
               c.key === "Escape" &&
                 (c.preventDefault(),
                 c.stopPropagation(),
                 d(false),
-                (f = u.current?.querySelector("button")) == null || f.focus());
+                u.current?.querySelector("button")?.focus());
             },
             children: [
               i.jsx("strong", {

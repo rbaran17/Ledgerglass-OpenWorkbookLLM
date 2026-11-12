@@ -917,7 +917,7 @@ function parseLocalizedCellEntry(e, r, t = "1900", n) {
 function formatCellEntryForEdit(e, r) {
   return typeof e?.raw == "number" && r
     ? localizeDecimalPoint(e.raw, r)
-    : `${e != null && e.literal && typeof e.raw == "string" ? "'" : ""}${String(e?.raw ?? "")}`;
+    : `${e?.literal && typeof e.raw == "string" ? "'" : ""}${String(e?.raw ?? "")}`;
 }
 function localizeDecimalPoint(e, r) {
   return Number.isFinite(e)
@@ -949,8 +949,8 @@ function validateLocalizedNumberEntry(e, r, t) {
 function formatLocalizedNumberDisplay(e, r, t = "1900", n) {
   return !n ||
     typeof e != "number" ||
-    (r != null && r.numberFormat) ||
-    (r != null && r.numFmt) ||
+    r?.numberFormat ||
+    r?.numFmt ||
     r?.format === "date"
     ? formatNumberWithPattern(e, r, t)
     : Number.isFinite(e)
@@ -1323,13 +1323,12 @@ function resolveWorkbookMessages(e = {}) {
       typeof t[n(d)] == "string" &&
       t[n(d)].trim().length > 0 &&
       o(d) === o(t[n(d)]),
-    s = (d) => {
-      return a(d)
+    s = (d) =>
+      a(d)
         ? n(d) === d
           ? t[d]
           : `${d.match(/^\s*/)?.[0] ?? ""}${t[n(d)]}${d.match(/\s*$/)?.[0] ?? ""}`
         : d;
-    };
   return {
     locale: r,
     entryLocale: e.locale,
@@ -1462,16 +1461,14 @@ function LocalizedNumberField({
         "aria-describedby": z,
         onChange: (V) => j(V.target.value),
         onFocus: (V) => {
-          (O || (w.current = h.entryLocale),
-            g(true),
-            onFocus == null || onFocus(V));
+          (O || (w.current = h.entryLocale), g(true), onFocus?.(V));
         },
         onBlur: (V) => {
-          (y(true), g(false), onBlur == null || onBlur(V));
+          (y(true), g(false), onBlur?.(V));
         },
         onKeyDown: (V) => {
           if (
-            (onKeyDown == null || onKeyDown(V),
+            (onKeyDown?.(V),
             !(
               V.defaultPrevented ||
               c.readOnly ||
@@ -1730,9 +1727,8 @@ function withExtensionHostScope(e, r = []) {
   );
 }
 function assertExtensionWriteScope(e, r, t) {
-  var o;
   if (t.readOnly) throw Error("The workbook is read-only.");
-  if ((o = e.structureProtection) != null && o.enabled)
+  if (e.structureProtection?.enabled)
     throw Error("Workbook structure is protected.");
   const n = validateExtensionHostPolicy(e, t);
   for (const a of r) {

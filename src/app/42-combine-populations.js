@@ -83,22 +83,21 @@ function CombinePopulationsDialog(e) {
       _.context.includeHidden === J.includeHidden &&
       JSON.stringify(_.context.allowedSheetIds) === JSON.stringify(q);
   (ne.useEffect(() => {
-    var Re, Me;
+    var Re;
     _ &&
       oe &&
-      ((Me = (Re = a.current) == null ? undefined : Re.scrollIntoView) ==
-        null ||
-        Me.call(Re, { block: "start" }));
+      ((Re = a.current) == null ? undefined : Re.scrollIntoView)?.call(Re, {
+        block: "start",
+      });
   }, [_, oe]),
     ne.useEffect(() => {
-      var ke;
       const Re = document.activeElement;
       return (
-        (ke = o.current?.querySelector(
-          '[data-ui-label="Combine operation"]',
-        )) == null || ke.focus(),
+        o.current
+          ?.querySelector('[data-ui-label="Combine operation"]')
+          ?.focus(),
         () => {
-          Re != null && Re.isConnected && Re.focus();
+          Re?.isConnected && Re.focus();
         }
       );
     }, []));
@@ -1132,16 +1131,15 @@ function TextToColumnsDialog(e) {
     H = B?.key === G && B.plan.snapshot === JSON.stringify(e.workbook),
     Q = H ? B.plan : null;
   (ne.useEffect(() => {
-    var Se;
     const ae = document.activeElement,
       oe = o.current?.querySelector('[data-ui-label="Source range"]');
     return (
-      (Se =
-        oe && !oe.matches(":disabled")
-          ? oe
-          : o.current?.querySelector("button")) == null || Se.focus(),
+      (oe && !oe.matches(":disabled")
+        ? oe
+        : o.current?.querySelector("button")
+      )?.focus(),
       () => {
-        ae != null && ae.isConnected && ae.focus();
+        ae?.isConnected && ae.focus();
       }
     );
   }, []),
@@ -1836,10 +1834,9 @@ function validateTextCleanupRequest(e) {
   };
 }
 function previewTextCleanup(e, r, t = {}) {
-  var v, g;
   const n = validateTextToColumnsPermissions(e, t),
     o = validateTextCleanupRequest(r);
-  if (!n.allowNewSheet || ((v = e.structureProtection) != null && v.enabled))
+  if (!n.allowNewSheet || e.structureProtection?.enabled)
     throw Error("Creating an output worksheet is not permitted.");
   const a = e.sheets.find((b) => b.id === o.sourceSheetId);
   if (!a) throw Error("Choose an existing source worksheet.");
@@ -1849,8 +1846,7 @@ function previewTextCleanup(e, r, t = {}) {
   if (s.firstCol !== s.lastCol || d > 500)
     throw Error("Select one source column containing at most 500 cells.");
   if (
-    (g = a.merges) != null &&
-    g.some((b) => {
+    a.merges?.some((b) => {
       const y = parseRangeAddress(b);
       return (
         y.firstRow <= s.lastRow &&

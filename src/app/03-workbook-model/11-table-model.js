@@ -179,8 +179,7 @@ function createWorksheetRecord(e) {
       };
 }
 function writeAnalysisOutputBlock(e, r, t, n) {
-  var f, p, m, v;
-  (n != null && n.sheetId) || assertWorkbookStructureEditable(e);
+  n?.sheetId || assertWorkbookStructureEditable(e);
   const o = t[0]?.length ?? 0;
   ((!o || t.length * o > workbookLimits.maxCells) &&
     throwWorkbookError("The analysis output exceeds 100,000 cells."),
@@ -189,11 +188,10 @@ function writeAnalysisOutputBlock(e, r, t, n) {
         "An analysis label exceeds the 32,767-character cell limit. Shorten source labels or value-field names.",
       ));
   const a = structuredClone(e),
-    s =
-      n != null && n.sheetId
-        ? findSheetOrThrow(a, n.sheetId)
-        : createWorksheetRecord(buildUniqueSheetName(a, n?.sheetName ?? r));
-  ((n != null && n.sheetId) || a.sheets.push(s), assertSheetUnprotected(s));
+    s = n?.sheetId
+      ? findSheetOrThrow(a, n.sheetId)
+      : createWorksheetRecord(buildUniqueSheetName(a, n?.sheetName ?? r));
+  (n?.sheetId || a.sheets.push(s), assertSheetUnprotected(s));
   const d = _t(n?.address ?? "A1"),
     u = d.row + t.length - 1,
     l = d.col + o - 1;
@@ -208,15 +206,15 @@ function writeAnalysisOutputBlock(e, r, t, n) {
       );
   }
   return (
-    (f = s.tables) != null &&
-      f.some((g) => rangesIntersect(c, parseRangeAddress(g.range))) &&
+    s.tables?.some((g) => rangesIntersect(c, parseRangeAddress(g.range))) &&
       throwWorkbookError("The output destination overlaps a table."),
-    (((p = s.merges) != null &&
-      p.some((g) => rangesIntersect(c, parseRangeAddress(g)))) ||
-      ((m = s.pivots) != null &&
-        m.some((g) => rangesIntersect(c, parseRangeAddress(g.outputRange)))) ||
-      ((v = s.queries) != null &&
-        v.some((g) => rangesIntersect(c, parseRangeAddress(g.outputRange))))) &&
+    (s.merges?.some((g) => rangesIntersect(c, parseRangeAddress(g))) ||
+      s.pivots?.some((g) =>
+        rangesIntersect(c, parseRangeAddress(g.outputRange)),
+      ) ||
+      s.queries?.some((g) =>
+        rangesIntersect(c, parseRangeAddress(g.outputRange)),
+      )) &&
       throwWorkbookError(
         "The output destination overlaps an existing merged area or analysis result. Choose another empty destination.",
       ),
@@ -240,7 +238,6 @@ function writeAnalysisOutputBlock(e, r, t, n) {
   );
 }
 function buildPivotTableOutput(e, r) {
-  var h;
   const t = normalizePivotDefinition(r),
     n = buildPivotSource(e, t.source),
     o = filterPivotSourceRows(
@@ -260,7 +257,7 @@ function buildPivotTableOutput(e, r) {
         m.showAs !== "value" &&
         (s.sheet.cells[Cn(l.row + f, l.col + p)].format = "percent");
     }
-  if (!((h = t.destination) != null && h.sheetId)) {
+  if (!t.destination?.sheetId) {
     let f = 26;
     (a.matrix[0].forEach((p, m) => {
       const v = String(p ?? ""),
@@ -365,16 +362,14 @@ function extractPivotDrillThrough(e, r, t, n) {
         "Original row",
         ...o.fields,
       ],
-      ...o.records.map((l) => {
-        return [
-          `${l.locator.sheetName}!${l.locator.range}`,
-          o.context.sourceRevision,
-          l.locator.original?.sourceName ?? null,
-          l.locator.original?.sourceSheet ?? null,
-          l.locator.original?.originalRow ?? null,
-          ...l.values,
-        ];
-      }),
+      ...o.records.map((l) => [
+        `${l.locator.sheetName}!${l.locator.range}`,
+        o.context.sourceRevision,
+        l.locator.original?.sourceName ?? null,
+        l.locator.original?.sourceSheet ?? null,
+        l.locator.original?.originalRow ?? null,
+        ...l.values,
+      ]),
     ],
     u = writeAnalysisOutputBlock(
       e,
@@ -533,13 +528,12 @@ function refreshQueryDefinition(e, r, t) {
   });
 }
 function normalizeCellRecord(e, r) {
-  var o;
   if (
     r &&
     isDeepFrozenValue(e) &&
     JU.has(e) &&
     !e.hyperlink &&
-    !((o = e.style) != null && o.binding)
+    !e.style?.binding
   )
     return e;
   if (!isNonArrayObject(e) || !hasOwnKey(e, "raw"))
@@ -744,8 +738,7 @@ function previewColumnTypeChange(e, r, t, n, o = {}) {
     const A = `${columnIndexToLetters(l.firstCol + u)}${l.firstRow + E + 1}`,
       k = s.cells[A],
       F = k?.raw ?? null,
-      I =
-        typeof F == "string" && F.startsWith("=") && !(k != null && k.literal);
+      I = typeof F == "string" && F.startsWith("=") && !k?.literal;
     try {
       if (I || a.mode === "tag") {
         if (!coerceImportedValue(g(r, A), a.dataType))
@@ -833,20 +826,18 @@ function applyColumnTypePreview(e, r, t = {}) {
   return JSON.stringify(e) === JSON.stringify(n.next) ? e : n.next;
 }
 function createWorksheetTable(e, r, t) {
-  var c, h;
   const n = findSheetOrThrow(e, r),
     o = validateTableName(t.name),
     a = resolveSourceRange(t.range, n);
   if (
     (assertSheetUnprotected(n),
-    (c = n.merges) != null &&
-      c.some((f) => rangesIntersect(a, parseRangeAddress(f))) &&
+    n.merges?.some((f) => rangesIntersect(a, parseRangeAddress(f))) &&
       throwWorkbookError(
         "A table cannot overlap merged cells. Unmerge the source first.",
       ),
-    e.sheets.some((f) => {
-      return f.tables?.some((m) => m.name.toLowerCase() === o.toLowerCase());
-    }) && throwWorkbookError("A table with that name already exists."),
+    e.sheets.some((f) =>
+      f.tables?.some((m) => m.name.toLowerCase() === o.toLowerCase()),
+    ) && throwWorkbookError("A table with that name already exists."),
     t.showTotals)
   ) {
     a.lastRow + 1 >= n.rowCount &&
@@ -857,8 +848,7 @@ function createWorksheetTable(e, r, t) {
     a.lastRow++;
   }
   (measureRangeArea(a) > workbookLimits.maxCells ||
-    ((h = n.tables) != null &&
-      h.some((f) => rangesIntersect(a, parseRangeAddress(f.range))))) &&
+    n.tables?.some((f) => rangesIntersect(a, parseRangeAddress(f.range)))) &&
     throwWorkbookError(
       "The table overlaps another table or exceeds the cell budget.",
     );
@@ -882,8 +872,7 @@ function createWorksheetTable(e, r, t) {
     const m = Cn(a.firstRow, a.firstCol + p),
       v = n.cells[m],
       g = d.cells[m];
-    return v?.raw === f.name &&
-      !(f.name.startsWith("=") && !(v != null && v.literal))
+    return v?.raw === f.name && !(f.name.startsWith("=") && !v?.literal)
       ? []
       : [
           {
@@ -925,7 +914,6 @@ function fillCalculatedTableColumns(e, r, t, n) {
       }
 }
 function resizeTable(e, r, t, n) {
-  var w;
   const o = findSheetOrThrow(e, r),
     a =
       o.tables?.find((A) => A.id === t) ??
@@ -938,11 +926,11 @@ function resizeTable(e, r, t, n) {
     throwWorkbookError(
       "Resize a table from its existing top-left header. Moving table source cells is a separate operation.",
     ),
-    e.sheets.some((A) => {
-      return A.tables?.some(
+    e.sheets.some((A) =>
+      A.tables?.some(
         (F) => F.id !== t && F.name.toLowerCase() === s.toLowerCase(),
-      );
-    }) && throwWorkbookError("A table with that name already exists."));
+      ),
+    ) && throwWorkbookError("A table with that name already exists."));
   const l = n.showTotals ?? a.showTotals;
   if (
     (l !== a.showTotals &&
@@ -954,11 +942,9 @@ function resizeTable(e, r, t, n) {
       throwWorkbookError(
         "The resized table does not fit the worksheet or processing budget.",
       ),
-    (w = o.tables) != null &&
-      w.some(
-        (A) => A.id !== t && rangesIntersect(d, parseRangeAddress(A.range)),
-      ) &&
-      throwWorkbookError("Tables cannot overlap."),
+    o.tables?.some(
+      (A) => A.id !== t && rangesIntersect(d, parseRangeAddress(A.range)),
+    ) && throwWorkbookError("Tables cannot overlap."),
     l && (!a.showTotals || d.lastRow !== u.lastRow))
   )
     for (let A = d.firstCol; A <= d.lastCol; A++)
@@ -990,13 +976,11 @@ function resizeTable(e, r, t, n) {
         delete f.cells[k]);
     }
   const p = validateReviewedTableHeaders(h, r, n.range, n.headers),
-    m = p.map((A, k) => {
-      return {
-        ...a.columns[k],
-        id: a.columns[k]?.id ?? `${a.id}:column:${k}:${e.revision}`,
-        name: A,
-      };
-    }),
+    m = p.map((A, k) => ({
+      ...a.columns[k],
+      id: a.columns[k]?.id ?? `${a.id}:column:${k}:${e.revision}`,
+      name: A,
+    })),
     v =
       n.totals ??
       Object.fromEntries(
@@ -1018,7 +1002,7 @@ function resizeTable(e, r, t, n) {
     const F = Cn(d.firstRow, d.firstCol + k),
       I = o.cells[F],
       O = f.cells[F];
-    return I?.raw === O.raw && !!(I != null && I.literal) == !!O.literal
+    return I?.raw === O.raw && !!I?.literal == !!O.literal
       ? []
       : [
           {
@@ -1071,7 +1055,6 @@ function resizeTable(e, r, t, n) {
   return assertWithinCellBudget(renameTableHeaderField(e, h));
 }
 function applyTableOperation(e, r, t, n, o = {}) {
-  var m;
   o.readOnly && throwWorkbookError("This workbook is read-only.");
   const a = findSheetOrThrow(e, r),
     s =
@@ -1201,8 +1184,7 @@ function applyTableOperation(e, r, t, n, o = {}) {
   const h = [];
   for (const v of u.sheets) {
     const g = findSheetOrThrow(e, v.id);
-    (m = g.protection) != null &&
-      m.enabled &&
+    g.protection?.enabled &&
       JSON.stringify(g) !== JSON.stringify(v) &&
       throwWorkbookError(
         "An affected worksheet is protected. Unprotect it before changing dependent table formulas.",
@@ -1770,14 +1752,12 @@ function cloneWorkbookWithNewIds(e) {
     }
   const o = [
     r.dataModel,
-    ...r.sheets.map((a) => {
-      return a.dataModelReport?.definition;
-    }),
+    ...r.sheets.map((a) => a.dataModelReport?.definition),
   ].filter(Boolean);
   for (const a of o)
     for (const s of a.tables)
       ((s.sheetId = t.get(s.sheetId) ?? s.sheetId),
-        s.tableId && (s.tableId = n.get(s.tableId) ?? s.tableId));
+        (s.tableId &&= n.get(s.tableId) ?? s.tableId));
   for (const a of r.sheets)
     a.dataModelReport &&
       (a.dataModelReport.definitionHash = fingerprintCanonicalValue(
@@ -1795,13 +1775,12 @@ function cloneWorkbookWithNewIds(e) {
         ),
       ])
         ((d.sheetId = t.get(d.sheetId) ?? d.sheetId),
-          d.tableId && (d.tableId = n.get(d.tableId) ?? d.tableId));
+          (d.tableId &&= n.get(d.tableId) ?? d.tableId));
       s.definitionHash = fingerprintCanonicalValue(s.definition);
     }
   }
   for (const a of r.sheets) {
-    ((a.id = t.get(a.id)),
-      a.outlineGroups && (a.outlineGroups = regenerateOutlineGroupIds(a)));
+    ((a.id = t.get(a.id)), (a.outlineGroups &&= regenerateOutlineGroupIds(a)));
     for (const s of a.tables ?? []) {
       s.id = n.get(s.id);
       for (const d of s.columns) d.id = crypto.randomUUID();
@@ -1809,8 +1788,7 @@ function cloneWorkbookWithNewIds(e) {
     for (const s of [...(a.pivots ?? []), ...(a.queries ?? [])])
       ((s.id = crypto.randomUUID()),
         (s.source.sheetId = t.get(s.source.sheetId) ?? s.source.sheetId),
-        s.source.tableId &&
-          (s.source.tableId = n.get(s.source.tableId) ?? s.source.tableId),
+        (s.source.tableId &&= n.get(s.source.tableId) ?? s.source.tableId),
         (s.sourceRevision = 0));
     for (const s of [
       ...(a.objects ?? []),
@@ -1820,8 +1798,7 @@ function cloneWorkbookWithNewIds(e) {
       s.id = crypto.randomUUID();
   }
   for (const a of r.definedNames ?? [])
-    a.scopeSheetId &&
-      (a.scopeSheetId = t.get(a.scopeSheetId) ?? a.scopeSheetId);
+    a.scopeSheetId &&= t.get(a.scopeSheetId) ?? a.scopeSheetId;
   return Mw(
     createReviewThread(
       createFormulaWatch(renameStyleNamespace(r, crypto.randomUUID()), t),
@@ -2005,7 +1982,6 @@ function setWorksheetTabColor(e, r, t) {
       });
 }
 function duplicateWorksheet(e, r, t) {
-  var p, m, v;
   assertWorkbookStructureEditable(e);
   const n = findWorksheetById(e, r),
     o = assertUniqueWorksheetName(e, createUniqueWorksheetName(e, n.name));
@@ -2023,7 +1999,7 @@ function duplicateWorksheet(e, r, t) {
       ));
   const s = structuredClone(n);
   ((s.id = createUuid()),
-    s.outlineGroups && (s.outlineGroups = regenerateOutlineGroupIds(s)),
+    (s.outlineGroups &&= regenerateOutlineGroupIds(s)),
     (s.name = o));
   const d = new Set([
       ...e.sheets.flatMap((g) =>
@@ -2054,38 +2030,33 @@ function duplicateWorksheet(e, r, t) {
     return b;
   };
   for (const g of s.tables ?? [])
-    for (const b of g.columns)
-      b.calculatedFormula && (b.calculatedFormula = c(b.calculatedFormula));
+    for (const b of g.columns) b.calculatedFormula &&= c(b.calculatedFormula);
   for (const g of Object.values(s.cells))
     !g.literal &&
       typeof g.raw == "string" &&
       g.raw.startsWith("=") &&
       (g.raw = c(g.raw));
-  ((p = s.objects) == null ||
-    p.forEach((g) => {
-      g.id = createUuid();
+  (s.objects?.forEach((g) => {
+    g.id = createUuid();
+  }),
+    s.validations?.forEach((g) => {
+      ((g.id = createUuid()),
+        g.kind === "custom" && g.formula && (g.formula = c(g.formula)));
     }),
-    (m = s.validations) == null ||
-      m.forEach((g) => {
-        ((g.id = createUuid()),
-          g.kind === "custom" && g.formula && (g.formula = c(g.formula)));
-      }),
-    (v = s.conditionalFormats) == null ||
-      v.forEach((g) => {
-        ((g.id = createUuid()),
-          g.kind === "formula" && g.formula && (g.formula = c(g.formula)));
-      }));
+    s.conditionalFormats?.forEach((g) => {
+      ((g.id = createUuid()),
+        g.kind === "formula" && g.formula && (g.formula = c(g.formula)));
+    }));
   for (const g of [...(s.pivots ?? []), ...(s.queries ?? [])])
     ((g.id = createUuid()),
       (g.sourceRevision = e.revision),
       g.source.sheetId === n.id &&
         ((g.source.sheetId = s.id),
-        g.source.tableId &&
-          (g.source.tableId =
-            u.get(g.source.tableId) ??
-            throwWorkbookError(
-              "A copied analysis refers to a missing source table.",
-            ))));
+        (g.source.tableId &&=
+          u.get(g.source.tableId) ??
+          throwWorkbookError(
+            "A copied analysis refers to a missing source table.",
+          ))));
   const h = (e.definedNames ?? [])
       .filter((g) => g.scopeSheetId === n.id)
       .map((g) => ({
@@ -2161,24 +2132,22 @@ function deleteWorksheet(e, r, t = false) {
         );
         (u !== d.formula && assertSheetUnprotected(s), (d.formula = u));
       }
-    (s.pivots && (s.pivots = s.pivots.filter((d) => d.source.sheetId !== r)),
-      s.queries &&
-        (s.queries = s.queries.filter((d) => d.source.sheetId !== r)));
+    ((s.pivots &&= s.pivots.filter((d) => d.source.sheetId !== r)),
+      (s.queries &&= s.queries.filter((d) => d.source.sheetId !== r)));
   }
   return (
-    a.definedNames &&
-      (a.definedNames = a.definedNames
-        .filter((s) => s.scopeSheetId !== r)
-        .map((s) => ({
-          ...s,
-          refersTo: rewriteStructuredTableReference(
-            s.refersTo,
-            e,
-            n,
-            undefined,
-            true,
-          ),
-        }))),
+    (a.definedNames &&= a.definedNames
+      .filter((s) => s.scopeSheetId !== r)
+      .map((s) => ({
+        ...s,
+        refersTo: rewriteStructuredTableReference(
+          s.refersTo,
+          e,
+          n,
+          undefined,
+          true,
+        ),
+      }))),
     w0(fQ(a, r))
   );
 }
@@ -2213,9 +2182,7 @@ function t$(e) {
     const t = Object.values(r.cells);
     for (const n of t) JU.add(n);
     (QU.set(r.cells, t.length),
-      t.some((n) => {
-        return n.hyperlink || n.style?.binding;
-      }) || YE.set(r, t.length));
+      t.some((n) => n.hyperlink || n.style?.binding) || YE.set(r, t.length));
   }
   return (NC.add(e), e);
 }

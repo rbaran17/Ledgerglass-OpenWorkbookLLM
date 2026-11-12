@@ -56,21 +56,17 @@ function FormatConversionDialog(e) {
     [y, w] = ne.useState(null),
     [E, A] = ne.useState("");
   (ne.useEffect(() => {
-    var D;
     d.current = true;
     const V = document.activeElement;
     return (
-      (D = n.current) == null || D.focus(),
+      n.current?.focus(),
       () => {
-        ((d.current = false),
-          s.current++,
-          V != null && V.isConnected && V.focus());
+        ((d.current = false), s.current++, V?.isConnected && V.focus());
       }
     );
   }, []),
     ne.useEffect(() => {
-      var V;
-      y || (V = n.current) == null || V.focus();
+      y || n.current?.focus();
     }, [y]));
   const k = async (V) => {
       (b(""), A(""), v(true));
@@ -1063,9 +1059,7 @@ function createLocalWorkbookStore(e, r, t = {}) {
     );
   }
   return {
-    load: () => {
-      return s()?.result ?? null;
-    },
+    load: () => s()?.result ?? null,
     save(h, f, p, m = {}) {
       const v = d(p),
         g = createWorkbookSnapshot(h, f),
@@ -1125,13 +1119,10 @@ function createLocalWorkbookStore(e, r, t = {}) {
         g
       );
     },
-    listCheckpoints: () => {
-      return s()?.result.checkpoints ?? [];
-    },
+    listCheckpoints: () => s()?.result.checkpoints ?? [],
     compareCheckpoint: (h, f) =>
       compareWorkbookVersions(c(s(), h).snapshot.workbook, f),
     restoreCheckpoint(h, f, p, m = "Auditor") {
-      var k;
       const v = d(p),
         g = normalizeWorkbookSnapshot(f);
       if (
@@ -1145,10 +1136,8 @@ function createLocalWorkbookStore(e, r, t = {}) {
           v.result.guard,
         );
       if (
-        ((k = g.structureProtection) != null && k.enabled) ||
-        g.sheets.some((I) => {
-          return I.protection?.enabled;
-        })
+        g.structureProtection?.enabled ||
+        g.sheets.some((I) => I.protection?.enabled)
       )
         return throwPersistenceError(
           "invalid",

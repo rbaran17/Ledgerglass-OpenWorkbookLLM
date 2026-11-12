@@ -91,12 +91,11 @@ function ReportOutputsDialog(e) {
           ? m?.snapshot
           : undefined;
   ne.useEffect(() => {
-    var de;
     const ae = document.activeElement;
     return (
-      (de = n.current?.querySelector("button")) == null || de.focus(),
+      n.current?.querySelector("button")?.focus(),
       () => {
-        ae != null && ae.isConnected && ae.focus();
+        ae?.isConnected && ae.focus();
       }
     );
   }, []);
@@ -112,7 +111,7 @@ function ReportOutputsDialog(e) {
     },
     Q = (ae, oe) =>
       G(() => {
-        var Se, le;
+        var Se;
         const de = refreshReportOutput(e.workbook, ae, C, oe);
         (v(de),
           b(oe),
@@ -120,10 +119,10 @@ function ReportOutputsDialog(e) {
           w(e.workbook),
           A(T),
           d("Publish"),
-          (le =
-            (Se = n.current?.querySelector(".lg-reports-scroll")) == null
-              ? undefined
-              : Se.scrollTo) == null || le.call(Se, 0, 0));
+          ((Se = n.current?.querySelector(".lg-reports-scroll")) == null
+            ? undefined
+            : Se.scrollTo
+          )?.call(Se, 0, 0));
       }),
     X$1 = async (ae, oe) => {
       (_(true), F(""));
@@ -700,7 +699,7 @@ function ReportOutputsDialog(e) {
                     disabled: !N || e.readOnly || B,
                     onClick: () =>
                       G(() => {
-                        const ae = !!(m != null && m.refreshId),
+                        const ae = !!m?.refreshId,
                           oe = publishReportOutput(e.workbook, m, C);
                         (e.onWorkbookChange(
                           oe,
@@ -718,10 +717,9 @@ function ReportOutputsDialog(e) {
                           ),
                           d("Saved outputs"));
                       }),
-                    children:
-                      m != null && m.refreshId
-                        ? "Publish reviewed refresh"
-                        : "Publish report output",
+                    children: m?.refreshId
+                      ? "Publish reviewed refresh"
+                      : "Publish report output",
                   }),
               ],
             }),
@@ -831,7 +829,6 @@ function computeWhatIfResult(e, r, t = {}) {
         "A what-if source is missing or outside the visible, authorized host context.",
       );
   const s = n.inputs.map((f, p) => {
-      var y, w;
       const m = e.sheets.find((E) => E.id === f.sheetId),
         v = m.cells[f.address],
         g = _t(f.address);
@@ -839,11 +836,11 @@ function computeWhatIfResult(e, r, t = {}) {
         throw Error(
           "Changing cells must contain finite numeric inputs, not formulas, text, blanks or spill outputs.",
         );
-      if ((y = m.protection) != null && y.enabled)
+      if (m.protection?.enabled)
         throw Error(
           "A changing worksheet is protected. Unprotect it before analyzing scenarios.",
         );
-      if ((w = m.merges) != null && w.some((E) => isCellInRange(E, f.address)))
+      if (m.merges?.some((E) => isCellInRange(E, f.address)))
         throw Error("Merged cells cannot be what-if inputs.");
       if (
         [...(m.pivots ?? []), ...(m.queries ?? [])].some((E) =>
@@ -858,7 +855,7 @@ function computeWhatIfResult(e, r, t = {}) {
         if (
           g.row === A.firstRow ||
           (E.showTotals && g.row === A.lastRow) ||
-          (k != null && k.calculatedFormula) ||
+          k?.calculatedFormula ||
           Object.entries(m.cells).some(([F, I]) => {
             const O = _t(F);
             return (
@@ -1101,9 +1098,8 @@ function applyWhatIfScenario(e, r, t, n = {}) {
         }),
       };
 }
-const formatAssumptionReference = (e, r) => {
-  return `${e.assumptions.find((n) => cellAddressKey(n) === cellAddressKey(r))?.sheetName ?? r.sheetId}!${r.address}`;
-};
+const formatAssumptionReference = (e, r) =>
+  `${e.assumptions.find((n) => cellAddressKey(n) === cellAddressKey(r))?.sheetName ?? r.sheetId}!${r.address}`;
 function buildWhatIfReportRows(e) {
   const r = e.request.inputs.map((a) => formatAssumptionReference(e, a)),
     t = e.request.outputs.map((a) => formatAssumptionReference(e, a)),
@@ -1164,9 +1160,8 @@ function buildWhatIfReportRows(e) {
   );
 }
 function saveWhatIfAnalysis(e, r, t = {}, n) {
-  var f;
   if (t.readOnly) throw Error("This workbook is read-only.");
-  if ((f = e.structureProtection) != null && f.enabled)
+  if (e.structureProtection?.enabled)
     throw Error(
       "Workbook structure is protected. Unprotect it before saving a new report.",
     );
@@ -1236,9 +1231,8 @@ function isWhatIfAnalysisInScope(e, r, t = {}) {
   );
 }
 function findSavedWhatIfAnalysis(e, r, t = {}) {
-  var o;
   if (t.readOnly) throw Error("This workbook is read-only.");
-  if ((o = e.structureProtection) != null && o.enabled)
+  if (e.structureProtection?.enabled)
     throw Error("Workbook structure is protected.");
   const n = e.whatIfAnalyses?.find((s) => s.id === r);
   if (!n || !isWhatIfAnalysisInScope(e, n, t))

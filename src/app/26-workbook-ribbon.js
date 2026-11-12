@@ -76,7 +76,6 @@ import {
 import { ColorPickerButton } from "./25-color-picker.js";
 
 function WorkbookRibbon(e) {
-  var H;
   const { text, language } = useWorkbookMessages(),
     [n, o] = ne.useState("Home"),
     [a, s] = ne.useState(false),
@@ -89,14 +88,10 @@ function WorkbookRibbon(e) {
     g = ne.useRef(null),
     b = ne.useId(),
     y = !c || f,
-    w = () => {
-      return m.current
-        ?.querySelector('[role="tab"][aria-selected="true"]')
-        ?.focus();
-    },
+    w = () =>
+      m.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus(),
     E = () => {
-      var J;
-      ((J = v.current) != null && J.contains(document.activeElement) && w(),
+      (v.current?.contains(document.activeElement) && w(),
         h((q) => !q),
         p(false),
         l(false));
@@ -107,8 +102,7 @@ function WorkbookRibbon(e) {
   (ne.useEffect(() => {
     if (!f) return;
     const J = (q) => {
-      var W;
-      ((W = m.current) != null && W.contains(q.target)) || p(false);
+      m.current?.contains(q.target) || p(false);
     };
     return (
       document.addEventListener("pointerdown", J),
@@ -156,8 +150,7 @@ function WorkbookRibbon(e) {
         e.cell.numberFormat.category,
       ),
     z = (J) => {
-      var K;
-      if ((K = e.cell) != null && K.numberFormat && !j) {
+      if (e.cell?.numberFormat && !j) {
         const le = validateNumberFormatSettings({
           ...e.cell.numberFormat,
           decimals: Math.max(
@@ -184,8 +177,7 @@ function WorkbookRibbon(e) {
   ne.useEffect(() => {
     if (!u) return;
     const J = (q) => {
-      var W;
-      ((W = g.current) != null && W.contains(q.target)) || l(false);
+      g.current?.contains(q.target) || l(false);
     };
     return (
       document.addEventListener("pointerdown", J),
@@ -197,10 +189,7 @@ function WorkbookRibbon(e) {
     },
     D = i.jsxs("select", {
       "aria-label": text("Number format"),
-      value:
-        (H = e.cell) != null && H.numberFormat
-          ? "advanced"
-          : (e.cell?.format ?? "general"),
+      value: e.cell?.numberFormat ? "advanced" : (e.cell?.format ?? "general"),
       disabled: k,
       onChange: (J) =>
         J.target.value === "advanced"
@@ -2100,7 +2089,6 @@ function WorkbookRibbon(e) {
                   className: "xl-file-control",
                   ref: g,
                   onKeyDown: (J) => {
-                    var W, te;
                     if (!(
                       J.altKey ||
                       J.ctrlKey ||
@@ -2132,14 +2120,13 @@ function WorkbookRibbon(e) {
                                       ? 1
                                       : ae.length - 1)) %
                                   ae.length;
-                        (W = ae[de]) == null || W.focus();
+                        ae[de]?.focus();
                       } else
                         J.key === "Escape" &&
                           (J.preventDefault(),
                           J.stopPropagation(),
                           l(false),
-                          (te = g.current?.querySelector("button")) == null ||
-                            te.focus());
+                          g.current?.querySelector("button")?.focus());
                   },
                   children: [
                     i.jsx("button", {
@@ -2179,7 +2166,6 @@ function WorkbookRibbon(e) {
                         onClick: () => A(J),
                         onDoubleClick: E,
                         onKeyDown: (W) => {
-                          var K, te;
                           if (!(
                             W.defaultPrevented ||
                             W.altKey ||
@@ -2198,14 +2184,12 @@ function WorkbookRibbon(e) {
                                     : Uh.length - 1)) %
                                 Uh.length;
                               (A(Uh[ae]),
-                                (K = document.getElementById(`${b}-${ae}`)) ==
-                                  null || K.focus());
+                                document.getElementById(`${b}-${ae}`)?.focus());
                             } else if (W.key === "Home" || W.key === "End") {
                               W.preventDefault();
                               const ae = W.key === "Home" ? 0 : Uh.length - 1;
                               (A(Uh[ae]),
-                                (te = document.getElementById(`${b}-${ae}`)) ==
-                                  null || te.focus());
+                                document.getElementById(`${b}-${ae}`)?.focus());
                             } else if (W.key === "ArrowDown") {
                               (W.preventDefault(), A(J));
                               const ae = N[J].commands.find((oe) => !oe.reason);

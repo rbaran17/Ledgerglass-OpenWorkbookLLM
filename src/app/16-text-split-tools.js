@@ -145,7 +145,6 @@ function discoverArrayFormulaAnchors(e, r, t) {
     );
 }
 function buildTextSplitResult(e, r, t = {}) {
-  var w, A, k, F, I;
   const n = validateTextToColumnsPermissions(e, t),
     o = validateTextToColumnsRequest(r),
     a = e.sheets.find((O) => O.id === o.sourceSheetId);
@@ -155,8 +154,7 @@ function buildTextSplitResult(e, r, t = {}) {
     d = s.lastRow - s.firstRow + 1;
   ((s.firstCol !== s.lastCol || d > dataModelBudgets.sourceCells) &&
     failWithMessage("Select one source column containing at most 500 cells."),
-    (w = a.merges) != null &&
-      w.some((O) => rangesOverlap(O, o.sourceRange)) &&
+    a.merges?.some((O) => rangesOverlap(O, o.sourceRange)) &&
       failWithMessage("Unmerge the source before splitting text."));
   const u = [],
     l = [],
@@ -201,14 +199,12 @@ function buildTextSplitResult(e, r, t = {}) {
       failWithMessage(
         "A column conversion refers to a field outside the split result.",
       ));
-  const p = Array.from({ length: h }, (O, j) => {
-    return o.formats?.[j] ?? "text";
-  });
+  const p = Array.from({ length: h }, (O, j) => o.formats?.[j] ?? "text");
   let m,
     v,
     g = { row: 0, col: 0 };
   if (o.destination.kind === "new-sheet")
-    ((!n.allowNewSheet || ((A = e.structureProtection) != null && A.enabled)) &&
+    ((!n.allowNewSheet || e.structureProtection?.enabled) &&
       failWithMessage(
         "Creating an output worksheet is not permitted while workbook structure is protected or the host disallows new worksheets.",
       ),
@@ -224,8 +220,7 @@ function buildTextSplitResult(e, r, t = {}) {
       m || failWithMessage("Choose an existing output worksheet."),
       (g = _t(o.destination.address)),
       (v = m.name),
-      (k = m.protection) != null &&
-        k.enabled &&
+      m.protection?.enabled &&
         failWithMessage("The output worksheet is protected."));
   }
   (g.row + d > workbookLimits.maxRows || g.col + h > workbookLimits.maxCols) &&
@@ -238,8 +233,8 @@ function buildTextSplitResult(e, r, t = {}) {
       failWithMessage(
         "Choose a separate destination so the original source cells remain intact.",
       ),
-    (((F = m.tables) != null && F.some((O) => rangesOverlap(O.range, b))) ||
-      ((I = m.merges) != null && I.some((O) => rangesOverlap(O, b))) ||
+    (m.tables?.some((O) => rangesOverlap(O.range, b)) ||
+      m.merges?.some((O) => rangesOverlap(O, b)) ||
       [...(m.pivots ?? []), ...(m.queries ?? [])].some((O) =>
         rangesOverlap(O.outputRange, b),
       )) &&
@@ -673,12 +668,11 @@ function convertFieldToTypedValue(e, r, t = "1900") {
   return n;
 }
 function prepareTransformationInput(e, r, t) {
-  var p, m;
   const n = validateFieldTransformRecipe(r),
     o = validateTextToColumnsPermissions(e, t),
     a = e.sheets.find((v) => v.id === n.sourceSheetId);
   if (!a) throw Error("Choose an existing source worksheet.");
-  if (!o.allowNewSheet || ((p = e.structureProtection) != null && p.enabled))
+  if (!o.allowNewSheet || e.structureProtection?.enabled)
     throw Error("Creating a derived worksheet is not permitted.");
   if (e.sheets.some((v) => v.name.toLowerCase() === n.outputName.toLowerCase()))
     throw Error("The output worksheet name is already used.");
@@ -694,16 +688,15 @@ function prepareTransformationInput(e, r, t) {
     throw Error("Select at least one data row in addition to the heading row.");
   if (
     (assertSelectionInAuthorizedSheet(a, n.sourceRange, o),
-    (m = a.merges) != null &&
-      m.some((v) => {
-        const g = parseRangeAddress(v);
-        return (
-          g.firstRow <= s.lastRow &&
-          g.lastRow >= s.firstRow &&
-          g.firstCol <= s.lastCol &&
-          g.lastCol >= s.firstCol
-        );
-      }))
+    a.merges?.some((v) => {
+      const g = parseRangeAddress(v);
+      return (
+        g.firstRow <= s.lastRow &&
+        g.lastRow >= s.firstRow &&
+        g.firstCol <= s.lastCol &&
+        g.lastCol >= s.firstCol
+      );
+    }))
   )
     throw Error("Unmerge the selected source before reshaping fields.");
   (assertOutputNameUnreferenced(e, n.outputName),
@@ -1084,15 +1077,14 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
       sourceRows: rows.length,
       sourceCells: sources.length,
       outputCells: Object.keys(f).length,
-      changedCells: h.filter((v) => {
-        return (
+      changedCells: h.filter(
+        (v) =>
           v.sources.length !== 1 ||
           JSON.stringify(
             sources.find((y) => y.address === v.sources[0])?.original?.raw ??
               null,
-          ) !== JSON.stringify(v.value)
-        );
-      }).length,
+          ) !== JSON.stringify(v.value),
+      ).length,
       exceptions: exceptions.length,
       exceptionRows: new Set(exceptions.map((v) => v.row)).size,
     },
@@ -1638,9 +1630,7 @@ function executeRecipeStep(e, r, t, n) {
         new Set(t.mappings.map((d) => d.from)).size !== t.mappings.length)
       )
         throw Error("Rename each input field only once per step.");
-      const s = (d) => {
-        return t.mappings.find((l) => l.from === d)?.to ?? d;
-      };
+      const s = (d) => t.mappings.find((l) => l.from === d)?.to ?? d;
       return {
         data: {
           ...o,

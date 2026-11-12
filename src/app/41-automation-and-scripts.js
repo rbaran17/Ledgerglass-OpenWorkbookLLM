@@ -1,4 +1,3 @@
-import { formatCellValueForDisplay } from "./17-recipe-step-editors.js";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { sha256HexDigest } from "./01-core-schemas-and-hashing.js";
@@ -227,13 +226,12 @@ const compiledMigrationCache = new WeakMap(),
     };
   };
 function assertAutomationSheetAllowed(e, r, t = false) {
-  var o;
   if (t) throw Error("This workbook is read-only.");
   const n = e.sheets.find((a) => a.id === r.sheetId);
   if (!n) throw Error("The approved worksheet does not exist.");
   if (n.hidden || n.veryHidden)
     throw Error("Hidden worksheets are outside the automation scope.");
-  if ((o = n.protection) != null && o.enabled)
+  if (n.protection?.enabled)
     throw Error("The approved worksheet is protected.");
   return n;
 }
@@ -404,9 +402,9 @@ function buildAutomationChanges(e, r, t, n = {}) {
   );
 }
 function findAutomationArtifact(e, r) {
-  var t;
-  return (t = e.automationArtifacts) != null &&
-    t.some((n) => n.sha256 === r.sha256 && n.fileName === r.fileName)
+  return e.automationArtifacts?.some(
+    (n) => n.sha256 === r.sha256 && n.fileName === r.fileName,
+  )
     ? e
     : normalizeWorkbookInput({
         ...e,
@@ -426,9 +424,8 @@ function preserveAutomationArtifact(e, r, t) {
       );
 }
 function removeAutomationArtifact(e, r, t) {
-  var n;
   if (t.readOnly) throw Error("This workbook is read-only.");
-  if (!((n = e.automationArtifacts) != null && n.some((o) => o.id === r)))
+  if (!e.automationArtifacts?.some((o) => o.id === r))
     throw Error("Automation artifact was not found.");
   return applyWorkbookChange(
     e,
@@ -500,7 +497,6 @@ function runApprovedMigration(e, r, t) {
   );
 }
 function AutomationScriptsDialog(e) {
-  var J;
   const { text, language } = useWorkbookMessages(),
     n = useOperationScope(),
     o = ne.useRef(null),
@@ -528,7 +524,7 @@ function AutomationScriptsDialog(e) {
     [C, T] = ne.useState(""),
     N = ne.useMemo(
       () =>
-        c != null && c.script
+        c?.script
           ? migrateAutomationSource(c.script.text, c.script.language)
           : null,
       [c],
@@ -538,19 +534,14 @@ function AutomationScriptsDialog(e) {
       (p(null), D(false), O(""));
     },
     $ = () => {
-      var q;
-      ((q = o.current) == null || q.abort(), u.current++, z(false));
+      (o.current?.abort(), u.current++, z(false));
     };
   (ne.useEffect(() => {
-    var W;
     const q = document.activeElement;
     return (
-      (W = s.current) == null || W.focus(),
+      s.current?.focus(),
       () => {
-        var K;
-        ((K = o.current) == null || K.abort(),
-          u.current++,
-          q != null && q.isConnected && q.focus());
+        (o.current?.abort(), u.current++, q?.isConnected && q.focus());
       }
     );
   }, []),
@@ -565,9 +556,8 @@ function AutomationScriptsDialog(e) {
     }
   };
   async function G(q) {
-    var te;
     if (!q) return;
-    (te = o.current) == null || te.abort();
+    o.current?.abort();
     const W = new AbortController();
     o.current = W;
     const K = ++u.current;
@@ -661,9 +651,7 @@ function AutomationScriptsDialog(e) {
               children: [
                 i.jsx("button", {
                   disabled: j,
-                  onClick: () => {
-                    return d.current?.click();
-                  },
+                  onClick: () => d.current?.click(),
                   children: i.jsx(LocalizedText, {
                     children: "Inspect automation file",
                   }),
@@ -675,9 +663,7 @@ function AutomationScriptsDialog(e) {
                   "aria-label": text("Automation source file"),
                   accept:
                     ".bas,.vba,.cls,.ts,.osts,.xlsm,.xlam,.xltm,.xlsx,.xltx,.xls,.xlsb",
-                  onChange: (q) => {
-                    return void G(q.target.files?.[0]);
-                  },
+                  onChange: (q) => void G(q.target.files?.[0]),
                   lang: language("Automation source file"),
                   "data-ui-label": "Automation source file",
                 }),
@@ -1192,8 +1178,8 @@ function AutomationScriptsDialog(e) {
                         }),
                       }),
                       i.jsx("tbody", {
-                        children: f.changes.map((q) => {
-                          return i.jsxs(
+                        children: f.changes.map((q) =>
+                          i.jsxs(
                             "tr",
                             {
                               children: [
@@ -1207,8 +1193,8 @@ function AutomationScriptsDialog(e) {
                               ],
                             },
                             q.address,
-                          );
-                        }),
+                          ),
+                        ),
                       }),
                     ],
                   }),
@@ -1245,7 +1231,7 @@ function AutomationScriptsDialog(e) {
                   }),
                 ],
               }),
-            !!((J = e.workbook.automationRuns) != null && J.length) &&
+            !!e.workbook.automationRuns?.length &&
               i.jsxs("details", {
                 children: [
                   i.jsxs("summary", {
@@ -1324,7 +1310,7 @@ function AutomationScriptsDialog(e) {
               }),
             }),
             i.jsx("button", {
-              disabled: !V || !(f != null && f.valid) || e.readOnly,
+              disabled: !V || !f?.valid || e.readOnly,
               onClick: () =>
                 U(() => {
                   !f || !V || (e.onApply(f, R, B), p(null), D(false));

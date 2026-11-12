@@ -130,17 +130,13 @@ function WorkbookSyncBoundary(e) {
     (n.current.propId = e.initialWorkbook?.id));
   const o = ne.useCallback(
       (c) => {
-        var h;
-        ((n.current.emittedId = c.id),
-          (h = e.onChange) == null || h.call(e, c));
+        ((n.current.emittedId = c.id), e.onChange?.(c));
       },
       [e.onChange],
     ),
     a = ne.useCallback(
       (c) => {
-        var h;
-        ((n.current.emittedId = c.id),
-          (h = e.onWorkbookLoaded) == null || h.call(e, c));
+        ((n.current.emittedId = c.id), e.onWorkbookLoaded?.(c));
       },
       [e.onWorkbookLoaded],
     );
@@ -190,7 +186,6 @@ function MainWorksheetEditor({
   externalProposal,
   onExternalProposalStaged,
 }) {
-  var sheetProtectionDetails;
   const defaultDiagnosticsMonitor = ne.useMemo(
       () => createWorkbookDiagnosticsMonitor(),
       [],
@@ -214,7 +209,7 @@ function MainWorksheetEditor({
     ),
     activeWorkbook = ne.useMemo(
       () =>
-        workbookSnapshot.extensions || (extensions != null && extensions.length)
+        workbookSnapshot.extensions || extensions?.length
           ? withExtensionHostScope(workbookSnapshot, extensions)
           : workbookSnapshot,
       [workbookSnapshot, extensions],
@@ -277,12 +272,7 @@ function MainWorksheetEditor({
     [isSaveConflictDialogOpen, setIsSaveConflictDialogOpen] =
       ne.useState(false),
     [pendingSaveCount, setPendingSaveCount] = ne.useState(0),
-    isEditingLocked =
-      readOnly ||
-      !!(
-        (sheetProtectionDetails = activeSheet.protection) != null &&
-        sheetProtectionDetails.enabled
-      ),
+    isEditingLocked = readOnly || !!activeSheet.protection?.enabled,
     [activeDialogMode, setActiveDialogMode] = ne.useState(null),
     [automationInspection, setAutomationInspection] = ne.useState(),
     [contextMenuState, setContextMenuState] = ne.useState(null),
@@ -338,9 +328,8 @@ function MainWorksheetEditor({
             Oe.x < jt.left + 28
               ? (gt.scrollLeft -= 36)
               : Oe.x > jt.right - 28 && (gt.scrollLeft += 36));
-          const rr = document.elementFromPoint
-            ?.call(
-              document,
+          const rr = document
+            .elementFromPoint?.(
               Math.max(jt.left + 48, Math.min(jt.right - 8, Oe.x)),
               Math.max(jt.top + 28, Math.min(jt.bottom - 8, Oe.y)),
             )
@@ -354,7 +343,7 @@ function MainWorksheetEditor({
       Ue = (gt) => {
         formulaPointerStateRef.current.dragging &&
           ((Oe = { x: gt.clientX, y: gt.clientY }),
-          fe || (fe = requestAnimationFrame(Be)));
+          (fe ||= requestAnimationFrame(Be)));
       },
       Xe = () => {
         const gt = formulaPointerStateRef.current.dragging;
@@ -378,8 +367,7 @@ function MainWorksheetEditor({
   }, []),
     ne.useEffect(() => {
       (activeCellEditRef.current || resetFormulaEditSession(),
-        onCellEditPendingChange == null ||
-          onCellEditPendingChange(!!activeCellEditRef.current));
+        onCellEditPendingChange?.(!!activeCellEditRef.current));
     }, [cellEditText, cellEditState, activeWorkbook, onCellEditPendingChange]));
   const [sidePanelKind, setSidePanelKind] = ne.useState(null),
     [filterValueSearch, setFilterValueSearch] = ne.useState(""),
@@ -415,9 +403,8 @@ function MainWorksheetEditor({
     activeOperationControllerRef = ne.useRef(null);
   ne.useEffect(
     () => () => {
-      var fe;
       (latestOperationIdRef.current++,
-        (fe = activeOperationControllerRef.current) == null || fe.abort());
+        activeOperationControllerRef.current?.abort());
     },
     [],
   );
@@ -657,8 +644,7 @@ function MainWorksheetEditor({
     getAllCellEntries = ne.useMemo(() => {
       let fe;
       return () =>
-        fe ??
-        (fe = Object.entries(arrayDisplayResult.cells).map(([Oe, Be]) => ({
+        (fe ??= Object.entries(arrayDisplayResult.cells).map(([Oe, Be]) => ({
           address: Oe,
           cell: Be,
           ..._t(Oe),
@@ -1512,20 +1498,18 @@ function MainWorksheetEditor({
           setErrorNotice(persistenceMessageRef.current));
       }
       return () => {
-        var Be;
         fe.active = false;
         for (const Ue of fe.controllers) Ue.abort();
         const Oe = persistenceSessionRef.current;
         Oe.active = false;
         for (const Ue of Oe.controllers) Ue.abort();
-        (Be = saveAbortControllerRef.current) == null || Be.abort();
+        saveAbortControllerRef.current?.abort();
       };
     }, [workbookPersistence]),
     ne.useEffect(() => {
-      var fe;
       if (readOnly) {
         for (const Oe of persistenceSessionRef.current.controllers) Oe.abort();
-        (fe = saveAbortControllerRef.current) == null || fe.abort();
+        saveAbortControllerRef.current?.abort();
       }
     }, [readOnly]),
     ne.useEffect(() => {
@@ -1615,19 +1599,17 @@ function MainWorksheetEditor({
       samplingSeed,
       agingAsOfDate,
     ]),
-    ne.useEffect(() => {
-      var fe;
-      return (
+    ne.useEffect(
+      () => (
         assistantRequestIdRef.current++,
-        (fe = assistantAbortControllerRef.current) == null || fe.abort(),
+        assistantAbortControllerRef.current?.abort(),
         setIsAssistantBusy(false),
         setAssistantProposal(null),
         setAnswerCitations(null),
-        () => {
-          return assistantAbortControllerRef.current?.abort();
-        }
-      );
-    }, [activeWorkbook, activeSheet.id, selectionAreasKey, adapter]),
+        () => assistantAbortControllerRef.current?.abort()
+      ),
+      [activeWorkbook, activeSheet.id, selectionAreasKey, adapter],
+    ),
     ne.useEffect(() => {
       if (
         !externalProposal ||
@@ -1851,9 +1833,8 @@ function MainWorksheetEditor({
         },
         fe,
       ),
-    renderGridRow = (fe, Oe, Be, Ue) => {
-      var gt;
-      return i.jsx(
+    renderGridRow = (fe, Oe, Be, Ue) =>
+      i.jsx(
         WorksheetGridRow,
         {
           idPrefix: `${editorIdPrefix}-${Ue}`,
@@ -1894,9 +1875,8 @@ function MainWorksheetEditor({
             activeFormulaReference?.sheetId === activeSheet.id
               ? activeFormulaReference.bounds
               : null,
-          formulaDraftActive: !!(
-            (gt = activeCellEditRef.current) != null && gt.value.startsWith("=")
-          ),
+          formulaDraftActive:
+            !!activeCellEditRef.current?.value.startsWith("="),
           onDragStart: (Nt, wt) => {
             ((dragAnchorRef.current = Nt),
               (dragBaseSelectionsRef.current = wt ? [...selectionAreas] : []));
@@ -1921,18 +1901,16 @@ function MainWorksheetEditor({
           },
           onNavigate: moveSelectionAfterCommit,
           onPivotDrill: (Nt) => {
-            var jt;
             const wt = _t(Nt);
-            return (jt = activeSheet.pivots) != null &&
-              jt.some((rr) => {
-                const Mr = parseRangeAddress(rr.outputRange);
-                return (
-                  wt.row > Mr.firstRow &&
-                  wt.row <= Mr.lastRow &&
-                  wt.col >= Mr.firstCol + Math.max(1, rr.rowFields.length) &&
-                  wt.col <= Mr.lastCol
-                );
-              })
+            return activeSheet.pivots?.some((rr) => {
+              const Mr = parseRangeAddress(rr.outputRange);
+              return (
+                wt.row > Mr.firstRow &&
+                wt.row <= Mr.lastRow &&
+                wt.col >= Mr.firstCol + Math.max(1, rr.rowFields.length) &&
+                wt.col <= Mr.lastCol
+              );
+            })
               ? (selectCellAddress(Nt), runEditorCommand("pivotExplore"), true)
               : false;
           },
@@ -1982,17 +1960,14 @@ function MainWorksheetEditor({
           setEditing: (Nt) =>
             Nt === null ? cancelCellEdit() : beginCellEdit(Nt, true),
           select: (Nt, wt, jt) => {
-            var rr;
             (selectCellAddress(Nt, wt, jt),
-              (rr = gridContainerRef.current) == null ||
-                rr.focus({ preventScroll: true }));
+              gridContainerRef.current?.focus({ preventScroll: true }));
           },
           saveCell: commitCellEdit,
           readOnly: isEditingLocked,
         },
         fe,
-      );
-    },
+      ),
     renderVirtualSpacer = (fe, Oe, Be) =>
       fe > 0
         ? i.jsx(
@@ -2064,11 +2039,8 @@ function MainWorksheetEditor({
   });
 
   const closeContextMenu = ne.useCallback((fe) => {
-      var Oe;
       (setContextMenuState(null),
-        fe &&
-          ((Oe = gridContainerRef.current) == null ||
-            Oe.focus({ preventScroll: true })));
+        fe && gridContainerRef.current?.focus({ preventScroll: true }));
     }, []),
     editBlockReason = isOperationBusy
       ? "Wait for the current workbook operation to finish."
@@ -2174,7 +2146,6 @@ function MainWorksheetEditor({
     role: "region",
     "aria-label": activeWorkbook.name,
     onKeyDown: (fe) => {
-      var wt;
       if (
         fe.key !== "F6" ||
         fe.defaultPrevented ||
@@ -2202,36 +2173,30 @@ function MainWorksheetEditor({
           ),
         ].filter((jt) => !!jt),
         Be = document.activeElement,
-        Ue =
-          Be != null && Be.closest(".xl-ribbon")
-            ? 0
-            : Be != null && Be.closest(".lg-sheet-tabs")
-              ? 3
-              : Oe.findIndex((jt) => jt === Be || jt.contains(Be)),
+        Ue = Be?.closest(".xl-ribbon")
+          ? 0
+          : Be?.closest(".lg-sheet-tabs")
+            ? 3
+            : Oe.findIndex((jt) => jt === Be || jt.contains(Be)),
         Xe = fe.shiftKey ? -1 : 1;
-      (wt =
-        Oe[
-          Ue < 0
-            ? fe.shiftKey
-              ? Oe.length - 1
-              : 0
-            : (Ue + Xe + Oe.length) % Oe.length
-        ]) == null || wt.focus({ preventScroll: true });
+      Oe[
+        Ue < 0
+          ? fe.shiftKey
+            ? Oe.length - 1
+            : 0
+          : (Ue + Xe + Oe.length) % Oe.length
+      ]?.focus({ preventScroll: true });
     },
     children: [
       i.jsxs("div", {
         className: "lg-skip-links",
         children: [
           i.jsx("button", {
-            onClick: () => {
-              return gridContainerRef.current?.focus();
-            },
+            onClick: () => gridContainerRef.current?.focus(),
             children: i.jsx(LocalizedText, { children: "Skip to worksheet" }),
           }),
           i.jsx("button", {
-            onClick: () => {
-              return formulaInputRef.current?.focus();
-            },
+            onClick: () => formulaInputRef.current?.focus(),
             children: i.jsx(LocalizedText, { children: "Skip to formula bar" }),
           }),
         ],
@@ -2533,9 +2498,7 @@ function MainWorksheetEditor({
             accept:
               ".xlsx,.xltx,.xls,.xlsb,.xlsm,.xltm,.ods,.csv,.tsv,.json,.bas,.vba,.cls,.ts,.osts,.xlam",
             hidden: true,
-            onChange: (fe) => {
-              return void importWorkbookFromFile(fe.target.files?.[0]);
-            },
+            onChange: (fe) => void importWorkbookFromFile(fe.target.files?.[0]),
             lang: language("Import workbook file"),
             "data-ui-label": "Import workbook file",
           }),
@@ -2607,13 +2570,12 @@ function MainWorksheetEditor({
           i.jsx(AnalysisSnapshotNotice, {
             workbook: activeWorkbook,
             sheetId: activeSheet.id,
-            onReview: () => {
-              return runEditorCommand(
+            onReview: () =>
+              runEditorCommand(
                 activeSheet.analysisReport?.request.kind === "solver"
                   ? "solver"
                   : "statistics",
-              );
-            },
+              ),
           }),
           i.jsx(DataModelSnapshotNotice, {
             workbook: activeWorkbook,
@@ -2914,9 +2876,7 @@ function MainWorksheetEditor({
           readOnly: isEditingLocked,
           onRetry: () => {
             (setValidationReviewState(null),
-              requestAnimationFrame(() => {
-                return formulaInputRef.current?.focus();
-              }));
+              requestAnimationFrame(() => formulaInputRef.current?.focus()));
           },
           onCancel: () => {
             (setValidationReviewState(null),

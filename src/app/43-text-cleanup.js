@@ -1,4 +1,3 @@
-import { stringifyJsonValue } from "./42-combine-populations.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -61,13 +60,11 @@ function TextCleanupDialog(e) {
     (d(e.range), b(null), w(""), (a.current = false));
   }, [e.sheetId, e.range]),
     ne.useEffect(() => {
-      var X;
       const H = document.activeElement;
       return (
-        (X = o.current?.querySelector("input:not(:disabled),button")) == null ||
-          X.focus(),
+        o.current?.querySelector("input:not(:disabled),button")?.focus(),
         () => {
-          H != null && H.isConnected && H.focus();
+          H?.isConnected && H.focus();
         }
       );
     }, []));
@@ -490,8 +487,8 @@ function TextCleanupDialog(e) {
                       }),
                     }),
                     i.jsx("tbody", {
-                      children: B.rows.slice(E * 20, E * 20 + 20).map((H) => {
-                        return i.jsxs(
+                      children: B.rows.slice(E * 20, E * 20 + 20).map((H) =>
+                        i.jsxs(
                           "tr",
                           {
                             children: [
@@ -517,8 +514,8 @@ function TextCleanupDialog(e) {
                             ],
                           },
                           H.sourceAddress,
-                        );
-                      }),
+                        ),
+                      ),
                     }),
                   ],
                 }),

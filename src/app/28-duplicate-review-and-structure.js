@@ -80,13 +80,11 @@ function DuplicateReviewDialog(e) {
         ));
     };
   ne.useEffect(() => {
-    var ge;
     const le = document.activeElement;
     return (
-      (ge = o.current?.querySelector('[data-ui-label="Source range"]')) ==
-        null || ge.focus(),
+      o.current?.querySelector('[data-ui-label="Source range"]')?.focus(),
       () => {
-        le != null && le.isConnected && le.focus();
+        le?.isConnected && le.focus();
       }
     );
   }, []);
@@ -975,12 +973,8 @@ function StructureToolDialog({
     B = ne.useRef(null),
     _ = workbook.sheets.find((G) => G.id === sheetId);
   ne.useEffect(() => {
-    var Q;
     const G = document.activeElement;
-    return (
-      (Q = B.current?.querySelector("select")) == null || Q.focus(),
-      () => G?.focus()
-    );
+    return (B.current?.querySelector("select")?.focus(), () => G?.focus());
   }, []);
   const C = () => {
       (A(null), D(false), F(""), O(0));

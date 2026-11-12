@@ -87,7 +87,6 @@ function createClipboardAndFindActions({
     );
   }
   async function copyOrCutSelection(fe) {
-    var Oe;
     try {
       if (fe && isEditingLocked) throw new Error("This workbook is read-only.");
       const Be = activeWorkbook,
@@ -112,7 +111,7 @@ function createClipboardAndFindActions({
             ? Be.message
             : "Clipboard access is unavailable. Use Ctrl/⌘ C or X with the grid focused.",
         ),
-        (Oe = gridContainerRef.current) == null || Oe.focus());
+        gridContainerRef.current?.focus());
     }
   }
   function pasteClipboardText(fe) {
@@ -188,7 +187,6 @@ function createClipboardAndFindActions({
     });
   }
   async function pasteFromClipboard() {
-    var fe;
     try {
       const Oe = activeWorkbook,
         Be = await navigator.clipboard.readText();
@@ -203,7 +201,7 @@ function createClipboardAndFindActions({
       (setErrorNotice(
         "Clipboard access is unavailable. Use Ctrl/⌘ V with the grid focused.",
       ),
-        (fe = gridContainerRef.current) == null || fe.focus());
+        gridContainerRef.current?.focus());
     }
   }
   function findNextTextMatch() {
@@ -249,14 +247,13 @@ function createClipboardAndFindActions({
           "gi",
         ),
         Oe = getSelectedCellAddresses()
-          .filter((Be) => {
-            return (
+          .filter(
+            (Be) =>
               typeof activeSheet.cells[Be]?.raw == "string" &&
               String(activeSheet.cells[Be].raw)
                 .toLowerCase()
-                .includes(findQuery.toLowerCase())
-            );
-          })
+                .includes(findQuery.toLowerCase()),
+          )
           .map((Be) => ({
             sheetId: activeSheet.id,
             address: Be,

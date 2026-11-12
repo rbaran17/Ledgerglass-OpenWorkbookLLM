@@ -135,7 +135,6 @@ function resolveFilteredRowContext(e, r = {}) {
   for (const u of e.sheets)
     d.set(u.id, createAxisVisibilityIndex(u.rowCount, cn(u, "row")));
   return (u, l, c) => {
-    var Q, X;
     if (!referenceSensitiveFunctionNames.includes(u))
       return notReferenceFunctionMarker;
     const { issue, isIssue } = c,
@@ -176,12 +175,8 @@ function resolveFilteredRowContext(e, r = {}) {
       if (l.length !== 1) return issue("#VALUE!");
       const J = p(l[0]),
         q = (K, te) => {
-          var oe;
           const ae = `${columnIndexToLetters(te - 1)}${K}`;
-          return (
-            (oe = c.readMetadata) == null || oe.call(c, J.sheet.id, ae),
-            J.sheet.cells[ae]
-          );
+          return (c.readMetadata?.(J.sheet.id, ae), J.sheet.cells[ae]);
         };
       if (u === "FORMULATEXT") {
         const K = q(J.firstRow, J.firstCol);
@@ -286,12 +281,12 @@ function resolveFilteredRowContext(e, r = {}) {
     for (const J of V)
       for (let q = J.firstRow; q <= J.lastRow; q++)
         if (!(
-          ((Q = a.get(J.sheet.id)) != null && Q.isHidden(q - 1)) ||
+          a.get(J.sheet.id)?.isHidden(q - 1) ||
           (E && d.get(J.sheet.id).isHidden(q - 1))
         ))
           for (let W = J.firstCol; W <= J.lastCol; W++) {
             const K = `${columnIndexToLetters(W - 1)}${q}`;
-            (X = c.readMetadata) == null || X.call(c, J.sheet.id, K);
+            c.readMetadata?.(J.sheet.id, K);
             const te = J.sheet.cells[K];
             if (
               k &&
@@ -648,7 +643,7 @@ function shiftReviewTargetsOnAxisEdit(e, r, t, n) {
         if (m?.kind !== "internal" || m.sheetId !== r) continue;
         const v = a(m.address);
         v !== m.address &&
-          (h ?? (h = { ...c.cells }),
+          ((h ??= { ...c.cells }),
           (h[f] = { ...p }),
           (s = true),
           v ? (h[f].hyperlink = { ...m, address: v }) : delete h[f].hyperlink);
@@ -658,8 +653,7 @@ function shiftReviewTargetsOnAxisEdit(e, r, t, n) {
   return s ? { ...e, sheets: u, ...(d ? { reviewThreads: d } : {}) } : e;
 }
 function shiftFormulaWatchesOnAxisEdit(e, r, t) {
-  var n;
-  return (n = e.formulaWatches) != null && n.length
+  return e.formulaWatches?.length
     ? {
         ...e,
         formulaWatches: e.formulaWatches.map((o) => {
@@ -970,12 +964,11 @@ function validateSavedWhatIfAnalyses(e) {
       );
     if (
       [...s.inputs, ...s.outputs].some((p) => !h.has(cellAddressKey(p))) ||
-      s.inputs.some((p, m) => {
-        return (
+      s.inputs.some(
+        (p, m) =>
           f.find((g) => cellAddressKey(g) === cellAddressKey(p))?.raw !==
-          u.inputs[m]
-        );
-      })
+          u.inputs[m],
+      )
     )
       throw Error(
         "Saved baseline inputs and dependency assumptions do not reconcile.",
@@ -1505,8 +1498,7 @@ function removeOutlineGroup(e, r, t, n) {
     e,
     r,
     (o) => {
-      var a;
-      if (!((a = o.outlineGroups) != null && a.some((s) => s.id === t)))
+      if (!o.outlineGroups?.some((s) => s.id === t))
         throw Error("Outline group not found.");
       o.outlineGroups = o.outlineGroups.filter((s) => s.id !== t);
     },
@@ -1677,7 +1669,6 @@ function normalizeConditionalRules(e) {
   const r = new Set(),
     t = new Set();
   return e.map((n) => {
-    var d;
     if (!isNonArrayObject(n) || !conditionalRuleKinds.includes(n.kind))
       throw Error("Invalid conditional rule.");
     const o = assertBoundedString(n.id, 100, "conditional rule ID");
@@ -1725,8 +1716,7 @@ function normalizeConditionalRules(e) {
           "conditional formula",
         )),
       s.kind === "formula" &&
-        (!((d = s.formula) != null && d.startsWith("=")) ||
-          !s.formula.slice(1).trim()))
+        (!s.formula?.startsWith("=") || !s.formula.slice(1).trim()))
     )
       throw Error("A formula rule requires a formula beginning with =.");
     for (const u of ["minColor", "maxColor"])

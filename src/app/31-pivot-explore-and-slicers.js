@@ -160,8 +160,7 @@ function PivotExplorerPanel(e) {
       }
     }, [e.workbook, r.source.sheetId, r.source.range]);
   ne.useEffect(() => {
-    var B;
-    (B = n.current?.querySelector("input")) == null || B.focus();
+    n.current?.querySelector("input")?.focus();
   }, []);
   const A = (D) => {
       try {
@@ -200,12 +199,8 @@ function PivotExplorerPanel(e) {
         );
       }
     }, [e.workbook, t, F]),
-    O = (D) => {
-      return I.get(D)?.items ?? [];
-    },
-    j = (D) => {
-      return I.get(D)?.error ?? "";
-    },
+    O = (D) => I.get(D)?.items ?? [],
+    j = (D) => I.get(D)?.error ?? "",
     z = (D, B) => a((_) => ({ ..._, [D]: B })),
     V = y ? f.book.sheets.flatMap((D) => D.pivots ?? []).at(-1) : null;
   return i.jsxs("div", {
@@ -396,12 +391,9 @@ function PivotExplorerPanel(e) {
                 disabled: !E.length,
                 onClick: () =>
                   A(() => {
-                    const D = E.find((B) => {
-                      var _;
-                      return !(
-                        (_ = o.slicers) != null && _.some((C) => C.field === B)
-                      );
-                    });
+                    const D = E.find(
+                      (B) => !o.slicers?.some((C) => C.field === B),
+                    );
                     if (!D)
                       throw Error("Every source field already has a slicer.");
                     z("slicers", [
@@ -582,23 +574,12 @@ function PivotExplorerPanel(e) {
                 disabled: !E.length,
                 onClick: () => {
                   const D =
-                    E.find((B) => {
-                      var _;
-                      return (
+                    E.find(
+                      (B) =>
                         /date/i.test(B) &&
-                        !(
-                          (_ = o.timelines) != null &&
-                          _.some((C) => C.field === B)
-                        )
-                      );
-                    }) ??
-                    E.find((B) => {
-                      var _;
-                      return !(
-                        (_ = o.timelines) != null &&
-                        _.some((C) => C.field === B)
-                      );
-                    });
+                        !o.timelines?.some((C) => C.field === B),
+                    ) ??
+                    E.find((B) => !o.timelines?.some((C) => C.field === B));
                   D &&
                     z("timelines", [
                       ...(o.timelines ?? []),
@@ -622,8 +603,8 @@ function PivotExplorerPanel(e) {
                   children: "Sort pivot fields",
                 }),
               }),
-              [...new Set([...r.rowFields, ...r.columnFields])].map((D) => {
-                return i.jsxs(
+              [...new Set([...r.rowFields, ...r.columnFields])].map((D) =>
+                i.jsxs(
                   "label",
                   {
                     children: [
@@ -657,8 +638,8 @@ function PivotExplorerPanel(e) {
                     ],
                   },
                   D,
-                );
-              }),
+                ),
+              ),
             ],
           }),
           i.jsxs("details", {

@@ -40,9 +40,7 @@ function renderStatusBar({
           isOperationBusy &&
             activeOperationControllerRef.current &&
             i.jsx("button", {
-              onClick: () => {
-                return activeOperationControllerRef.current?.abort();
-              },
+              onClick: () => activeOperationControllerRef.current?.abort(),
               children: i.jsx(LocalizedText, {
                 children: "Cancel file processing",
               }),

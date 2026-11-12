@@ -124,7 +124,6 @@ function createGridPaneRenderer({
             );
           },
           onKeyDown: (Sr) => {
-            var Wi;
             if (
               sheetSplitPanes &&
               Sr.key === "F6" &&
@@ -139,8 +138,7 @@ function createGridPaneRenderer({
                 $o = Di.indexOf(fe),
                 Ds = Di[($o + (Sr.shiftKey ? Di.length - 1 : 1)) % Di.length];
               activateGridPane(Ds) &&
-                ((Wi = splitPaneSizes.refs.current[Ds]) == null ||
-                  Wi.focus({ preventScroll: true }));
+                splitPaneSizes.refs.current[Ds]?.focus({ preventScroll: true });
             } else handleGridKeyDown(Sr);
           },
           onContextMenu: (Sr) => {

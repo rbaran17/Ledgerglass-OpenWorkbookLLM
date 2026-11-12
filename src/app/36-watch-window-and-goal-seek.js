@@ -110,7 +110,6 @@ function assertWatchPreviewCurrent(e, r, t = {}) {
   return n.next;
 }
 function inspectFormulaWatches(e, r = {}) {
-  var y;
   const t = normalizeFormulaWatchContext(e, r),
     n = validateFormulaWatches(e.formulaWatches, e),
     o = [],
@@ -168,10 +167,7 @@ function inspectFormulaWatches(e, r = {}) {
             (k) => typeof k.raw == "string" && k.raw.toLowerCase().includes(E),
           ),
       ) &&
-      !(
-        (y = e.definedNames) != null &&
-        y.some((A) => A.refersTo.toLowerCase().includes(E))
-      )
+      !e.definedNames?.some((A) => A.refersTo.toLowerCase().includes(E))
     )
       break;
     if (w === 3)
@@ -361,13 +357,11 @@ function FormulaWatchWindow(e) {
       }
     }, [e.workbook, e.allowHidden, e.allowedSheetIds, s]);
   ne.useEffect(() => {
-    var D;
     const z = document.activeElement;
     return (
-      (D = o.current?.querySelector('[data-ui-label="Close Watch Window"]')) ==
-        null || D.focus(),
+      o.current?.querySelector('[data-ui-label="Close Watch Window"]')?.focus(),
       () => {
-        z != null && z.isConnected && z.focus();
+        z?.isConnected && z.focus();
       }
     );
   }, []);
@@ -710,7 +704,7 @@ function FormulaWatchWindow(e) {
                 ].map(({ watch, action }) => {
                   const D = F.find((_) => _.id === watch.id),
                     B =
-                      I && (action === "Add" || (D != null && D.anchor))
+                      I && (action === "Add" || D?.anchor)
                         ? `${watch.anchor.sheetName}!${watch.anchor.address}`
                         : "Watch outside current context";
                   return i.jsxs(
@@ -857,7 +851,6 @@ function normalizeGoalSeekRequest(e) {
   return r;
 }
 function solveGoalSeek(e, r, t = {}) {
-  var O, j;
   if (t.readOnly)
     throw Error(
       "This workbook is read-only. Goal Seek cannot propose a writable input.",
@@ -907,14 +900,11 @@ function solveGoalSeek(e, r, t = {}) {
     throw Error(
       "Changing cell must contain a finite numeric input, not a formula, text, blank or spill output.",
     );
-  if ((O = a.protection) != null && O.enabled)
+  if (a.protection?.enabled)
     throw Error(
       "The changing worksheet is protected. Unprotect it before Goal Seek.",
     );
-  if (
-    (j = a.merges) != null &&
-    j.some((z) => isCellInRange(z, n.variableAddress))
-  )
+  if (a.merges?.some((z) => isCellInRange(z, n.variableAddress)))
     throw Error("A merged cell cannot be the Goal Seek variable.");
   for (const z of a.tables ?? []) {
     if (!isCellInRange(z.range, n.variableAddress)) continue;
@@ -1302,13 +1292,11 @@ function GoalSeekDialog(e) {
       D.context.includeHidden === T.includeHidden &&
       JSON.stringify(D.context.allowedSheetIds) === JSON.stringify(N);
   ne.useEffect(() => {
-    var te;
     const W = document.activeElement;
     return (
-      (te = d.current?.querySelector('[data-ui-label="Set cell"]')) == null ||
-        te.focus(),
+      d.current?.querySelector('[data-ui-label="Set cell"]')?.focus(),
       () => {
-        W != null && W.isConnected && W.focus();
+        W?.isConnected && W.focus();
       }
     );
   }, []);
@@ -1824,7 +1812,6 @@ function normalizeAnalysisPermissions(e, r = {}) {
   };
 }
 function validateAnalysisSource(e, r, t) {
-  var s;
   const n = normalizeAnalysisPermissions(e, t),
     o = e.sheets.find((d) => d.id === r.sheetId);
   if (!o || !n.allowedSheetIds.includes(o.id))
@@ -1848,7 +1835,7 @@ function validateAnalysisSource(e, r, t) {
     throw Error(
       "Analysis and model report snapshots cannot be analysis inputs. Use the original source cells.",
     );
-  if ((s = o.merges) != null && s.some((d) => parseRangeBounds(d, r.address)))
+  if (o.merges?.some((d) => parseRangeBounds(d, r.address)))
     throw Error("Merged analysis sources are ambiguous.");
   return o;
 }
@@ -1871,11 +1858,7 @@ function p_(e) {
   });
 }
 function assertAutomaticCalculation(e) {
-  var t;
-  if (
-    e.calculation?.mode === "manual" ||
-    ((t = e.calculation) != null && t.iterative)
-  )
+  if (e.calculation?.mode === "manual" || e.calculation?.iterative)
     throw Error(
       "Analysis formulas require automatic, non-iterative calculation.",
     );

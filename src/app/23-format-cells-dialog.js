@@ -43,7 +43,6 @@ import {
 } from "./22-themes-and-cell-styles.js";
 
 function FormatCellsDialog(e) {
-  var $;
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -64,9 +63,9 @@ function FormatCellsDialog(e) {
       selection: JSON.stringify(e.ranges ?? [e.range]),
       active: e.active,
     }),
-    [h] = ne.useState(() => {
-      return validateCellStyle(resolveEffectiveCellStyle(s?.cells[l]?.style));
-    }),
+    [h] = ne.useState(() =>
+      validateCellStyle(resolveEffectiveCellStyle(s?.cells[l]?.style)),
+    ),
     [f, p] = ne.useState(
       e.mode === "alignment"
         ? "Alignment"
@@ -93,12 +92,7 @@ function FormatCellsDialog(e) {
       c.current.sheet !== e.sheetId ||
       c.current.selection !== JSON.stringify(e.ranges ?? [e.range]) ||
       c.current.active !== e.active,
-    B =
-      e.readOnly ||
-      D ||
-      !!(($ = s?.protection) != null && $.enabled) ||
-      !s ||
-      j > 500;
+    B = e.readOnly || D || !!s?.protection?.enabled || !s || j > 500;
   let _ = h,
     C = "";
   try {
@@ -138,13 +132,11 @@ function FormatCellsDialog(e) {
   });
   return (
     ne.useEffect(() => {
-      var X;
       const H = document.activeElement;
       return (
-        (X = o.current?.querySelector('[role="tab"][aria-selected="true"]')) ==
-          null || X.focus(),
+        o.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus(),
         () => {
-          H != null && H.isConnected && H.focus();
+          H?.isConnected && H.focus();
         }
       );
     }, []),
@@ -210,7 +202,6 @@ function FormatCellsDialog(e) {
                   tabIndex: f === H ? 0 : -1,
                   onClick: () => p(H),
                   onKeyDown: (X) => {
-                    var q;
                     if (
                       ["ArrowLeft", "ArrowRight", "Home", "End"].includes(X.key)
                     ) {
@@ -226,8 +217,7 @@ function FormatCellsDialog(e) {
                                   : cellFormatTabs.length - 1)) %
                               cellFormatTabs.length;
                       (p(cellFormatTabs[W]),
-                        (q = X.currentTarget.parentElement?.children[W]) ==
-                          null || q.focus());
+                        X.currentTarget.parentElement?.children[W]?.focus());
                     }
                   },
                   children: H,
@@ -908,7 +898,6 @@ function describeDataBarRule(e) {
     .join("; ");
 }
 function ConditionalFormattingRulesManager(e) {
-  var O;
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -918,12 +907,12 @@ function ConditionalFormattingRulesManager(e) {
       range: e.range,
       guard: JSON.stringify(e.workbook),
     }),
-    [s, d] = ne.useState(() => {
-      return structuredClone(
+    [s, d] = ne.useState(() =>
+      structuredClone(
         e.workbook.sheets.find((B) => B.id === e.sheetId)?.conditionalFormats ??
           [],
-      );
-    }),
+      ),
+    ),
     [u, l] = ne.useState(() => createConditionalRuleDraft(e.range)),
     [c, h] = ne.useState(""),
     [f, p] = ne.useState(null),
@@ -933,16 +922,15 @@ function ConditionalFormattingRulesManager(e) {
       a.current.guard !== JSON.stringify(e.workbook) ||
       a.current.sheetId !== e.sheetId ||
       a.current.range !== e.range,
-    y = e.readOnly || b || !g || !!((O = g.protection) != null && O.enabled),
+    y = e.readOnly || b || !g || !!g.protection?.enabled,
     w = sortConditionalRulesByPriority(s),
     E = ["colorScale", "dataBar", "iconSet"].includes(u.kind);
   ne.useEffect(() => {
-    var _;
     const D = document.activeElement;
     return (
-      (_ = o.current?.querySelector("button")) == null || _.focus(),
+      o.current?.querySelector("button")?.focus(),
       () => {
-        D != null && D.isConnected && D.focus();
+        D?.isConnected && D.focus();
       }
     );
   }, []);
@@ -1369,14 +1357,13 @@ function ConditionalFormattingRulesManager(e) {
                               i.jsx(LocalizedNumberField, {
                                 "aria-label": text("Middle icon starts at"),
                                 value: u.iconThresholds?.[0] ?? 33,
-                                onValueChange: (D) => {
-                                  return k({
+                                onValueChange: (D) =>
+                                  k({
                                     iconThresholds: [
                                       Number(D),
                                       u.iconThresholds?.[1] ?? 67,
                                     ],
-                                  });
-                                },
+                                  }),
                               }),
                             ],
                           }),
@@ -1388,14 +1375,13 @@ function ConditionalFormattingRulesManager(e) {
                               i.jsx(LocalizedNumberField, {
                                 "aria-label": text("High icon starts at"),
                                 value: u.iconThresholds?.[1] ?? 67,
-                                onValueChange: (D) => {
-                                  return k({
+                                onValueChange: (D) =>
+                                  k({
                                     iconThresholds: [
                                       u.iconThresholds?.[0] ?? 33,
                                       Number(D),
                                     ],
-                                  });
-                                },
+                                  }),
                               }),
                             ],
                           }),
@@ -1682,11 +1668,7 @@ function ConditionalFormattingRulesManager(e) {
 }
 function ConditionalFormatIndicator({ decoration, children }) {
   const { text, language } = useWorkbookMessages();
-  if (
-    !(decoration != null && decoration.dataBar) &&
-    !(decoration != null && decoration.icon) &&
-    !(decoration != null && decoration.errors.length)
-  )
+  if (!decoration?.dataBar && !decoration?.icon && !decoration?.errors.length)
     return i.jsx(i.Fragment, { children });
   const o = decoration.dataBar;
   return i.jsxs("span", {

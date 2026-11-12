@@ -43,9 +43,7 @@ const operationScopeContext = ne.createContext({}),
 function useCancellableOperation() {
   const e = useOperationScope(),
     r = ne.useRef(null),
-    t = ne.useCallback(() => {
-      return r.current?.abort();
-    }, []);
+    t = ne.useCallback(() => r.current?.abort(), []);
   return (
     ne.useEffect(() => () => t(), [t]),
     {
@@ -90,7 +88,6 @@ function WorkbookLinkStatusBadge({ workbook, sources, onReview }) {
     : null;
 }
 function WorkbookLinksDialog(e) {
-  var ge;
   const r = ne.useRef(e);
   r.current = e;
   const t = ne.useRef(null),
@@ -126,18 +123,15 @@ function WorkbookLinksDialog(e) {
       }
     }, [e.workbook, H]),
     X$1 = Q.inventory,
-    J = X$1?.links.find((se) => {
-      return se.target === (u || X$1.links[0]?.target);
-    }),
+    J = X$1?.links.find((se) => se.target === (u || X$1.links[0]?.target)),
     q = J?.target ?? "",
     W =
       X$1?.cells.filter((se) => se.references.some((we) => we.target === q)) ??
       [],
     K = (se) => {
-      var we;
       if (e.approvedSources !== undefined && !e.onApprovedSourcesChange)
         throw Error("Source approvals are controlled by your host.");
-      ((we = e.onApprovedSourcesChange) == null || we.call(e, se),
+      (e.onApprovedSourcesChange?.(se),
         e.approvedSources === undefined && d(se),
         w(null));
     },
@@ -147,16 +141,15 @@ function WorkbookLinksDialog(e) {
       allowedSheetIds: r.current.allowedSheetIds,
     });
   (ne.useEffect(() => {
-    var we;
     a.current = true;
     const se = document.activeElement;
     return (
-      (we = t.current) == null || we.focus(),
+      t.current?.focus(),
       () => {
         ((a.current = false),
           o.current++,
           n.cancel(),
-          se != null && se.isConnected && se.focus());
+          se?.isConnected && se.focus());
       }
     );
   }, []),
@@ -300,7 +293,7 @@ function WorkbookLinksDialog(e) {
                 }),
               ],
             }),
-            X$1 != null && X$1.links.length
+            X$1?.links.length
               ? i.jsxs(i.Fragment, {
                   children: [
                     i.jsxs("label", {
@@ -563,7 +556,7 @@ function WorkbookLinksDialog(e) {
                   children:
                     "No supported external workbook references were found. Static links such as =SUM('[Source.xlsx]Sheet1'!A1:A3) can be reviewed here.",
                 }),
-            !!(X$1 != null && X$1.unsupported.length) &&
+            !!X$1?.unsupported.length &&
               i.jsxs("section", {
                 className: "lg-links-warning",
                 children: [
@@ -585,10 +578,7 @@ function WorkbookLinksDialog(e) {
                   ),
                 ],
               }),
-            !!(
-              (ge = e.workbook.workbookLinks?.packageTargets) != null &&
-              ge.length
-            ) &&
+            !!e.workbook.workbookLinks?.packageTargets?.length &&
               i.jsxs("details", {
                 children: [
                   i.jsx("summary", {
@@ -947,7 +937,6 @@ function parseExtractionResult(e, r) {
   );
 }
 async function runDocumentExtraction(e, r, t, n = {}) {
-  var l, c, h;
   if (t !== true)
     throw Error(
       "Approve the host extractor before sharing the selected source.",
@@ -955,14 +944,13 @@ async function runDocumentExtraction(e, r, t, n = {}) {
   if (e.method !== "document-adapter")
     throw Error("Choose a document source for extraction.");
   const o = toSourceFileDescriptor(e);
-  if ((l = n.signal) != null && l.aborted)
-    throw Error("Document extraction cancelled.");
+  if (n.signal?.aborted) throw Error("Document extraction cancelled.");
   const a = n.timeoutMs ?? 3e4;
   if (!Number.isInteger(a) || a < 1 || a > 6e4)
     throw Error("Invalid document extraction time budget.");
   const s = new AbortController(),
     d = () => s.abort();
-  (c = n.signal) == null || c.addEventListener("abort", d, { once: true });
+  n.signal?.addEventListener("abort", d, { once: true });
   let u;
   try {
     return await new Promise((f, p) => {
@@ -1008,9 +996,7 @@ async function runDocumentExtraction(e, r, t, n = {}) {
           ));
     });
   } finally {
-    (clearTimeout(u),
-      (h = n.signal) == null || h.removeEventListener("abort", d),
-      s.abort());
+    (clearTimeout(u), n.signal?.removeEventListener("abort", d), s.abort());
   }
 }
 const importPreviewRegistry = new WeakMap();

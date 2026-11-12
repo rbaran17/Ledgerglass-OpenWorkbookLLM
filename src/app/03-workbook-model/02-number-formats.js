@@ -124,13 +124,9 @@ function renderTextSectionPattern(e, r) {
     (t, n, o) => n ?? o ?? (t === "@" ? r : t),
   );
 }
-const getLocaleDecimalSeparator = (e) => {
-  return (
-    new Intl.NumberFormat(e)
-      .formatToParts(1.1)
-      .find((t) => t.type === "decimal")?.value ?? "."
-  );
-};
+const getLocaleDecimalSeparator = (e) =>
+  new Intl.NumberFormat(e).formatToParts(1.1).find((t) => t.type === "decimal")
+    ?.value ?? ".";
 function formatNumericSection(e, r, t) {
   const n = e < 0 && r.sections.length > 1,
     { parsed, divisor } =

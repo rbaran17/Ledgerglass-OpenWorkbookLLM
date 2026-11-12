@@ -140,7 +140,6 @@ function createGridInteractionActions({
     }
   }
   function handleGridKeyDown(fe) {
-    var wt;
     if (
       fe.target !== fe.currentTarget ||
       fe.defaultPrevented ||
@@ -226,9 +225,9 @@ function createGridInteractionActions({
     }
     if (fe.key === "Escape" && !fe.ctrlKey && !fe.metaKey && !fe.shiftKey) {
       (fe.preventDefault(),
-        (wt = appRootRef.current?.querySelector(
-          '[role="tab"][aria-selected="true"]',
-        )) == null || wt.focus());
+        appRootRef.current
+          ?.querySelector('[role="tab"][aria-selected="true"]')
+          ?.focus());
       return;
     }
     if (
@@ -375,9 +374,7 @@ function createGridInteractionActions({
       if (jt === "f" || jt === "h") {
         (fe.preventDefault(),
           setIsFindBarVisible(true),
-          requestAnimationFrame(() => {
-            return findInputRef.current?.focus();
-          }));
+          requestAnimationFrame(() => findInputRef.current?.focus()));
         return;
       }
       if (jt === "home") {
@@ -500,12 +497,9 @@ function createGridInteractionActions({
       });
   }
   function activateGridPane(fe) {
-    var Oe;
     return splitPaneSizes.active.current === fe
       ? true
-      : !(
-            (Oe = activeCellEditRef.current) != null && Oe.value.startsWith("=")
-          ) && !commitCellEdit()
+      : !activeCellEditRef.current?.value.startsWith("=") && !commitCellEdit()
         ? false
         : (splitPaneSizes.activate(fe),
           (gridContainerRef.current = splitPaneSizes.refs.current[fe] ?? null),

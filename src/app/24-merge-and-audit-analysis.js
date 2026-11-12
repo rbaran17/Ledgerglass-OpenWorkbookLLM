@@ -87,12 +87,11 @@ function MergeCellsPreviewDialog(e) {
     b = Math.max(1, Math.ceil((g?.cells.length ?? 0) / 12)),
     y = Math.min(l, b - 1);
   ne.useEffect(() => {
-    var k;
     const E = document.activeElement;
     return (
-      (k = o.current?.querySelector("button")) == null || k.focus(),
+      o.current?.querySelector("button")?.focus(),
       () => {
-        E != null && E.isConnected && E.focus();
+        E?.isConnected && E.focus();
       }
     );
   }, []);
@@ -409,7 +408,6 @@ function MergeCellsPreviewDialog(e) {
   });
 }
 function applyWorkbookChange(e, r, t, n, o = {}) {
-  var h;
   if (
     ((r = assertTextCleanupEvidenceUnchanged(e, r)),
     (r = assertFieldTransformsUnchanged(e, r)),
@@ -420,7 +418,7 @@ function applyWorkbookChange(e, r, t, n, o = {}) {
     throw new Error(
       "The workbook changed while this tool was open. Reopen the tool and try again.",
     );
-  if ((h = e.structureProtection) != null && h.enabled) {
+  if (e.structureProtection?.enabled) {
     const f = (p) =>
       p.sheets.map((m) => ({
         id: m.id,
@@ -484,16 +482,13 @@ function applyWorkbookChange(e, r, t, n, o = {}) {
           d.add(u(p.sheetId, p.address, p.after)));
   checkDataValidationBatch(
     r,
-    a.filter((f) => {
-      var v, g;
-      return (
+    a.filter(
+      (f) =>
         r.sheets.some((b) => b.id === f.sheetId) &&
         !(o.restoringHistory && d.has(u(f.sheetId, f.address, f.after))) &&
         ((f.before?.raw ?? null) !== (f.after?.raw ?? null) ||
-          !!((v = f.before) != null && v.literal) !=
-            !!((g = f.after) != null && g.literal))
-      );
-    }),
+          !!f.before?.literal != !!f.after?.literal),
+    ),
   );
   const l = Array.from({ length: s }, (f, p) => ({
       id: crypto.randomUUID(),
@@ -598,8 +593,7 @@ class CalculationWorkerSession {
   cancel(
     r = "Calculation cancelled. Inputs are intact; use Calculate Now to retry.",
   ) {
-    var t;
-    (t = this.active) == null || t.cancel(r);
+    this.active?.cancel(r);
   }
   dispose() {
     (this.cancel(), this.terminateWorker());
@@ -612,15 +606,13 @@ class CalculationWorkerSession {
       { memoryBudgetBytes } = resolveCalculationBudget(r.calculation),
       d = this.reliability?.start("calculation", "run");
     return new Promise((l) => {
-      var v, g;
       let c = false,
         h;
       const f = (y, w = false) => {
-          var E;
           c ||
             ((c = true),
             h && clearTimeout(h),
-            (E = t.signal) == null || E.removeEventListener("abort", m),
+            t.signal?.removeEventListener("abort", m),
             (this.active = undefined),
             this.worker &&
               ((this.worker.onmessage = null),
@@ -637,7 +629,7 @@ class CalculationWorkerSession {
                 : y === "#PENDING!"
                   ? "cancelled"
                   : "unavailable";
-          (d == null || d.finish(E === "cancelled" ? "cancelled" : "failed", E),
+          (d?.finish(E === "cancelled" ? "cancelled" : "failed", E),
             f(
               runIterativeCalculation(r, n, y, w, readMonotonicClockMs() - a),
               true,
@@ -656,14 +648,13 @@ class CalculationWorkerSession {
               y ?? "Calculation cancelled; source inputs are intact.",
             ),
         }),
-        (v = t.signal) != null && v.aborted)
+        t.signal?.aborted)
       ) {
         m();
         return;
       }
       if (
-        ((g = t.signal) == null ||
-          g.addEventListener("abort", m, { once: true }),
+        (t.signal?.addEventListener("abort", m, { once: true }),
         estimateWorkbookMemoryBytes(r, memoryBudgetBytes) > memoryBudgetBytes)
       ) {
         p(
@@ -681,9 +672,8 @@ class CalculationWorkerSession {
         r.calculation?.timeBudgetMs ?? 2500,
       );
       try {
-        (this.worker ?? (this.worker = this.factory()),
+        ((this.worker ??= this.factory()),
           (this.worker.onmessage = ({ data }) => {
-            var F;
             if (c) return;
             const w = data;
             if (!(!w || w.id !== o)) {
@@ -725,13 +715,12 @@ class CalculationWorkerSession {
                         w.result.report.execution?.state === "pending"
                           ? "complete"
                           : (w.result.report.execution?.state ?? "complete"),
-                      message:
-                        (F = w.result.report.resources) != null && F.stopped
-                          ? (w.result.report.resources.reason ??
-                            "Calculation stopped at a resource limit.")
-                          : w.result.report.pending > 0
-                            ? "Manual calculation is pending. Use Calculate Now to refresh results. Source inputs were not modified."
-                            : "Calculated in an isolated worker. Source inputs were not modified.",
+                      message: w.result.report.resources?.stopped
+                        ? (w.result.report.resources.reason ??
+                          "Calculation stopped at a resource limit.")
+                        : w.result.report.pending > 0
+                          ? "Manual calculation is pending. Use Calculate Now to refresh results. Source inputs were not modified."
+                          : "Calculated in an isolated worker. Source inputs were not modified.",
                       wallElapsedMs: readMonotonicClockMs() - a,
                     },
                     limits: { ...w.result.report.limits, hardInterrupt: true },
@@ -742,11 +731,10 @@ class CalculationWorkerSession {
                   });
                 j && (this.completed = r);
                 const z = j?.report.resources?.stopped;
-                (d == null ||
-                  d.finish(
-                    j ? (z ? "failed" : "succeeded") : "cancelled",
-                    z ? (z === "#TIMEOUT!" ? "timeout" : "limit") : undefined,
-                  ),
+                (d?.finish(
+                  j ? (z ? "failed" : "succeeded") : "cancelled",
+                  z ? (z === "#TIMEOUT!" ? "timeout" : "limit") : undefined,
+                ),
                   f(j));
               } catch {
                 p(
@@ -789,12 +777,8 @@ function createCalculationWorker() {
         onerror: null,
       };
     return (
-      (r.onmessage = (n) => {
-        return t.onmessage?.call(t, { data: n.data });
-      }),
-      (r.onerror = (n) => {
-        return t.onerror?.call(t, { message: n.message });
-      }),
+      (r.onmessage = (n) => t.onmessage?.({ data: n.data })),
+      (r.onerror = (n) => t.onerror?.({ message: n.message })),
       t
     );
   } catch (r) {
@@ -823,15 +807,14 @@ function useCalculationRun(e, r, t, n) {
         const w = g ? refreshCalculationReport(e) : getWorkbookCalculation(e),
           E = w.report.resources?.stopped;
         return (
-          b == null ||
-            b.finish(
-              E ? "failed" : "succeeded",
-              E === "#TIMEOUT!" ? "timeout" : E ? "limit" : undefined,
-            ),
+          b?.finish(
+            E ? "failed" : "succeeded",
+            E === "#TIMEOUT!" ? "timeout" : E ? "limit" : undefined,
+          ),
           w
         );
       } catch (w) {
-        throw (b == null || b.fail(w), w);
+        throw (b?.fail(w), w);
       }
     },
     p = ne.useMemo(
@@ -878,7 +861,7 @@ function useCalculationRun(e, r, t, n) {
           const g = new AbortController();
           (g.abort(),
             s.run(e, { signal: g.signal }).then(() => u((b) => b + 1)));
-        } else s == null || s.cancel();
+        } else s?.cancel();
         (u((g) => g + 1), l.current());
       },
       isolated: !!s,
@@ -1669,12 +1652,11 @@ function CommandReferenceDialog({ commands, onClose, onLocate }) {
     a = ne.useRef(null),
     s = ne.useId();
   ne.useEffect(() => {
-    var h;
     const c = document.activeElement;
     return (
-      (h = a.current) == null || h.focus(),
+      a.current?.focus(),
       () => {
-        c != null && c.isConnected && c.focus({ preventScroll: true });
+        c?.isConnected && c.focus({ preventScroll: true });
       }
     );
   }, []);

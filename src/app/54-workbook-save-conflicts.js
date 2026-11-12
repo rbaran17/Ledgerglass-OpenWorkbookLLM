@@ -105,7 +105,7 @@ function saveWorkbookWithLock(e, r, t = {}) {
         E;
       const A = () => {
           (E !== undefined && clearTimeout(E),
-            l == null || l.removeEventListener("abort", F));
+            l?.removeEventListener("abort", F));
         },
         k = (j) => {
           !v || g || ((v = false), (w = j), A(), p.abort(j), h(j));
@@ -133,7 +133,7 @@ function saveWorkbookWithLock(e, r, t = {}) {
                     ),
             ));
         };
-      if (l != null && l.aborted) {
+      if (l?.aborted) {
         F();
         return;
       }
@@ -146,7 +146,7 @@ function saveWorkbookWithLock(e, r, t = {}) {
           );
           return;
         }
-        (l == null || l.addEventListener("abort", F, { once: true }),
+        (l?.addEventListener("abort", F, { once: true }),
           (E = setTimeout(() => k(I()), a)));
         const j = o.request(s, { mode: "exclusive", signal: p.signal }, (z) => {
           if (!v || p.signal.aborted)
@@ -397,22 +397,18 @@ function WorkbookSaveConflictDialog(e) {
     };
   (ne.useEffect(m, [e.workbook]),
     ne.useEffect(() => {
-      var A;
       const w = document.activeElement;
       return (
-        (A = p.current?.querySelector("button")) == null || A.focus(),
+        p.current?.querySelector("button")?.focus(),
         () => {
-          w != null && w.isConnected && w.focus();
+          w?.isConnected && w.focus();
         }
       );
     }, []));
-  const v = (w) => {
-      return (
-        e.workbook.sheets.find((k) => k.id === w)?.name ??
-        n?.workbook.sheets.find((k) => k.id === w)?.name ??
-        "Removed worksheet"
-      );
-    },
+  const v = (w) =>
+      e.workbook.sheets.find((k) => k.id === w)?.name ??
+      n?.workbook.sheets.find((k) => k.id === w)?.name ??
+      "Removed worksheet",
     g = (w) =>
       w[0] === "sheets" && w[1] === "order"
         ? "Worksheet order"
@@ -600,13 +596,12 @@ function WorkbookSaveConflictDialog(e) {
                                 ...Object.keys(w.before ?? {}),
                                 ...Object.keys(w.after ?? {}),
                               ]),
-                            ].filter((A) => {
-                              return (
+                            ].filter(
+                              (A) =>
                                 A !== "raw" &&
                                 stableSerialize(w.before?.[A]) !==
-                                  stableSerialize(w.after?.[A])
-                              );
-                            });
+                                  stableSerialize(w.after?.[A]),
+                            );
                             return i.jsxs(
                               "tr",
                               {
@@ -947,7 +942,7 @@ function createWorkbookDiagnosticsMonitor(e = {}) {
         return;
       }
       try {
-        const w = e.onEvent?.call(e, m);
+        const w = e.onEvent?.(m);
         w &&
           (h++,
           Promise.resolve(w).then(
@@ -1142,10 +1137,7 @@ function instrumentWorkbookPersistence(e, r) {
       try {
         const o = e.load(),
           a = o ? normalizeCheckpointRecord(o) : null;
-        return (
-          n.finish(a != null && a.recovered ? "recovered" : "succeeded"),
-          a
-        );
+        return (n.finish(a?.recovered ? "recovered" : "succeeded"), a);
       } catch (o) {
         throw (n.fail(o), o);
       }
@@ -1201,12 +1193,11 @@ function WorkbookHealthDialog({ monitor, onClose }) {
     o = ne.useRef(null),
     a = useWorkbookMessages();
   ne.useEffect(() => {
-    var u;
     const d = document.activeElement;
     return (
-      (u = o.current) == null || u.focus(),
+      o.current?.focus(),
       () => {
-        d != null && d.isConnected && d.focus();
+        d?.isConnected && d.focus();
       }
     );
   }, []);
@@ -1407,7 +1398,6 @@ function snapshotSheetContent(e) {
   });
 }
 function checkSourceSheetAccess(e, r, t) {
-  var o;
   if (t.readOnly) throw new ExternalSourceError("refused");
   if (!r) {
     assertWorkbookStructureEditable(e);
@@ -1418,7 +1408,7 @@ function checkSourceSheetAccess(e, r, t) {
     !n ||
     n.hidden ||
     n.veryHidden ||
-    ((o = n.protection) != null && o.enabled) ||
+    n.protection?.enabled ||
     (t.allowedSheetIds && !t.allowedSheetIds.includes(r))
   )
     throw new ExternalSourceError("refused");
@@ -1477,12 +1467,13 @@ function evaluateExternalSourceQuery(e, r, t, n, o = {}, a = []) {
     controls: computeSourceControlTotals(d),
   };
   if (
-    c.controls.some((h) => {
-      return !Number.isFinite(
-        h.sum -
-          (c.previous?.controls.find((m) => m.field === h.field)?.sum ?? 0),
-      );
-    })
+    c.controls.some(
+      (h) =>
+        !Number.isFinite(
+          h.sum -
+            (c.previous?.controls.find((m) => m.field === h.field)?.sum ?? 0),
+        ),
+    )
   )
     throw new ExternalSourceError("limit");
   return (cellSnapshotCache.set(c, fingerprintCanonicalValue(c)), c);
@@ -1525,13 +1516,13 @@ function buildSourceSheetSnapshot(e, r) {
           ...(typeof l == "string" && /^[=+@-]/.test(l)
             ? { literal: true }
             : {}),
-          ...(f != null && f.style
+          ...(f?.style
             ? { style: structuredClone(f.style) }
             : u === 0
               ? { style: { bold: true, fill: "#eef2ff" } }
               : {}),
-          ...(f != null && f.numFmt ? { numFmt: f.numFmt } : {}),
-          ...(f != null && f.format ? { format: f.format } : {}),
+          ...(f?.numFmt ? { numFmt: f.numFmt } : {}),
+          ...(f?.format ? { format: f.format } : {}),
           note: `Source ${r.snapshot.source.id} · version ${r.snapshot.version} · ${u === 0 ? "header" : `record ${u}`} · as of ${r.snapshot.sourceTimestamp}`,
         };
       }),
@@ -1644,15 +1635,14 @@ function applySourceGrantPlans(e, r, t, n = {}) {
   return d;
 }
 function normalizeExternalSourceState(e, r, t, n, o = {}) {
-  var u;
   if (o.readOnly) return e;
   const a = e.sheets.find((l) => l.id === r);
   if (
-    !(a != null && a.externalConnection) ||
+    !a?.externalConnection ||
     a.externalConnection.source.id !== t ||
     a.hidden ||
     a.veryHidden ||
-    ((u = a.protection) != null && u.enabled) ||
+    a.protection?.enabled ||
     (o.allowedSheetIds && !o.allowedSheetIds.includes(r))
   )
     return e;
@@ -1680,7 +1670,6 @@ function normalizeExternalSourceState(e, r, t, n, o = {}) {
   });
 }
 async function runSourceWithTimeout(e, r, t = {}) {
-  var l, c;
   const n = t.timeoutMs ?? externalSourceLimits.timeoutMs;
   if (!Number.isInteger(n) || n < 1 || n > externalSourceLimits.timeoutMs)
     throw new ExternalSourceError("invalid");
@@ -1689,28 +1678,24 @@ async function runSourceWithTimeout(e, r, t = {}) {
   let s,
     d = () => {};
   try {
-    if ((l = t.signal) != null && l.aborted)
-      throw new ExternalSourceError("cancelled");
+    if (t.signal?.aborted) throw new ExternalSourceError("cancelled");
     const h = new Promise((p, m) => {
-        var v;
         ((d = () => {
           (a.abort(), m(new ExternalSourceError("cancelled")));
         }),
-          (v = t.signal) == null ||
-            v.addEventListener("abort", d, { once: true }),
+          t.signal?.addEventListener("abort", d, { once: true }),
           (s = setTimeout(() => {
             (a.abort(), m(new ExternalSourceError("timeout")));
           }, n)));
       }),
       f = await Promise.race([Promise.resolve().then(() => r(a.signal)), h]);
     if (a.signal.aborted) throw new ExternalSourceError("cancelled");
-    return (o == null || o.finish(), f);
+    return (o?.finish(), f);
   } catch (h) {
     const f = isExternalSourceError(h);
-    throw (o == null || o.fail(f), f);
+    throw (o?.fail(f), f);
   } finally {
-    (clearTimeout(s),
-      (c = t.signal) == null || c.removeEventListener("abort", d));
+    (clearTimeout(s), t.signal?.removeEventListener("abort", d));
   }
 }
 async function fetchSourceCatalog(e, r = {}) {
@@ -1770,7 +1755,6 @@ async function runSourceRefreshBatch(e, r, t, n = {}) {
     await runSourceWithTimeout(
       "refresh",
       async (d) => {
-        var u;
         for (const l of t) {
           if (d.aborted) throw new ExternalSourceError("cancelled");
           const c = e.sheets.find((f) => f.id === l).externalConnection.source
@@ -1795,7 +1779,7 @@ async function runSourceRefreshBatch(e, r, t, n = {}) {
               externalSourceLimits.responseBytes)
           )
             throw new ExternalSourceError("limit");
-          (u = n.onProgress) == null || u.call(n, o.length, t.length);
+          n.onProgress?.(o.length, t.length);
         }
       },
       n,

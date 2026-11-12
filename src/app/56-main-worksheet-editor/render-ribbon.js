@@ -51,18 +51,11 @@ function renderEditorRibbon({
   pasteFromClipboard,
   autoFitSelectedAxis,
 }) {
-  let ribbonSheetProtectionDetails, workbookStructureDetails;
   return i.jsx(WorkbookRibbon, {
     onTool: runEditorCommand,
-    sheetProtected: !!(
-      (ribbonSheetProtectionDetails = activeSheet.protection) != null &&
-      ribbonSheetProtectionDetails.enabled
-    ),
+    sheetProtected: !!activeSheet.protection?.enabled,
     allowProtectionChange: !readOnly,
-    workbookStructureProtected: !!(
-      (workbookStructureDetails = activeWorkbook.structureProtection) != null &&
-      workbookStructureDetails.enabled
-    ),
+    workbookStructureProtected: !!activeWorkbook.structureProtection?.enabled,
     readOnly: isEditingLocked,
     busy: isOperationBusy,
     canUndo: undoStack.length > 0,
@@ -76,9 +69,7 @@ function renderEditorRibbon({
     onFormat: applyCellFormatPatch,
     onUndo: () => undoOrRedo(),
     onRedo: () => undoOrRedo(true),
-    onImport: () => {
-      return importFileInputRef.current?.click();
-    },
+    onImport: () => importFileInputRef.current?.click(),
     onExport: (fe) => void exportWorkbookAs(fe),
     onNew: () => replaceActiveWorkbook(createBlankWorkbook()),
     onDemo: () => replaceActiveWorkbook(buildSampleLedgerWorkbook()),
@@ -152,7 +143,7 @@ function renderEditorRibbon({
       }),
     onReviewed: () =>
       applyCellFormatPatch({
-        tickmark: activeCell != null && activeCell.tickmark ? "" : "✓",
+        tickmark: activeCell?.tickmark ? "" : "✓",
       }),
   });
 }

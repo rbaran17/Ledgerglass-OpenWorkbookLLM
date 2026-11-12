@@ -10445,7 +10445,7 @@ function Hu(e, t = {}, n, i) {
           )
             throw f("#NAME?");
           let ee = R++,
-            re = E[ee] ?? (E[ee] = q()),
+            re = (E[ee] ??= q()),
             oe = re._callFunction;
           re._callFunction = (Y, ne) =>
             Y === Dm
@@ -10580,7 +10580,7 @@ function Hu(e, t = {}, n, i) {
           (w.add(Q), S.set(Q, new Set()));
           let ge;
           try {
-            let _e = O[Se] ?? (O[Se] = q()),
+            let _e = (O[Se] ??= q()),
               Ge = le
                 ? D(ae, V, G)
                 : _e.parse(
@@ -12710,7 +12710,7 @@ function XW(e) {
     a.cells.forEach((s, l) => {
       if (s.address !== `${Ue(i[l])}${a.row}`)
         throw Error("Invalid report cell address.");
-      s.style && (s.style = As(s.style));
+      s.style &&= As(s.style);
     });
   }
   if (t.object) {
@@ -18958,13 +18958,12 @@ function g8(e, t, n, i) {
         let p = c[f],
           h = r.hasHeader && u === 1 ? "text" : (r.columns[f] ?? "auto"),
           m = `${Ue(f)}${u}`;
-        a.schema[f] ||
-          (a.schema[f] = {
-            index: f,
-            label: r.hasHeader && u === 1 ? p : Ue(f),
-            type: r.columns[f] ?? "auto",
-            observed: [],
-          });
+        a.schema[f] ||= {
+          index: f,
+          label: r.hasHeader && u === 1 ? p : Ue(f),
+          type: r.columns[f] ?? "auto",
+          observed: [],
+        };
         let g;
         try {
           g = Nq(p, h, r);

@@ -41,7 +41,6 @@ import {
 } from "./51-pattern-checks-and-citations.js";
 
 function runWorkbookComparison(e, r, t, n = {}) {
-  var g;
   if (
     !t ||
     !Array.isArray(t.mappings) ||
@@ -250,8 +249,7 @@ function runWorkbookComparison(e, r, t, n = {}) {
           }));
       };
     if (b.rowMatch === "position") {
-      if ((g = b.keys) != null && g.length)
-        throw Error("Positional matching does not use keys.");
+      if (b.keys?.length) throw Error("Positional matching does not use keys.");
       u({
         kind: "uncertain",
         confidence: "unresolved",
@@ -905,17 +903,14 @@ function WorkbookComparisonDialog(e) {
       };
     };
   (ne.useEffect(() => {
-    var he;
     const oe = document.activeElement;
     return (
-      (he = a.current?.querySelector(
-        '[data-ui-label="Comparison baseline file"]',
-      )) == null || he.focus(),
+      a.current
+        ?.querySelector('[data-ui-label="Comparison baseline file"]')
+        ?.focus(),
       (d.current = true),
       () => {
-        ((d.current = false),
-          s.current++,
-          oe != null && oe.isConnected && oe.focus());
+        ((d.current = false), s.current++, oe?.isConnected && oe.focus());
       }
     );
   }, []),
@@ -1128,8 +1123,8 @@ function WorkbookComparisonDialog(e) {
               }),
             }),
             B &&
-              g.map((oe, de) => {
-                return i.jsxs(
+              g.map((oe, de) =>
+                i.jsxs(
                   "fieldset",
                   {
                     children: [
@@ -1415,8 +1410,8 @@ function WorkbookComparisonDialog(e) {
                     ],
                   },
                   de,
-                );
-              }),
+                ),
+              ),
             i.jsxs("div", {
               className: "wc-actions",
               children: [
@@ -1544,8 +1539,8 @@ function WorkbookComparisonDialog(e) {
                           ".",
                         ],
                       }),
-                      y.request.mappings.map((oe, de) => {
-                        return i.jsxs(
+                      y.request.mappings.map((oe, de) =>
+                        i.jsxs(
                           "p",
                           {
                             children: [
@@ -1574,8 +1569,8 @@ function WorkbookComparisonDialog(e) {
                             ],
                           },
                           de,
-                        );
-                      }),
+                        ),
+                      ),
                     ],
                   }),
                   i.jsxs("label", {
@@ -1902,7 +1897,6 @@ function compareCellPositions(e, r, t) {
     : r.row - t.row || r.col - t.col;
 }
 function searchWorkbookCells(e, r) {
-  var h;
   const t = normalizeSearchQuery(e, r),
     n = createSearchBudget(),
     o = compileSearchPattern(t),
@@ -1955,7 +1949,7 @@ function searchWorkbookCells(e, r) {
           text: F,
           raw: E?.raw ?? null,
           isFormula: A,
-          protected: !!((h = f.protection) != null && h.enabled),
+          protected: !!f.protection?.enabled,
           hidden: !!w,
           ...(w ? { hiddenReason: w } : {}),
           occurrences: I.length,

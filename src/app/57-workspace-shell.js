@@ -48,9 +48,7 @@ function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
   return (
     ne.useEffect(() => {
       const a = (s) => {
-        var d;
-        (d = o.current) != null &&
-          d.open &&
+        o.current?.open &&
           s.target instanceof Node &&
           !o.current.contains(s.target) &&
           (o.current.open = false);
@@ -64,13 +62,12 @@ function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
       ref: o,
       className: `emb-header-menu ${className}`,
       onKeyDown: (a) => {
-        var s;
         a.key === "Escape" &&
           a.currentTarget.open &&
           (a.preventDefault(),
           a.stopPropagation(),
           (a.currentTarget.open = false),
-          (s = a.currentTarget.querySelector("summary")) == null || s.focus());
+          a.currentTarget.querySelector("summary")?.focus());
       },
       children: [
         i.jsx("summary", {
@@ -83,10 +80,9 @@ function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
           role: "region",
           "aria-label": label,
           onClick: (a) => {
-            var d;
             a.target.closest("button") &&
               (o.current && (o.current.open = false),
-              (d = o.current?.querySelector("summary")) == null || d.focus());
+              o.current?.querySelector("summary")?.focus());
           },
           children,
         }),
@@ -926,10 +922,10 @@ function EmbeddedWorkbookWorkspace() {
                 U = L.at(-1);
               (R.shiftKey &&
                 document.activeElement === $ &&
-                (R.preventDefault(), U == null || U.focus()),
+                (R.preventDefault(), U?.focus()),
                 !R.shiftKey &&
                   document.activeElement === U &&
-                  (R.preventDefault(), $ == null || $.focus()));
+                  (R.preventDefault(), $?.focus()));
             },
             children: [
               i.jsx("button", {

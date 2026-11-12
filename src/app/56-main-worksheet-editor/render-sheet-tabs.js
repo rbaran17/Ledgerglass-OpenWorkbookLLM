@@ -16,7 +16,6 @@ function renderSheetTabs({
   commitCellEdit,
   switchActiveWorksheet,
 }) {
-  let workbookStructureLock;
   return i.jsxs("div", {
     className: "lg-sheet-tabs",
     "aria-label": text("Worksheet navigation"),
@@ -37,15 +36,11 @@ function renderSheetTabs({
                   "data-sheet-id": fe.id,
                   tabIndex: fe.id === activeSheet.id ? 0 : -1,
                   onPointerDown: (Oe) => {
-                    var Be;
-                    (Be = activeCellEditRef.current) != null &&
-                      Be.value.startsWith("=") &&
+                    activeCellEditRef.current?.value.startsWith("=") &&
                       Oe.preventDefault();
                   },
                   onMouseDown: (Oe) => {
-                    var Be;
-                    (Be = activeCellEditRef.current) != null &&
-                      Be.value.startsWith("=") &&
+                    activeCellEditRef.current?.value.startsWith("=") &&
                       Oe.preventDefault();
                   },
                   onKeyDown: (Oe) => {
@@ -74,15 +69,15 @@ function renderSheetTabs({
                                   Be.length
                               ];
                     (switchActiveWorksheet(Xe.id),
-                      requestAnimationFrame(() => {
-                        return Array.from(
+                      requestAnimationFrame(() =>
+                        Array.from(
                           appRootRef.current?.querySelectorAll(
                             "[data-sheet-id]",
                           ) ?? [],
                         )
                           .find((wt) => wt.dataset.sheetId === Xe.id)
-                          ?.focus();
-                      }));
+                          ?.focus(),
+                      ));
                   },
                   onClick: () => switchActiveWorksheet(fe.id),
                   style: fe.tabColor
@@ -108,12 +103,7 @@ function renderSheetTabs({
           i.jsx("button", {
             className: "lg-add-sheet",
             "aria-label": text("Add worksheet"),
-            disabled:
-              readOnly ||
-              !!(
-                (workbookStructureLock = activeWorkbook.structureProtection) !=
-                  null && workbookStructureLock.enabled
-              ),
+            disabled: readOnly || !!activeWorkbook.structureProtection?.enabled,
             onClick: () =>
               setPromptDialogState({
                 kind: "sheet",

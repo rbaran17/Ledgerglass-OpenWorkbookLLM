@@ -1562,7 +1562,6 @@ function FunctionAndNameDialog({
   onWorkbookChange,
   onInsertFormula,
 }) {
-  var de, he;
   const { text, language } = useWorkbookMessages(),
     c = workbook.sheets.find((se) => se.id === sheetId),
     [h, f] = ne.useState(""),
@@ -1585,10 +1584,7 @@ function FunctionAndNameDialog({
     H = (se, we) => {
       (_ || B(JSON.stringify(workbook)), C(true), N(null), U(""), se(we));
     },
-    Q =
-      readOnly ||
-      !c ||
-      !!((de = workbook.structureProtection) != null && de.enabled),
+    Q = readOnly || !c || !!workbook.structureProtection?.enabled,
     X$1 = (se) =>
       V(se instanceof Error ? se.message : "The name could not be saved."),
     J = ne.useMemo(
@@ -1927,8 +1923,8 @@ function FunctionAndNameDialog({
                         }),
                         i.jsx("tbody", {
                           children: (workbook.definedNames ?? []).map(
-                            (se, we) => {
-                              return i.jsxs(
+                            (se, we) =>
+                              i.jsxs(
                                 "tr",
                                 {
                                   children: [
@@ -2024,13 +2020,12 @@ function FunctionAndNameDialog({
                                   ],
                                 },
                                 `${se.scopeSheetId}:${se.name}`,
-                              );
-                            },
+                              ),
                           ),
                         }),
                       ],
                     }),
-                    !((he = workbook.definedNames) != null && he.length) &&
+                    !workbook.definedNames?.length &&
                       i.jsx("p", {
                         children: i.jsx(LocalizedText, {
                           children:

@@ -1,7 +1,7 @@
 import { listRangeColumnIndexes } from "./21-aging-and-materiality-screens.js";
 import { throwErrorMessage, isNullOrEmptyValue } from "./03-workbook-model.js";
 import { cloneStructuredValue } from "./11-workbook-formats-dialog.js";
-import { parseNumericText } from "./37-linear-solver-engine.js";
+
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -113,7 +113,7 @@ function MaterialityRiskScreen(e) {
         : checkMaterialityReportFreshness(e.workbook, N, ae, oe)
       : null,
     we = listRangeColumnIndexes(c),
-    Ee = se != null && se.disclose ? N : null,
+    Ee = se?.disclose ? N : null,
     Ae = Ee?.rows.filter((Me) => K === "all" || Me.disposition === K) ?? [],
     ye = Math.max(1, Math.ceil(Ae.length / materialityScreenLimits.pageSize)),
     Te = Math.min(q, ye - 1),
@@ -127,16 +127,12 @@ function MaterialityRiskScreen(e) {
         J(""));
     };
   ne.useEffect(() => {
-    var je;
     u.current = true;
     const Me = document.activeElement;
     return (
-      (je = a.current?.querySelector('[data-ui-label="Source range"]')) ==
-        null || je.focus(),
+      a.current?.querySelector('[data-ui-label="Source range"]')?.focus(),
       () => {
-        ((u.current = false),
-          d.current++,
-          Me != null && Me.isConnected && Me.focus());
+        ((u.current = false), d.current++, Me?.isConnected && Me.focus());
       }
     );
   }, []);
@@ -151,7 +147,7 @@ function MaterialityRiskScreen(e) {
     },
     ht = () => {
       try {
-        if (!N || !(se != null && se.current))
+        if (!N || !se?.current)
           throw Error("Run a current screen before downloading a report.");
         const Me = exportMaterialityReportJson(e.workbook, N, ae, oe),
           ke = URL.createObjectURL(
@@ -502,7 +498,7 @@ function MaterialityRiskScreen(e) {
             }),
             i.jsx("button", {
               onClick: ht,
-              disabled: !(se != null && se.current),
+              disabled: !se?.current,
               children: i.jsx(LocalizedText, {
                 children: "Download current report",
               }),
@@ -1125,9 +1121,7 @@ function summarizeRuleOutcome(e, r) {
   ((t.tested = t.matched + t.notMatched),
     (t.groups = new Set(r.map((o) => o.group.id)).size),
     (t.findings = r.length));
-  const n = r.reduce((o, a) => {
-    return o + BigInt(a.missing?.count ?? 0);
-  }, 0n);
+  const n = r.reduce((o, a) => o + BigInt(a.missing?.count ?? 0), 0n);
   return (
     n > BigInt(Number.MAX_SAFE_INTEGER) &&
       throwErrorMessage(

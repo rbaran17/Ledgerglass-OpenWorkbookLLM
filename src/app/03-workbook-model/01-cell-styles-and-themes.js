@@ -193,8 +193,7 @@ function resolveEffectiveCellStyle(e) {
   );
 }
 function resolveBorderEdge(e, r) {
-  var t;
-  if (((e = resolveEffectiveCellStyle(e)), (t = e?.borders) != null && t[r]))
+  if (((e = resolveEffectiveCellStyle(e)), e?.borders?.[r]))
     return e.borders[r];
   if (e?.border === "none") return { style: "none" };
   if (e?.border === "all" || (e?.border === "bottom" && r === "bottom"))
@@ -220,7 +219,7 @@ function indentToPx(e) {
     (e = resolveEffectiveCellStyle(e)),
     (e?.indent ?? 0) *
       cellIndentMetrics.indentEm *
-      (e != null && e.fontSize ? (e.fontSize * 4) / 3 : 14)
+      (e?.fontSize ? (e.fontSize * 4) / 3 : 14)
   );
 }
 function cellStyleToCss(e, r, t = {}) {
@@ -233,10 +232,10 @@ function cellStyleToCss(e, r, t = {}) {
   return {
     background: e?.fill,
     color: e?.color,
-    fontWeight: e != null && e.bold ? 700 : 400,
-    fontStyle: e != null && e.italic ? "italic" : "normal",
+    fontWeight: e?.bold ? 700 : 400,
+    fontStyle: e?.italic ? "italic" : "normal",
     fontFamily: e?.fontFamily,
-    fontSize: e != null && e.fontSize ? `${e.fontSize}pt` : undefined,
+    fontSize: e?.fontSize ? `${e.fontSize}pt` : undefined,
     textDecoration: a || "none",
     textAlign: n,
     verticalAlign: e?.verticalAlign,
@@ -256,13 +255,13 @@ function textWrapToCss(e) {
   return (
     (e = resolveEffectiveCellStyle(e)),
     {
-      whiteSpace: e != null && e.wrap ? "pre-wrap" : "nowrap",
-      overflowWrap: e != null && e.wrap ? "anywhere" : undefined,
+      whiteSpace: e?.wrap ? "pre-wrap" : "nowrap",
+      overflowWrap: e?.wrap ? "anywhere" : undefined,
     }
   );
 }
 function measureCellBorderInsets(e) {
-  if (((e = resolveEffectiveCellStyle(e)), !(e != null && e.borders))) {
+  if (((e = resolveEffectiveCellStyle(e)), !e?.borders)) {
     const t = e?.border === "all" ? 2 : e?.border === "none" ? 0 : 1;
     return { horizontal: t, vertical: t };
   }
@@ -548,14 +547,12 @@ function createDefaultStyleCatalog(e) {
   });
 }
 function resolveNamedStyleAppearance(e, r) {
-  var n;
   const t = cloneStyleValue(e.base);
   (e.fontRole && (t.fontFamily = r.fonts[e.fontRole]),
     e.fillRole && (t.fill = r.palette[e.fillRole]),
     e.colorRole && (t.color = r.palette[e.colorRole]));
   for (const o of cellBorderEdges)
-    (n = e.borderRoles) != null &&
-      n[o] &&
+    e.borderRoles?.[o] &&
       (t.borders = {
         ...t.borders,
         [o]: { ...resolveBorderEdge(t, o), color: r.palette[e.borderRoles[o]] },
@@ -574,11 +571,10 @@ function resolveNamedStyleBinding(e, r) {
     styleId: r.styleId,
     base: t && e ? resolveNamedStyleAppearance(t.definition, e.theme) : {},
     ...(t ? {} : { missing: true }),
-    ...(e != null && e.missingTheme ? { themeFallback: true } : {}),
+    ...(e?.missingTheme ? { themeFallback: true } : {}),
   };
 }
 function reconcileWorkbookStyleBindings(e, r) {
-  var o;
   const t = e === undefined ? undefined : validateWorkbookStyleCatalog(e);
   t ? (r.styleCatalog = t) : delete r.styleCatalog;
   const n = isPlainObjectLiteral(e) && e.theme === undefined;
@@ -586,7 +582,7 @@ function reconcileWorkbookStyleBindings(e, r) {
     for (const s of hasLinkedOrBoundCells(a.cells)
       ? Object.values(a.cells)
       : []) {
-      if (!((o = s.style) != null && o.binding)) continue;
+      if (!s.style?.binding) continue;
       const d = validateNamedStyleBinding(s.style.binding),
         u = resolveNamedStyleBinding(t, d);
       (!u.missing &&
@@ -599,7 +595,7 @@ function reconcileWorkbookStyleBindings(e, r) {
     }
 }
 function assertNamedStyleBindingCurrent(e, r) {
-  if (!(r != null && r.binding)) return;
+  if (!r?.binding) return;
   const t = validateNamedStyleBinding(r.binding),
     n = resolveNamedStyleBinding(e.styleCatalog, t);
   canonicalStyleKey(t) !== canonicalStyleKey(n) &&
@@ -608,17 +604,14 @@ function assertNamedStyleBindingCurrent(e, r) {
     );
 }
 function describeNamedStyleFallback(e) {
-  var r, t;
-  if ((r = e?.binding) != null && r.missing)
+  if (e?.binding?.missing)
     return "Named style is missing. Default formatting and direct cell formatting are shown.";
-  if ((t = e?.binding) != null && t.themeFallback)
+  if (e?.binding?.themeFallback)
     return "Workbook theme is missing. The Office theme is shown.";
 }
 function collectStyleFallbackWarnings(e) {
-  var t;
   const r = new Set();
-  (t = e.styleCatalog) != null &&
-    t.missingTheme &&
+  e.styleCatalog?.missingTheme &&
     r.add("Workbook theme is missing. The Office theme is shown.");
   for (const n of e.sheets)
     for (const o of Object.values(n.cells)) {
@@ -844,7 +837,7 @@ function aQ(e, r) {
       for (const [c, h] of Object.entries(d.cells))
         h.hyperlink?.kind !== "internal" ||
           t.has(h.hyperlink.sheetId) ||
-          (u ?? (u = { ...d.cells }),
+          ((u ??= { ...d.cells }),
           (u[c] = { ...h }),
           delete u[c].hyperlink,
           (n = true));
@@ -869,20 +862,18 @@ function uQ(e, r) {
     sheets: e.sheets.map((t) => ({
       ...t,
       cells: Object.fromEntries(
-        Object.entries(t.cells).map(([n, o]) => {
-          return [
-            n,
-            o.hyperlink?.kind === "internal"
-              ? {
-                  ...o,
-                  hyperlink: {
-                    ...o.hyperlink,
-                    sheetId: r.get(o.hyperlink.sheetId) ?? o.hyperlink.sheetId,
-                  },
-                }
-              : o,
-          ];
-        }),
+        Object.entries(t.cells).map(([n, o]) => [
+          n,
+          o.hyperlink?.kind === "internal"
+            ? {
+                ...o,
+                hyperlink: {
+                  ...o.hyperlink,
+                  sheetId: r.get(o.hyperlink.sheetId) ?? o.hyperlink.sheetId,
+                },
+              }
+            : o,
+        ]),
       ),
     })),
   };
@@ -901,8 +892,7 @@ function createReviewThread(e, r) {
     : t;
 }
 function fQ(e, r) {
-  var t;
-  return (t = e.formulaWatches) != null && t.length
+  return e.formulaWatches?.length
     ? {
         ...e,
         formulaWatches: e.formulaWatches.map((n) =>
@@ -914,8 +904,7 @@ function fQ(e, r) {
     : e;
 }
 function createFormulaWatch(e, r) {
-  var t;
-  return (t = e.formulaWatches) != null && t.length
+  return e.formulaWatches?.length
     ? {
         ...e,
         formulaWatches: e.formulaWatches.map((n) => ({
@@ -1564,9 +1553,7 @@ function sortConditionalRulesByPriority(e) {
 }
 
 function assertSheetUnprotected(e) {
-  var r;
-  (r = e.protection) != null &&
-    r.enabled &&
+  e.protection?.enabled &&
     failWithMessage(
       "This sheet is protected. Unprotect it before changing its contents.",
     );
@@ -1653,18 +1640,15 @@ async function hashSheetPassword(e, r) {
     .join("");
 }
 async function updateSheetProtection(e, r, t, n) {
-  var d, u;
   const o = e.sheets.find((l) => l.id === r);
   (n &&
-    (d = o.protection) != null &&
-    d.enabled &&
+    o.protection?.enabled &&
     failWithMessage(
       "Unprotect this sheet before changing its protection settings.",
     ),
     t.length > 200 && failWithMessage("Password is too long."),
     !n &&
-      (u = o.protection) != null &&
-      u.hash &&
+      o.protection?.hash &&
       (await hashSheetPassword(t, o.protection.salt)) !== o.protection.hash &&
       failWithMessage("The password does not match."));
   const a = crypto.randomUUID(),
@@ -1810,7 +1794,7 @@ function summarizeNumberFormat(e) {
   const r = BN(e);
   if (!r) return;
   const t = parseNumberFormatCode(r[0]);
-  return t != null && t.hasNumber ? t.maxDecimals : undefined;
+  return t?.hasNumber ? t.maxDecimals : undefined;
 }
 function numberFormatToIntlOptions(e, r) {
   const t = BN(r);

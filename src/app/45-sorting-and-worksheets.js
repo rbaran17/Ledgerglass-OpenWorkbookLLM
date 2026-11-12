@@ -56,7 +56,6 @@ import {
 } from "./44-clean-and-reshape.js";
 
 function buildSortPreview(e, r, t = {}) {
-  var V;
   const n = assertSortWorkbookAuthorized(e, r.sheetId, t),
     o = normalizeSortSpecification(e, r),
     a = resolveSortSourceRange(e, o.sheetId, o.range, o.headers);
@@ -95,9 +94,7 @@ function buildSortPreview(e, r, t = {}) {
       o.caseSensitive
         ? B.normalize("NFC")
         : B.normalize("NFC").toLocaleLowerCase("en-US"),
-    m = o.keys.map((B) => {
-      return new Map(B.customOrder?.map((C, T) => [p(C), T]));
-    }),
+    m = o.keys.map((B) => new Map(B.customOrder?.map((C, T) => [p(C), T]))),
     v = (B) =>
       B.compare === null || B.compare === ""
         ? 4
@@ -210,7 +207,7 @@ function buildSortPreview(e, r, t = {}) {
         .map(([C]) => _t(C).row),
     );
     for (const C of g)
-      if (_.has(C.row) && !((V = n.rowOriginIds) != null && V[C.row])) {
+      if (_.has(C.row) && !n.rowOriginIds?.[C.row]) {
         if (E.rowOrigins.length >= 1e5)
           throw Error("Source row identity capacity has been reached.");
         const T = crypto.randomUUID();
@@ -292,17 +289,15 @@ const buildSortKeySpec = (e) => ({
     useCustom: false,
   }),
   expandSortSelectionToRecords = (e) => {
-    var t;
     try {
       const n = parseRangeAddress(
         resolveSortSourceRange(e.workbook, e.sheetId, e.range).expandedRange,
       ).firstRow;
       return (
         n === 0 ||
-        !!(
-          (t = e.workbook.sheets.find((o) => o.id === e.sheetId)?.tables) !=
-            null && t.some((o) => parseRangeAddress(o.range).firstRow === n)
-        )
+        !!e.workbook.sheets
+          .find((o) => o.id === e.sheetId)
+          ?.tables?.some((o) => parseRangeAddress(o.range).firstRow === n)
       );
     } catch {
       return false;
@@ -400,22 +395,21 @@ function CustomSortDialog(e) {
       }
     };
   (ne.useEffect(() => {
-    var q;
     const X = document.activeElement;
     return (
-      (q = o.current?.querySelector('input[data-ui-label="Source range"]')) ==
-        null || q.focus(),
+      o.current?.querySelector('input[data-ui-label="Source range"]')?.focus(),
       () => {
-        X != null && X.isConnected && X.focus();
+        X?.isConnected && X.focus();
       }
     );
   }, []),
     ne.useEffect(() => {
-      var X, J, q;
+      var X;
       y &&
-        ((J = (X = a.current) == null ? undefined : X.scrollIntoView) == null ||
-          J.call(X, { block: "start" }),
-        (q = a.current) == null || q.focus({ preventScroll: true }));
+        (((X = a.current) == null ? undefined : X.scrollIntoView)?.call(X, {
+          block: "start",
+        }),
+        a.current?.focus({ preventScroll: true }));
     }, [y]));
   const H = Math.max(
       1,
@@ -632,8 +626,8 @@ function CustomSortDialog(e) {
                             value: X$1.column,
                             onChange: (q) =>
                               L(J, { column: Number(q.target.value) }),
-                            children: N.map((q) => {
-                              return i.jsxs(
+                            children: N.map((q) =>
+                              i.jsxs(
                                 "option",
                                 {
                                   value: q,
@@ -645,8 +639,8 @@ function CustomSortDialog(e) {
                                   ],
                                 },
                                 q,
-                              );
-                            }),
+                              ),
+                            ),
                           }),
                     ],
                   }),
@@ -1051,7 +1045,7 @@ Low`,
                 }),
                 i.jsx("button", {
                   className: "dup-primary",
-                  disabled: !B || !(y != null && y.movedRows),
+                  disabled: !B || !y?.movedRows,
                   onClick: G,
                   children: i.jsx(LocalizedText, { children: "Apply sort" }),
                 }),
@@ -1072,7 +1066,6 @@ const worksheetVisibilityState = (e) =>
       ? e.message
       : "The worksheet operation could not be completed.";
 function WorksheetTabBar(e) {
-  var K;
   const { text, language } = useWorkbookMessages(),
     [n, o] = ne.useState(e.sheetId),
     a = e.workbook.sheets.find((ae) => ae.id === n) ?? e.workbook.sheets[0],
@@ -1092,7 +1085,7 @@ function WorksheetTabBar(e) {
     D = ne.useRef(true);
   V.current = e;
   const B = ne.useId(),
-    _ = !!((K = e.workbook.structureProtection) != null && K.enabled),
+    _ = !!e.workbook.structureProtection?.enabled,
     T = ne
       .useMemo(() => summarizeWorksheets(e.workbook), [e.workbook])
       .find((ae) => ae.sheetId === a.id),
@@ -1101,11 +1094,10 @@ function WorksheetTabBar(e) {
     L = !a.hidden && e.workbook.sheets.filter((ae) => !ae.hidden).length === 1,
     $ = !N && e.workbook.sheets.length > 1 && !L;
   (ne.useEffect(() => {
-    var oe;
     D.current = true;
     const ae = document.activeElement;
     return (
-      (oe = z.current ?? j.current) == null || oe.focus(),
+      (z.current ?? j.current)?.focus(),
       () => {
         ((D.current = false),
           ae instanceof HTMLElement && ae.isConnected && ae.focus());
@@ -1177,9 +1169,8 @@ function WorksheetTabBar(e) {
     }
   }
   async function J() {
-    var de;
     const ae = V.current,
-      oe = !!((de = ae.workbook.structureProtection) != null && de.enabled);
+      oe = !!ae.workbook.structureProtection?.enabled;
     (v(""), b(""), w(true));
     try {
       if (ae.readOnly) throw new Error("This workbook is read-only.");
@@ -2021,7 +2012,7 @@ const worksheetPropertyLabels = {
                     .join(" · ") || "No details",
   formatAuditCellValue = (e) => (e ? formatAuditDetailValue(e) : "Empty cell"),
   formatChangeAttribution = (e) =>
-    e != null && e.actor && e.timestamp
+    e?.actor && e.timestamp
       ? `${e.actor} · ${new Date(e.timestamp).toLocaleString()}${e.basis === "operation-history" ? " · from operation history" : ""}`
       : "Author and time not recorded for this change";
 

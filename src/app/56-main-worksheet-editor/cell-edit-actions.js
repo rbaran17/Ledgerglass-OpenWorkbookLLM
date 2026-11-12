@@ -110,13 +110,9 @@ function createCellEditActions({
   function restoreFormulaEditorFocus() {
     ((formulaPointerStateRef.current.restoring = true),
       requestAnimationFrame(() => {
-        var Be;
         if (!activeCellEditRef.current) return;
         const fe = formulaPointerStateRef.current,
-          Oe =
-            (Be = fe.input) != null && Be.isConnected
-              ? fe.input
-              : formulaInputRef.current;
+          Oe = fe.input?.isConnected ? fe.input : formulaInputRef.current;
         (Oe &&
           ((fe.input = Oe),
           Oe.focus({ preventScroll: true }),
@@ -125,11 +121,10 @@ function createCellEditActions({
       }));
   }
   function isFormulaEditingLocked() {
-    var Oe;
-    const fe = latestEditStateRef.current.book.sheets.find((Be) => {
-      return Be.id === (activeCellEditRef.current?.sheetId ?? activeSheet.id);
-    });
-    return readOnly || !fe || !!((Oe = fe.protection) != null && Oe.enabled);
+    const fe = latestEditStateRef.current.book.sheets.find(
+      (Be) => Be.id === (activeCellEditRef.current?.sheetId ?? activeSheet.id),
+    );
+    return readOnly || !fe || !!fe.protection?.enabled;
   }
   function switchToEditSheet(fe) {
     fe.sheetId !== activeSheet.id &&
@@ -142,7 +137,6 @@ function createCellEditActions({
       setPendingScrollAddress(fe.address));
   }
   function beginCellEdit(fe, Oe = false) {
-    var Ue;
     const Be = activeCellEditRef.current
       ? undefined
       : workbookCalculator.getSpillAnchor(activeSheet.id, activeCellAddress);
@@ -152,7 +146,7 @@ function createCellEditActions({
       );
       return;
     }
-    ((Ue = saveAbortControllerRef.current) == null || Ue.abort(),
+    (saveAbortControllerRef.current?.abort(),
       (activeCellEditRef.current = {
         sheetId: activeCellEditRef.current?.sheetId ?? activeSheet.id,
         address: activeCellEditRef.current?.address ?? activeCellAddress,
@@ -237,25 +231,23 @@ function createCellEditActions({
       )
         throw Error("Unmerge selected cells before changing border edges.");
       applyCellPatches(
-        Oe.map((Be) => {
-          return {
-            sheetId: activeSheet.id,
-            address: Be,
-            cell: {
-              ...activeSheet.cells[Be],
-              raw: activeSheet.cells[Be]?.raw ?? null,
-              ...fe,
-              ...(fe.style
-                ? {
-                    style: {
-                      ...activeSheet.cells[Be]?.style,
-                      ...fe.style,
-                    },
-                  }
-                : {}),
-            },
-          };
-        }),
+        Oe.map((Be) => ({
+          sheetId: activeSheet.id,
+          address: Be,
+          cell: {
+            ...activeSheet.cells[Be],
+            raw: activeSheet.cells[Be]?.raw ?? null,
+            ...fe,
+            ...(fe.style
+              ? {
+                  style: {
+                    ...activeSheet.cells[Be]?.style,
+                    ...fe.style,
+                  },
+                }
+              : {}),
+          },
+        })),
         "Format selection",
       );
     });

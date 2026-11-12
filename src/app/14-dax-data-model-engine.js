@@ -1,4 +1,3 @@
-import { createUuid } from "./03-workbook-model.js";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
@@ -1016,11 +1015,9 @@ function normalizeModelHostPermissions(e, r) {
   };
 }
 function buildModelTableSnapshots(e, r, t, n) {
-  var u;
   normalizeModelHostPermissions(e, t);
   for (const c of r.tables)
-    (u = e.sheets.find((h) => h.id === c.sheetId)) != null &&
-      u.dataModelReport &&
+    e.sheets.find((h) => h.id === c.sheetId)?.dataModelReport &&
       throwDaxModelError(
         "SNAPSHOT_SOURCE",
         "Model report snapshots cannot be calculation sources. Use the original typed source tables; retained measure caches are not trusted inputs.",
@@ -1048,13 +1045,12 @@ function buildModelTableSnapshots(e, r, t, n) {
     d = new Map();
   return (
     e.calculation?.mode === "manual" &&
-      s.dependencyCells.some((c) => {
-        return (
+      s.dependencyCells.some(
+        (c) =>
           typeof c.cell?.raw == "string" &&
           c.cell.raw.startsWith("=") &&
-          !c.cell.literal
-        );
-      }) &&
+          !c.cell.literal,
+      ) &&
       throwDaxModelError(
         "MANUAL",
         "Model source formulas require Automatic calculation. In Manual mode use an explicitly reviewed values snapshot; pending or historical formula values cannot enter the model.",
@@ -1263,9 +1259,7 @@ function evaluateDataModelQuery(e, r, t, n = {}) {
         value: (k, F, I) => decodeColumnValue(u.get(k).columns.get(F), I),
         order: p,
         tick: c,
-        canFilter: (k, F) => {
-          return m.get(k)?.has(F) ?? false;
-        },
+        canFilter: (k, F) => m.get(k)?.has(F) ?? false,
         parentRow: (k, F, I) => {
           const O = m.get(F)?.get(k);
           if (!O) return;
@@ -1536,7 +1530,7 @@ function buildModelReportCells(e, r) {
       const d = e.cells[`${columnIndexToLetters(s)}${o + 1}`];
       a.push({
         raw: d?.raw ?? null,
-        literal: !!(d != null && d.literal),
+        literal: !!d?.literal,
         note: d?.note ?? "",
       });
     }
@@ -1716,10 +1710,8 @@ function DaxExpressionInput({ label, value, onChange }) {
                   c = d.target.value + "(";
                 (onChange(value.slice(0, u) + c + value.slice(l)),
                   requestAnimationFrame(() => {
-                    var p, m;
-                    ((p = a.current) == null || p.focus(),
-                      (m = a.current) == null ||
-                        m.setSelectionRange(u + c.length, u + c.length));
+                    (a.current?.focus(),
+                      a.current?.setSelectionRange(u + c.length, u + c.length));
                   }));
               },
               children: [

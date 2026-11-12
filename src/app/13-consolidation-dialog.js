@@ -148,7 +148,7 @@ function publishConsolidatedSchedule(e, r, t = {}) {
           ],
           d,
         ),
-          (s.outlineGroups ?? (s.outlineGroups = [])).push({
+          (s.outlineGroups ??= []).push({
             id: crypto.randomUUID(),
             axis: "row",
             start: I - 1,
@@ -272,11 +272,12 @@ function findTableRangesForSource(e, r) {
     );
     return a.lastCol - a.firstCol >= 50
       ? []
-      : Array.from({ length: a.lastCol - a.firstCol + 1 }, (s, d) => {
-          return o.cells[
-            `${columnIndexToLetters(a.firstCol + d)}${a.firstRow + 1}`
-          ]?.raw;
-        }).filter((s) => typeof s == "string" && !!s);
+      : Array.from(
+          { length: a.lastCol - a.firstCol + 1 },
+          (s, d) =>
+            o.cells[`${columnIndexToLetters(a.firstCol + d)}${a.firstRow + 1}`]
+              ?.raw,
+        ).filter((s) => typeof s == "string" && !!s);
   } catch {
     return [];
   }
@@ -313,10 +314,10 @@ function ConsolidationStatusBanner({
 }) {
   const { text, language } = useWorkbookMessages(),
     s = workbook.sheets.find((l) => l.id === sheetId),
-    d = s != null && s.consolidation ? JSON.stringify([workbook, options]) : "",
+    d = s?.consolidation ? JSON.stringify([workbook, options]) : "",
     u = ne.useMemo(
       () =>
-        s != null && s.consolidation
+        s?.consolidation
           ? checkConsolidationFreshness(workbook, s, options)
           : null,
       [d, sheetId],
@@ -354,7 +355,6 @@ function ConsolidationStatusBanner({
     : null;
 }
 function ConsolidationDialog(e) {
-  var W;
   const { text, language } = useWorkbookMessages(),
     n = useCancellableOperation(),
     o = ne.useRef(null),
@@ -421,13 +421,10 @@ function ConsolidationDialog(e) {
     [D, B] = ne.useState("contributions"),
     _ = [
       ...(e.approvedWorkbooks ?? []),
-      ...b.filter((K) => {
-        var te;
-        return !(
-          (te = e.approvedWorkbooks) != null &&
-          te.some((ae) => ae.workbook.id === K.workbook.id)
-        );
-      }),
+      ...b.filter(
+        (K) =>
+          !e.approvedWorkbooks?.some((ae) => ae.workbook.id === K.workbook.id),
+      ),
     ],
     C = {
       readOnly: e.readOnly,
@@ -447,25 +444,21 @@ function ConsolidationDialog(e) {
       ..._,
     ];
   (ne.useEffect(() => {
-    var ae;
     u.current = true;
     const K = document.activeElement;
     return (
-      (ae = a.current?.querySelector("input,select,button")) == null ||
-        ae.focus(),
+      a.current?.querySelector("input,select,button")?.focus(),
       () => {
-        ((u.current = false),
-          s.current++,
-          K != null && K.isConnected && K.focus());
+        ((u.current = false), s.current++, K?.isConnected && K.focus());
       }
     );
   }, []),
     ne.useEffect(() => {
-      var K, te;
+      var K;
       N &&
-        ((te = (K = o.current) == null ? undefined : K.scrollIntoView) ==
-          null ||
-          te.call(K, { block: "start" }));
+        ((K = o.current) == null ? undefined : K.scrollIntoView)?.call(K, {
+          block: "start",
+        });
     }, [O, N]));
   const $ = (K) => {
       (f(K), j(null), I(""), V(0));
@@ -735,7 +728,6 @@ function ConsolidationDialog(e) {
               "data-ui-label": "Consolidation sources",
               children: [
                 h.sources.map((K, te) => {
-                  var ce;
                   const ae = L.find((se) => se.workbook.id === K.workbookId),
                     oe = ae?.workbook,
                     de =
@@ -922,9 +914,8 @@ function ConsolidationDialog(e) {
                                       children: "Explicit range",
                                     }),
                                     K.tableId &&
-                                      !(
-                                        (ce = he?.tables) != null &&
-                                        ce.some((se) => se.id === K.tableId)
+                                      !he?.tables?.some(
+                                        (se) => se.id === K.tableId,
                                       ) &&
                                       i.jsx("option", {
                                         value: K.tableId,
@@ -1190,9 +1181,8 @@ function ConsolidationDialog(e) {
                         }),
                       ],
                     }),
-                  _.map((K) => {
-                    var te;
-                    return i.jsxs(
+                  _.map((K) =>
+                    i.jsxs(
                       "p",
                       {
                         children: [
@@ -1205,11 +1195,8 @@ function ConsolidationDialog(e) {
                           i.jsxs("button", {
                             disabled:
                               !e.onApprovedWorkbooksChange &&
-                              !!(
-                                (te = e.approvedWorkbooks) != null &&
-                                te.some(
-                                  (ae) => ae.workbook.id === K.workbook.id,
-                                )
+                              !!e.approvedWorkbooks?.some(
+                                (ae) => ae.workbook.id === K.workbook.id,
                               ),
                             onClick: () =>
                               Q(
@@ -1225,8 +1212,8 @@ function ConsolidationDialog(e) {
                         ],
                       },
                       K.workbook.id,
-                    );
-                  }),
+                    ),
+                  ),
                 ],
               }),
             F &&
@@ -1588,9 +1575,9 @@ function ConsolidationDialog(e) {
             i.jsx("button", {
               className: "primary",
               disabled:
-                !(R != null && R.complete) ||
+                !R?.complete ||
                 e.readOnly ||
-                !!((W = e.workbook.structureProtection) != null && W.enabled),
+                !!e.workbook.structureProtection?.enabled,
               onClick: () =>
                 G(() => {
                   if (!N) return;

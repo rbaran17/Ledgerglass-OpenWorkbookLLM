@@ -351,7 +351,6 @@ function renderEditorDialogs({
               latestEditStateRef.current.book,
             ),
           onRestore: (Ue) => {
-            var wt;
             if (readOnly) throw new Error("This workbook is read-only.");
             if (!persistedWorkbookRecordRef.current)
               throw new Error(
@@ -359,7 +358,7 @@ function renderEditorDialogs({
               );
             const Xe = latestEditStateRef.current.book,
               gt = persistenceSessionRef.current;
-            (wt = saveAbortControllerRef.current) == null || wt.abort();
+            saveAbortControllerRef.current?.abort();
             const Nt = new AbortController();
             return (
               (saveAbortControllerRef.current = Nt),
@@ -448,10 +447,11 @@ function renderEditorDialogs({
                 setFormulaCaretPosition(Ue.length),
                 setIsFormulaBarFocused(true),
                 requestAnimationFrame(() => {
-                  var Xe, gt;
-                  ((Xe = formulaInputRef.current) == null || Xe.focus(),
-                    (gt = formulaInputRef.current) == null ||
-                      gt.setSelectionRange(Ue.length, Ue.length));
+                  (formulaInputRef.current?.focus(),
+                    formulaInputRef.current?.setSelectionRange(
+                      Ue.length,
+                      Ue.length,
+                    ));
                 }));
             },
           },

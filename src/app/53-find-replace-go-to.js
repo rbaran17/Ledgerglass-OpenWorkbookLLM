@@ -119,10 +119,7 @@ function replaceSearchMatches(e, r, t, n = {}) {
   const f = {
     targetSheetId:
       l[0]?.sheetId ??
-      e.sheets.find((g) => {
-        var b;
-        return !((b = g.protection) != null && b.enabled);
-      })?.id ??
+      e.sheets.find((g) => !g.protection?.enabled)?.id ??
       a.sheetId,
     targetRange: l[0]?.address ?? a.range,
     targetCount: l.length,
@@ -259,7 +256,7 @@ function selectSpecialCells(e, r, t) {
       b = isFormulaCellValue(g);
     let y = false;
     if (t === "formulas") y = b;
-    else if (t === "notes") y = !!(g != null && g.note);
+    else if (t === "notes") y = !!g?.note;
     else if (t === "constants") y = !!g && g.raw !== null && g.raw !== "" && !b;
     else {
       if (!b && g && g.raw !== null) continue;
@@ -356,15 +353,15 @@ function FindReplaceDialog(e) {
       oe());
   }
   ne.useEffect(() => {
-    var je;
     const Re = document.activeElement;
     return (
-      (je =
+      (
         a.current ??
         o.current?.querySelector("select,input") ??
-        o.current?.querySelector("button")) == null || je.focus(),
+        o.current?.querySelector("button")
+      )?.focus(),
       () => {
-        Re != null && Re.isConnected && Re.focus();
+        Re?.isConnected && Re.focus();
       }
     );
   }, []);
@@ -512,7 +509,7 @@ function FindReplaceDialog(e) {
     }
   }
   function Ee() {
-    if (L != null && L.count)
+    if (L?.count)
       try {
         if ((J(""), he(L), !s.current.onSelectRanges))
           throw new Error(
@@ -552,7 +549,6 @@ function FindReplaceDialog(e) {
       "aria-modal": "true",
       "aria-labelledby": n,
       onKeyDown: (Re) => {
-        var ke;
         if (Re.key === "Escape")
           (Re.preventDefault(), Re.stopPropagation(), s.current.onClose());
         else if (Re.key === "Tab") {
@@ -565,8 +561,7 @@ function FindReplaceDialog(e) {
             Je = je.at(-1);
           ((Re.shiftKey && document.activeElement === $e) ||
             (!Re.shiftKey && document.activeElement === Je)) &&
-            (Re.preventDefault(),
-            (ke = Re.shiftKey ? Je : $e) == null || ke.focus());
+            (Re.preventDefault(), (Re.shiftKey ? Je : $e)?.focus());
         } else
           Re.key === "Enter" &&
             Re.target instanceof HTMLInputElement &&
@@ -614,7 +609,6 @@ function FindReplaceDialog(e) {
                 tabIndex: u === Re ? 0 : -1,
                 onClick: () => de(Re),
                 onKeyDown: (je) => {
-                  var Je;
                   if (
                     ["ArrowLeft", "ArrowRight", "Home", "End"].includes(je.key)
                   ) {
@@ -627,8 +621,7 @@ function FindReplaceDialog(e) {
                             ? 2
                             : (ke + (je.key === "ArrowRight" ? 1 : 2)) % 3;
                     (de(ze[at]),
-                      (Je = je.currentTarget.parentElement?.children[at]) ==
-                        null || Je.focus());
+                      je.currentTarget.parentElement?.children[at]?.focus());
                   }
                 },
                 children: Me,
@@ -1154,8 +1147,8 @@ function FindReplaceDialog(e) {
                         i.jsx("tbody", {
                           children: N.previewPatches
                             .slice(Pe * Bv, (Pe + 1) * Bv)
-                            .map((Re) => {
-                              return i.jsxs(
+                            .map((Re) =>
+                              i.jsxs(
                                 "tr",
                                 {
                                   children: [
@@ -1182,8 +1175,8 @@ function FindReplaceDialog(e) {
                                   ],
                                 },
                                 `${Re.sheetId}:${Re.address}`,
-                              );
-                            }),
+                              ),
+                            ),
                         }),
                       ],
                     }),
@@ -1276,7 +1269,7 @@ function FindReplaceDialog(e) {
               i.jsx("button", {
                 type: "button",
                 className: "st-primary",
-                disabled: e.readOnly || !(N != null && N.count) || qe,
+                disabled: e.readOnly || !N?.count || qe,
                 onClick: se,
                 children: i.jsx(LocalizedText, {
                   children: "Apply replacement",
@@ -1286,7 +1279,7 @@ function FindReplaceDialog(e) {
               i.jsx("button", {
                 type: "button",
                 className: "st-primary",
-                disabled: !(L != null && L.count) || !e.onSelectRanges || qe,
+                disabled: !L?.count || !e.onSelectRanges || qe,
                 onClick: Ee,
                 children: i.jsx(LocalizedText, { children: "Select cells" }),
               }),
@@ -1358,8 +1351,7 @@ function useSplitPaneSizes(e) {
       const p = {};
       for (const m of paneQuadrantNames) {
         const v = o.current[m];
-        v != null &&
-          v.clientWidth &&
+        v?.clientWidth &&
           v.clientHeight &&
           (p[m] = { width: v.clientWidth, height: v.clientHeight });
       }
@@ -1473,7 +1465,7 @@ function SplitPaneLayout(e) {
                       (p.preventDefault(), h(f, p.key === "Home" ? 20 : 80));
                 },
                 onPointerDown: (p) => {
-                  var v, g;
+                  var v;
                   if (e.readOnly || p.button !== 0) return;
                   (p.preventDefault(), p.currentTarget.focus(), l(""));
                   const m = {
@@ -1485,8 +1477,10 @@ function SplitPaneLayout(e) {
                   };
                   ((d.current = m),
                     s(m),
-                    (g = (v = p.currentTarget).setPointerCapture) == null ||
-                      g.call(v, p.pointerId));
+                    (v = p.currentTarget).setPointerCapture?.call(
+                      v,
+                      p.pointerId,
+                    ));
                 },
                 onPointerMove: (p) => {
                   const m = d.current,
@@ -1508,7 +1502,7 @@ function SplitPaneLayout(e) {
                   ((d.current = y), s(y));
                 },
                 onPointerUp: (p) => {
-                  var v, g;
+                  var v;
                   const m = d.current;
                   if (((d.current = null), s(null), !!m)) {
                     if (
@@ -1520,9 +1514,10 @@ function SplitPaneLayout(e) {
                       return;
                     }
                     (m.value !== m.split[f] && h(f, m.value),
-                      (g = (v = p.currentTarget).hasPointerCapture) != null &&
-                        g.call(v, p.pointerId) &&
-                        p.currentTarget.releasePointerCapture(p.pointerId));
+                      (v = p.currentTarget).hasPointerCapture?.call(
+                        v,
+                        p.pointerId,
+                      ) && p.currentTarget.releasePointerCapture(p.pointerId));
                   }
                 },
                 onPointerCancel: () => {
@@ -1549,10 +1544,9 @@ function SplitPaneLayout(e) {
 }
 
 function isWithinFormulaSuggestions(e, r) {
-  var n;
   if (!(r instanceof Node)) return false;
   const t = document.getElementById(e.getAttribute("aria-controls") ?? "");
-  return !!((n = t?.closest(".formula-suggestions")) != null && n.contains(r));
+  return !!t?.closest(".formula-suggestions")?.contains(r);
 }
 const FormulaSuggestionList = ne.forwardRef(function (
     {
@@ -1604,12 +1598,9 @@ const FormulaSuggestionList = ne.forwardRef(function (
         const I = inputRef.current;
         if (!I) return;
         const O = () => {
-            var V;
             y(
               document.activeElement === I ||
-                !!(
-                  (V = h.current) != null && V.contains(document.activeElement)
-                ),
+                !!h.current?.contains(document.activeElement),
             );
             const z = I.getBoundingClientRect();
             E({
@@ -1619,9 +1610,7 @@ const FormulaSuggestionList = ne.forwardRef(function (
             });
           },
           j = (z) => {
-            var V;
-            ((V = h.current) != null && V.contains(z.relatedTarget)) ||
-              y(false);
+            h.current?.contains(z.relatedTarget) || y(false);
           };
         return (
           O(),
@@ -1649,19 +1638,16 @@ const FormulaSuggestionList = ne.forwardRef(function (
           : j.top < z.top && (O.scrollTop -= z.top - j.top);
       }, [k, p, c]));
     const F = (I) => {
-      var z;
       const O = f.items[I];
       if (!O) return;
-      (z = inputRef.current) == null || z.focus({ preventScroll: true });
+      inputRef.current?.focus({ preventScroll: true });
       const j = applyFormulaCompletion(value, O);
       (onAccept(j.value, j.caret),
         m(-1),
         g(null),
         requestAnimationFrame(() => {
-          var V, D;
-          ((V = inputRef.current) == null || V.focus(),
-            (D = inputRef.current) == null ||
-              D.setSelectionRange(j.caret, j.caret));
+          (inputRef.current?.focus(),
+            inputRef.current?.setSelectionRange(j.caret, j.caret));
         }));
     };
     return (
@@ -1705,7 +1691,7 @@ const FormulaSuggestionList = ne.forwardRef(function (
               onBlur: (I) => {
                 I.currentTarget.contains(I.relatedTarget) ||
                   I.relatedTarget === inputRef.current ||
-                  (y(false), onExit == null || onExit());
+                  (y(false), onExit?.());
               },
               style: { position: "fixed", ...w },
               children: [
@@ -1811,12 +1797,11 @@ const FormulaSuggestionList = ne.forwardRef(function (
   clampNumber = (e, r, t) => Math.max(r, Math.min(t, e));
 function buildCellFontString(e) {
   const r = resolveEffectiveCellStyle(e?.style),
-    t = r != null && r.fontSize ? `${r.fontSize}pt` : "14px",
-    n =
-      r != null && r.fontFamily
-        ? JSON.stringify(r.fontFamily)
-        : "Calibri, Aptos, Arial, sans-serif";
-  return `${r != null && r.italic ? "italic" : "normal"} ${r != null && r.bold ? "700" : "400"} ${t} ${n}`;
+    t = r?.fontSize ? `${r.fontSize}pt` : "14px",
+    n = r?.fontFamily
+      ? JSON.stringify(r.fontFamily)
+      : "Calibri, Aptos, Arial, sans-serif";
+  return `${r?.italic ? "italic" : "normal"} ${r?.bold ? "700" : "400"} ${t} ${n}`;
 }
 function parseFontSizePx(e, r) {
   const t = r.match(/([\d.]+)(px|pt)/),

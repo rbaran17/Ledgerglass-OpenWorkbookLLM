@@ -7733,7 +7733,7 @@ function B0(e, t = {}, r, o) {
           )
             throw d("#NAME?");
           let Ee = A++,
-            fe = w[Ee] ?? (w[Ee] = X()),
+            fe = (w[Ee] ??= X()),
             ke = fe._callFunction;
           fe._callFunction = (z, J) =>
             z === Uf
@@ -7868,7 +7868,7 @@ function B0(e, t = {}, r, o) {
           (y.add(ue), x.set(ue, new Set()));
           let Le;
           try {
-            let Ke = k[rt] ?? (k[rt] = X()),
+            let Ke = (k[rt] ??= X()),
               Ct = ce
                 ? L(ne, $, W)
                 : Ke.parse(

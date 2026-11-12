@@ -27,7 +27,6 @@ import {
 } from "./39-report-outputs.js";
 
 function WhatIfAnalysisDialog(e) {
-  var ce;
   const { text, language, entryLocale } = useWorkbookMessages(),
     o = ne.useRef(entryLocale).current,
     a = o === "de-DE" || o === "fr-FR",
@@ -76,13 +75,11 @@ function WhatIfAnalysisDialog(e) {
       isWhatIfAnalysisInScope(e.workbook, ge, $),
     );
   (ne.useEffect(() => {
-    var we;
     const ge = document.activeElement;
     return (
-      (we = u.current?.querySelector('[data-ui-label="Analysis name"]')) ==
-        null || we.focus(),
+      u.current?.querySelector('[data-ui-label="Analysis name"]')?.focus(),
       () => {
-        ge != null && ge.isConnected && ge.focus();
+        ge?.isConnected && ge.focus();
       }
     );
   }, []),
@@ -861,10 +858,7 @@ function WhatIfAnalysisDialog(e) {
                             i.jsx("button", {
                               className: "gs-primary",
                               disabled:
-                                e.readOnly ||
-                                !!(
-                                  (ce = T.trials[Number(_)]) != null && ce.error
-                                ),
+                                e.readOnly || !!T.trials[Number(_)]?.error,
                               onClick: de,
                               children: i.jsx(LocalizedText, {
                                 children: "Apply selected scenario",
@@ -933,39 +927,37 @@ function DelimitedImportExportDialog({
     h = useOperationScope(),
     f = ne.useRef(0),
     p = ne.useRef(null),
-    [m, v] = ne.useState(() => {
-      return {
-        ...delimitedImportDefaults,
-        columns: {},
-        includeHeader: true,
-        bom: false,
-        quoteAll: false,
-        dateOutput: "calendar",
-        ...(u
-          ? {}
-          : {
-              delimiter: ",",
-              encoding: "utf-8",
-              newline: `\r
+    [m, v] = ne.useState(() => ({
+      ...delimitedImportDefaults,
+      columns: {},
+      includeHeader: true,
+      bom: false,
+      quoteAll: false,
+      dateOutput: "calendar",
+      ...(u
+        ? {}
+        : {
+            delimiter: ",",
+            encoding: "utf-8",
+            newline: `\r
 `,
-              range:
-                source.population?.range ??
-                getWorksheetUsedRange(source.snapshot, source.sheetId),
-              ...(source.population
-                ? {
-                    population: {
-                      definition: source.population,
-                      scope: "full",
-                    },
-                  }
-                : {}),
-              hasHeader: source.population
-                ? true
-                : (source.snapshot.sheets.find((U) => U.id === source.sheetId)
-                    ?.delimitedSource?.hasHeader ?? true),
-            }),
-      };
-    }),
+            range:
+              source.population?.range ??
+              getWorksheetUsedRange(source.snapshot, source.sheetId),
+            ...(source.population
+              ? {
+                  population: {
+                    definition: source.population,
+                    scope: "full",
+                  },
+                }
+              : {}),
+            hasHeader: source.population
+              ? true
+              : (source.snapshot.sheets.find((U) => U.id === source.sheetId)
+                  ?.delimitedSource?.hasHeader ?? true),
+          }),
+    })),
     g = (R) => {
       try {
         return {
@@ -991,18 +983,16 @@ function DelimitedImportExportDialog({
     z = b.result?.report,
     V = Math.max(1, Math.ceil((z?.columns ?? 1) / 20));
   function D(R, L) {
-    var $;
     (v((U) => ({ ...U, [R]: L })),
       k(true),
       f.current++,
-      ($ = p.current) == null || $.abort(),
+      p.current?.abort(),
       E(false),
       j(""));
   }
   async function B() {
-    var $;
     const R = ++f.current;
-    ($ = p.current) == null || $.abort();
+    p.current?.abort();
     const L = new AbortController();
     if (((p.current = L), u)) {
       E(true);
@@ -1030,19 +1020,17 @@ function DelimitedImportExportDialog({
     () => (
       u && !source.initial && B(),
       () => {
-        var R;
-        (f.current++, (R = p.current) == null || R.abort());
+        (f.current++, p.current?.abort());
       }
     ),
     [source],
   ),
     ne.useEffect(() => {
-      var L;
       const R = document.activeElement;
       return (
-        (L = c.current) == null || L.focus(),
+        c.current?.focus(),
         () => {
-          R != null && R.isConnected && R.focus();
+          R?.isConnected && R.focus();
         }
       );
     }, []));
@@ -1620,10 +1608,10 @@ function DelimitedImportExportDialog({
               }),
             }),
             i.jsx("button", {
-              disabled: A || w || !!blocked || !(z != null && z.valid),
+              disabled: A || w || !!blocked || !z?.valid,
               onClick: () => {
                 var R, L;
-                if (!(A || w || blocked || !(z != null && z.valid)))
+                if (!(A || w || blocked || !z?.valid))
                   try {
                     u
                       ? (R = b.result) != null &&

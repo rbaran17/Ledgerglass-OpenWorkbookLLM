@@ -188,7 +188,7 @@ function WorksheetGridRow({
                         : undefined,
                     className: `${ze ? "lg-cell-active" : ""} ${selectionBounds.some((lt) => Tp(lt, row, Te)) ? "lg-cell-selected" : ""} ${Je ? "lg-formula-cell" : ""} ${typeof $e == "string" && $e.startsWith("#") ? "lg-cell-error" : ""} ${frozenColumns.includes(Te) ? "lg-frozen-column" : ""}`,
                     style: at,
-                    title: `${Me}${je != null && je.note ? ` · ${je.note}` : ""}${Je ? ` · ${je.raw}` : ""}`,
+                    title: `${Me}${je?.note ? ` · ${je.note}` : ""}${Je ? ` · ${je.raw}` : ""}`,
                     onPointerDown: (lt) => {
                       lt.button !== 0 ||
                         editing !== null ||
@@ -248,7 +248,6 @@ function WorksheetGridRow({
                                   ) || saveCell(editing);
                                 },
                                 onKeyDown: (lt) => {
-                                  var be, ft;
                                   if (
                                     (lt.stopPropagation(),
                                     !lt.nativeEvent.isComposing)
@@ -257,16 +256,14 @@ function WorksheetGridRow({
                                       if (
                                         !formulaReference &&
                                         editing.length > 1 &&
-                                        (be = Ee.current) != null &&
-                                        be.handleKeyDown(lt)
+                                        Ee.current?.handleKeyDown(lt)
                                       )
                                         return;
                                       (lt.preventDefault(), onCancelEdit());
                                       return;
                                     }
                                     onFormulaKey(lt) ||
-                                      ((ft = Ee.current) != null &&
-                                        ft.handleKeyDown(lt)) ||
+                                      Ee.current?.handleKeyDown(lt) ||
                                       ((lt.key === "Enter" ||
                                         lt.key === "Tab") &&
                                         (lt.preventDefault(),
@@ -292,10 +289,8 @@ function WorksheetGridRow({
                                   (setEditing(lt),
                                     ye(be),
                                     requestAnimationFrame(() => {
-                                      var ft, pt;
-                                      ((ft = we.current) == null || ft.focus(),
-                                        (pt = we.current) == null ||
-                                          pt.setSelectionRange(be, be));
+                                      (we.current?.focus(),
+                                        we.current?.setSelectionRange(be, be));
                                     }));
                                 },
                               }),
@@ -374,7 +369,7 @@ function WorksheetGridRow({
                                 i.jsx("button", {
                                   className: "lg-comment-marker",
                                   style: {
-                                    right: je != null && je.note ? 8 : 0,
+                                    right: je?.note ? 8 : 0,
                                   },
                                   "aria-label": `Review comments at ${Me}`,
                                   title: text("Open review discussion"),

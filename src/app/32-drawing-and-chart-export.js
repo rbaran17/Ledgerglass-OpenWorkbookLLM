@@ -339,7 +339,6 @@ function ChartInspectionPanel({
   });
 }
 function PicturePropertiesDialog(e) {
-  var N;
   const { text, language } = useWorkbookMessages(),
     n = useCancellableOperation(),
     o = e.workbook.sheets
@@ -380,7 +379,7 @@ function PicturePropertiesDialog(e) {
       d.current.selection !== e.range ||
       u.current !== e.mode ||
       l.current !== e.objectId,
-    F = e.readOnly || k || !s || !!((N = s?.protection) != null && N.enabled),
+    F = e.readOnly || k || !s || !!s?.protection?.enabled,
     I = () => {
       const L = c.current;
       if (u.current !== L.mode || l.current !== L.objectId)
@@ -395,16 +394,15 @@ function PicturePropertiesDialog(e) {
       !F && !E && v(($) => ({ ...$, ...L }));
     };
   (ne.useEffect(() => {
-    var U;
     f.current = true;
     const L = document.activeElement;
     return (
-      (U = h.current?.querySelector("button")) == null || U.focus(),
+      h.current?.querySelector("button")?.focus(),
       () => {
         ((f.current = false),
           p.current++,
           n.cancel(),
-          L != null && L.isConnected && L.focus());
+          L?.isConnected && L.focus());
       }
     );
   }, []),
@@ -465,7 +463,6 @@ function PicturePropertiesDialog(e) {
     }
   }
   function z() {
-    var L;
     try {
       if ((I(), E)) return;
       const $ = c.current,
@@ -487,8 +484,7 @@ function PicturePropertiesDialog(e) {
               createPictureEvidence(m.dataURL, { origin: "legacy-native" })),
             sourceLocator: g || undefined,
           }),
-        e.objectId &&
-          !((L = U.objects) != null && L.some((X) => X.id === e.objectId)))
+        e.objectId && !U.objects?.some((X) => X.id === e.objectId))
       )
         throw Error("The drawing no longer exists.");
       const H = e.objectId
@@ -633,9 +629,7 @@ function PicturePropertiesDialog(e) {
                             accept: "image/png,image/jpeg",
                             "aria-label": text("Picture file"),
                             disabled: F || E,
-                            onChange: (L) => {
-                              return void j(L.target.files?.[0]);
-                            },
+                            onChange: (L) => void j(L.target.files?.[0]),
                             lang: language("Picture file"),
                             "data-ui-label": "Picture file",
                           }),
@@ -1006,12 +1000,11 @@ function DrawingObjectSvg({ object, sheet, calc, textScale = 1 }) {
       : i.jsx(ChartPreviewFrame, { object, sheet, calc });
 }
 function DrawingObjectOverlay(e) {
-  var y;
   const { text, language } = useWorkbookMessages(),
     n = e.workbook.sheets.find((E) => E.id === e.sheetId),
     o = ne.useRef(e);
   o.current = e;
-  const a = e.readOnly || !n || !!((y = n?.protection) != null && y.enabled),
+  const a = e.readOnly || !n || !!n?.protection?.enabled,
     [s, d] = ne.useState(null),
     [u, l] = ne.useState(""),
     [c, h] = ne.useState(null),
@@ -1019,11 +1012,10 @@ function DrawingObjectOverlay(e) {
     m = ne.useRef(null);
   m.current = f;
   function v(E, A, k) {
-    var F;
     try {
       const I = o.current,
         O = I.workbook.sheets.find((z) => z.id === I.sheetId);
-      if (!((F = O?.objects) != null && F.some((z) => z.id === E.id)))
+      if (!O?.objects?.some((z) => z.id === E.id))
         throw Error("The selected drawing no longer exists.");
       const j = setSheetDrawingObjects(
         I.workbook,
@@ -1448,25 +1440,20 @@ function PrintPagePreview({
                             const F =
                                 k?.anchor ??
                                 `${columnIndexToLetters(A)}${E + 1}`,
-                              I =
-                                k != null && k.suppressContent
-                                  ? undefined
-                                  : sheet.cells[F],
+                              I = k?.suppressContent
+                                ? undefined
+                                : sheet.cells[F],
                               O = {
                                 ...I,
                                 raw: I?.raw ?? null,
-                                style:
-                                  k != null && k.suppressContent
-                                    ? {}
-                                    : {
-                                        ...I?.style,
-                                        ...ruleStyles(F).style,
-                                      },
+                                style: k?.suppressContent
+                                  ? {}
+                                  : {
+                                      ...I?.style,
+                                      ...ruleStyles(F).style,
+                                    },
                               },
-                              j =
-                                k != null && k.suppressContent
-                                  ? null
-                                  : calc(sheet.id, F),
+                              j = k?.suppressContent ? null : calc(sheet.id, F),
                               z = b[g.get(k?.lastRow ?? E) + 1] - b[g.get(E)];
                             return i.jsx(
                               "td",
@@ -1495,10 +1482,9 @@ function PrintPagePreview({
                                     position: "relative",
                                   },
                                   children: i.jsx(ConditionalFormatIndicator, {
-                                    decoration:
-                                      k != null && k.suppressContent
-                                        ? undefined
-                                        : ruleStyles(F),
+                                    decoration: k?.suppressContent
+                                      ? undefined
+                                      : ruleStyles(F),
                                     children: i.jsx(CellValuePreview, {
                                       value: j,
                                       cell: O,
@@ -1679,7 +1665,6 @@ function boundsOverlap(e, r, t = 0.8) {
   );
 }
 function measureRenderedTextBounds(e) {
-  var s;
   if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1)
     return true;
   const r = e.ownerDocument,
@@ -1688,7 +1673,7 @@ function measureRenderedTextBounds(e) {
     o = r.createRange();
   let a;
   for (; (a = n.nextNode());)
-    if ((s = a.textContent) != null && s.trim()) {
+    if (a.textContent?.trim()) {
       o.selectNodeContents(a);
       for (const d of o.getClientRects()) if (boundsOverlap(d, t)) return true;
     }
@@ -1706,7 +1691,6 @@ function measurePrintLayoutIssues(e) {
   let n = false;
   return (
     r.forEach((o, a) => {
-      var f, p;
       const s = a + 1,
         d = o.getBoundingClientRect(),
         u = o.querySelector(".dg-print-content"),
@@ -1730,7 +1714,7 @@ function measurePrintLayoutIssues(e) {
         });
       for (const m of ["header", "footer"]) {
         const v = o.querySelector(`.dg-print-${m}`);
-        if (!((f = v?.textContent) != null && f.trim())) continue;
+        if (!v?.textContent?.trim()) continue;
         const g = v.getBoundingClientRect();
         (boundsOverlap(g, d) ||
           measureRenderedTextBounds(v) ||
@@ -1745,7 +1729,7 @@ function measurePrintLayoutIssues(e) {
       const h = [];
       for (const m of o.querySelectorAll("[data-print-cell]")) {
         const v = m.firstElementChild;
-        if (!((p = v?.textContent) != null && p.trim())) continue;
+        if (!v?.textContent?.trim()) continue;
         m.dataset.printInArea !== "false" && (n = true);
         const g = m.dataset.printCell,
           b = m.dataset.printNumber === "true";
@@ -1828,8 +1812,7 @@ function summarizePrintIssues(e) {
 async function waitForPrintAssets(e, r = {}) {
   const t = e.ownerDocument ?? e,
     { signal, timeoutMs = 1e4 } = r;
-  if (signal != null && signal.aborted)
-    throw Error("Print preparation was cancelled.");
+  if (signal?.aborted) throw Error("Print preparation was cancelled.");
   const a = [];
   try {
     const d = Promise.all([
@@ -1877,10 +1860,9 @@ async function waitForPrintAssets(e, r = {}) {
             timeoutMs,
           ),
           h = () => l(Error("Print preparation was cancelled."));
-        (signal == null || signal.addEventListener("abort", h, { once: true }),
+        (signal?.addEventListener("abort", h, { once: true }),
           a.push(() => {
-            (clearTimeout(c),
-              signal == null || signal.removeEventListener("abort", h));
+            (clearTimeout(c), signal?.removeEventListener("abort", h));
           }));
       }),
     ]);
@@ -1915,21 +1897,16 @@ function buildScheduleFileName(e, r) {
   }.pdf`;
 }
 async function renderSchedulePdf(e, r, t) {
-  var p, m, v, g;
   const n = () => {
-      var b;
-      if ((b = t.signal) != null && b.aborted)
-        throw Error("PDF creation was cancelled.");
+      if (t.signal?.aborted) throw Error("PDF creation was cancelled.");
       t.assertCurrent();
     },
     o = async (b) => {
-      var E;
       let y, w;
       try {
         return await Promise.race([
           b,
           new Promise((A, k) => {
-            var F, I;
             ((y = setTimeout(
               () =>
                 k(
@@ -1940,14 +1917,12 @@ async function renderSchedulePdf(e, r, t) {
               pdfRenderLimits.pageTimeoutMs,
             )),
               (w = () => k(Error("PDF creation was cancelled."))),
-              (F = t.signal) == null ||
-                F.addEventListener("abort", w, { once: true }),
-              (I = t.signal) != null && I.aborted && w());
+              t.signal?.addEventListener("abort", w, { once: true }),
+              t.signal?.aborted && w());
           }),
         ]);
       } finally {
-        (clearTimeout(y),
-          w && ((E = t.signal) == null || E.removeEventListener("abort", w)));
+        (clearTimeout(y), w && t.signal?.removeEventListener("abort", w));
       }
     };
   if ((n(), typeof document > "u"))
@@ -1969,7 +1944,6 @@ async function renderSchedulePdf(e, r, t) {
   const c = [];
   try {
     await new Promise((F, I) => {
-      var z;
       const O = () => I(Error("PDF creation was cancelled.")),
         j = setTimeout(
           () =>
@@ -1982,12 +1956,10 @@ async function renderSchedulePdf(e, r, t) {
         );
       ((l.onload = () => F()),
         (l.onerror = () => I(Error("The PDF rendering frame could not load."))),
-        (z = t.signal) == null ||
-          z.addEventListener("abort", O, { once: true }),
+        t.signal?.addEventListener("abort", O, { once: true }),
         c.push(() => {
-          var V;
           (clearTimeout(j),
-            (V = t.signal) == null || V.removeEventListener("abort", O),
+            t.signal?.removeEventListener("abort", O),
             (l.onload = null),
             (l.onerror = null));
         }),
@@ -2022,10 +1994,9 @@ async function renderSchedulePdf(e, r, t) {
       E.setCreator("Ledgerglass schedule PDF"),
       E.setProducer("Ledgerglass / pdf-lib"));
     let A = 0;
-    (p = t.onProgress) == null || p.call(t, 0, w.length);
+    t.onProgress?.(0, w.length);
     for (let F = 0; F < w.length; F++) {
-      if ((m = t.signal) != null && m.aborted)
-        throw Error("PDF creation was cancelled.");
+      if (t.signal?.aborted) throw Error("PDF creation was cancelled.");
       const I = await o(
         toCanvas(w[F], {
           width: u.width,
@@ -2038,8 +2009,7 @@ async function renderSchedulePdf(e, r, t) {
         }),
       );
       try {
-        if ((v = t.signal) != null && v.aborted)
-          throw Error("PDF creation was cancelled.");
+        if (t.signal?.aborted) throw Error("PDF creation was cancelled.");
         if (
           I.width !== Math.floor(u.width * 2) ||
           I.height !== Math.floor(u.height * 2)
@@ -2071,7 +2041,7 @@ async function renderSchedulePdf(e, r, t) {
       } finally {
         ((I.width = 0), (I.height = 0));
       }
-      (g = t.onProgress) == null || g.call(t, F + 1, w.length);
+      t.onProgress?.(F + 1, w.length);
     }
     n();
     const k = await E.save();

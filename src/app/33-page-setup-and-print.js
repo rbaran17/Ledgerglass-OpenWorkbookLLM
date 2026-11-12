@@ -38,7 +38,6 @@ import {
 } from "./32-drawing-and-chart-export.js";
 
 function PageSetupDialog(e) {
-  var X$1, q;
   const { text, language } = useWorkbookMessages(),
     n = ne.useRef(e);
   n.current = e;
@@ -55,12 +54,7 @@ function PageSetupDialog(e) {
     },
     [m],
   ),
-    ne.useEffect(
-      () => () => {
-        return a.current?.abort();
-      },
-      [],
-    ));
+    ne.useEffect(() => () => a.current?.abort(), []));
   const [g] = ne.useState(() => ({
       snapshot: buildSnapshotGuard(e.workbook),
       sheetId: e.sheetId,
@@ -94,16 +88,12 @@ function PageSetupDialog(e) {
     ),
     [A, k] = ne.useState(""),
     [F, I] = ne.useState("office"),
-    [O, j] = ne.useState(() => {
-      return (b.pageLayout?.rowBreaks ?? [])
-        .map((K) => String(K + 1))
-        .join(", ");
-    }),
-    [z, V] = ne.useState(() => {
-      return (b.pageLayout?.columnBreaks ?? [])
-        .map(columnIndexToLetters)
-        .join(", ");
-    });
+    [O, j] = ne.useState(() =>
+      (b.pageLayout?.rowBreaks ?? []).map((K) => String(K + 1)).join(", "),
+    ),
+    [z, V] = ne.useState(() =>
+      (b.pageLayout?.columnBreaks ?? []).map(columnIndexToLetters).join(", "),
+    );
   function D() {
     const W = (K, te) => {
       if (!K.trim()) return;
@@ -307,8 +297,7 @@ function PageSetupDialog(e) {
     }
   }
   function Q() {
-    var W;
-    ((W = a.current) == null || W.abort(), e.onClose());
+    (a.current?.abort(), e.onClose());
   }
   return i.jsx("div", {
     className: "dg-backdrop",
@@ -789,7 +778,7 @@ function PageSetupDialog(e) {
                           "Replaces the header and footer with workbook name, engagement, period, revision and page numbers. Fields: &[Workbook], &[Engagement], &[Period], &[Revision]. Missing properties display a “not set” label. Values come from this workbook; revision is local history, not an approval or certification.",
                       }),
                     }),
-                    !!((X$1 = b.merges) != null && X$1.length) &&
+                    !!b.merges?.length &&
                       i.jsx("p", {
                         className: "dg-muted",
                         children: i.jsx(LocalizedText, {
@@ -1012,7 +1001,7 @@ function PageSetupDialog(e) {
                 e.readOnly ||
                 c ||
                 u ||
-                !!((q = b.protection) != null && q.enabled) ||
+                !!b.protection?.enabled ||
                 (!B && !!C.error),
               children: B ? "Apply theme" : "Save page setup",
             }),
@@ -1300,16 +1289,15 @@ function getFormulaCompletions(e, r, t, n) {
   const d = listInstalledExtensionFunctions(t),
     u = s.at(-1),
     l = d.find((I) => I.name === u?.name),
-    c =
-      u != null && u.name
-        ? [
-            ...(t.definedNames ?? []).filter((I) => I.scopeSheetId === n),
-            ...(t.definedNames ?? []).filter((I) => !I.scopeSheetId),
-          ].find((I) => I.name.toUpperCase() === u.name)
-        : undefined,
+    c = u?.name
+      ? [
+          ...(t.definedNames ?? []).filter((I) => I.scopeSheetId === n),
+          ...(t.definedNames ?? []).filter((I) => !I.scopeSheetId),
+        ].find((I) => I.name.toUpperCase() === u.name)
+      : undefined,
     h = c ? parseFormulaTree(c.refersTo) : undefined,
     f =
-      u != null && u.name && (builtinFunctionNames.includes(u.name) || h || l)
+      u?.name && (builtinFunctionNames.includes(u.name) || h || l)
         ? {
             ...u,
             signature:
