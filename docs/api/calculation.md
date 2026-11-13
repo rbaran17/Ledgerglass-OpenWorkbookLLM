@@ -45,7 +45,7 @@ export function withCalculationSettings(
 ): Workbook;
 ```
 
-Returns a new workbook object whose `calculation` field holds the normalized settings. The new object shares its `sheets` array with the argument, and the argument is not changed. The revision is not changed. Throws when the settings are invalid.
+Returns a new workbook object whose `calculation` field holds the normalized settings. The new object shares its `sheets` array with the argument, and the argument is not changed. The returned workbook's `revision` is one higher and its `events` gets one new event, `Change calculation settings`, with an empty change list. Throws when the settings are invalid.
 
 ```js
 import {

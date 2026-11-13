@@ -32,8 +32,8 @@ let workbook = createBlankWorkbook("Budget");
 workbook = renameWorksheet(workbook, workbook.sheets[0].id, "Budget");
 const budget = workbook.sheets[0];
 
-// Cell edits go through applyCellPatchTransaction. It is the only function that
-// records an event and increases `revision`, so it is the right way to edit cells.
+// Cell edits go through applyCellPatchTransaction. It lists each changed cell in
+// the event it records and increases `revision`, so it is the right way to edit cells.
 // Each patch sets one cell; a value starting with "=" is a formula.
 workbook = applyCellPatchTransaction(
   workbook,
@@ -72,8 +72,8 @@ workbook = applyCellPatchTransaction(
   "Add note",
 );
 
-// Keep the header row visible while scrolling. Freezing one row is a pane
-// setting, so it does not add an event to the workbook.
+// Keep the header row visible while scrolling. Freezing one row is an edit like
+// any other: it adds an event with an empty change list and increases `revision`.
 workbook = setFreezePanes(workbook, budget.id, 1);
 
 // calculateWorkbookValues returns the result of every filled cell, keyed by sheet name.

@@ -1,9 +1,9 @@
 // Creates a worksheet table over a range, adds a data validation rule to one
 // of its columns, and checks a valid and an invalid value against the rule.
 //
-// The table and the rule are added with the functions in docs/api/tables.md and
-// docs/api/rules.md. Neither changes the revision or the event log, which is
-// why the rule is stored directly on the sheet, as the rules page shows.
+// The table is added with a function from docs/api/tables.md, which records an event.
+// The validation rule is stored directly on the sheet, as docs/api/rules.md shows: the
+// SDK has no function that adds a rule, so that write is not recorded in the event log.
 //
 // Run from the repository root:
 //   node examples/node-scripts/04-tables-and-validation.mjs

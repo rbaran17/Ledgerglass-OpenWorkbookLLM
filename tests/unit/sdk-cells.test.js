@@ -463,14 +463,21 @@ describe("applyBorderEditTransaction", () => {
     expect(next.sheets[0].cells.A1).toEqual({ raw: 10, style: { bold: true } });
   });
 
-  test("the argument is not changed, and the revision and history stay as they were", () => {
+  test("the argument is not changed, and the result has one more revision and one new event", () => {
     const workbook = sheetWith({ A1: { raw: 10 } });
     const next = applyBorderEditTransaction(workbook, idOf(workbook), "A1", {
       italic: true,
     });
     expect(workbook.sheets[0].cells.A1).toEqual({ raw: 10 });
-    expect(next.revision).toBe(workbook.revision);
-    expect(next.events).toHaveLength(workbook.events.length);
+    expect(workbook.revision).toBe(0);
+    expect(workbook.events).toEqual([]);
+    expect(next.revision).toBe(workbook.revision + 1);
+    expect(next.events).toHaveLength(workbook.events.length + 1);
+    expect(next.events.at(-1)).toMatchObject({
+      action: "Apply border edit transaction",
+      actor: "Preparer",
+      changes: [],
+    });
   });
 
   test("a second identical edit returns the same workbook object", () => {
@@ -613,14 +620,19 @@ describe("setCellHyperlink", () => {
     ).toThrow("This workbook is read-only.");
   });
 
-  test("the returned workbook keeps the revision and history", () => {
+  test("the returned workbook has one more revision and a new Set cell hyperlink event", () => {
     const workbook = sheetWith({});
     const next = setCellHyperlink(workbook, idOf(workbook), "A1", {
       kind: "external",
       url: "https://example.com",
     });
-    expect(next.revision).toBe(workbook.revision);
-    expect(next.events).toHaveLength(workbook.events.length);
+    expect(next.revision).toBe(workbook.revision + 1);
+    expect(next.events).toHaveLength(workbook.events.length + 1);
+    expect(next.events.at(-1)).toMatchObject({
+      action: "Set cell hyperlink",
+      actor: "Preparer",
+      changes: [],
+    });
   });
 });
 
@@ -850,14 +862,21 @@ describe("applyNumberFormatTransaction", () => {
     ).toBe(first);
   });
 
-  test("the argument is not changed, and the revision and history stay as they were", () => {
+  test("the argument is not changed, and the result has one more revision and one new event", () => {
     const workbook = sheetWith({ A1: { raw: 1 } });
     const next = applyNumberFormatTransaction(workbook, idOf(workbook), "A1", {
       category: "number",
     });
     expect(workbook.sheets[0].cells.A1).toEqual({ raw: 1 });
-    expect(next.revision).toBe(workbook.revision);
-    expect(next.events).toHaveLength(workbook.events.length);
+    expect(workbook.revision).toBe(0);
+    expect(workbook.events).toEqual([]);
+    expect(next.revision).toBe(workbook.revision + 1);
+    expect(next.events).toHaveLength(workbook.events.length + 1);
+    expect(next.events.at(-1)).toMatchObject({
+      action: "Apply number format transaction",
+      actor: "Preparer",
+      changes: [],
+    });
   });
 
   test("throws for invalid settings, a read-only workbook, and a selection over 500 cells", () => {

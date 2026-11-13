@@ -261,7 +261,7 @@ export function cellStyleToCss(
 
 /**
  * Merges a style into the cells of a selection and returns a new workbook, leaving the argument unchanged.
- * The returned workbook keeps the original revision and event history, so the change is not recorded in the history.
+ * The returned workbook's revision is one higher, and its events has one new event, "Apply border edit transaction", with an empty change list.
  * A string is one area, so pass an array for several. Throws if the workbook is read-only, the sheet is protected, the selection has more than 500 cells, or it touches a merged area.
  */
 export function applyBorderEditTransaction(
@@ -274,7 +274,7 @@ export function applyBorderEditTransaction(
 
 /**
  * Sets or removes the hyperlink of one cell and returns a new workbook. Pass null to remove the link.
- * The returned workbook keeps the original revision and event history, so the change is not recorded in the history.
+ * The returned workbook's revision is one higher, and its events has one new event, "Set cell hyperlink", with an empty change list.
  * Throws if the link is invalid, the target sheet is missing, the workbook is read-only, or the cell is inside a merged area and is not its first cell.
  */
 export function setCellHyperlink(
@@ -305,7 +305,7 @@ export function formatCellValueWithNumberFormat(
 
 /**
  * Applies a number format to every cell of a selection and returns a new workbook, leaving the argument unchanged.
- * The returned workbook keeps the original revision and event history, so the change is not recorded in the history.
+ * The returned workbook's revision is one higher, and its events has one new event, "Apply number format transaction", with an empty change list.
  * A string is one area, so pass an array for several. Throws if the settings are invalid, the workbook is read-only, the sheet is protected, or the selection has more than 500 cells.
  */
 export function applyNumberFormatTransaction(

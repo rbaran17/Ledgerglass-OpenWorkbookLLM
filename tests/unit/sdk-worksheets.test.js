@@ -50,14 +50,21 @@ function valueOf(workbook, sheetId, address) {
 }
 
 describe("addWorksheet", () => {
-  test("appends a sheet and leaves the original workbook unchanged", () => {
+  test("appends a sheet, records one event, and leaves the original workbook unchanged", () => {
     const original = createBlankWorkbook("Budget");
     const next = addWorksheet(original, "Data");
     expect(next.sheets.map((sheet) => sheet.name)).toEqual(["Sheet1", "Data"]);
     expect(original.sheets).toHaveLength(1);
+    expect(original.revision).toBe(0);
+    expect(original.events).toEqual([]);
     expect(next.sheets[1].rowCount).toBe(original.sheets[0].rowCount);
-    expect(next.revision).toBe(original.revision);
-    expect(next.events).toEqual([]);
+    expect(next.revision).toBe(original.revision + 1);
+    expect(next.events).toHaveLength(1);
+    expect(next.events[0]).toMatchObject({
+      action: "Add worksheet",
+      actor: "Preparer",
+      changes: [],
+    });
   });
 
   test("throws for a duplicate name ignoring case and for an invalid name", () => {

@@ -43,6 +43,9 @@ export * from "./sdk/rules.js";
 export * from "./sdk/tables.js";
 export * from "./sdk/worksheets.js";
 
+/** Recording of edits: see docs/api/README.md, "Edits are recorded". */
+export { createActorEdits, recordWorkbookChange } from "./sdk/recording.js";
+
 /** Assistant protocol: the approved-selection context and the checks applied to proposals. */
 export {
   buildAssistantSelectionContext,
