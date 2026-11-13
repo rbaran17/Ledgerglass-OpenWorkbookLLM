@@ -13,6 +13,13 @@ export { WorkbookSyncBoundary as AuditWorkbook } from "./app/56-main-worksheet-e
 /** Assistant adapters: the built-in local demonstration and one that calls your server. */
 export { Vj as localDemoAdapter } from "./app/55-external-source-refresh.js";
 export { createHttpAdapter } from "./integrations/http-adapter.js";
+/** An assistant adapter that talks to an AG-UI agent; see docs/AGENT-UI.md. */
+export {
+  PROPOSE_WORKBOOK_CHANGES_TOOL_NAME,
+  createAgUiAdapter,
+  proposeWorkbookChangesTool,
+  runAgUiAgent,
+} from "./integrations/ag-ui-adapter.js";
 
 /**
  * External data sources: the adapter for the editor's `externalSourceAdapter` prop, which talks
