@@ -65,6 +65,13 @@ const selectionContextDescription =
   "sheetName, range and cells (address, raw content, calculated value). This is everything you " +
   "can see. Only these cells may be cited or changed.";
 
+function hashText(text) {
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index++)
+    hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
+  return (hash >>> 0).toString(36);
+}
+
 function newId() {
   return globalThis.crypto.randomUUID();
 }
@@ -197,31 +204,41 @@ export function createAgUiAdapter({
 } = {}) {
   if (typeof url !== "string" || !url)
     throw new TypeError("createAgUiAdapter needs a url.");
-  // One AG-UI thread per adapter, so an agent that keeps state per thread sees one conversation.
-  const threadId = newId();
+  // One AG-UI thread per conversation, so an agent that keeps state per thread sees it as one.
+  // A run that arrives with no earlier messages starts a new conversation, and a new thread.
+  let threadId = newId();
+  let started = false;
 
   return {
     name,
     ...(chat ? { chat: { history: true, attachments: false } } : {}),
     async propose(prompt, context, signal, request) {
-      const history = (chat ? (request?.messages ?? []) : [])
-        .filter(
-          (message) =>
-            (message.role === "user" || message.role === "assistant") &&
-            typeof message.text === "string" &&
-            message.text,
-        )
-        .map((message) => ({
-          id: message.id ?? newId(),
+      const earlier = (chat ? (request?.messages ?? []) : []).filter(
+        (message) =>
+          (message.role === "user" || message.role === "assistant") &&
+          typeof message.text === "string" &&
+          message.text,
+      );
+      if (earlier.length === 0 && started) threadId = newId();
+      started = true;
+      // A message keeps the same id on every run that carries it (its place and content decide
+      // the id), so an agent that remembers a thread can tell which messages it has seen.
+      const turns = [
+        ...earlier.map((message) => ({
           role: message.role,
           content: message.text,
-        }));
+        })),
+        { role: "user", content: prompt },
+      ].map((message, index) => ({
+        id: `${threadId}:${index}:${hashText(`${message.role}\n${message.content}`)}`,
+        ...message,
+      }));
       const input = {
         protocolVersion: "1.0",
         threadId,
         runId: newId(),
         state: {},
-        messages: [...history, { id: newId(), role: "user", content: prompt }],
+        messages: turns,
         tools: [proposeWorkbookChangesTool],
         context: [
           {

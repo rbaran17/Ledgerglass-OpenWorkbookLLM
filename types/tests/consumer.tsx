@@ -6,6 +6,7 @@ import {
   AuditWorkbook,
   applyCellPatchTransaction,
   buildAssistantSelectionContext,
+  createAgUiAdapter,
   createBlankWorkbook,
   createHttpAdapter,
   getWorkbookCalculation,
@@ -87,6 +88,15 @@ export const element = (
   />
 );
 
+// An AG-UI agent as the assistant: the same adapter prop, with a url instead of an endpoint.
+const agUiAdapter: AssistantAdapter = createAgUiAdapter({
+  url: "/agent",
+  name: "AG-UI agent",
+});
+export const agUiElement = (
+  <AuditWorkbook initialWorkbook={edited} adapter={agUiAdapter} />
+);
+
 const queue: AssistantProposal[] = [];
 export const server = createWorkbookMcpServer({
   getWorkbook: () => edited,
@@ -99,6 +109,8 @@ void checked;
 applyCellPatchTransaction(workbook, [{ sheetId: sheet.id, address: "A1" }]);
 // @ts-expect-error an adapter needs an endpoint
 createHttpAdapter({});
+// @ts-expect-error an AG-UI adapter needs a url
+createAgUiAdapter({});
 // @ts-expect-error the host must supply a proposal queue
 createWorkbookMcpServer({
   getWorkbook: () => edited,

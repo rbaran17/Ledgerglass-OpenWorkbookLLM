@@ -71,6 +71,8 @@ const adapter = {
 };
 ```
 
+`createAgUiAdapter({ url })` is a ready-made adapter for an AG-UI 1.0 agent: it runs the agent for each request and turns the agent's `propose_workbook_changes` tool call into the proposal. See [the agent guide](AGENT-UI.md), section 6.
+
 The editor validates whatever comes back against the approved selection and current revision before showing it for review. `createHttpAdapter` covers the common case of asking your own server:
 
 ```js
