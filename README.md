@@ -6,11 +6,12 @@
 [![Live demo](https://img.shields.io/badge/live%20demo-open-4f46e5)](https://rbaran17.github.io/Ledgerglass/?demo)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Ledgerglass is a React spreadsheet with an Excel-style ribbon, formula bar, grid and sheet tabs, and 395 worksheet functions calculated in the browser. Use it three ways:
+Ledgerglass is a React spreadsheet with an Excel-style ribbon, formula bar, grid and sheet tabs, and 395 worksheet functions calculated in the browser. Use it four ways:
 
 - **Run it** as a standalone application: one HTML file, a static site, or a Docker container.
-- **Embed it** in your own React application as a component.
-- **Connect it to an LLM**: an assistant that proposes changes for review, an MCP server for one approved selection, and AG-UI / A2UI support so an agent can show a workbook itself.
+- **Embed it** in your own React application as a component, or use its model as a library in Node: 169 documented exports.
+- **Connect it to an LLM**: an assistant that proposes changes for review (on your own endpoint or an AG-UI agent), an MCP server for one approved selection, and AG-UI / A2UI support so an agent can show a workbook itself.
+- **Connect it to your data**: a server-side gateway that offers approved sources (files, JSON APIs, OData, SQLite, your own database driver) to the workbook.
 
 **[Open the live demo](https://rbaran17.github.io/Ledgerglass/?demo)** (a synthetic audit workbook; nothing leaves your browser), or download [`Ledgerglass.html`](Ledgerglass.html), a single self-contained file, and open it in a desktop browser with `?demo` added to the address. The AI assistant needs a connected provider (see [AI assistant and MCP](#ai-assistant-and-mcp)).
 
@@ -22,7 +23,7 @@ application (<code>?embedded</code>).</sub>
 
 > **Scope:** this is a substantial working implementation with documented limits, not full Microsoft Excel parity. Acceptance applies to the documented local scope; production, external-provider and independent accessibility acceptance remain separate.
 
-> **Project status:** the original TypeScript source, SDK build, examples and most reference documents are not available. `src/` was recovered from the compiled application and reorganised into named modules; third-party libraries are imported from `node_modules`. The repository includes unit tests and browser checks. See [`src/README.md`](src/README.md) for the layout. Commands that run today include `npm run dev`, `npm run build`, `npm run build:portable`, `npm run build:container`, `npm start`, `npm run mcp`, `npm test` and `npm run test:e2e`.
+> **Project status:** the original TypeScript source, SDK and reference documents were lost. `src/` was recovered from the compiled application and reorganised into named modules, with third-party libraries imported from `node_modules`; function and variable names were assigned afterwards from evidence in the code. The SDK, examples, MCP server and data-source gateway were rebuilt on that recovered code, and the repository now has unit tests, browser checks and examples that run in CI. See [`src/README.md`](src/README.md) for what recovered code is and is not.
 
 ## Screenshots
 
@@ -40,12 +41,16 @@ application (<code>?embedded</code>).</sub>
     <td></td>
   </tr>
   <tr>
+    <td><img src="docs/assets/data-sources.png" alt="Connections and Refresh dialog previewing four invoice records with a control total"><br><sub><b>External data:</b> a source your server approves, previewed with row counts and control totals before it is loaded</sub></td>
+    <td><img src="docs/assets/assistant-proposal.png" alt="Assistant panel showing a proposed SUM formula with citations and an Apply button"><br><sub><b>Assistant on an agent:</b> an AG-UI agent's proposal, with citations, waiting for review</sub></td>
+  </tr>
+  <tr>
     <td><img src="docs/assets/agent-ag-ui.png" alt="A chat in which an agent's render_workbook tool call shows a budget workbook with live formulas"><br><sub><b>Agent-rendered (AG-UI):</b> the agent calls the <code>render_workbook</code> tool and the host shows the editor</sub></td>
     <td><img src="docs/assets/agent-a2ui.png" alt="An A2UI surface with a text heading and a Workbook component showing a budget"><br><sub><b>Agent-rendered (A2UI):</b> the agent places a <code>Workbook</code> component on a surface; edits flow back to its data</sub></td>
   </tr>
 </table>
 
-<sub>The two agent screenshots come from a demo host that uses the official AG-UI client and A2UI React renderer with a scripted stand-in agent, not a live model. See [Showing a workbook from an agent](docs/AGENT-UI.md).</sub>
+<sub>The agent and assistant screenshots come from example hosts with a scripted stand-in agent, not a live model; the two agent-rendered ones use the official AG-UI client and A2UI React renderer. See [Showing a workbook from an agent](docs/AGENT-UI.md).</sub>
 
 ## Contents
 
@@ -114,27 +119,29 @@ The prebuilt `dist/` and `Ledgerglass.html` are committed so the application can
 
 The links below document supported behavior and its boundaries; a feature family does not imply every feature of the equivalent Microsoft product.
 
-| Area                     | Delivered capability                                                                                                                                                                                      |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workbook lifecycle       | Create/open/save, sheet management, protection, revisions, undo/redo, recovery and concurrent-instance conflict handling                                                                                  |
-| Familiar editing         | Keyboard navigation, multi-area selections, formula range selection, autocomplete after `=`, copy/cut/paste, fill, find/replace, freeze/split panes, outlines and row/column AutoFit                      |
-| Formulas                 | 395 catalogued local function names; arithmetic, logic, lookup, text, date/calendar, financial, statistical/database families, dynamic arrays, names and reusable formulas within declared limits         |
-| Calculation review       | Recalculation controls, dependency/error inspection, watches, evaluation steps, precision/date-system policies and bounded worker execution                                                               |
-| Formatting and layout    | Cell/number styles, themes, conditional formatting, merges, pictures/shapes, page setup, print areas/titles, print preview and schedule PDF export                                                        |
-| Tables and preparation   | Structured tables, calculated columns, safe sorting/filtering, saved views, validation, text cleanup/extraction, duplicate review, append/join and repeatable transformation recipes                      |
-| Connections              | Registered external sources, reviewed single-source refresh and atomic Refresh All; server-side JSON/OData, SQLite, CSV/TSV folder and ODBC-compatible adapter contracts                                  |
-| Models and analysis      | Relational models, a documented 20-function DAX subset, PivotTables, pivot filtering/drill-through, charts/sparklines, consolidation/subtotals, scenarios, Goal Seek and bounded Solver/statistical tools |
-| Interoperability         | Native workbook JSON, XLSX, delimited files, supported structured sources, original-source retention, explicit export-loss reports and host adapters for alternate formats/document extraction            |
-| Links and extensions     | Reviewed external-workbook snapshots, versioned custom-function/add-in adapters, reusable report outputs and bounded automation translation with inert unsupported source retention                       |
-| Audit extensions         | Notes/tickmarks, evidence links, comparisons, aging/materiality screens, sampling and duplicate/gap/unusual-pattern checks; retained alongside base spreadsheet functionality                             |
-| Assistant                | Chat built with assistant-ui, file staging/previews, history, Stop/Retry/Regenerate/Copy, selected-cell citations and explicit before/after proposal review                                               |
-| LLM interoperability     | Local deterministic demo, provider-neutral HTTP/custom adapters and nine scoped MCP tools; proposals require human approval before cell changes                                                           |
-| Collaboration            | Host-authorized shared editing contracts, conflict review, presence, discussions and offline recovery; production authority/storage/transport are host responsibilities                                   |
-| Embedding and operations | Iframe embedding of the served application, browser/Node calculation integrations, parser workers, localization interfaces, diagnostics, stateless web container, Compose and Kubernetes templates        |
+| Area                     | Delivered capability                                                                                                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Workbook lifecycle       | Create/open/save, sheet management, protection, revisions, undo/redo, recovery and concurrent-instance conflict handling                                                                                                 |
+| Familiar editing         | Keyboard navigation, multi-area selections, formula range selection, autocomplete after `=`, copy/cut/paste, fill, find/replace, freeze/split panes, outlines and row/column AutoFit                                     |
+| Formulas                 | 395 catalogued local function names; arithmetic, logic, lookup, text, date/calendar, financial, statistical/database families, dynamic arrays, names and reusable formulas within declared limits                        |
+| Calculation review       | Recalculation controls, dependency/error inspection, watches, evaluation steps, precision/date-system policies and bounded worker execution                                                                              |
+| Formatting and layout    | Cell/number styles, themes, conditional formatting, merges, pictures/shapes, page setup, print areas/titles, print preview and schedule PDF export                                                                       |
+| Tables and preparation   | Structured tables, calculated columns, safe sorting/filtering, saved views, validation, text cleanup/extraction, duplicate review, append/join and repeatable transformation recipes                                     |
+| Connections              | Registered external sources, reviewed single-source refresh and atomic Refresh All; a server-side gateway with JSON API, OData, SQLite and delimited-file connectors, and a query connector for your own database driver |
+| Models and analysis      | Relational models, a documented 20-function DAX subset, PivotTables, pivot filtering/drill-through, charts/sparklines, consolidation/subtotals, scenarios, Goal Seek and bounded Solver/statistical tools                |
+| Interoperability         | Native workbook JSON, XLSX, delimited files, supported structured sources, original-source retention, explicit export-loss reports and host adapters for alternate formats/document extraction                           |
+| Links and extensions     | Reviewed external-workbook snapshots, versioned custom-function/add-in adapters, reusable report outputs and bounded automation translation with inert unsupported source retention                                      |
+| Audit extensions         | Notes/tickmarks, evidence links, comparisons, aging/materiality screens, sampling and duplicate/gap/unusual-pattern checks; retained alongside base spreadsheet functionality                                            |
+| Assistant                | Chat built with assistant-ui, file staging/previews, history, Stop/Retry/Regenerate/Copy, selected-cell citations and explicit before/after proposal review                                                              |
+| LLM interoperability     | Local deterministic demo, provider-neutral HTTP, AG-UI and custom adapters, nine scoped MCP tools, and agent-rendered workbooks (AG-UI tool, A2UI component); proposals require human approval before cell changes       |
+| Collaboration            | Host-authorized shared editing contracts, conflict review, presence, discussions and offline recovery; production authority/storage/transport are host responsibilities                                                  |
+| Embedding and operations | React component and SDK (169 exports), a Node entry point, iframe embedding of the served application, parser workers, localization interfaces, diagnostics, stateless web container, Compose and Kubernetes templates   |
 
 ## Embedding
 
-**As a React component.** `npm run build:lib` builds an ES module library into `lib/` that exports the editor (`AuditWorkbook`), the workbook model and the assistant protocol:
+### As a React component
+
+`npm run build:lib` builds an ES module library into `lib/`:
 
 ```jsx
 import { AuditWorkbook, createBlankWorkbook } from "@ledgerglass/workbook";
@@ -149,17 +156,50 @@ export function Workbook() {
 }
 ```
 
-The library was rebuilt after the original SDK source was lost: its export names were chosen for the rebuild, its TypeScript declarations (`types/`) are hand-written for the public surface, and it is not published to a registry. `npm run test:lib` mounts the built library in a host page and drives it in a browser. See [Using Ledgerglass as a library](docs/LIBRARY.md) for the props, the assistant adapter contract and the model functions. Server-side entry points `@ledgerglass/workbook/source-gateway` and `/source-connectors` let the editor's Data > Connections & Refresh dialog load tables from sources your server offers; see [External data sources](docs/SOURCES.md). The [API reference](docs/api/README.md) covers the wider model API (files, worksheets, cells, tables and pivots, rules, calculation), and [`@ledgerglass/workbook/node`](docs/api/node.md) runs the same functions in Node without a browser: read an XLSX file, calculate it and write it back from a script.
+See [Using Ledgerglass as a library](docs/LIBRARY.md) for the props and the assistant adapter contract, and [`examples/react-host`](examples/react-host) for a complete host with open, download and reset.
 
-An AI agent can also show a workbook itself: as an AG-UI frontend tool (`render_workbook`) or as an A2UI catalog component (`Workbook`). `npm run test:agent-ui` checks both against the official AG-UI client and A2UI React renderer. The assistant panel can also run on an AG-UI agent: `createAgUiAdapter({ url })` sends the approved selection to the agent, and its proposal is reviewed before anything changes. See [Showing a workbook from an agent](docs/AGENT-UI.md).
+### As a library, in the browser or in Node
 
-**As an iframe.** The served application can be embedded if the host page's Content-Security-Policy and the `FRAME_ANCESTORS` setting allow it (see [Docker and scaling](#docker-and-scaling)). It is a visual embed; no general-purpose `postMessage` workbook API is supplied.
+The same package exports the workbook model: files, worksheets, cells, tables and pivots, rules and calculation. `@ledgerglass/workbook/node` is that model without the interface, plus file helpers that take a path:
+
+```js
+import {
+  calculateWorkbookValues,
+  readWorkbookFile,
+  writeWorkbookFile,
+} from "@ledgerglass/workbook/node";
+
+const { workbook } = await readWorkbookFile("budget.xlsx");
+console.log(calculateWorkbookValues(workbook).sheets.Budget.B4);
+await writeWorkbookFile(workbook, "budget.json");
+```
+
+Every edit made through these functions advances the workbook's revision and adds an event to its log. The [API reference](docs/api/README.md) describes each function; [all exports](docs/api/exports.md) lists the 169 names on one page.
+
+### With your own data sources
+
+`@ledgerglass/workbook/source-gateway` and `/source-connectors` run on your server. The gateway offers sources you register (delimited files, JSON APIs, OData, SQLite, or a query from your own driver) to the editor's **Data > Connections & Refresh** dialog. The browser only names a source; your server decides who may see it and how it is read. See [External data sources](docs/SOURCES.md) and [`examples/source-gateway`](examples/source-gateway).
+
+### As an iframe
+
+The served application can be embedded if the host page's Content-Security-Policy and the `FRAME_ANCESTORS` setting allow it (see [Docker and scaling](#docker-and-scaling)). It is a visual embed; no general-purpose `postMessage` workbook API is supplied.
+
+### What to know about the library
+
+The original SDK source was lost. The library is the recovered application's own functions made public: each was run before it was documented, its TypeScript declarations (`types/`) are hand-written, and its export names were chosen for the rebuild. It is not published to a registry; build it from this repository. `npm run test:lib` mounts the built library in a host page and runs the Node entry in plain Node.
 
 ## AI assistant and MCP
 
 ### Connect your own model
 
-The built-in assistant is a local deterministic demonstration; it does not call an LLM. A real model needs a host adapter that sends the selected context to your provider, keeps provider keys on the server and returns a proposal for review.
+The built-in assistant is a local deterministic demonstration; it does not call an LLM. A real model needs an adapter that sends the selected context to your provider, keeps provider keys on the server and returns a proposal for review. Two are included:
+
+- `createHttpAdapter({ endpoint })` posts the prompt and the approved selection to your own server, which returns a proposal ([library guide](docs/LIBRARY.md)).
+- `createAgUiAdapter({ url })` runs the assistant on an AG-UI agent, which proposes changes through a tool call ([agent guide](docs/AGENT-UI.md), [`examples/ag-ui-agent`](examples/ag-ui-agent)).
+
+Whichever adapter is used, the editor validates every proposal against the approved selection, and nothing changes until the user applies it.
+
+An agent can also show a workbook of its own: an AG-UI frontend tool (`render_workbook`) and an A2UI catalog component (`Workbook`) are described in the [agent guide](docs/AGENT-UI.md).
 
 The chat supports text, CSV/TSV, JSON, PDF, DOCX, XLSX and common image attachments within explicit limits. The local demo acknowledges staged files but does not use an LLM to interpret them. The host must opt into chat, implement document handling and enforce authorization, request limits, scanning and retention. Responses currently complete as a single proposal; token streaming is not implemented.
 
@@ -258,41 +298,63 @@ Excel-sized addresses do not mean a fully populated Excel-sized worksheet can be
 ```sh
 npm test                 # server tests, then unit tests
 npm run test:deployment  # the static web runtime tests (Node built-ins only)
-npm run test:unit        # core model, formulas and workers, in Node
+npm run test:unit        # model, formulas, workers, SDK, adapters and data sources, in Node
+npm run test:types       # the TypeScript declarations, and that the export index is current
 npm run test:e2e         # browser checks against a build
+npm run test:lib         # the built library in a host page, and the Node entry in plain Node
+npm run test:examples    # every example in examples/
+npm run test:agent-ui    # AG-UI and A2UI, against the official client and renderer
 npm run test:containers  # Docker build, replica and MCP startup checks (needs a Docker daemon)
 ```
+
+`test:lib`, `test:examples` and `test:agent-ui` need `npm run build:lib` first (`test:agent-ui` runs it itself).
 
 The Playwright browser for `npm run test:e2e` may need a one-time install with `npx playwright install chromium`.
 
 The Playwright config starts a development server on port 4173 and supports `CHROME_PATH`. Close any unrelated server on that port before testing. Container checks create and remove their own disposable Compose project; Kubernetes and actual provider acceptance require separate target environments.
 
-GitHub CI runs the deployment-server tests, a dependency audit, the unit tests, a build with compressed assets followed by the browser checks in `tests/browser/`, and builds the web and MCP images.
+GitHub CI runs the deployment-server tests, a dependency audit, the unit tests and type check, a build with compressed assets followed by the browser checks in `tests/browser/`, the library, example and agent checks, and builds the web and MCP images.
+
+What the checks do not cover: the examples and agent checks use scripted stand-in agents, not a live model; the data-source connectors have not been run against a production database or a live OData service.
 
 ## Repository layout
 
 ```text
 src/
   main.js            Application entry point
+  index.js           Library entry (browser)
+  node.js            Library entry (Node)
   app/               Workbook editor modules (see src/app/README.md)
+  sdk/               Public model API by area, with edit recording
+  agent-ui/          Agent-rendered workbook (AG-UI tool, A2UI component)
+  integrations/      Assistant and data-source adapters for the browser
+  sources/           Server-side data-source gateway and connectors
   assistant/         Assistant chat components
   workers/           Parser and calculation workers
   mcp/               Scoped MCP server (server.js, model.js)
   styles/            Application stylesheets
+types/               Hand-written TypeScript declarations for the public surface
+examples/            Runnable examples (see examples/README.md)
 tests/
   browser/           Browser checks (Playwright)
   unit/              Unit tests (Vitest)
+  agent-ui-host/     Fixture holding the AG-UI and A2UI packages for test:agent-ui
 scripts/
   serve.mjs          Static server for dist/ (npm start)
   portable.mjs       Builds the portable HTML editions
-  mcp-stdio.mjs     MCP server over stdio (npm run mcp)
+  mcp-stdio.mjs      MCP server over stdio (npm run mcp)
+  build-api-index.mjs  Generates docs/api/exports.md
+  verify-*.mjs       The library, Node, example and agent checks
   worker-source-plugin.mjs  Build plugin for worker sources
 deploy/              Container runtime, health checks, nginx config, Kubernetes templates and tests
-docs/LIBRARY.md      Building and embedding the library
-docs/AGENT-UI.md     Letting an agent show a workbook (AG-UI and A2UI)
-docs/MCP.md          MCP tools, configuration and integration
-docs/assets/         Images used in this README
-.github/workflows/   CI workflow
+docs/
+  LIBRARY.md         Building and embedding the library
+  api/               API reference by area, and all exports
+  SOURCES.md         External data sources: protocol, gateway, connectors
+  AGENT-UI.md        Agents: showing a workbook, and running the assistant (AG-UI, A2UI)
+  MCP.md             MCP tools, configuration and integration
+  assets/            Images used in this README
+.github/workflows/   CI and the live-demo deployment
 Dockerfile           Separate web and MCP build targets
 compose.yaml         Local gateway and scalable web service
 dist/                Committed production build
@@ -300,17 +362,17 @@ Ledgerglass.html     Committed portable application
 Embedded-Workbook.html  Launcher for the embedded mode
 ```
 
-`dist/`, `dist-container/`, portable HTML, and `node_modules/` are build outputs. `dist/` and the portable HTML are committed for convenience.
+`dist/`, `dist-container/`, `lib/`, portable HTML, and `node_modules/` are build outputs. `dist/` and the portable HTML are committed for convenience.
 
 ## Documentation
 
-- **Source:** [src/README.md](src/README.md) (layout and recovery notes), [src/app/README.md](src/app/README.md) (editor modules).
-- **External data sources:** [docs/SOURCES.md](docs/SOURCES.md) (the source protocol, a server-side gateway and connectors for files, JSON APIs, OData, SQLite and your own database driver).
-- **Examples:** [examples/](examples/README.md) (Node scripts, an MCP client and a React host application; all run in CI).
-- **API reference:** [docs/api/README.md](docs/api/README.md) (about 125 model functions by area, and the Node entry).
-- **Library:** [docs/LIBRARY.md](docs/LIBRARY.md) (building and embedding the React component, adapters and model functions).
-- **Agent-rendered workbook:** [docs/AGENT-UI.md](docs/AGENT-UI.md) (AG-UI frontend tool and A2UI catalog component).
+- **Library:** [docs/LIBRARY.md](docs/LIBRARY.md) (building and embedding the React component, and the assistant adapters).
+- **API reference:** [docs/api/README.md](docs/api/README.md) (the model API by area, edit recording and the Node entry), [docs/api/exports.md](docs/api/exports.md) (all 169 exports).
+- **Examples:** [examples/](examples/README.md) (Node scripts, an MCP client, a React host, a data-source gateway and an AG-UI agent; all run in CI).
+- **External data sources:** [docs/SOURCES.md](docs/SOURCES.md) (the source protocol, a server-side gateway and connectors).
+- **Agents:** [docs/AGENT-UI.md](docs/AGENT-UI.md) (an agent showing a workbook through AG-UI or A2UI, and the assistant running on an AG-UI agent).
 - **MCP:** [docs/MCP.md](docs/MCP.md) (tools, configuration and integration).
+- **Source:** [src/README.md](src/README.md) (layout and recovery notes), [src/app/README.md](src/app/README.md) (editor modules).
 - **Docker:** [START-HERE-DOCKER.md](START-HERE-DOCKER.md) (container run and developer integration notes).
 - **History and licensing:** [HISTORY.md](HISTORY.md) (earlier remediation checkpoints), [LICENSE](LICENSE) (MIT), [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) (dependency licenses).
 
