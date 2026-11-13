@@ -71,11 +71,13 @@ function appendNewMessages(thread, input) {
       thread.messages.push({ role: "user", content: message.content });
 }
 
-export function createClaudeAgent({
-  client = new Anthropic(),
-  model = "claude-opus-5-5",
-} = {}) {
-  return async function claudeAgent(input, { signal } = {}) {
+/**
+ * The agent, with the model call left to the caller: `callModel(params, { signal })` receives
+ * the Messages API request and resolves to the response. `createClaudeAgent` below supplies the
+ * Anthropic SDK; a test can supply anything that answers in the same shape.
+ */
+export function createModelAgent({ callModel, model = "claude-opus-5-5" }) {
+  return async function modelAgent(input, { signal } = {}) {
     if (!threads.has(input.threadId)) {
       if (threads.size >= maxThreads)
         threads.delete(threads.keys().next().value);
@@ -91,14 +93,10 @@ export function createClaudeAgent({
     const contextText = input.context
       .map((item) => `${item.description}\n${item.value}`)
       .join("\n\n");
-    const response = await client.beta.messages.create(
+    const response = await callModel(
       {
         model,
         max_tokens: 16000,
-        // If the model declines a request on policy grounds, let the API retry it on the
-        // fallback model it recommends instead of failing the turn.
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
         system: contextText
           ? [
               { type: "text", text: systemPrompt },
@@ -124,12 +122,27 @@ export function createClaudeAgent({
         thread.pending.add(block.id);
       }
     }
-    return {
-      text,
-      toolCalls,
-      usage: response.usage,
-      model: response.model,
-      stopReason: response.stop_reason,
-    };
+    return { text, toolCalls };
   };
+}
+
+/** The agent backed by Claude. Credentials are read from the environment by the SDK. */
+export function createClaudeAgent({
+  client = new Anthropic(),
+  model = "claude-opus-5-5",
+} = {}) {
+  return createModelAgent({
+    model,
+    callModel: (params, { signal }) =>
+      client.beta.messages.create(
+        {
+          ...params,
+          // If the model declines a request on policy grounds, let the API retry it on the
+          // fallback model it recommends instead of failing the turn.
+          betas: ["server-side-fallback-2026-07-01"],
+          fallbacks: "default",
+        },
+        { signal },
+      ),
+  });
 }

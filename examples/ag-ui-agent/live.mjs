@@ -24,7 +24,11 @@ import {
 } from "@ledgerglass/workbook/node";
 import { startServer } from "./server.mjs";
 
-const server = await startServer({ port: 0, agent: "claude" });
+// LIVE_AGENT_MODULE names a module whose default export is a responder to use instead of Claude.
+const agent = process.env.LIVE_AGENT_MODULE
+  ? (await import(process.env.LIVE_AGENT_MODULE)).default
+  : "claude";
+const server = await startServer({ port: 0, agent });
 const url = `http://127.0.0.1:${server.address().port}/agent`;
 const show = (label, value) =>
   console.log(

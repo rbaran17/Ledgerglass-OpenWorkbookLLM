@@ -314,3 +314,40 @@ try {
   await browser.close();
   server.close();
 }
+
+// The example agent endpoint, read by the official AG-UI client: the client checks the order and
+// shape of every event, so a stream it accepts follows the protocol.
+{
+  const { createRequire } = await import("node:module");
+  const { HttpAgent } = createRequire(
+    `${repositoryRoot}/tests/agent-ui-host/host.jsx`,
+  )("@ag-ui/client");
+  const { startServer } = await import("../examples/ag-ui-agent/server.mjs");
+  const { renderWorkbookTool, createWorkbookToolSubscriber } =
+    await import("../lib/node.js");
+  const agentServer = await startServer({ port: 0, agent: "scripted" });
+  try {
+    const agent = new HttpAgent({
+      url: `http://127.0.0.1:${agentServer.address().port}/agent`,
+    });
+    const shown = [];
+    agent.subscribe(
+      createWorkbookToolSubscriber({ onWorkbook: (call) => shown.push(call) }),
+    );
+    agent.addMessage({ id: "u1", role: "user", content: "Show a budget" });
+    await agent.runAgent({ tools: [renderWorkbookTool] });
+    assert.equal(shown.length, 1);
+    assert.equal(shown[0].workbook.sheets[0].name, "Plan");
+    agent.addMessage(shown[0].result);
+    const second = await agent.runAgent({ tools: [renderWorkbookTool] });
+    assert.match(
+      second.newMessages.at(-1).content,
+      /on screen with 0 formula error/,
+    );
+    console.log(
+      "PASS AG-UI: the official client accepts the example agent's event stream over two runs",
+    );
+  } finally {
+    agentServer.close();
+  }
+}

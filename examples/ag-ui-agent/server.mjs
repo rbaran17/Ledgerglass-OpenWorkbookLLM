@@ -23,10 +23,13 @@ const contentTypes = {
 
 export async function startServer({ port = 4330, agent = "scripted" } = {}) {
   // The Claude agent, and the SDK it needs, are loaded only when asked for.
+  // `agent` may also be a responder function of your own.
   const respond =
-    agent === "claude"
-      ? (await import("./claude-agent.mjs")).createClaudeAgent()
-      : scriptedAgent;
+    typeof agent === "function"
+      ? agent
+      : agent === "claude"
+        ? (await import("./claude-agent.mjs")).createClaudeAgent()
+        : scriptedAgent;
   const handleRun = createAgUiEndpoint(respond);
   const server = createServer(async (request, response) => {
     try {
