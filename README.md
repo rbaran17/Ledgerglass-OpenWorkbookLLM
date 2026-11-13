@@ -13,13 +13,13 @@ Ledgerglass is a React spreadsheet with an Excel-style ribbon, formula bar, grid
 - **Connect it to an LLM**: an assistant that proposes changes for review (on your own endpoint or an AG-UI agent), an MCP server for one approved selection, and AG-UI / A2UI support so an agent can show a workbook itself.
 - **Connect it to your data**: a server-side gateway that offers approved sources (files, JSON APIs, OData, SQLite, your own database driver) to the workbook.
 
-**[Open the live demo](https://rbaran17.github.io/Ledgerglass/?demo)** (a synthetic audit workbook; nothing leaves your browser), or download [`Ledgerglass.html`](Ledgerglass.html), a single self-contained file, and open it in a desktop browser with `?demo` added to the address. The AI assistant needs a connected provider (see [AI assistant and MCP](#ai-assistant-and-mcp)).
+**[Open the live demo](https://rbaran17.github.io/Ledgerglass/?demo)** (a sample sales workbook; nothing leaves your browser), or download [`Ledgerglass.html`](Ledgerglass.html), a single self-contained file, and open it in a desktop browser with `?demo` added to the address. The AI assistant needs a connected provider (see [AI assistant and MCP](#ai-assistant-and-mcp)).
 
-![Demo: general ledger, trial balance formulas, range statistics, the AI assistant panel and the embedded workbook](docs/assets/demo.gif)
+![Demo: an orders sheet, summary formulas across sheets, range statistics, the AI assistant panel and the embedded workbook](docs/assets/demo.gif)
 
-<sub>The synthetic audit demo (<code>?demo</code>): a general ledger, a trial balance built with <code>SUMIF</code> across sheets,
+<sub>The sample workbook (<code>?demo</code>): a year of orders, summaries by region and by product built with <code>COUNTIF</code> and <code>SUMIF</code> across sheets,
 live selection statistics, the workbook assistant scoped to the selected range, and the same workbook embedded in a host
-application (<code>?embedded</code>).</sub>
+application (<code>?embedded</code>). The figures are invented.</sub>
 
 > **Scope:** this is a substantial working implementation with documented limits, not full Microsoft Excel parity. Acceptance applies to the documented local scope; production, external-provider and independent accessibility acceptance remain separate.
 
@@ -29,8 +29,8 @@ application (<code>?embedded</code>).</sub>
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/workbook.png" alt="Standalone workbook with ribbon, formula bar and general ledger"><br><sub><b>Workbook:</b> Excel-style ribbon, formula bar, grid and sheet tabs</sub></td>
-    <td width="50%"><img src="docs/assets/formulas.png" alt="Trial balance with a SUM formula in the formula bar"><br><sub><b>Formulas:</b> trial balance totals that reconcile to zero</sub></td>
+    <td width="50%"><img src="docs/assets/workbook.png" alt="Standalone workbook with ribbon, formula bar and an orders sheet"><br><sub><b>Workbook:</b> Excel-style ribbon, formula bar, grid and sheet tabs</sub></td>
+    <td width="50%"><img src="docs/assets/formulas.png" alt="Summary by region with a SUM formula in the formula bar"><br><sub><b>Formulas:</b> a summary by region whose total is checked against the orders</sub></td>
   </tr>
   <tr>
     <td><img src="docs/assets/ai-assistant.png" alt="Workbook assistant panel scoped to the selected range"><br><sub><b>AI assistant:</b> scoped to the selection; changes are proposed for review</sub></td>
@@ -100,7 +100,7 @@ Open **http://127.0.0.1:4177/**. No model API key or backend service is required
 | `/`           | Standalone workbook; opens blank or restores locally saved work |
 | `/?embedded`  | Workbook inside the Test example application                    |
 | `/?temporary` | Temporary workbook without browser persistence                  |
-| `/?demo`      | Synthetic audit demonstration data                              |
+| `/?demo`      | A sample sales workbook with invented figures                   |
 
 ### Build and run locally
 

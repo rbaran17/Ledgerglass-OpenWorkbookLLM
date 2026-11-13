@@ -42,11 +42,11 @@ test("blank workbook loads under the production content security policy", async 
 test("demo workbook calculates cross-sheet formulas", async ({ page }) => {
   const errors = watchForErrors(page);
   await open(page, "demo&temporary");
-  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID");
-  await page.getByRole("button", { name: "Trial balance" }).click();
-  await expect(cell(page, "A2")).toHaveAttribute("aria-label", "A2 Accounts payable");
-  await expect(cell(page, "B2")).toHaveAttribute("aria-label", "B2 8750");
-  await expect(cell(page, "D2")).toHaveAttribute("aria-label", "D2 -21750");
+  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Order ID");
+  await page.getByRole("button", { name: "By region" }).click();
+  await expect(cell(page, "A2")).toHaveAttribute("aria-label", "A2 East");
+  await expect(cell(page, "B2")).toHaveAttribute("aria-label", "B2 5");
+  await expect(cell(page, "D2")).toHaveAttribute("aria-label", "D2 12968.9");
   expect(errors).toEqual([]);
 });
 
@@ -101,7 +101,7 @@ test("CSV export contains the worksheet", async ({ page }) => {
   await page.getByRole("button", { name: "Download reviewed data" }).click();
   const download = await downloading;
   const text = await readFile(await download.path(), "utf8");
-  expect(text).toContain("Journal ID");
+  expect(text).toContain("Order ID");
   expect(errors).toEqual([]);
 });
 
@@ -125,7 +125,7 @@ test("XLSX export can be opened again", async ({ page }) => {
     buffer: bytes,
   });
   await page.getByRole("button", { name: "Open derived workbook" }).click();
-  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID", { timeout: 30_000 });
+  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Order ID", { timeout: 30_000 });
   expect(workers.length).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
@@ -160,7 +160,7 @@ test("native workbook data round-trips and invalid data is refused", async ({ pa
     mimeType: "application/json",
     buffer: Buffer.from(saved),
   });
-  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID");
+  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Order ID");
 
   await open(page, "temporary");
   await page.getByLabel("Import workbook file").setInputFiles({
@@ -214,17 +214,17 @@ test("alternate workbook format round-trips through its ZIP archive", async ({ p
   });
   await page.getByRole("button", { name: "Preview template workbook" }).click();
   await page.getByRole("button", { name: "Open derived workbook" }).click();
-  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID", { timeout: 30_000 });
+  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Order ID", { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
 
 test("schedule PDF export produces a PDF file", async ({ page }) => {
   const errors = watchForErrors(page);
   await open(page, "demo&temporary");
-  await page.getByRole("button", { name: "Trial balance" }).click();
+  await page.getByRole("button", { name: "By region" }).click();
   // Column widths depend on the fonts installed; the app refuses to print a number
   // that does not fit, so size the columns to their content first.
-  await select(page, "A1:E16");
+  await select(page, "A1:E6");
   await page.getByRole("button", { name: "AutoFit Column Width" }).click();
   await page.getByRole("tab", { name: "Page Layout", exact: true }).click();
   await page.getByRole("button", { name: "Margins", exact: true }).click();

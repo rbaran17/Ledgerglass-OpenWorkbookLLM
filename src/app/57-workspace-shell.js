@@ -28,7 +28,7 @@ import {
 } from "./03-workbook-model.js";
 import { createLocalWorkbookStore } from "./11-local-workbook-store-and-versions.js";
 import { buildLocalDemoProposal } from "./20-calculation-options-and-assistant.js";
-import { buildSampleLedgerWorkbook } from "./24-merge-audit-and-ribbon-helpers.js";
+import { buildSampleWorkbook } from "./24-merge-audit-and-ribbon-helpers.js";
 import {
   workbookLockName,
   saveWorkbookWithLock,
@@ -41,7 +41,7 @@ const legacyEmbeddedDemoKey = "embedded-excel-demo-v1",
     `embedded-excel-demo-v2:${documentKind}`,
   workspaceDocumentKinds = ["ledger", "draft"],
   workspaceDocumentLabels = {
-    ledger: "General ledger",
+    ledger: "Sample sales",
     draft: "Draft workbook",
   };
 function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
@@ -96,7 +96,7 @@ function restoreSavedWorkspaceDocuments() {
     version: 1,
     activeDocument: "ledger",
     documents: {
-      ledger: buildSampleLedgerWorkbook(),
+      ledger: buildSampleWorkbook(),
       draft: createBlankWorkbook("Draft workbook"),
     },
   };
@@ -573,11 +573,11 @@ function EmbeddedWorkbookWorkspace() {
             children: [
               i.jsx("span", { children: "Workspace" }),
               i.jsx(ChevronRight, { size: 14, "aria-hidden": "true" }),
-              i.jsx("span", { children: "Example engagement" }),
+              i.jsx("span", { children: "Example team" }),
               i.jsx(ChevronRight, { size: 14, "aria-hidden": "true" }),
               i.jsx("strong", {
                 "aria-current": "page",
-                children: "Workpapers",
+                children: "Workbooks",
               }),
             ],
           }),
@@ -592,7 +592,7 @@ function EmbeddedWorkbookWorkspace() {
       }),
       i.jsxs("aside", {
         className: "emb-documents",
-        "aria-label": "Engagement documents",
+        "aria-label": "Team documents",
         hidden: !isDocumentBrowserOpen,
         children: [
           i.jsxs("div", {
@@ -604,8 +604,8 @@ function EmbeddedWorkbookWorkspace() {
               }),
               i.jsxs("div", {
                 children: [
-                  i.jsx("strong", { children: "Example engagement" }),
-                  i.jsx("span", { children: "Financial statement audit" }),
+                  i.jsx("strong", { children: "Example team" }),
+                  i.jsx("span", { children: "Shared workbooks" }),
                 ],
               }),
             ],
@@ -613,7 +613,7 @@ function EmbeddedWorkbookWorkspace() {
           i.jsxs("div", {
             className: "emb-document-section",
             children: [
-              i.jsx("span", { children: "WORKPAPERS" }),
+              i.jsx("span", { children: "WORKBOOKS" }),
               i.jsx("button", {
                 type: "button",
                 "aria-label": "Hide document browser",
@@ -629,8 +629,8 @@ function EmbeddedWorkbookWorkspace() {
               i.jsx(Search, { size: 14 }),
               i.jsx("input", {
                 type: "search",
-                "aria-label": "Search workpapers",
-                placeholder: "Find a workpaper",
+                "aria-label": "Search workbooks",
+                placeholder: "Find a workbook",
                 value: documentFilter,
                 onChange: (event) => setDocumentFilter(event.target.value),
               }),
@@ -641,7 +641,7 @@ function EmbeddedWorkbookWorkspace() {
             children: [
               i.jsx(ChevronDown, { size: 12 }),
               i.jsx(FolderOpen, { size: 14 }),
-              i.jsx("span", { children: "Audit files" }),
+              i.jsx("span", { children: "Team files" }),
               i.jsx("span", { children: workspaceDocumentKinds.length }),
             ],
           }),
@@ -673,7 +673,7 @@ function EmbeddedWorkbookWorkspace() {
                           i.jsx("span", {
                             children:
                               documentKind === "ledger"
-                                ? "Synthetic audit example"
+                                ? "Sample data"
                                 : "Your working file",
                           }),
                         ],
@@ -689,7 +689,7 @@ function EmbeddedWorkbookWorkspace() {
               filteredDocumentKinds.length === 0 &&
                 i.jsxs("p", {
                   className: "emb-no-documents",
-                  children: ["No workpapers match “", documentFilter, "”."],
+                  children: ["No workbooks match “", documentFilter, "”."],
                 }),
             ],
           }),
@@ -729,11 +729,11 @@ function EmbeddedWorkbookWorkspace() {
                 children: [
                   i.jsx("div", {
                     className: "emb-section-kicker",
-                    children: "EXAMPLE ENGAGEMENT",
+                    children: "EXAMPLE TEAM",
                   }),
-                  i.jsx("h1", { children: "Workpapers" }),
+                  i.jsx("h1", { children: "Workbooks" }),
                   i.jsx("p", {
-                    children: "Review and prepare your audit evidence.",
+                    children: "Open, review and edit your team's workbooks.",
                   }),
                 ],
               }),
@@ -763,7 +763,7 @@ function EmbeddedWorkbookWorkspace() {
           }),
           i.jsx("div", {
             className: "emb-mobile-documents",
-            "aria-label": "Choose workpaper",
+            "aria-label": "Choose workbook",
             children: workspaceDocumentKinds.map((workspaceDocumentKind) =>
               i.jsxs(
                 "button",
@@ -913,7 +913,7 @@ function EmbeddedWorkbookWorkspace() {
                   i.jsxs("div", {
                     children: [
                       i.jsx("span", { className: "emb-host-context-dot" }),
-                      "Connected to workpaper",
+                      "Connected to workbook",
                       i.jsx("span", {
                         className: "emb-footer-divider",
                         children: "/",
@@ -956,7 +956,7 @@ function EmbeddedWorkbookWorkspace() {
                   children: [
                     "Your changes remain in this workspace.",
                     i.jsx("br", {}),
-                    "Open a workpaper to continue.",
+                    "Open a workbook to continue.",
                   ],
                 }),
                 i.jsxs("button", {
@@ -1041,7 +1041,7 @@ function EmbeddedWorkbookWorkspace() {
               }),
               i.jsx("p", {
                 children:
-                  "This example hosts the spreadsheet in a document window. Switch workpapers, expand the editor, or close and reopen it. The host application retains each workbook and receives the selected range.",
+                  "This example hosts the spreadsheet in a document window. Switch workbooks, expand the editor, or close and reopen it. The host application retains each workbook and receives the selected range.",
               }),
               i.jsxs("div", {
                 className: "emb-info-detail",
@@ -1078,10 +1078,7 @@ function EmbeddedWorkbookWorkspace() {
                 type: "button",
                 className: "emb-info-return",
                 onClick: () => setIsAboutOpen(false),
-                children: [
-                  i.jsx(ArrowLeft, { size: 15 }),
-                  "Back to workpapers",
-                ],
+                children: [i.jsx(ArrowLeft, { size: 15 }), "Back to workbooks"],
               }),
             ],
           }),
@@ -1097,7 +1094,7 @@ Hq.createRoot(document.getElementById("root")).render(
     : i.jsx(WorkbookSyncBoundary, {
         actor: "Preparer",
         initialWorkbook: pageUrlParams.has("demo")
-          ? buildSampleLedgerWorkbook()
+          ? buildSampleWorkbook()
           : undefined,
         persistenceKey:
           pageUrlParams.has("temporary") || pageUrlParams.has("demo")

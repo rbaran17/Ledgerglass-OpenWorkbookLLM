@@ -1057,347 +1057,205 @@ function buildSampleSheetCells(sheetId, sheetName, rows) {
     }
   );
 }
-function buildSampleLedgerWorkbook() {
-  const journalEntries = [
-      [
-        "2025-01-03",
-        "Cash",
-        "Equity",
-        "Opening capital contribution",
-        25e4,
-        "CAP-001",
-      ],
-      [
-        "2025-01-07",
-        "Equipment",
-        "Cash",
-        "Network equipment acquisition",
-        185e3,
-        "INV-4821",
-      ],
-      [
-        "2025-01-12",
-        "Rent expense",
-        "Cash",
-        "January office lease",
-        12500,
-        "LEASE-01",
-      ],
-      [
-        "2025-01-18",
-        "Accounts receivable",
-        "Revenue",
-        "Advisory services – Westbridge",
-        64e3,
-        "SALES-1041",
-      ],
-      [
-        "2025-01-25",
-        "Payroll expense",
-        "Cash",
-        "January payroll",
-        43820,
-        "PAY-0125",
-      ],
-      [
-        "2025-02-03",
-        "Cash",
-        "Accounts receivable",
-        "Westbridge remittance",
-        64e3,
-        "RCPT-2041",
-      ],
-      [
-        "2025-02-11",
-        "Professional fees",
-        "Accounts payable",
-        "Legal contract review",
-        8750,
-        "INV-4956",
-      ],
+/**
+ * The sample workbook behind `?demo` and the ribbon's sample command: a year of orders for an
+ * invented shop, a summary by region and by product built with formulas across sheets, and a
+ * sheet of notes. Written for the rebuilt project; the data is made up.
+ */
+function buildSampleWorkbook() {
+  const orders = [
+      ["2025-01-08", "North", "Desk lamp", 24, 39.5, "R. Okafor", "Online"],
+      ["2025-01-21", "West", "Standing desk", 6, 489, "M. Lindqvist", "Store"],
+      ["2025-02-04", "East", "Office chair", 15, 219, "R. Okafor", "Online"],
       [
         "2025-02-19",
-        "Accounts receivable",
-        "Revenue",
-        "Advisory services – Harbor",
-        32500,
-        "SALES-1042",
+        "South",
+        "Monitor arm",
+        32,
+        84.9,
+        "T. Nakamura",
+        "Partner",
       ],
+      ["2025-03-03", "North", "Office chair", 9, 219, "M. Lindqvist", "Store"],
+      ["2025-03-17", "East", "Desk lamp", 40, 39.5, "T. Nakamura", "Online"],
+      ["2025-04-02", "West", "Monitor arm", 18, 84.9, "R. Okafor", "Online"],
       [
-        "2025-03-02",
-        "Rent expense",
-        "Cash",
-        "March office lease",
-        12500,
-        "LEASE-03",
+        "2025-04-24",
+        "South",
+        "Standing desk",
+        4,
+        489,
+        "M. Lindqvist",
+        "Partner",
       ],
+      ["2025-05-12", "North", "Monitor arm", 27, 84.9, "T. Nakamura", "Online"],
+      ["2025-05-29", "East", "Standing desk", 8, 489, "R. Okafor", "Store"],
+      ["2025-06-10", "West", "Desk lamp", 55, 39.5, "M. Lindqvist", "Online"],
+      ["2025-06-26", "South", "Office chair", 12, 219, "T. Nakamura", "Store"],
+      ["2025-07-15", "North", "Standing desk", 5, 489, "R. Okafor", "Partner"],
+      ["2025-08-05", "East", "Monitor arm", 21, 84.9, "M. Lindqvist", "Online"],
+      ["2025-08-28", "West", "Office chair", 14, 219, "T. Nakamura", "Online"],
+      ["2025-09-16", "South", "Desk lamp", 36, 39.5, "R. Okafor", "Store"],
+      ["2025-10-07", "North", "Desk lamp", 48, 39.5, "M. Lindqvist", "Online"],
+      ["2025-10-30", "East", "Office chair", 11, 219, "T. Nakamura", "Partner"],
+      ["2025-11-18", "West", "Standing desk", 7, 489, "R. Okafor", "Online"],
       [
-        "2025-03-17",
-        "Software expense",
-        "Cash",
-        "Annual analytics subscription",
-        16800,
-        "INV-5200",
-      ],
-      [
-        "2025-04-04",
-        "Accounts payable",
-        "Cash",
-        "Legal invoice settlement",
-        8750,
-        "PMT-3191",
-      ],
-      [
-        "2025-04-22",
-        "Accounts receivable",
-        "Revenue",
-        "Advisory services – Cedar",
-        91200,
-        "SALES-1043",
-      ],
-      [
-        "2025-05-09",
-        "Travel expense",
-        "Cash",
-        "Fieldwork travel reimbursement",
-        3240.75,
-        "EXP-0638",
-      ],
-      [
-        "2025-06-14",
-        "Cash",
-        "Accounts receivable",
-        "Harbor remittance",
-        32500,
-        "RCPT-2042",
-      ],
-      [
-        "2025-07-30",
-        "Payroll expense",
-        "Cash",
-        "July payroll",
-        45210,
-        "PAY-0730",
-      ],
-      [
-        "2025-08-21",
-        "Insurance expense",
-        "Cash",
-        "Professional indemnity premium",
-        14200,
-        "POL-2025",
-      ],
-      [
-        "2025-09-12",
-        "Accounts receivable",
-        "Revenue",
-        "Advisory services – Elm",
-        48750,
-        "SALES-1044",
-      ],
-      [
-        "2025-10-20",
-        "Professional fees",
-        "Accounts payable",
-        "Specialist valuation support",
-        21750,
-        "INV-6782",
-      ],
-      [
-        "2025-11-28",
-        "Cash",
-        "Accounts receivable",
-        "Cedar partial remittance",
-        6e4,
-        "RCPT-2043",
-      ],
-      [
-        "2025-12-31",
-        "Depreciation expense",
-        "Accumulated depreciation",
-        "Year-end depreciation charge",
-        30833.33,
-        "FA-2025",
+        "2025-12-09",
+        "South",
+        "Monitor arm",
+        29,
+        84.9,
+        "M. Lindqvist",
+        "Online",
       ],
     ],
-    ledgerRows = [
+    orderRows = [
       [
-        "Journal ID",
+        "Order ID",
         "Date",
-        "Account",
-        "Description",
-        "Debit",
-        "Credit",
-        "Net",
-        "Prepared by",
-        "Source",
-        "Review",
+        "Region",
+        "Product",
+        "Units",
+        "Unit price",
+        "Revenue",
+        "Sales rep",
+        "Channel",
+        "Status",
       ],
     ];
-  (journalEntries.forEach(
+  orders.forEach(
     (
-      [
-        entryDate,
-        debitAccount,
-        creditAccount,
-        description,
-        amount,
-        sourceReference,
-      ],
-      entryIndex,
+      [orderDate, region, product, units, unitPrice, salesRep, channel],
+      index,
     ) => {
-      const journalId = `JE-25-${String(entryIndex + 1).padStart(3, "0")}`;
-      for (const lineSide of [0, 1]) {
-        const newRowNumber = ledgerRows.length + 1;
-        ledgerRows.push([
-          `${journalId}/${lineSide + 1}`,
-          entryDate,
-          lineSide === 0 ? debitAccount : creditAccount,
-          description,
-          lineSide === 0 ? amount : 0,
-          lineSide === 1 ? amount : 0,
-          `=E${newRowNumber}-F${newRowNumber}`,
-          entryIndex % 2 === 0 ? "A. Patel" : "J. Morgan",
-          sourceReference,
-          entryIndex === 1 || entryIndex === 8 ? "Pending" : "Reviewed",
-        ]);
-      }
+      const rowNumber = orderRows.length + 1;
+      orderRows.push([
+        `SO-25-${String(index + 1).padStart(3, "0")}`,
+        orderDate,
+        region,
+        product,
+        units,
+        unitPrice,
+        `=E${rowNumber}*F${rowNumber}`,
+        salesRep,
+        channel,
+        index === 17 || index === 19 ? "Open" : "Shipped",
+      ]);
     },
-  ),
-    (ledgerRows[17][0] = ledgerRows[15][0]),
-    ledgerRows.push([
-      "Total",
-      null,
-      null,
-      null,
-      "=SUM(E2:E41)",
-      "=SUM(F2:F41)",
-      "=SUM(G2:G41)",
-      null,
-      null,
-      null,
-    ]));
-  const sampleSheetCells = buildSampleSheetCells(
-    "general-ledger",
-    "General ledger",
-    ledgerRows,
   );
-  for (let rowNumber = 2; rowNumber <= 42; rowNumber++)
-    for (const amountColumn of ["E", "F", "G"])
-      sampleSheetCells.cells[`${amountColumn}${rowNumber}`].format = "number";
-  ((sampleSheetCells.cells.A18.note =
-    "Identifier repeats A16. Inspect source documentation and posting sequence before resolving."),
-    (sampleSheetCells.cells.A18.style = { fill: "#fff0d1" }),
-    (sampleSheetCells.cells.E4.note =
-      "Agreed acquisition amount to equipment invoice INV-4821."),
-    (sampleSheetCells.cells.E4.tickmark = "V"));
-  for (const totalRowColumn of ["A", "E", "F", "G"])
-    sampleSheetCells.cells[`${totalRowColumn}42`].style = {
-      bold: true,
-      fill: "#e4eef0",
-    };
-  const accountNames = [
-      ...new Set(journalEntries.flatMap((entry) => [entry[1], entry[2]])),
-    ].sort(),
-    trialBalanceRows = [
-      ["Account", "Debit activity", "Credit activity", "Net balance", "Status"],
-    ];
-  accountNames.forEach((accountName, accountIndex) => {
-    const accountRowNumber = accountIndex + 2;
-    trialBalanceRows.push([
-      accountName,
-      `=SUMIF('General ledger'!$C$2:$C$41,A${accountRowNumber},'General ledger'!$E$2:$E$41)`,
-      `=SUMIF('General ledger'!$C$2:$C$41,A${accountRowNumber},'General ledger'!$F$2:$F$41)`,
-      `=B${accountRowNumber}-C${accountRowNumber}`,
-      "Ready for review",
-    ]);
-  });
-  const lastAccountRowNumber = accountNames.length + 1,
-    totalRowNumber = lastAccountRowNumber + 1;
-  trialBalanceRows.push([
+  const lastOrderRow = orderRows.length,
+    orderTotalRow = lastOrderRow + 1;
+  orderRows.push([
     "Total",
-    `=SUM(B2:B${lastAccountRowNumber})`,
-    `=SUM(C2:C${lastAccountRowNumber})`,
-    `=SUM(D2:D${lastAccountRowNumber})`,
-    `=IF(ABS(D${totalRowNumber})<0.01,"Balanced","Investigate")`,
+    null,
+    null,
+    null,
+    `=SUM(E2:E${lastOrderRow})`,
+    null,
+    `=SUM(G2:G${lastOrderRow})`,
+    null,
+    null,
+    null,
   ]);
-  const trialBalanceSheet = buildSampleSheetCells(
-    "trial-balance",
-    "Trial balance",
-    trialBalanceRows,
-  );
-  for (
-    let balanceRowNumber = 2;
-    balanceRowNumber <= totalRowNumber;
-    balanceRowNumber++
-  )
-    for (const balanceColumn of ["B", "C", "D"])
-      trialBalanceSheet.cells[`${balanceColumn}${balanceRowNumber}`].format =
-        "number";
-  for (const balanceTotalColumn of ["A", "B", "C", "D", "E"])
-    trialBalanceSheet.cells[`${balanceTotalColumn}${totalRowNumber}`].style = {
+  const ordersSheet = buildSampleSheetCells("orders", "Orders", orderRows);
+  for (let rowNumber = 2; rowNumber <= orderTotalRow; rowNumber++)
+    for (const amountColumn of ["F", "G"])
+      if (ordersSheet.cells[`${amountColumn}${rowNumber}`]?.raw != null)
+        ordersSheet.cells[`${amountColumn}${rowNumber}`].format = "number";
+  ((ordersSheet.cells.E12.note =
+    "Largest order of the year by units. Bulk price agreed with the customer."),
+    (ordersSheet.cells.E12.style = { fill: "#fff0d1" }));
+  for (const totalColumn of ["A", "E", "G"])
+    ordersSheet.cells[`${totalColumn}${orderTotalRow}`].style = {
       bold: true,
       fill: "#e4eef0",
     };
-  const auditPlanSheet = buildSampleSheetCells("audit-plan", "Audit plan", [
-    ["Procedure", "Purpose", "Owner", "Status", "Reference"],
-    [
-      "Ledger reconciliation",
-      "Confirm debit and credit control totals",
-      "A. Patel",
-      "Complete",
-      "General ledger!E42:G42",
-    ],
-    [
-      "Duplicate scan",
-      "Inspect repeated journal-line identifiers",
-      "J. Morgan",
-      "Pending",
-      "General ledger!A1:J41",
-    ],
-    [
-      "Materiality screen",
-      "Screen absolute row amounts at 50,000",
-      "A. Patel",
-      "Pending",
-      "General ledger!A1:J41",
-    ],
-    [
-      "Sample selection",
-      "Select 8 reproducible rows for inspection",
-      "J. Morgan",
-      "Pending",
-      "Seed: audit-2025",
-    ],
-    [
-      "Source vouching",
-      "Inspect invoice and posting evidence for selected rows",
-      "A. Patel",
-      "In progress",
-      "Tickmark V = vouched",
-    ],
-    [
-      "Account summary",
-      "Reconcile signed movement by account",
-      "J. Morgan",
-      "Pending",
-      "Trial balance",
-    ],
-    [
-      "Demo data",
-      "Synthetic journal data for product evaluation",
-      "System",
-      "Information",
-      "Not a real client workbook",
-    ],
-  ]);
+
+  const orderRange = (column) =>
+    `Orders!$${column}$2:$${column}$${lastOrderRow}`;
+  /** A summary of the orders by the values of one column, with a total and a check row. */
+  const buildSummaryRows = (heading, keyColumn, keys) => {
+    const rows = [[heading, "Orders", "Units", "Revenue", "Share of revenue"]],
+      lastKeyRow = keys.length + 1,
+      totalRow = lastKeyRow + 1;
+    keys.forEach((key, keyIndex) => {
+      const rowNumber = keyIndex + 2;
+      rows.push([
+        key,
+        `=COUNTIF(${orderRange(keyColumn)},A${rowNumber})`,
+        `=SUMIF(${orderRange(keyColumn)},A${rowNumber},${orderRange("E")})`,
+        `=SUMIF(${orderRange(keyColumn)},A${rowNumber},${orderRange("G")})`,
+        `=D${rowNumber}/$D$${totalRow}`,
+      ]);
+    });
+    rows.push([
+      "Total",
+      `=SUM(B2:B${lastKeyRow})`,
+      `=SUM(C2:C${lastKeyRow})`,
+      `=SUM(D2:D${lastKeyRow})`,
+      `=IF(ABS(D${totalRow}-Orders!G${orderTotalRow})<0.01,"Matches orders","Check")`,
+    ]);
+    return { rows, lastKeyRow, totalRow };
+  };
+  const formatSummarySheet = (sheet, { lastKeyRow, totalRow }) => {
+    for (let rowNumber = 2; rowNumber <= totalRow; rowNumber++)
+      sheet.cells[`D${rowNumber}`].format = "number";
+    for (let rowNumber = 2; rowNumber <= lastKeyRow; rowNumber++)
+      sheet.cells[`E${rowNumber}`].format = "percent";
+    for (const totalColumn of ["A", "B", "C", "D", "E"])
+      sheet.cells[`${totalColumn}${totalRow}`].style = {
+        bold: true,
+        fill: "#e4eef0",
+      };
+    return sheet;
+  };
+  const uniqueSorted = (columnIndex) =>
+      [...new Set(orders.map((order) => order[columnIndex]))].sort(),
+    regionSummary = buildSummaryRows("Region", "C", uniqueSorted(1)),
+    productSummary = buildSummaryRows("Product", "D", uniqueSorted(2)),
+    regionSheet = formatSummarySheet(
+      buildSampleSheetCells("by-region", "By region", regionSummary.rows),
+      regionSummary,
+    ),
+    productSheet = formatSummarySheet(
+      buildSampleSheetCells("by-product", "By product", productSummary.rows),
+      productSummary,
+    ),
+    notesSheet = buildSampleSheetCells("notes", "Notes", [
+      ["Sheet", "What it shows", "Try this"],
+      [
+        "Orders",
+        "Twenty orders with a revenue formula on every row",
+        "Change a unit count and watch the totals update",
+      ],
+      [
+        "By region",
+        "Orders, units and revenue by region, built with COUNTIF and SUMIF across sheets",
+        "Select a range and read the statistics in the status bar",
+      ],
+      [
+        "By product",
+        "The same summary by product, with each product's share of revenue",
+        "Insert a chart or a PivotTable from the Insert tab",
+      ],
+      [
+        "Check",
+        "Each summary's last cell compares its total with the Orders total",
+        "Open the AI assistant and ask about the selected range",
+      ],
+      [
+        "Sample data",
+        "Invented figures for trying the application",
+        "Not a real company's records",
+      ],
+    ]);
   return normalizeWorkbookInput({
     schemaVersion: 1,
-    id: "demo-northstar-fy2025",
-    name: "Northstar Advisory · FY2025",
+    id: "demo-sample-sales-2025",
+    name: "Sample sales · 2025",
     revision: 0,
     metadata: createWorkbookMetadata(),
-    sheets: [sampleSheetCells, trialBalanceSheet, auditPlanSheet],
+    sheets: [ordersSheet, regionSheet, productSheet, notesSheet],
     events: [],
   });
 }
@@ -2415,7 +2273,7 @@ function RibbonIconButton({
 export {
   useCalculationRun,
   MergeCellsPreviewDialog,
-  buildSampleLedgerWorkbook,
+  buildSampleWorkbook,
   collectRibbonCommands,
   RibbonGroup,
   runAuditAnalysis,

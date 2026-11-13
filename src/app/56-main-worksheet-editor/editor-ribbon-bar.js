@@ -1,7 +1,7 @@
 import i from "react/jsx-runtime";
 import { WorkbookRibbon } from "../26-workbook-ribbon.js";
 import { _t, applyAutoSum, createBlankWorkbook } from "../03-workbook-model.js";
-import { buildSampleLedgerWorkbook } from "../24-merge-audit-and-ribbon-helpers.js";
+import { buildSampleWorkbook } from "../24-merge-audit-and-ribbon-helpers.js";
 import {
   applyCellPreview,
   buildFillPreview,
@@ -54,7 +54,7 @@ function EditorRibbonBar({
       void fileAndAnalysisActions.exportWorkbookAs(exportFormat),
     onNew: () => navigationActions.replaceActiveWorkbook(createBlankWorkbook()),
     onDemo: () =>
-      navigationActions.replaceActiveWorkbook(buildSampleLedgerWorkbook()),
+      navigationActions.replaceActiveWorkbook(buildSampleWorkbook()),
     onRename: () =>
       dialogState.setPromptDialogState({
         kind: "rename",
