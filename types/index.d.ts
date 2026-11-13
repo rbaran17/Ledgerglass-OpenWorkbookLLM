@@ -217,6 +217,74 @@ export function createHttpAdapter(options: {
   fetch?: typeof fetch;
 }): AssistantAdapter;
 
+/** The name of the one frontend tool the AG-UI assistant adapter offers an agent. */
+export const PROPOSE_WORKBOOK_CHANGES_TOOL_NAME: "propose_workbook_changes";
+
+/** A message in an AG-UI run. `content` is text for user and assistant messages. */
+export interface AgUiMessage {
+  id: string;
+  role: string;
+  content?: unknown;
+  [extra: string]: unknown;
+}
+
+/** A tool an AG-UI agent may call. The parameters are a JSON Schema object. */
+export interface AgUiTool {
+  name: string;
+  description: string;
+  parameters: unknown;
+}
+
+/** The RunAgentInput an AG-UI 1.0 agent receives. Other fields the agent sends are not typed here. */
+export interface AgUiRunInput {
+  protocolVersion: "1.0";
+  threadId: string;
+  runId: string;
+  state: unknown;
+  messages: AgUiMessage[];
+  tools: AgUiTool[];
+  context: Array<{ description: string; value: string }>;
+  forwardedProps: unknown;
+}
+
+/** The frontend tool an agent calls to propose cell changes: explanation, citations and patches. Frozen. */
+export const proposeWorkbookChangesTool: Readonly<AgUiTool>;
+
+/**
+ * Starts one AG-UI run with a POST and reads the server-sent events until RUN_FINISHED. Returns
+ * the agent's text and each tool call's JSON arguments as received. Throws on a non-2xx status,
+ * on RUN_ERROR, on a stream that ends early, or on an event that is not JSON.
+ */
+export function runAgUiAgent(options: {
+  url: string;
+  input: AgUiRunInput;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+  fetch?: typeof fetch;
+  credentials?: RequestCredentials;
+}): Promise<{
+  text: string;
+  toolCalls: Array<{ id: string; name: string; args: string }>;
+}>;
+
+/**
+ * Returns an assistant adapter that runs an AG-UI agent for each request in the assistant panel.
+ * A tool call becomes a proposal and a text reply becomes an answer with no changes. Throws a
+ * TypeError if `url` is missing.
+ */
+export function createAgUiAdapter(options: {
+  /** The AG-UI agent's endpoint. It receives a POST and replies with server-sent events. */
+  url: string;
+  /** Extra request headers, such as an authorization header. Keep model provider keys on the agent's server. */
+  headers?: Record<string, string>;
+  /** Shown in the assistant panel. Defaults to "Workbook assistant". */
+  name?: string;
+  /** Send the chat's earlier messages with each run. Defaults to true. */
+  chat?: boolean;
+  fetch?: typeof fetch;
+  credentials?: RequestCredentials;
+}): AssistantAdapter;
+
 export interface AuditWorkbookProps {
   /** The workbook to open. Change its `id` to switch documents. */
   initialWorkbook?: Workbook;

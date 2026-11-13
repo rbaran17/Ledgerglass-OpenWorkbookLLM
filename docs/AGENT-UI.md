@@ -1,8 +1,8 @@
 # Showing a workbook from an agent
 
-An agent can show a workbook to the user in one of two ways. Through AG-UI, the agent calls a frontend tool named `render_workbook`, and the host application shows the workbook as the answer to that call. Through A2UI, the agent places a `Workbook` component on a surface, and the host's A2UI renderer shows it.
+This guide covers two directions. In the first, an agent shows a workbook to the user, in one of two ways. Through AG-UI, the agent calls a frontend tool named `render_workbook`, and the host application shows the workbook as the answer to that call. Through A2UI, the agent places a `Workbook` component on a surface, and the host's A2UI renderer shows it. Sections 1 to 5 cover that direction. In the second, the editor is the host: its assistant panel sends the user's requests to your AG-UI agent and shows what the agent proposes. Section 6 covers that.
 
-Ledgerglass does not depend on either protocol. The host application installs the AG-UI and A2UI packages and passes its own client, renderer and `zod` to the functions in this library. What the library provides is the workbook description format, the conversion from that description to a workbook, the tool and catalog definitions, and the editor component `AgentWorkbook`. The code is written against AG-UI 1.0 (`@ag-ui/client` 1.0.4) and A2UI 1.0 (`@a2ui/react` and `@a2ui/web_core`, version 0.15.0). `npm run test:agent-ui` checks it against those packages (section 6). The package is private and not published (see `docs/LIBRARY.md`); the examples import from `@ledgerglass/workbook` as a host application would.
+Ledgerglass does not depend on either protocol. The host application installs the AG-UI and A2UI packages and passes its own client, renderer and `zod` to the functions in this library. What the library provides is the workbook description format, the conversion from that description to a workbook, the tool and catalog definitions, and the editor component `AgentWorkbook`. The code is written against AG-UI 1.0 (`@ag-ui/client` 1.0.4) and A2UI 1.0 (`@a2ui/react` and `@a2ui/web_core`, version 0.15.0). `npm run test:agent-ui` checks it against those packages (section 7). The package is private and not published (see `docs/LIBRARY.md`); the examples import from `@ledgerglass/workbook` as a host application would.
 
 | AG-UI: a tool call in a chat                                                                            | A2UI: a component on a surface                                                         |
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -275,7 +275,62 @@ import { z } from "zod/v3";
 
 The check runs this combination. `createWorkbookCatalog` takes `z` as an argument; the library does not import zod for the catalog.
 
-## 6. How it is checked
+## 6. The editor's assistant on an AG-UI agent
+
+In this direction the editor is the host. Its assistant panel sends each request to your AG-UI agent, and the agent's answer comes back into the panel. Pass the adapter as the `adapter` prop of `AuditWorkbook`:
+
+```jsx
+import {
+  AuditWorkbook,
+  createAgUiAdapter,
+  createBlankWorkbook,
+} from "@ledgerglass/workbook";
+import "@ledgerglass/workbook/style.css";
+
+const adapter = createAgUiAdapter({ url: "/agent", name: "AG-UI agent" });
+
+export function Editor() {
+  return (
+    <div style={{ height: "100vh" }}>
+      <AuditWorkbook
+        initialWorkbook={createBlankWorkbook("Budget")}
+        adapter={adapter}
+      />
+    </div>
+  );
+}
+```
+
+`url` is the agent's endpoint. The adapter POSTs an AG-UI 1.0 run to it and reads the server-sent events in reply. The adapter has its own small client, so the host application does not need an AG-UI package for this direction. Keep model provider keys on the agent's server. `headers` can carry a credential for that server if it needs one.
+
+Each run sends:
+
+- `context`: the approved selection, as JSON, with `workbookId`, `revision`, `sheetId`, `sheetName`, `range` and `cells` (address, raw content and calculated value). The agent sees only these cells, and only these may be cited or changed.
+- `tools`: one frontend tool, `propose_workbook_changes`, with three parameters: `explanation` (text), `citations` (addresses in the selection) and `patches` (a list of `{ address, value }`).
+- `messages`: the chat's earlier user and assistant messages, then the new request. Earlier messages are sent unless the adapter is created with `chat: false`.
+- `threadId` and `runId`: one thread per conversation, so an agent that holds state per thread sees it as one; a run that arrives with no earlier messages (the first, or after "New chat") starts a new thread. Each run has its own `runId`. A message keeps the same `id` on every run that carries it, so such an agent can tell which messages it has already seen.
+
+What comes back:
+
+- A call to `propose_workbook_changes` becomes a proposal. The panel shows the explanation and the cells that would change. Nothing changes until the user chooses "Apply". If the agent calls the tool more than once in a run, the first call is used.
+- A text reply with no tool call is shown as an answer, with no changes.
+- An error (a non-2xx status, a `RUN_ERROR` event, or a reply that ends before `RUN_FINISHED`) is shown as an error, and no change is proposed.
+
+The editor checks every proposal against the approved selection, whatever the agent sent. A patch outside the selection is refused. A formula must use allowed functions and refer only to cells in the selection. The adapter passes the proposal on as it received it, so the check is the editor's. `validateAssistantProposal` runs the same check in a script.
+
+For the agent's author, any AG-UI 1.0 agent can serve this. The tool's arguments are a JSON object like this:
+
+```json
+{
+  "explanation": "Adds a total of the costs in B5.",
+  "citations": ["B2", "B3", "B4"],
+  "patches": [{ "address": "B5", "value": "=SUM(B2:B4)" }]
+}
+```
+
+A `value` is a number, text, `true`, `false` or `null`, which clears the cell. Text that starts with `=` is a formula. To answer a question without changing cells, reply in text and do not call the tool. `examples/ag-ui-agent/` runs this flow end to end, and `tests/unit/ag-ui-adapter.test.js` tests the adapter.
+
+## 7. How it is checked
 
 `npm run test:agent-ui` builds the library (`npm run build:lib`), installs the protocol packages into `tests/agent-ui-host` only, and runs `scripts/verify-agent-ui.mjs`. That script serves a small host page built from the library, drives it in a browser, and talks to a stand-in agent on a local server. The stand-in calls `render_workbook` with the budget description from section 1 and, once it receives the result, replies with a fixed sentence. The browser is Chromium through Playwright; set `CHROME_PATH` to use an installed Chrome.
 
@@ -296,3 +351,21 @@ The limits of the check are these:
 - The agent is a stand-in with fixed replies, not a live model. The check does not show how a real model chooses to call the tool or what it does with the result.
 - Only A2UI 1.0 through the official React renderer is covered. A2UI versions before 1.0, and other A2UI renderers (Lit, Angular, Flutter), are not covered.
 - AG-UI is covered through `HttpAgent` with a server-sent event stream. Other transports are not covered.
+
+The check of the assistant direction (section 6) is `examples/ag-ui-agent/verify.mjs`. It starts the example's server with the scripted agent, so the result is the same each time, drives the editor's assistant panel in a browser, and prints:
+
+```
+PASS a question reaches the agent with only the approved selection, and its text answer is shown
+PASS a requested change comes back as a proposal; nothing changes before review
+PASS accepting the proposal puts =SUM(B2:B4) in B5 (1770)
+PASS no page errors
+```
+
+`npm run test:examples` runs it with the other examples.
+
+### Trial with a live model
+
+- `examples/ag-ui-agent/live.mjs` runs both flows against Claude through the Anthropic SDK (`AGENT=claude`); it needs Anthropic credentials, costs money, and is not part of CI.
+- That direct API path has not been run yet: no API key was available where this was built.
+- What has been run: the same script with a live Claude Haiku model standing in behind the same endpoint, receiving the same system prompt, tool definitions, context and messages, with its replies relayed by hand-off files instead of the API. In that run the model answered a question in text and proposed no changes; for "Put a total of the costs in B5" it proposed `=SUM(B2:B4)` in B5 citing B2, B3 and B4, which passed the editor's proposal validation and calculated to 1,770; and for a loan request (250,000 at 6% over 3 annual payments) it called `render_workbook` once with a 36-cell sheet holding 19 formulas, 0 formula errors, an annual payment of 93,527.45, total principal of 250,000 and a closing balance of 0, then confirmed in text.
+- That is one run with one model; it shows the prompts and tool definitions are usable by a live model, and it does not test the SDK call itself, other models, or longer conversations.

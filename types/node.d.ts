@@ -10,12 +10,14 @@ import type {
 
 export type * from "./index";
 export {
+  PROPOSE_WORKBOOK_CHANGES_TOOL_NAME,
   RENDER_WORKBOOK_TOOL_NAME,
   WorkbookSpecError,
   applyCellPatchTransaction,
   buildAssistantSelectionContext,
   buildCanonicalWorkbookSnapshot,
   buildWorkbookFromSpec,
+  createAgUiAdapter,
   createBlankWorkbook,
   createWorkbookToolResult,
   createActorEdits,
@@ -23,10 +25,12 @@ export {
   describeWorkbookAsSpec,
   getWorkbookCalculation,
   normalizeWorkbookInput,
+  proposeWorkbookChangesTool,
   readRenderWorkbookCall,
   recordWorkbookChange,
   renderWorkbookTool,
   resolveAssistantSelection,
+  runAgUiAgent,
   shiftFormulaReferences,
   summarizeWorkbookForAgent,
   validateAssistantFormula,

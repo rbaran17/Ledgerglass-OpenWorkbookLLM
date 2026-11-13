@@ -52,6 +52,7 @@ for (const folder of ["node-scripts", "mcp-client"]) {
 for (const [folder, minimumChecks] of [
   ["react-host", 8],
   ["source-gateway", 6],
+  ["ag-ui-agent", 4],
 ]) {
   const host = await run(`examples/${folder}/verify.mjs`);
   assert.equal(

@@ -35,6 +35,14 @@ export {
   validateAssistantProposal,
 } from "./app/19b-assistant-protocol.js";
 
+/** The AG-UI assistant adapter and its client, for agents driven from a script or a server. */
+export {
+  PROPOSE_WORKBOOK_CHANGES_TOOL_NAME,
+  createAgUiAdapter,
+  proposeWorkbookChangesTool,
+  runAgUiAgent,
+} from "./integrations/ag-ui-adapter.js";
+
 /** The workbook description an agent sends (shared with the AG-UI tool and A2UI component). */
 export {
   WorkbookSpecError,
